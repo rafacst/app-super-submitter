@@ -190,3 +190,31 @@ import Testing
     #expect(PriceDraft.resolve(amount: "4.99", currency: "usd", territory: "us")
             == .valid(Price(amount: Decimal(string: "4.99")!, currency: "USD", territory: "US")))
 }
+
+@Test func newCatalogRowsContainNoInventedStoreData() {
+    let purchase = ManifestDrafts.purchase()
+    #expect(purchase.id.isEmpty)
+    #expect(purchase.name == nil)
+    #expect(purchase.price == nil)
+
+    let group = ManifestDrafts.subscriptionGroup()
+    #expect(group.groupId.isEmpty)
+    #expect(group.groupName == nil)
+    #expect(group.plans.isEmpty)
+
+    let plan = ManifestDrafts.subscriptionPlan()
+    #expect(plan.id.isEmpty)
+    #expect(plan.duration.isEmpty)
+    #expect(plan.basePlanId == nil)
+    #expect(plan.price == nil)
+
+    let entitlement = ManifestDrafts.entitlement()
+    #expect(entitlement.key.isEmpty)
+    #expect(entitlement.name == nil)
+
+    let offering = ManifestDrafts.offering(isFirst: true)
+    #expect(offering.key.isEmpty)
+    #expect(offering.name == nil)
+    #expect(offering.products?.isEmpty == true)
+    #expect(offering.isCurrent == true)
+}
