@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import PostHog
 import SubmitKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -33,6 +34,10 @@ extension BuildFlow {
         uploadProgress = 0
         startedAt = Date()
         run.move(to: .building)
+        PostHogSDK.shared.capture("project_build_started", properties: [
+            "platform": project.platform == .android ? "android" : "apple",
+            "allow_provisioning_updates": allowProvisioningUpdates
+        ])
         try? storage.save(run)
 
         task = Task { [weak self] in
@@ -183,6 +188,11 @@ extension BuildFlow {
         candidate.mismatches = mismatches(for: candidate)
         self.candidate = candidate
         run.candidateIdentity = candidate.logicalIdentity
+        PostHogSDK.shared.capture("artifact_inspected", properties: [
+            "platform": run.platform == .android ? "android" : "apple",
+            "source": "imported",
+            "has_blocking_mismatches": !candidate.blockingMismatches.isEmpty
+        ])
         await recheckRemote(for: candidate)
         run.move(to: .needsUploadConfirmation)
     }
@@ -247,6 +257,11 @@ extension BuildFlow {
         candidate.mismatches = mismatches(for: candidate)
         self.candidate = candidate
         run.candidateIdentity = candidate.logicalIdentity
+        PostHogSDK.shared.capture("artifact_inspected", properties: [
+            "platform": project.platform == .android ? "android" : "apple",
+            "source": "project_build",
+            "has_blocking_mismatches": !candidate.blockingMismatches.isEmpty
+        ])
         try? storage.save(run)
 
         // A build script can change a version, so any difference matters.
@@ -361,6 +376,9 @@ extension BuildFlow {
         uploadProgress = 0
         artifactOnly = false
         run.move(to: .uploading)
+        PostHogSDK.shared.capture("artifact_upload_started", properties: [
+            "platform": candidate.platform == .android ? "android" : "apple"
+        ])
         try? storage.save(run)
 
         task = Task { [weak self] in
@@ -449,6 +467,9 @@ extension BuildFlow {
                     processingLabel = nil
                     successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
                     run.move(to: .complete)
+                    PostHogSDK.shared.capture("artifact_upload_completed", properties: [
+                        "platform": "apple"
+                    ])
                     try? storage.save(run)
                     return
                 case .failed(let id, let detail):
@@ -516,6 +537,9 @@ extension BuildFlow {
         run.cleanupState = .complete
         successLink = "https://play.google.com/console"
         run.move(to: .complete)
+        PostHogSDK.shared.capture("artifact_upload_completed", properties: [
+            "platform": "android"
+        ])
         try? storage.save(run)
     }
 
@@ -613,6 +637,9 @@ extension BuildFlow {
         failure = value
         run.lastError = value
         run.move(to: value.category.needsReconciliation ? .recoveryRequired : .failed)
+        PostHogSDK.shared.capture("build_flow_failed", properties: [
+            "stage": value.stage
+        ])
         try? storage.save(run)
     }
 

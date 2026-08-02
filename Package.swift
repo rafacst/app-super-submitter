@@ -10,6 +10,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
+        .package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.59.3"),
     ],
     targets: [
         // No UI. Every rule in the spec lives here and has a test.
@@ -21,7 +22,10 @@ let package = Package(
         // Views only. No logic.
         .executableTarget(
             name: "SuperSubmitter",
-            dependencies: ["SubmitKit"],
+            dependencies: [
+                "SubmitKit",
+                .product(name: "PostHog", package: "posthog-ios"),
+            ],
             resources: [.copy("Resources/AppIcon.png")]
         ),
         .testTarget(

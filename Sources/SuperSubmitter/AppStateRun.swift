@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import PostHog
 import SubmitKit
 import SwiftUI
 import UserNotifications
@@ -105,6 +106,12 @@ extension AppState {
         stepStates = Array(repeating: .pending, count: result.steps.count)
         stepMeta = Array(repeating: "", count: result.steps.count)
         refreshDraftStatuses()
+        PostHogSDK.shared.capture("plan_generated", properties: [
+            "store_count": stores.count,
+            "step_count": result.steps.count,
+            "is_blocked": result.isBlocked,
+            "is_dry_run": dryRun
+        ])
         planReading = false
     }
 
@@ -208,6 +215,11 @@ extension AppState {
         guard start > 0 || canApply else { return }
         let previous = runTask
         previous?.cancel()
+        PostHogSDK.shared.capture("submission_run_started", properties: [
+            "start_step": start,
+            "step_count": plan.steps.count,
+            "is_dry_run": dryRun
+        ])
         runFailure = nil
         providerFailure = nil
         runDone = false
@@ -271,6 +283,10 @@ extension AppState {
         case .failure(let failure):
             runFailure = failure
             runIndex = failure.stepIndex
+            PostHogSDK.shared.capture("submission_run_failed", properties: [
+                "step_index": failure.stepIndex,
+                "is_dry_run": dryRun
+            ])
         case .providerFailed(let message):
             providerFailure = message
         case .finished:
@@ -284,6 +300,10 @@ extension AppState {
         runProgress = 1
         applied = !dryRun
         runFailure = nil
+        PostHogSDK.shared.capture("submission_run_completed", properties: [
+            "step_count": runSteps.count,
+            "is_dry_run": dryRun
+        ])
         refreshDraftStatuses()
         // The tab moves to tab 9 by itself when the run ends. Spec 16.3.
         Task { [weak self] in
@@ -462,8 +482,14 @@ extension AppState {
                 statuses[.google] = StoreStatus(store: .google, phase: .inQueue,
                                                 detail: detail(for: .google), checkedAt: Date())
             }
+            PostHogSDK.shared.capture("release_submitted", properties: [
+                "store": store == .apple ? "apple" : "google"
+            ])
             startPolling()
         } catch {
+            PostHogSDK.shared.capture("release_submission_failed", properties: [
+                "store": store == .apple ? "apple" : "google"
+            ])
             releaseError = "\(store == .apple ? "App Store" : "Google Play"): \(error.localizedDescription)"
         }
         releasing = nil

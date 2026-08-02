@@ -1,9 +1,14 @@
 import AppKit
 import SwiftUI
 
+
 @main
 struct SuperSubmitterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+
+    init() {
+        PostHogClient.setup()
+    }
     @State private var state = AppState()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 

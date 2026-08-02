@@ -3,3 +3,10 @@
 *.xcodeproj
 .DS_Store
 .super-submitter/
+
+# The PostHog project token is a real credential. `.env.example` carries the
+# variable names; the values never enter the repository.
+.env
+
+# Icon Composer writes these from super-submitter-icon.icon on every export.
+super-submitter-icon Exports/
