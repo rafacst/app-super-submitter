@@ -106,4 +106,9 @@ private func manifest(provider: Manifest.Provider = .none) -> Manifest {
     #expect(!StoreStatus.Phase.noDraft.isReleased)
     #expect(StoreStatus.Phase.inQueue.isReleased)
     #expect(StoreStatus.Phase.draft.label == "Draft, ready to release")
+    #expect(StoreStatus.Phase.inQueue.needsPolling)
+    #expect(StoreStatus.Phase.inReview.needsPolling)
+    #expect(StoreStatus.Phase.approved.needsPolling)
+    #expect(!StoreStatus.Phase.live.needsPolling)
+    #expect(!StoreStatus.Phase.rejected.needsPolling)
 }
