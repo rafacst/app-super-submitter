@@ -44,19 +44,20 @@ extension Runner {
     /// `sha256`, which the app compares to the local hash.
     func googleImages(locale: String, imageType: String, files: [MediaUpload],
                       index: Int) async throws {
+        guard let editID = googleEditID else { throw RunError.missingEdit }
         var uploaded = 0
         for file in files {
             try Task.checkCancellation()
             let data = try Data(contentsOf: file.url, options: .mappedIfSafe)
             let path = "/upload/androidpublisher/v3/applications/"
                 + "\(StateReader.escape(manifest.apps.google?.packageName ?? ""))"
-                + "/edits/\(googleEditID ?? "")/listings/\(locale)/\(imageType)"
+                + "/edits/\(editID)/listings/\(locale)/\(imageType)"
             let response = JSON(data: try await api.googleUpload(
                 path, contentType: Self.contentType(for: file.url), body: data).data)
-            let remote = response["image"]["sha256"].string
-            if let remote, remote != file.sha256 {
+            guard let remote = response["image"]["sha256"].string,
+                  remote == file.sha256 else {
                 throw RunError.uploadFailed(
-                    "\(file.url.lastPathComponent): Google reported a different checksum.")
+                    "\(file.url.lastPathComponent): Google did not confirm the expected checksum.")
             }
             uploaded += 1
             report(index: index, fraction: Double(uploaded) / Double(files.count),
@@ -67,14 +68,16 @@ extension Runner {
     func googleBundleUpload(path: String, index: Int) async throws {
         guard let url = resolve(path) else { throw RunError.missingBuild }
         guard let editID = googleEditID else { throw RunError.missingEdit }
-        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         report(index: index, fraction: 0.05, detail: "\(url.lastPathComponent)")
         let uploadPath = "/upload/androidpublisher/v3/applications/"
             + "\(StateReader.escape(manifest.apps.google?.packageName ?? ""))"
             + "/edits/\(editID)/bundles"
         let response = JSON(data: try await api.googleUpload(
-            uploadPath, contentType: "application/octet-stream", body: data).data)
-        googleVersionCode = response["versionCode"].int
+            uploadPath, contentType: "application/octet-stream", file: url).data)
+        guard let versionCode = response["versionCode"].int else {
+            throw RunError.uploadFailed("Google accepted the bundle but returned no version code.")
+        }
+        googleVersionCode = versionCode
         report(index: index, fraction: 1,
                detail: "version code \(googleVersionCode.map(String.init) ?? "unknown")")
     }

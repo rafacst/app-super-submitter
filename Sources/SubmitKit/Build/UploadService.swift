@@ -48,10 +48,8 @@ public struct UploadService: Sendable {
             return result
         }
 
-        let builds = JSON(data: try await api.apple(
-            "GET", "/v1/builds?filter%5Bapp%5D=\(appID)&limit=200").data)
         var highest = 0
-        for build in builds["data"].array {
+        for build in try await appleBuilds(appID: appID) {
             let attributes = build["attributes"]
             let version = attributes["version"].string ?? ""
             highest = max(highest, Int(version) ?? 0)
@@ -86,9 +84,7 @@ public struct UploadService: Sendable {
     /// It never assumes the newest remote build is this run's build.
     public func appleProcessingState(appID: String, marketingVersion: String,
                                      buildVersion: String) async throws -> AppleProcessing {
-        let builds = JSON(data: try await api.apple(
-            "GET", "/v1/builds?filter%5Bapp%5D=\(appID)&limit=200").data)
-        for build in builds["data"].array
+        for build in try await appleBuilds(appID: appID)
         where build["attributes"]["version"].string == buildVersion {
             guard let id = build["id"].string else { continue }
             let preRelease = JSON(data: try await api.apple(
@@ -111,6 +107,30 @@ public struct UploadService: Sendable {
     public static func pollDelay(attempt: Int) -> TimeInterval {
         let base = min(300.0, 10.0 * pow(1.6, Double(max(0, attempt - 1))))
         return base + Double.random(in: 0...(base * 0.2))
+    }
+
+    private func appleBuilds(appID: String) async throws -> [JSON] {
+        var path: String? = "/v1/builds?filter%5Bapp%5D=\(appID)&limit=200"
+        var pages = 0
+        var seen: Set<String> = []
+        var builds: [JSON] = []
+        while let pagePath = path, pages < 100, seen.insert(pagePath).inserted {
+            pages += 1
+            let page = JSON(data: try await api.apple("GET", pagePath).data)
+            builds += page["data"].array
+            path = page["links"]["next"].string.flatMap(Self.appleNextPagePath)
+        }
+        return builds
+    }
+
+    static func appleNextPagePath(_ value: String) -> String? {
+        guard let components = URLComponents(string: value),
+              components.scheme == "https",
+              components.host == "api.appstoreconnect.apple.com",
+              components.path == "/v1/builds" else { return nil }
+        var path = components.percentEncodedPath
+        if let query = components.percentEncodedQuery { path += "?\(query)" }
+        return path
     }
 
     // MARK: - Google
@@ -181,20 +201,22 @@ public struct UploadService: Sendable {
     /// commit the edit is disposable, and the cleanup path always runs.
     public func uploadGoogleBundle(packageName: String, track: String, bundle: URL,
                                    expectedVersionCode: Int, versionName: String?,
+                                   onEditCreated: @Sendable (String) async -> Void = { _ in },
                                    onProgress: @Sendable (Double) -> Void) async throws
         -> GoogleUploadResult {
         let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
         guard let editID = edit["id"].string else { throw RunError.missingEdit }
         let editBase = "\(base)/edits/\(editID)"
+        await onEditCreated(editID)
+        var commitAttempted = false
 
         do {
-            let data = try Data(contentsOf: bundle, options: .mappedIfSafe)
             onProgress(0.1)
             let uploadPath = "/upload/androidpublisher/v3/applications/"
                 + "\(StateReader.escape(packageName))/edits/\(editID)/bundles"
             let response = JSON(data: try await api.googleUpload(
-                uploadPath, contentType: "application/octet-stream", body: data).data)
+                uploadPath, contentType: "application/octet-stream", file: bundle).data)
             onProgress(0.7)
 
             guard let returned = response["versionCode"].int else {
@@ -223,6 +245,7 @@ public struct UploadService: Sendable {
 
             try await api.google("POST", "\(editBase):validate", body: [:])
             onProgress(0.95)
+            commitAttempted = true
             try await api.google("POST", "\(editBase):commit", body: [:],
                                  query: [URLQueryItem(name: "changesNotSentForReview",
                                                       value: "true")])
@@ -232,7 +255,9 @@ public struct UploadService: Sendable {
             // The commit can throw after the server already committed, so a
             // lost response is not a failure. Query the actual state before
             // anything is repeated. upload-spec 9.15.
-            if let reconciled = try? await reconcileGoogle(packageName: packageName,
+            if commitAttempted,
+               let reconciled = try? await reconcileGoogle(packageName: packageName,
+                                                           track: track,
                                                            versionCode: expectedVersionCode),
                reconciled {
                 return GoogleUploadResult(versionCode: expectedVersionCode, editID: editID,
@@ -253,14 +278,41 @@ public struct UploadService: Sendable {
 
     /// True when the version code is present in committed state. Then the
     /// operation succeeded even though its response was lost.
-    public func reconcileGoogle(packageName: String, versionCode: Int) async throws -> Bool {
+    public func reconcileGoogle(packageName: String, track: String,
+                                versionCode: Int) async throws -> Bool {
         let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
         guard let editID = edit["id"].string else { return false }
         let editBase = "\(base)/edits/\(editID)"
-        defer { Task { try? await deleteEdit(editBase) } }
-        let bundles = JSON(data: try await api.google("GET", "\(editBase)/bundles").data)
-        return bundles["bundles"].array.contains { $0["versionCode"].int == versionCode }
+        do {
+            let tracks = JSON(data: try await api.google("GET", "\(editBase)/tracks").data)
+            let landed = Self.googleTrackContainsCommittedVersion(
+                tracks, track: track, versionCode: versionCode)
+            try await deleteEdit(editBase)
+            return landed
+        } catch {
+            do { try await deleteEdit(editBase) } catch {
+                throw BuildFailure(
+                    category: .cleanup, stage: "Clean up the reconciliation edit",
+                    message: "The Google Play state check opened an edit that could not be deleted.",
+                    underlying: error.localizedDescription,
+                    retainedRemoteEdit: editID)
+            }
+            throw error
+        }
+    }
+
+    static func googleTrackContainsCommittedVersion(_ payload: JSON, track: String,
+                                                     versionCode: Int) -> Bool {
+        payload["tracks"].array
+            .filter { $0["track"].string == track }
+            .flatMap { $0["releases"].array }
+            .contains { release in
+                release["status"].string == "draft"
+                    && release["versionCodes"].array.contains { code in
+                        code.int == versionCode || code.string.flatMap(Int.init) == versionCode
+                    }
+            }
     }
 
     public func deleteEdit(_ editBase: String) async throws {

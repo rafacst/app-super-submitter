@@ -138,6 +138,22 @@ public actor StoreAPI {
     @discardableResult
     public func googleUpload(_ path: String, contentType: String, body: Data,
                              query: [URLQueryItem] = []) async throws -> Result {
+        var request = try await googleUploadRequest(path, contentType: contentType, query: query)
+        request.httpBody = body
+        return try await perform(request, system: .google, path: path)
+    }
+
+    /// Streams a large artifact from disk instead of retaining a second copy
+    /// of it in memory for the duration of the upload.
+    @discardableResult
+    public func googleUpload(_ path: String, contentType: String, file: URL,
+                             query: [URLQueryItem] = []) async throws -> Result {
+        let request = try await googleUploadRequest(path, contentType: contentType, query: query)
+        return try await perform(request, system: .google, path: path, bodyFile: file)
+    }
+
+    private func googleUploadRequest(_ path: String, contentType: String,
+                                     query: [URLQueryItem]) async throws -> URLRequest {
         var components = URLComponents(string: "https://androidpublisher.googleapis.com" + path)
         var items = query
         items.append(URLQueryItem(name: "uploadType", value: "media"))
@@ -147,8 +163,7 @@ public actor StoreAPI {
         request.httpMethod = "POST"
         request.setValue("Bearer \(try await googleBearer())", forHTTPHeaderField: "Authorization")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        return try await perform(request, system: .google, path: path)
+        return request
     }
 
     /// The dry run never reaches this type, but it still has to appear in the
@@ -160,7 +175,8 @@ public actor StoreAPI {
     // MARK: - The one request path
 
     private func perform(_ request: URLRequest, system: PlanSystem,
-                         path: String, retryOverride: Bool? = nil) async throws -> Result {
+                         path: String, retryOverride: Bool? = nil,
+                         bodyFile: URL? = nil) async throws -> Result {
         let method = request.httpMethod ?? "GET"
         let mayRetry = retryOverride
             ?? ["GET", "HEAD", "PUT", "DELETE", "OPTIONS"].contains(method.uppercased())
@@ -170,7 +186,13 @@ public actor StoreAPI {
             try await waitForBucket(system)
             let started = Date()
             do {
-                let (data, response) = try await session.data(for: request)
+                let data: Data
+                let response: URLResponse
+                if let bodyFile {
+                    (data, response) = try await session.upload(for: request, fromFile: bodyFile)
+                } else {
+                    (data, response) = try await session.data(for: request)
+                }
                 guard let http = response as? HTTPURLResponse else {
                     throw ConnectionError.invalidResponse
                 }

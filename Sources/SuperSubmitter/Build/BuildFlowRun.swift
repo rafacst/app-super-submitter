@@ -482,15 +482,24 @@ extension BuildFlow {
             throw BuildFailure(category: .authentication, stage: "Upload the bundle",
                                message: "Enter the Google Play package name on the Stores tab.")
         }
+        guard let versionCode = Int(candidate.buildVersion), versionCode > 0 else {
+            throw BuildFailure(category: .artifactValidation, stage: "Upload the bundle",
+                               message: "The inspected bundle has no valid positive version code.",
+                               retainedArtifact: candidate.artifactPath)
+        }
+        let track = app.manifest.release?.google?.track ?? "production"
         let service = UploadService(api: app.readOnlyAPI())
         record(preview: "POST edits · upload bundle · commit changesNotSentForReview=true")
         run.cleanupState = .pending
         let result = try await service.uploadGoogleBundle(
             packageName: packageName,
-            track: app.manifest.release?.google?.track ?? "production",
+            track: track,
             bundle: candidate.artifactURL,
-            expectedVersionCode: Int(candidate.buildVersion) ?? 0,
+            expectedVersionCode: versionCode,
             versionName: candidate.marketingVersion,
+            onEditCreated: { [weak self] editID in
+                await self?.rememberGoogleEdit(editID)
+            },
             onProgress: { [weak self] value in
                 Task { @MainActor in self?.uploadProgress = value }
             })
@@ -499,6 +508,11 @@ extension BuildFlow {
         run.cleanupState = .complete
         successLink = "https://play.google.com/console"
         run.move(to: .complete)
+        try? storage.save(run)
+    }
+
+    private func rememberGoogleEdit(_ editID: String) {
+        run.remoteIDs["googleEdit"] = editID
         try? storage.save(run)
     }
 
@@ -531,8 +545,10 @@ extension BuildFlow {
             return
         }
         let service = UploadService(api: app.readOnlyAPI())
+        let track = app.manifest.release?.google?.track ?? "production"
         if let landed = try? await service.reconcileGoogle(
-            packageName: packageName, versionCode: Int(candidate.buildVersion) ?? 0), landed {
+            packageName: packageName, track: track,
+            versionCode: Int(candidate.buildVersion) ?? 0), landed {
             processingLabel = "The upload had already reached Google Play, so it was not undone."
             run.cleanupState = .complete
             run.move(to: .complete)
