@@ -65,6 +65,19 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
     #expect(!result.containers.contains { $0.name == "Escaped.xcodeproj" })
 }
 
+@Test func aSiblingWhoseNameStartsWithTheRootNameStillEscapesTheRoot() throws {
+    let parent = try temporaryRoot("prefix-\(UUID().uuidString)")
+    let root = parent.appendingPathComponent("app")
+    let sibling = parent.appendingPathComponent("app-secrets")
+    defer { try? FileManager.default.removeItem(at: parent) }
+    try makeDirectory(root)
+    try makeDirectory(sibling)
+    let link = root.appendingPathComponent("linked-secrets")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: sibling)
+
+    #expect(ProjectDiscovery.escapesRoot(link, root: root))
+}
+
 @Test func aGradleWrapperWithoutSettingsIsNotBuildable() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -130,6 +143,22 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
     #expect(variants.contains { $0.module == ":wear" })
 }
 
+@Test func bundleTaskParsingUsesGradlesVariantDescriptionAndSuffixes() {
+    let output = """
+        :app:bundleLatestRelease - Assembles bundle for variant latestRelease
+        :app:bundleContestRelease - Assembles bundle for variant contestRelease
+        :app:bundleReleaseUnitTest - Assembles bundle for variant releaseUnitTest
+        :app:bundleSomething - An unrelated task whose name happens to start with bundle
+        """
+
+    let variants = AndroidBuildService.parseBundleTasks(output)
+
+    #expect(variants.map(\.id).contains(":app:bundleLatestRelease"))
+    #expect(variants.map(\.id).contains(":app:bundleContestRelease"))
+    #expect(!variants.map(\.id).contains(":app:bundleReleaseUnitTest"))
+    #expect(!variants.map(\.id).contains(":app:bundleSomething"))
+}
+
 @Test func theGradleVersionComesFromTheWrapperProperties() {
     let properties = "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-bin.zip"
     #expect(AndroidBuildService.gradleVersion(fromDistributionURL: properties) == "8.7")
@@ -144,9 +173,23 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
           Signature algorithm: SHA256withRSA, 2048-bit key
         jar verified.
         """
-    let (subject, _) = AndroidBuildService.certificate(from: output)
+    let (subject, fingerprint) = AndroidBuildService.certificate(from: output)
     #expect(subject == "CN=Upload Key, O=Example, C=GB")
-    #expect(!output.contains("PRIVATE KEY"))
+    #expect(subject?.contains("PRIVATE KEY") != true)
+    #expect(fingerprint?.contains("PRIVATE KEY") != true)
+}
+
+@Test func certificateParsingDoesNotMistakeTheSignatureAlgorithmForAFingerprint() {
+    let output = """
+        X.509, CN=Upload Key
+        Signature algorithm: SHA256withRSA, 2048-bit key
+        SHA-256 digest: AA:BB:CC:DD
+        jar verified.
+        """
+
+    let (_, fingerprint) = AndroidBuildService.certificate(from: output)
+
+    #expect(fingerprint == "AA:BB:CC:DD")
 }
 
 // MARK: - Storage
@@ -224,4 +267,27 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
     #expect(unfinished.contains(polling.id))
     #expect(unfinished.contains(stranded.id))
     #expect(!unfinished.contains(done.id))
+}
+
+@Test func storageNamesCannotResolveToTheCurrentOrParentDirectory() {
+    #expect(BuildStorage.safe(".") == "unknown")
+    #expect(BuildStorage.safe("..") == "unknown")
+    #expect(BuildStorage.safe("com.example.app") == "com.example.app")
+}
+
+@Test func pruningOldDataPreservesRunsThatNeedResumeOrCleanup() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let storage = BuildStorage(root: root)
+    var run = UploadRun(platform: .ios)
+    run.state = .processingOrValidating
+    try storage.save(run)
+    let folder = storage.runFolder(run.id)
+    let old = Date(timeIntervalSinceNow: -90 * 24 * 60 * 60)
+    try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: folder.path)
+
+    let removed = storage.prune(olderThan: 30 * 24 * 60 * 60)
+
+    #expect(!removed.contains(folder))
+    #expect(FileManager.default.fileExists(atPath: folder.path))
 }

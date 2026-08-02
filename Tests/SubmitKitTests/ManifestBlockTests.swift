@@ -63,6 +63,22 @@ private func sample() -> Manifest {
     }
 }
 
+@Test func aLeadingCommentDoesNotTurnANonemptyBlockIntoAnEmptyOne() throws {
+    let edited = """
+        # This comment describes the block below.
+        media:
+          screenshots:
+            en-US:
+              phone:
+                - assets/commented.png
+        """
+
+    let result = try ManifestFile.apply(edited, block: .media, to: sample())
+
+    #expect(result.mediaPaths(locale: "en-US", deviceClass: .phone)
+        == ["assets/commented.png"])
+}
+
 @Test func everyEditingTabOwnsAtLeastOneKeyAndNoTwoTabsShareOne() {
     var seen: Set<String> = []
     for block in ManifestBlock.allCases {

@@ -129,3 +129,21 @@ import Testing
     #expect(report.contains("edit-123"))
     #expect(report.contains("Try again."))
 }
+
+@Test func everyDynamicDiagnosticFieldIsRedacted() {
+    let secret = "SUPERSECRETVALUE12345"
+    let failure = BuildFailure(
+        category: .upload,
+        stage: "Upload \(secret)",
+        message: "Message \(secret)",
+        underlying: "Underlying \(secret)",
+        diagnostics: "Diagnostics \(secret)",
+        recovery: "Recovery \(secret)",
+        retainedArtifact: "/tmp/\(secret).xcarchive",
+        retainedRemoteEdit: "edit-\(secret)")
+
+    let report = failure.report(redactor: Redactor(literals: [secret]))
+
+    #expect(!report.contains(secret))
+    #expect(report.contains("«redacted»"))
+}
