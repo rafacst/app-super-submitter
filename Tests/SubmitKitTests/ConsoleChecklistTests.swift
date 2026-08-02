@@ -101,6 +101,17 @@ private func manifest(provider: Manifest.Provider = .none) -> Manifest {
     #expect(ReleaseStatusReader.applePhase("METADATA_REJECTED") == .rejected)
 }
 
+@Test func theGoogleReleaseSummaryStatesMapToTheRowLabels() {
+    #expect(ReleaseStatusReader.googlePhase("RELEASE_LIFECYCLE_STATE_DRAFT") == .draft)
+    #expect(ReleaseStatusReader.googlePhase(
+        "RELEASE_LIFECYCLE_STATE_NOT_SENT_FOR_REVIEW") == .draft)
+    #expect(ReleaseStatusReader.googlePhase("RELEASE_LIFECYCLE_STATE_IN_REVIEW") == .inReview)
+    #expect(ReleaseStatusReader.googlePhase(
+        "RELEASE_LIFECYCLE_STATE_APPROVED_NOT_PUBLISHED") == .approved)
+    #expect(ReleaseStatusReader.googlePhase("RELEASE_LIFECYCLE_STATE_NOT_APPROVED") == .rejected)
+    #expect(ReleaseStatusReader.googlePhase("RELEASE_LIFECYCLE_STATE_PUBLISHED") == .live)
+}
+
 @Test func aDraftIsNotAReleasedStore() {
     #expect(!StoreStatus.Phase.draft.isReleased)
     #expect(!StoreStatus.Phase.noDraft.isReleased)
