@@ -12,19 +12,8 @@ struct StoresTab: View {
     var body: some View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 14) {
-                StoreChoiceCard(
-                    store: .apple,
-                    line: "iOS and Mac. Written through the App Store Connect API.",
-                    selected: state.stores.contains(.apple)) {
-                        state.setStore(.apple, enabled: !state.stores.contains(.apple))
-                    }
-                StoreChoiceCard(
-                    store: .google,
-                    line: "Android. Written through the Android Publisher API.",
-                    selected: state.stores.contains(.google)) {
-                        state.setStore(.google, enabled: !state.stores.contains(.google))
-                    }
+            StoreSelectionGrid(selected: state.stores) { store in
+                state.setStore(store, enabled: !state.stores.contains(store))
             }
 
             if state.stores.contains(.apple) {
@@ -155,43 +144,6 @@ struct StoresTab: View {
                 GuideLink("Open Cloud console ↗", "https://console.cloud.google.com/iam-admin/serviceaccounts"),
                 GuideLink("Open Play Console ↗", "https://play.google.com/console"),
             ])
-    }
-}
-
-private struct StoreChoiceCard: View {
-    let store: Store
-    let line: String
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    StoreMark(store: store, size: 22)
-                    Text(store.storeName).font(.system(size: 13.5, weight: .semibold))
-                    Spacer()
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(selected ? Theme.accent : Theme.sep)
-                }
-                Text(line)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.text2)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(selected ? Theme.accent : Theme.sep,
-                              lineWidth: selected ? 1.5 : Theme.hairline))
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(selected ? "Selected" : "Not selected")
     }
 }
 

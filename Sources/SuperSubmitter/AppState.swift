@@ -97,6 +97,7 @@ final class AppState {
     /// Settings opens as a panel over the window, not as a second window.
     var showSettings = false
     var showOnboarding = false
+    var showExistingAppImport = false
     var releaseSheet: Store?
     var showAddLocale = false
 
@@ -355,7 +356,7 @@ final class AppState {
     }
 
     /// Both doors end here: read the file, add it once, and select it.
-    private func link(manifestAt url: URL) {
+    func link(manifestAt url: URL) {
         do {
             let loaded = try ManifestFile.load(from: url)
             if let index = linkedApps.firstIndex(where: { $0.manifestPath == url.path }) {
@@ -1381,7 +1382,7 @@ final class AppState {
         acknowledged = []
     }
 
-    private func persistLinkedApps() {
+    func persistLinkedApps() {
         do {
             let data = try JSONEncoder().encode(linkedApps)
             UserDefaults.standard.set(data, forKey: linkedAppsDefaultsKey)
