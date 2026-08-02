@@ -1,152 +1,204 @@
+import SubmitKit
 import SwiftUI
 
-/// Tab 6. Everything the reviewer needs and nothing the customer sees.
-///
-/// The open rows sit first. This is the tab a developer forgets, and a
-/// forgotten row returns as a rejection days later.
+/// Tab 6. Review metadata is persisted; demo credentials stay in Keychain.
 struct ReviewInfoTab: View {
+    @Environment(AppState.self) private var state
+
     var body: some View {
+        @Bindable var state = state
         VStack(alignment: .leading, spacing: 20) {
-            openRows
             reviewContact
             demoAccount
-            everythingElse
+            reviewNotes
+            categories
+            declarations
         }
         .frame(maxWidth: 940, alignment: .leading)
-    }
-
-    private var openRows: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 9) {
-                Text("Open rows").font(.system(size: 12.5, weight: .semibold))
-                Text("2 of 9 rows need you. They sit first, because this is the tab a developer forgets.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.text2)
-            }
-            RowCard(rows: DemoData.reviewOpenRows, emphasised: true)
-        }
+        .sheet(isPresented: $state.showAgeRating) { AgeRatingSheet() }
+        .sheet(isPresented: $state.showDataSafety) { DataSafetySheet() }
+        .onChange(of: state.reviewerUsername) { _, _ in state.reviewerCredentialsChanged() }
+        .onChange(of: state.reviewerPassword) { _, _ in state.reviewerCredentialsChanged() }
     }
 
     private var reviewContact: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Review contact").font(.system(size: 12.5, weight: .semibold))
-            HStack(alignment: .top, spacing: 12) {
-                SmallField(label: "First name", value: "Rafa", minWidth: 150)
-                SmallField(label: "Last name", value: "C", minWidth: 150)
-                SmallField(label: "Email", value: "dev@fastbillsplit.app", minWidth: 190, mono: true)
-                SmallField(label: "Phone", value: "+351 000 000 000", minWidth: 150, mono: true)
-            }
-            Text("App Store only. Google Play has no equivalent field.")
-                .font(.system(size: 11.5))
-                .foregroundStyle(Theme.text2)
+        Section_("Review contact") {
+            HStack {
+                TextField("First name", text: state.reviewBinding(.firstName))
+                TextField("Last name", text: state.reviewBinding(.lastName))
+                TextField("Email", text: state.reviewBinding(.email))
+                TextField("Phone", text: state.reviewBinding(.phone))
+            }.reviewPanel()
+            Text("App Store only; Google Play has no equivalent fields.")
+                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
         }
     }
 
-    /// The password goes to the Keychain, and the panel says so. A password
-    /// field next to a YAML toggle would tell the developer the wrong thing.
     private var demoAccount: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Demo account").font(.system(size: 12.5, weight: .semibold))
-            VStack(alignment: .leading, spacing: 11) {
-                HStack(spacing: 9) {
-                    StaticToggle(isOn: true)
-                    Text("The reviewer needs an account to sign in").font(.system(size: 12.5))
-                }
-                HStack(alignment: .top, spacing: 12) {
-                    SmallField(label: "User name", value: "review@fastbillsplit.app",
-                               minWidth: 220, mono: true)
-                    SmallField(label: "Password", value: "••••••••••••", minWidth: 160, mono: true)
-                    Spacer(minLength: 0)
-                }
-                Text("The user name and the password go to the macOS Keychain. They are never written to a file in your repository.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.text2)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-        }
-    }
-
-    private var everythingElse: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Everything else").font(.system(size: 12.5, weight: .semibold))
-            RowCard(rows: DemoData.reviewRows, emphasised: false)
-        }
-    }
-}
-
-private struct RowCard: View {
-    let rows: [DemoReviewRow]
-    let emphasised: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if index > 0 { Hairline(color: Theme.sep2) }
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.title)
-                            .font(.system(size: 12.5, weight: emphasised ? .medium : .regular))
-                        Text(row.reason)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.text2)
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
+        @Bindable var state = state
+        return Section_("Demo account") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("The reviewer needs an account to sign in",
+                       isOn: state.demoAccountRequiredBinding)
+                if state.manifest.review?.demoAccountRequired == true {
+                    HStack {
+                        TextField("User name", text: $state.reviewerUsername)
+                        SecureField("Password", text: $state.reviewerPassword)
                     }
-                    Spacer(minLength: 8)
-                    StatePill(text: row.state.label,
-                              foreground: row.state.color,
-                              background: row.state.background)
-                    QuietButton(title: row.action)
-                        .frame(minWidth: emphasised ? 0 : 78)
                 }
-                .padding(.horizontal, 15)
-                .padding(.vertical, emphasised ? 11 : 10)
-            }
+                Text("Credentials are stored in macOS Keychain and never written to the repository.")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            }.reviewPanel()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
-}
 
-struct SmallField: View {
-    let label: String
-    let value: String
-    var minWidth: CGFloat = 150
-    var mono = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
-            Text(value)
-                .font(mono ? Theme.mono(12) : .system(size: 12.5))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .frame(minWidth: minWidth, alignment: .leading)
-                .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6)
+    private var reviewNotes: some View {
+        Section_("Notes for the reviewer") {
+            TextEditor(text: state.reviewBinding(.notes))
+                .font(.system(size: 12.5)).scrollContentBackground(.hidden)
+                .padding(7).frame(minHeight: 100)
+                .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
         }
     }
+
+    private var categories: some View {
+        Section_("Categories") {
+            VStack(alignment: .leading, spacing: 9) {
+                if state.stores.contains(.apple) {
+                    HStack {
+                        TextField("Apple primary category",
+                                  text: state.reviewBinding(.applePrimaryCategory))
+                        TextField("Apple secondary category",
+                                  text: state.reviewBinding(.appleSecondaryCategory))
+                    }
+                }
+                if state.stores.contains(.google) {
+                    HStack {
+                        TextField("Google category", text: state.reviewBinding(.googleCategory))
+                        Link("Open Play Console ↗",
+                             destination: URL(string: "https://play.google.com/console/")!)
+                    }
+                }
+            }.reviewPanel()
+        }
+    }
+
+    private var declarations: some View {
+        Section_("Store declarations") {
+            VStack(spacing: 0) {
+                ActionRow(title: "Age rating", detail: "Answer the content questionnaire") {
+                    state.showAgeRating = true
+                }
+                Divider()
+                ConsoleLinkRow(title: "Google content rating",
+                               detail: "The IARC questionnaire is Console only",
+                               destination: URL(string: "https://play.google.com/console/")!)
+                Divider()
+                ActionRow(title: "Privacy policy", detail: "Edit the localized URL") {
+                    state.selectedTab = .details
+                }
+                Divider()
+                ConsoleLinkRow(title: "App Store privacy labels",
+                               detail: "Nutrition labels are Console only",
+                               destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
+                Divider()
+                ActionRow(title: "Google data safety", detail: "Review declarations stored in the manifest") {
+                    state.showDataSafety = true
+                }
+                Divider()
+                Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+            }.reviewPanel(padding: 0)
+        }
+    }
 }
 
-struct StaticToggle: View {
-    let isOn: Bool
-
+private struct ConsoleLinkRow: View {
+    let title: String
+    let detail: String
+    let destination: URL
     var body: some View {
-        ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule().fill(isOn ? Theme.accent : Theme.sep)
-            Circle().fill(.white).frame(width: 16, height: 16)
-        }
-        .frame(width: 34, height: 20)
-        .padding(2)
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12.5, weight: .medium))
+                Text(detail).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            }
+            Spacer()
+            Link("Open ↗", destination: destination)
+        }.padding(.horizontal, 14).padding(.vertical, 10)
+    }
+}
+
+private struct ActionRow: View {
+    let title: String
+    let detail: String
+    let action: () -> Void
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12.5, weight: .medium))
+                Text(detail).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            }
+            Spacer()
+            Button("Review", action: action)
+        }.padding(.horizontal, 14).padding(.vertical, 10)
+    }
+}
+
+private struct AgeRatingSheet: View {
+    @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
+    private let questions = [
+        ("violence", "Violence"), ("sexual_content", "Sexual content"),
+        ("profanity", "Profanity or crude humor"), ("gambling", "Gambling"),
+        ("user_generated_content", "User-generated content")
+    ]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Age rating").font(.title2.weight(.semibold))
+            Text("Enable every content type present anywhere in the app.")
+                .foregroundStyle(Theme.text2)
+            ForEach(questions, id: \.0) { key, title in
+                Toggle(title, isOn: state.reviewAnswerBinding(group: "age", key: key))
+            }
+            HStack { Spacer(); Button("Done", action: dismiss.callAsFunction).keyboardShortcut(.defaultAction) }
+        }.padding(24).frame(width: 430)
+    }
+}
+
+private struct DataSafetySheet: View {
+    @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
+    private let questions = [
+        ("collects_personal_data", "Collects personal data"),
+        ("shares_personal_data", "Shares personal data with third parties"),
+        ("data_encrypted_in_transit", "Data is encrypted in transit"),
+        ("supports_data_deletion", "Users can request data deletion")
+    ]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Google data safety").font(.title2.weight(.semibold))
+            Text("These answers are saved for planning; confirm them in Play Console before release.")
+                .foregroundStyle(Theme.text2)
+            ForEach(questions, id: \.0) { key, title in
+                Toggle(title, isOn: state.reviewAnswerBinding(group: "safety", key: key))
+            }
+            HStack {
+                Link("Open Play Console ↗", destination: URL(string: "https://play.google.com/console/")!)
+                Spacer()
+                Button("Done", action: dismiss.callAsFunction).keyboardShortcut(.defaultAction)
+            }
+        }.padding(24).frame(width: 520)
+    }
+}
+
+private extension View {
+    func reviewPanel(padding: CGFloat = 13) -> some View {
+        self.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }

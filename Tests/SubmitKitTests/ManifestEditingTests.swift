@@ -90,3 +90,103 @@ import Testing
     #expect(credential.clientEmail == "submitter@example.iam.gserviceaccount.com")
     #expect(credential.fileName == "service.json")
 }
+
+@Test func listingFieldsAndGoogleOverridesRoundTripThroughEditingHelpers() {
+    var manifest = Manifest()
+    manifest.setListingText("Shared subtitle", locale: "en-US", field: .subtitle)
+    manifest.setGoogleOverride(true, locale: "en-US", field: .googleShortDescription)
+    manifest.setListingText("Longer Google subtitle", locale: "en-US",
+                            field: .googleShortDescription)
+
+    #expect(manifest.listingText(locale: "en-US", field: .subtitle) == "Shared subtitle")
+    #expect(manifest.hasGoogleOverride(locale: "en-US", field: .googleShortDescription))
+    #expect(manifest.listingText(locale: "en-US", field: .googleShortDescription)
+            == "Longer Google subtitle")
+
+    manifest.setGoogleOverride(false, locale: "en-US", field: .googleShortDescription)
+    #expect(!manifest.hasGoogleOverride(locale: "en-US", field: .googleShortDescription))
+}
+
+@Test func mediaPathsCanBeAddedWithoutDuplicatesAndRemoved() {
+    var manifest = Manifest()
+    manifest.addMediaPaths(["shots/one.png", "shots/one.png", "shots/two.png"],
+                           locale: "en-US", deviceClass: .phone)
+    manifest.addMediaPaths(["previews/demo.mov"], locale: "en-US",
+                           deviceClass: .phone, previews: true)
+
+    #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone)
+            == ["shots/one.png", "shots/two.png"])
+    #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone, previews: true)
+            == ["previews/demo.mov"])
+
+    manifest.removeMediaPath("shots/one.png", locale: "en-US", deviceClass: .phone)
+    manifest.removeMediaPath("previews/demo.mov", locale: "en-US",
+                             deviceClass: .phone, previews: true)
+    #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone) == ["shots/two.png"])
+    #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone, previews: true).isEmpty)
+}
+
+@Test func reviewAnswersAndCategoriesSurviveManifestCoding() throws {
+    var manifest = Manifest()
+    manifest.setReviewText("Games", field: .applePrimaryCategory)
+    manifest.setReviewText("Productivity", field: .googleCategory)
+    manifest.review?.ageRatingAnswers = ["violence": false]
+    manifest.review?.dataSafetyAnswers = ["data_encrypted_in_transit": true]
+    manifest.review?.usesNonExemptEncryption = true
+
+    let data = try JSONEncoder().encode(manifest)
+    let decoded = try JSONDecoder().decode(Manifest.self, from: data)
+    #expect(decoded.reviewText(.applePrimaryCategory) == "Games")
+    #expect(decoded.reviewText(.googleCategory) == "Productivity")
+    #expect(decoded.review?.ageRatingAnswers?["violence"] == false)
+    #expect(decoded.review?.dataSafetyAnswers?["data_encrypted_in_transit"] == true)
+    #expect(decoded.review?.usesNonExemptEncryption == true)
+}
+
+@Test func screenshotDimensionsAreValidatedForTheSelectedBucketAndStores() throws {
+    try AssetInspector.validateDimensions(
+        ImageAssetInfo(width: 1242, height: 2208, fileSize: 1),
+        deviceClass: .phone, stores: [.apple, .google])
+    #expect(try AssetInspector.compatibleStores(
+        for: ImageAssetInfo(width: 1290, height: 2796, fileSize: 1),
+        deviceClass: .phone, selectedStores: [.apple, .google]) == [.apple])
+    #expect(try AssetInspector.compatibleStores(
+        for: ImageAssetInfo(width: 1080, height: 1920, fileSize: 1),
+        deviceClass: .phone, selectedStores: [.apple, .google]) == [.google])
+    try AssetInspector.validateDimensions(
+        ImageAssetInfo(width: 1080, height: 1920, fileSize: 1),
+        deviceClass: .phone, stores: [.google])
+
+    #expect(throws: AssetInspectionError.self) {
+        try AssetInspector.validateDimensions(
+            ImageAssetInfo(width: 1000, height: 1000, fileSize: 1),
+            deviceClass: .phone, stores: [.apple])
+    }
+    #expect(throws: AssetInspectionError.self) {
+        try AssetInspector.validateDimensions(
+            ImageAssetInfo(width: 400, height: 500, fileSize: 1),
+            deviceClass: .watch, stores: [.google])
+    }
+}
+
+@Test func listingValidationChecksEveryLocaleAndRespectsGoogleOverrides() {
+    var manifest = Manifest()
+    manifest.setListingText("Valid", locale: "en-US", field: .keywords)
+    manifest.setListingText(String(repeating: "x", count: 101),
+                            locale: "pt-BR", field: .keywords)
+    #expect(manifest.listingErrorCount(for: [.apple, .google]) == 1)
+
+    manifest.setListingText(String(repeating: "s", count: 40),
+                            locale: "en-US", field: .subtitle)
+    #expect(manifest.listingErrorCount(for: [.apple, .google]) == 2)
+    manifest.setGoogleOverride(true, locale: "en-US", field: .googleShortDescription)
+    #expect(manifest.listingErrorCount(for: [.google]) == 0)
+}
+
+@Test func priceDraftsClearOrRejectInsteadOfSilentlyKeepingAnOldPrice() {
+    #expect(PriceDraft.resolve(amount: "", currency: "USD") == .empty)
+    #expect(PriceDraft.resolve(amount: "four", currency: "USD")
+            == .invalid("The price must be a valid decimal amount."))
+    #expect(PriceDraft.resolve(amount: "4.99", currency: "usd", territory: "us")
+            == .valid(Price(amount: Decimal(string: "4.99")!, currency: "USD", territory: "US")))
+}

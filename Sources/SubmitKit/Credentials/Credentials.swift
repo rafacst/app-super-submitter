@@ -38,6 +38,22 @@ public struct GoogleServiceAccount: Codable, Sendable, Equatable {
     }
 }
 
+public struct RevenueCatCredential: Codable, Sendable, Equatable {
+    public var apiKey: String
+
+    public init(apiKey: String) { self.apiKey = apiKey }
+}
+
+public struct ReviewerCredential: Codable, Sendable, Equatable {
+    public var username: String
+    public var password: String
+
+    public init(username: String, password: String) {
+        self.username = username
+        self.password = password
+    }
+}
+
 public enum CredentialKind: String, Sendable {
     case apple
     case google

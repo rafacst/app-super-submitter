@@ -13,9 +13,17 @@ let package = Package(
     ],
     targets: [
         // No UI. Every rule in the spec lives here and has a test.
-        .target(name: "SubmitKit", dependencies: ["Yams"]),
+        .target(
+            name: "SubmitKit",
+            dependencies: ["Yams"],
+            resources: [.copy("Resources/screenshot-sizes.json")]
+        ),
         // Views only. No logic.
-        .executableTarget(name: "SuperSubmitter", dependencies: ["SubmitKit"]),
+        .executableTarget(
+            name: "SuperSubmitter",
+            dependencies: ["SubmitKit"],
+            resources: [.copy("Resources/AppIcon.png")]
+        ),
         .testTarget(
             name: "SubmitKitTests",
             dependencies: ["SubmitKit"],

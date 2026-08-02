@@ -31,6 +31,19 @@ enum ConnectionStatus: Equatable {
     }
 }
 
+enum PurchaseTextField { case id, name, amount, currency, entitlement }
+enum PlanTextField { case id, duration, basePlanID, amount, currency, entitlement, packageKey }
+
+enum MediaInputError: LocalizedError {
+    case tooMany(limit: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .tooMany(let limit): "You can add at most \(limit) files to this device size."
+        }
+    }
+}
+
 /// Where the tabs live. Spec section 16.1.
 enum NavigationPosition: String, CaseIterable, Identifiable {
     case sidebar, topBar
@@ -101,12 +114,28 @@ final class AppState {
     var packageErrors: [AppPackage.Kind: String] = [:]
     var readingPackages: Set<AppPackage.Kind> = []
 
+    // Tabs 3 and 4.
+    var mediaError: String?
+
     // Tab 3.
     var locale = "en-US"
-    var keywordsFixed = false
 
     // Tab 5.
     var provider: Manifest.Provider = .revenuecat
+    var revenueCatAPIKey = ""
+    var revenueCatProjectID = ""
+    var revenueCatConnection: ConnectionStatus = .notTested
+    var adaptyConnection: ConnectionStatus = .notTested
+    var priceAmount = ""
+    var priceCurrency = ""
+    var priceTerritory = ""
+    var moneyError: String?
+
+    // Tab 6.
+    var reviewerUsername = ""
+    var reviewerPassword = ""
+    var showAgeRating = false
+    var showDataSafety = false
 
     // Tab 7.
     var dryRun = false
@@ -412,6 +441,467 @@ final class AppState {
         saveManifestReportingErrors()
     }
 
+    // MARK: - Listing details
+
+    func listingBinding(_ field: ListingTextField, locale code: String? = nil) -> Binding<String> {
+        let localeCode = code ?? locale
+        return Binding(
+            get: { self.manifest.listingText(locale: localeCode, field: field) },
+            set: { value in
+                self.manifest.setListingText(value, locale: localeCode, field: field)
+                if field == .name, localeCode == self.manifest.listing?.defaultLocale {
+                    self.updateLinkedAppNameFromManifest()
+                }
+                self.saveManifestReportingErrors()
+            })
+    }
+
+    func googleOverrideBinding(_ field: ListingTextField) -> Binding<Bool> {
+        let localeCode = locale
+        return Binding(
+            get: { self.manifest.hasGoogleOverride(locale: localeCode, field: field) },
+            set: { enabled in
+                self.manifest.setGoogleOverride(enabled, locale: localeCode, field: field)
+                self.saveManifestReportingErrors()
+            })
+    }
+
+    // MARK: - Media
+
+    func mediaPaths(deviceClass: Manifest.DeviceClass, previews: Bool = false) -> [String] {
+        manifest.mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+    }
+
+    func mediaURL(for path: String) -> URL {
+        let url = URL(fileURLWithPath: path)
+        if url.path.hasPrefix("/") { return url }
+        return manifestURL?.deletingLastPathComponent().appendingPathComponent(path) ?? url
+    }
+
+    func imageInfo(for path: String) -> ImageAssetInfo? {
+        try? AssetInspector.image(at: mediaURL(for: path))
+    }
+
+    func imageStores(for path: String, deviceClass: Manifest.DeviceClass) -> Set<Store> {
+        guard let info = imageInfo(for: path) else { return [] }
+        return (try? AssetInspector.compatibleStores(
+            for: info, deviceClass: deviceClass, selectedStores: stores)) ?? []
+    }
+
+    func chooseMediaFiles(deviceClass: Manifest.DeviceClass, previews: Bool = false) {
+        let panel = NSOpenPanel()
+        panel.title = previews ? "Choose app previews" : "Choose screenshots"
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        let extensions = previews ? ["mov", "m4v", "mp4"] : ["png", "jpg", "jpeg"]
+        panel.allowedContentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
+        guard panel.runModal() == .OK else { return }
+        addMediaFiles(panel.urls, deviceClass: deviceClass, previews: previews)
+    }
+
+    func addMediaFiles(_ urls: [URL], deviceClass: Manifest.DeviceClass,
+                       previews: Bool = false) {
+        if previews {
+            Task {
+                var accepted: [String] = []
+                do {
+                    let existing = mediaPaths(deviceClass: deviceClass, previews: true)
+                    guard existing.count + urls.count <= 3 else {
+                        throw MediaInputError.tooMany(limit: 3)
+                    }
+                    for url in urls {
+                        let accessed = url.startAccessingSecurityScopedResource()
+                        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                        _ = try await AssetInspector.validatePreview(at: url)
+                        accepted.append(manifestPath(for: url))
+                    }
+                    manifest.addMediaPaths(accepted, locale: locale,
+                                           deviceClass: deviceClass, previews: true)
+                    saveManifestReportingErrors()
+                    mediaError = nil
+                } catch {
+                    mediaError = error.localizedDescription
+                }
+            }
+        } else {
+            do {
+                let limit = stores.contains(.google) ? 8 : 10
+                let existing = mediaPaths(deviceClass: deviceClass)
+                guard existing.count + urls.count <= limit else {
+                    throw MediaInputError.tooMany(limit: limit)
+                }
+                var paths: [String] = []
+                for url in urls {
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    _ = try AssetInspector.validateImage(at: url, deviceClass: deviceClass,
+                                                         stores: stores)
+                    paths.append(manifestPath(for: url))
+                }
+                manifest.addMediaPaths(paths, locale: locale, deviceClass: deviceClass)
+                saveManifestReportingErrors()
+                mediaError = nil
+            } catch {
+                mediaError = error.localizedDescription
+            }
+        }
+    }
+
+    func removeMedia(_ path: String, deviceClass: Manifest.DeviceClass,
+                     previews: Bool = false) {
+        manifest.removeMediaPath(path, locale: locale, deviceClass: deviceClass,
+                                 previews: previews)
+        saveManifestReportingErrors()
+    }
+
+    // MARK: - Money
+
+    func setProvider(_ value: Manifest.Provider) {
+        provider = value
+        var monetization = manifest.monetization ?? Manifest.Monetization()
+        monetization.provider = value
+        manifest.monetization = monetization
+        saveManifestReportingErrors()
+    }
+
+    func updateRevenueCatProject() {
+        var monetization = manifest.monetization ?? Manifest.Monetization(provider: .revenuecat)
+        monetization.provider = .revenuecat
+        var revenueCat = monetization.revenuecat
+            ?? Manifest.Monetization.RevenueCat(projectId: revenueCatProjectID)
+        revenueCat.projectId = revenueCatProjectID
+        monetization.revenuecat = revenueCat
+        manifest.monetization = monetization
+        saveManifestReportingErrors()
+    }
+
+    func revenueCatKeyChanged() {
+        do {
+            try KeychainCredentials.save(RevenueCatCredential(apiKey: revenueCatAPIKey),
+                                         kind: .revenueCat, account: credentialAccount)
+            revenueCatConnection = .notTested
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func testRevenueCatConnection() {
+        revenueCatConnection = .testing
+        Task {
+            do {
+                revenueCatKeyChanged()
+                let message = try await ProviderConnectionClient().testRevenueCat(
+                    apiKey: revenueCatAPIKey, projectID: revenueCatProjectID)
+                revenueCatConnection = .connected(message)
+            } catch { revenueCatConnection = .failed(error.localizedDescription) }
+        }
+    }
+
+    func checkAdapty() {
+        adaptyConnection = .testing
+        Task {
+            do {
+                let message = try await Task.detached { try AdaptyCLIClient().status() }.value
+                adaptyConnection = .connected(message)
+            } catch { adaptyConnection = .failed(error.localizedDescription) }
+        }
+    }
+
+    func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    func updateBasePrice() {
+        switch PriceDraft.resolve(amount: priceAmount, currency: priceCurrency,
+                                  territory: priceTerritory) {
+        case .empty:
+            manifest.pricing = nil
+            saveManifestReportingErrors()
+            moneyError = priceCurrency.isEmpty ? nil : "Enter an amount to save the base price."
+        case .invalid(let message):
+            moneyError = message
+        case .valid(let price):
+            manifest.pricing = Manifest.Pricing(
+                base: price,
+                autoConvertOtherTerritories: manifest.pricing?.autoConvertOtherTerritories ?? true)
+            saveManifestReportingErrors()
+            moneyError = nil
+        }
+    }
+
+    func addPurchase() {
+        var values = manifest.purchases ?? []
+        values.append(.init(id: "com.example.product", kind: .nonConsumable,
+                            name: "New product", price: Price(amount: 0.99, currency: "USD")))
+        manifest.purchases = values
+        saveManifestReportingErrors()
+    }
+
+    func removePurchase(at index: Int) {
+        guard manifest.purchases?.indices.contains(index) == true else { return }
+        manifest.purchases?.remove(at: index)
+        saveManifestReportingErrors()
+    }
+
+    func purchaseBinding(index: Int, field: PurchaseTextField) -> Binding<String> {
+        Binding(get: {
+            guard let item = self.manifest.purchases?[safe: index] else { return "" }
+            return switch field {
+            case .id: item.id
+            case .name: item.name ?? ""
+            case .amount: item.price.map { "\($0.amount)" } ?? ""
+            case .currency: item.price?.currency ?? ""
+            case .entitlement: item.entitlements?.joined(separator: ",") ?? ""
+            }
+        }, set: { value in
+            guard self.manifest.purchases?.indices.contains(index) == true else { return }
+            switch field {
+            case .id: self.manifest.purchases?[index].id = value
+            case .name: self.manifest.purchases?[index].name = value
+            case .amount:
+                if value.isEmpty {
+                    self.manifest.purchases?[index].price = nil
+                    self.moneyError = nil
+                } else if let amount = Decimal(string: value) {
+                    let old = self.manifest.purchases?[index].price
+                    self.manifest.purchases?[index].price = Price(
+                        amount: amount, currency: old?.currency ?? "USD")
+                    self.moneyError = nil
+                } else {
+                    self.moneyError = "Purchase prices must be valid decimal amounts."
+                }
+            case .currency:
+                let old = self.manifest.purchases?[index].price
+                self.manifest.purchases?[index].price = Price(
+                    amount: old?.amount ?? 0, currency: value.uppercased())
+            case .entitlement:
+                self.manifest.purchases?[index].entitlements = value.split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            }
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func purchaseKindBinding(index: Int) -> Binding<Manifest.Purchase.Kind> {
+        Binding(get: { self.manifest.purchases?[safe: index]?.kind ?? .nonConsumable },
+                set: { value in
+                    guard self.manifest.purchases?.indices.contains(index) == true else { return }
+                    self.manifest.purchases?[index].kind = value
+                    self.saveManifestReportingErrors()
+                })
+    }
+
+    func addSubscriptionGroup() {
+        var groups = manifest.subscriptions ?? []
+        groups.append(.init(groupId: "main", groupName: "New subscription group", plans: [
+            .init(id: "com.example.monthly", duration: "P1M", basePlanId: "monthly",
+                  price: Price(amount: 0.99, currency: "USD"))
+        ]))
+        manifest.subscriptions = groups
+        saveManifestReportingErrors()
+    }
+
+    func removeSubscriptionGroup(at index: Int) {
+        guard manifest.subscriptions?.indices.contains(index) == true else { return }
+        manifest.subscriptions?.remove(at: index)
+        saveManifestReportingErrors()
+    }
+
+    func subscriptionGroupBinding(index: Int, name: Bool) -> Binding<String> {
+        Binding(get: {
+            guard self.manifest.subscriptions?.indices.contains(index) == true else { return "" }
+            return name ? self.manifest.subscriptions?[index].groupName ?? ""
+                : self.manifest.subscriptions?[index].groupId ?? ""
+        }, set: { value in
+            guard self.manifest.subscriptions?.indices.contains(index) == true else { return }
+            if name { self.manifest.subscriptions?[index].groupName = value }
+            else { self.manifest.subscriptions?[index].groupId = value }
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func addPlan(to groupIndex: Int) {
+        guard manifest.subscriptions?.indices.contains(groupIndex) == true else { return }
+        manifest.subscriptions?[groupIndex].plans.append(
+            .init(id: "com.example.monthly", duration: "P1M", basePlanId: "monthly",
+                  price: Price(amount: 0.99, currency: "USD")))
+        saveManifestReportingErrors()
+    }
+
+    func removePlan(groupIndex: Int, planIndex: Int) {
+        guard manifest.subscriptions?.indices.contains(groupIndex) == true,
+              manifest.subscriptions?[groupIndex].plans.indices.contains(planIndex) == true else { return }
+        manifest.subscriptions?[groupIndex].plans.remove(at: planIndex)
+        saveManifestReportingErrors()
+    }
+
+    func planBinding(groupIndex: Int, planIndex: Int, field: PlanTextField) -> Binding<String> {
+        Binding(get: {
+            guard self.manifest.subscriptions?.indices.contains(groupIndex) == true,
+                  self.manifest.subscriptions?[groupIndex].plans.indices.contains(planIndex) == true,
+                  let plan = self.manifest.subscriptions?[groupIndex].plans[planIndex] else { return "" }
+            return switch field {
+            case .id: plan.id
+            case .duration: plan.duration
+            case .basePlanID: plan.basePlanId ?? ""
+            case .amount: plan.price.map { "\($0.amount)" } ?? ""
+            case .currency: plan.price?.currency ?? ""
+            case .entitlement: plan.entitlements?.joined(separator: ",") ?? ""
+            case .packageKey: plan.packageKey ?? ""
+            }
+        }, set: { value in
+            guard self.manifest.subscriptions?.indices.contains(groupIndex) == true,
+                  self.manifest.subscriptions?[groupIndex].plans.indices.contains(planIndex) == true else { return }
+            switch field {
+            case .id: self.manifest.subscriptions?[groupIndex].plans[planIndex].id = value
+            case .duration: self.manifest.subscriptions?[groupIndex].plans[planIndex].duration = value
+            case .basePlanID: self.manifest.subscriptions?[groupIndex].plans[planIndex].basePlanId = value
+            case .amount:
+                if value.isEmpty {
+                    self.manifest.subscriptions?[groupIndex].plans[planIndex].price = nil
+                    self.moneyError = nil
+                } else if let amount = Decimal(string: value) {
+                    let old = self.manifest.subscriptions?[groupIndex].plans[planIndex].price
+                    self.manifest.subscriptions?[groupIndex].plans[planIndex].price =
+                        Price(amount: amount, currency: old?.currency ?? "USD")
+                    self.moneyError = nil
+                } else {
+                    self.moneyError = "Subscription prices must be valid decimal amounts."
+                }
+            case .currency:
+                let old = self.manifest.subscriptions?[groupIndex].plans[planIndex].price
+                self.manifest.subscriptions?[groupIndex].plans[planIndex].price =
+                    Price(amount: old?.amount ?? 0, currency: value.uppercased())
+            case .entitlement:
+                self.manifest.subscriptions?[groupIndex].plans[planIndex].entitlements =
+                    Self.csv(value)
+            case .packageKey: self.manifest.subscriptions?[groupIndex].plans[planIndex].packageKey = value
+            }
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func entitlementBinding(index: Int, name: Bool) -> Binding<String> {
+        Binding(get: {
+            guard self.manifest.entitlements?.indices.contains(index) == true else { return "" }
+            return name ? self.manifest.entitlements?[index].name ?? ""
+                : self.manifest.entitlements?[index].key ?? ""
+        }, set: { value in
+            guard self.manifest.entitlements?.indices.contains(index) == true else { return }
+            if name { self.manifest.entitlements?[index].name = value }
+            else { self.manifest.entitlements?[index].key = value }
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func offeringBinding(index: Int, field: String) -> Binding<String> {
+        Binding(get: {
+            guard self.manifest.offerings?.indices.contains(index) == true else { return "" }
+            switch field {
+            case "name": return self.manifest.offerings?[index].name ?? ""
+            case "products": return self.manifest.offerings?[index].products?.joined(separator: ",") ?? ""
+            default: return self.manifest.offerings?[index].key ?? ""
+            }
+        }, set: { value in
+            guard self.manifest.offerings?.indices.contains(index) == true else { return }
+            switch field {
+            case "name": self.manifest.offerings?[index].name = value
+            case "products": self.manifest.offerings?[index].products = Self.csv(value)
+            default: self.manifest.offerings?[index].key = value
+            }
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func offeringCurrentBinding(index: Int) -> Binding<Bool> {
+        Binding(get: { self.manifest.offerings?[safe: index]?.isCurrent ?? false }, set: { value in
+            guard self.manifest.offerings?.indices.contains(index) == true else { return }
+            self.manifest.offerings?[index].isCurrent = value
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func addEntitlement() {
+        var values = manifest.entitlements ?? []
+        values.append(.init(key: "new", name: "New entitlement"))
+        manifest.entitlements = values
+        saveManifestReportingErrors()
+    }
+
+    func removeEntitlement(at index: Int) {
+        guard manifest.entitlements?.indices.contains(index) == true else { return }
+        manifest.entitlements?.remove(at: index)
+        saveManifestReportingErrors()
+    }
+
+    func addOffering() {
+        var values = manifest.offerings ?? []
+        values.append(.init(key: "default", name: "New offering", isCurrent: values.isEmpty,
+                            products: []))
+        manifest.offerings = values
+        saveManifestReportingErrors()
+    }
+
+    func removeOffering(at index: Int) {
+        guard manifest.offerings?.indices.contains(index) == true else { return }
+        manifest.offerings?.remove(at: index)
+        saveManifestReportingErrors()
+    }
+
+    // MARK: - Review info
+
+    func reviewBinding(_ field: ReviewTextField) -> Binding<String> {
+        Binding(get: { self.manifest.reviewText(field) }, set: { value in
+            self.manifest.setReviewText(value, field: field)
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    var demoAccountRequiredBinding: Binding<Bool> {
+        Binding(get: { self.manifest.review?.demoAccountRequired ?? false }, set: { value in
+            var review = self.manifest.review ?? Manifest.Review()
+            review.demoAccountRequired = value
+            self.manifest.review = review
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func reviewerCredentialsChanged() {
+        do {
+            try KeychainCredentials.save(
+                ReviewerCredential(username: reviewerUsername, password: reviewerPassword),
+                kind: .reviewAccount, account: credentialAccount)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func reviewAnswerBinding(group: String, key: String) -> Binding<Bool> {
+        Binding(get: {
+            if group == "age" { return self.manifest.review?.ageRatingAnswers?[key] ?? false }
+            return self.manifest.review?.dataSafetyAnswers?[key] ?? false
+        }, set: { value in
+            var review = self.manifest.review ?? Manifest.Review()
+            if group == "age" {
+                var answers = review.ageRatingAnswers ?? [:]
+                answers[key] = value
+                review.ageRatingAnswers = answers
+            } else {
+                var answers = review.dataSafetyAnswers ?? [:]
+                answers[key] = value
+                review.dataSafetyAnswers = answers
+            }
+            self.manifest.review = review
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    var encryptionBinding: Binding<Bool> {
+        Binding(get: { self.manifest.review?.usesNonExemptEncryption ?? false }, set: { value in
+            var review = self.manifest.review ?? Manifest.Review()
+            review.usesNonExemptEncryption = value
+            self.manifest.review = review
+            self.saveManifestReportingErrors()
+        })
+    }
+
     // MARK: - The badges
 
     /// The count of open items per tab, and how loud each one is.
@@ -423,18 +913,22 @@ final class AppState {
         if applied { return nil }
         switch tab {
         case .details:
-            return keywordsFixed ? nil : (1, .error)
+            return listingErrorCount == 0 ? nil : (listingErrorCount, .error)
         case .reviewInfo:
             return (2, .warning)
         case .plan:
-            return keywordsFixed ? (2, .warning) : (3, .error)
+            return listingErrorCount == 0 ? (2, .warning) : (listingErrorCount + 2, .error)
         default:
             return nil
         }
     }
 
-    var planIsBlocked: Bool { !keywordsFixed }
+    var planIsBlocked: Bool { listingErrorCount > 0 }
     var hasProvider: Bool { provider != .none }
+
+    private var listingErrorCount: Int {
+        manifest.listingErrorCount(for: stores)
+    }
 
     // MARK: - The run
 
@@ -489,7 +983,6 @@ final class AppState {
         runTask = nil
         selectedTab = .stores
         buildRead = false
-        keywordsFixed = false
         applied = false
         runIndex = -1
         runDone = false
@@ -510,6 +1003,7 @@ final class AppState {
         manifest = try ManifestFile.load(from: url)
         manifestURL = url
         syncStoreFieldsFromManifest()
+        syncEditingStateFromManifest()
     }
 
     func save() throws {
@@ -532,6 +1026,7 @@ final class AppState {
             locale = manifest.listing?.defaultLocale
                 ?? manifest.listing?.locales.keys.sorted().first
                 ?? "en-US"
+            syncEditingStateFromManifest()
             packages = [:]
             packageErrors = [:]
             buildRead = false
@@ -555,6 +1050,13 @@ final class AppState {
             googleCredential = google
             googleCredentialFileName = google?.fileName ?? ""
             googleAccountEmail = google?.clientEmail ?? ""
+            let revenueCat = try KeychainCredentials.load(
+                RevenueCatCredential.self, kind: .revenueCat, account: credentialAccount)
+            revenueCatAPIKey = revenueCat?.apiKey ?? ""
+            let reviewer = try KeychainCredentials.load(
+                ReviewerCredential.self, kind: .reviewAccount, account: credentialAccount)
+            reviewerUsername = reviewer?.username ?? ""
+            reviewerPassword = reviewer?.password ?? ""
             appleConnection = .notTested
             googleConnection = .notTested
             remoteAppleApps = []
@@ -576,6 +1078,14 @@ final class AppState {
         appleAppID = manifest.apps.apple?.appId ?? ""
         appleBundleID = manifest.apps.apple?.bundleId ?? ""
         googlePackageName = manifest.apps.google?.packageName ?? ""
+    }
+
+    private func syncEditingStateFromManifest() {
+        provider = manifest.monetization?.provider ?? .none
+        revenueCatProjectID = manifest.monetization?.revenuecat?.projectId ?? ""
+        priceAmount = manifest.pricing.map { "\($0.base.amount)" } ?? ""
+        priceCurrency = manifest.pricing?.base.currency ?? ""
+        priceTerritory = manifest.pricing?.base.territory ?? ""
     }
 
     private func saveManifestReportingErrors() {
@@ -618,6 +1128,11 @@ final class AppState {
         return String(letters).uppercased()
     }
 
+    private static func csv(_ value: String) -> [String] {
+        value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     private static func displayName(from folderName: String) -> String {
         folderName
             .replacingOccurrences(of: "-", with: " ")
@@ -643,5 +1158,11 @@ final class AppState {
     private static func isValidLocale(_ code: String) -> Bool {
         code.range(of: #"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"#,
                    options: .regularExpression) != nil
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

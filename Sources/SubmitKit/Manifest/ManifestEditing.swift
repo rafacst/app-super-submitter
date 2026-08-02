@@ -1,9 +1,212 @@
 import Foundation
 
+public enum ListingTextField: String, Sendable, CaseIterable {
+    case name, subtitle, description, whatsNew, keywords, promotionalText
+    case supportURL, marketingURL, privacyPolicyURL
+    case googleShortDescription, googleWhatsNew, googleVideo
+}
+
+public enum ReviewTextField: String, Sendable, CaseIterable {
+    case firstName, lastName, email, phone, notes
+    case applePrimaryCategory, appleSecondaryCategory, googleCategory
+}
+
 /// Small, tested mutations used by the SwiftUI form. Keeping these in
 /// SubmitKit means the views never need to know how to construct a missing
 /// manifest block.
 public extension Manifest {
+    func listingErrorCount(for stores: Set<Store>) -> Int {
+        guard let localeCodes = listing?.locales.keys else { return 0 }
+        var count = 0
+        for code in localeCodes {
+            let googleSubtitleOverride = hasGoogleOverride(
+                locale: code, field: .googleShortDescription)
+            let googleWhatsNewOverride = hasGoogleOverride(
+                locale: code, field: .googleWhatsNew)
+            let checks: [(ListingTextField, ListingField, Set<Store>)] = [
+                (.name, .name, []),
+                (.subtitle, .subtitle, googleSubtitleOverride ? [.google] : []),
+                (.description, .description, []),
+                (.whatsNew, .whatsNew, googleWhatsNewOverride ? [.google] : []),
+                (.keywords, .keywords, []),
+                (.promotionalText, .promotionalText, []),
+            ]
+            for (textField, listingField, overrides) in checks {
+                if BindingLimits.overflow(
+                    listingText(locale: code, field: textField), for: listingField,
+                    stores: stores, overriddenIn: overrides) > 0 { count += 1 }
+            }
+            if googleSubtitleOverride,
+               BindingLimits.overflow(
+                listingText(locale: code, field: .googleShortDescription),
+                for: .shortDescription, stores: [.google]) > 0 { count += 1 }
+            if googleWhatsNewOverride,
+               BindingLimits.overflow(
+                listingText(locale: code, field: .googleWhatsNew),
+                for: .whatsNew, stores: [.google]) > 0 { count += 1 }
+        }
+        return count
+    }
+
+    func listingText(locale code: String, field: ListingTextField) -> String {
+        guard let locale = listing?.locales[code] else { return "" }
+        return switch field {
+        case .name: locale.name ?? ""
+        case .subtitle: locale.subtitle.value ?? ""
+        case .description: locale.description.value ?? ""
+        case .whatsNew: locale.whatsNew.value ?? ""
+        case .keywords: locale.keywords.value ?? ""
+        case .promotionalText: locale.promotionalText.value ?? ""
+        case .supportURL: locale.supportUrl.value ?? ""
+        case .marketingURL: locale.marketingUrl.value ?? ""
+        case .privacyPolicyURL: locale.privacyPolicyUrl.value ?? ""
+        case .googleShortDescription: locale.google?.shortDescription.value ?? ""
+        case .googleWhatsNew: locale.google?.whatsNew.value ?? ""
+        case .googleVideo: locale.google?.video.value ?? ""
+        }
+    }
+
+    mutating func setListingText(_ value: String, locale code: String,
+                                 field: ListingTextField) {
+        addLocale(code)
+        guard var listing else { return }
+        var locale = listing.locales[code] ?? Listing.Locale()
+        let managed = Managed<String>.value(value)
+        switch field {
+        case .name: locale.name = value
+        case .subtitle: locale.subtitle = managed
+        case .description: locale.description = managed
+        case .whatsNew: locale.whatsNew = managed
+        case .keywords: locale.keywords = managed
+        case .promotionalText: locale.promotionalText = managed
+        case .supportURL: locale.supportUrl = managed
+        case .marketingURL: locale.marketingUrl = managed
+        case .privacyPolicyURL: locale.privacyPolicyUrl = managed
+        case .googleShortDescription:
+            var google = locale.google ?? Listing.Locale.GoogleOverride()
+            google.shortDescription = managed
+            locale.google = google
+        case .googleWhatsNew:
+            var google = locale.google ?? Listing.Locale.GoogleOverride()
+            google.whatsNew = managed
+            locale.google = google
+        case .googleVideo:
+            var google = locale.google ?? Listing.Locale.GoogleOverride()
+            google.video = managed
+            locale.google = google
+        }
+        listing.locales[code] = locale
+        self.listing = listing
+    }
+
+    mutating func setGoogleOverride(_ enabled: Bool, locale code: String,
+                                    field: ListingTextField) {
+        addLocale(code)
+        guard var listing else { return }
+        var locale = listing.locales[code] ?? Listing.Locale()
+        if enabled {
+            var google = locale.google ?? Listing.Locale.GoogleOverride()
+            if field == .googleShortDescription, !google.shortDescription.isManaged {
+                google.shortDescription = .value(locale.subtitle.value ?? "")
+            }
+            if field == .googleWhatsNew, !google.whatsNew.isManaged {
+                google.whatsNew = .value(locale.whatsNew.value ?? "")
+            }
+            locale.google = google
+        } else if var google = locale.google {
+            if field == .googleShortDescription { google.shortDescription = .unmanaged }
+            if field == .googleWhatsNew { google.whatsNew = .unmanaged }
+            locale.google = google
+        }
+        listing.locales[code] = locale
+        self.listing = listing
+    }
+
+    func hasGoogleOverride(locale code: String, field: ListingTextField) -> Bool {
+        guard let google = listing?.locales[code]?.google else { return false }
+        return switch field {
+        case .googleShortDescription: google.shortDescription.isManaged
+        case .googleWhatsNew: google.whatsNew.isManaged
+        case .googleVideo: google.video.isManaged
+        default: false
+        }
+    }
+
+    func mediaPaths(locale: String, deviceClass: DeviceClass, previews: Bool = false) -> [String] {
+        let source = previews ? media?.previews : media?.screenshots
+        return source?[locale]?[deviceClass.rawValue] ?? []
+    }
+
+    mutating func addMediaPaths(_ paths: [String], locale: String,
+                                deviceClass: DeviceClass, previews: Bool = false) {
+        var media = self.media ?? Media()
+        if previews {
+            var locales = media.previews ?? [:]
+            var groups = locales[locale] ?? [:]
+            var values = groups[deviceClass.rawValue] ?? []
+            for path in paths where !values.contains(path) { values.append(path) }
+            groups[deviceClass.rawValue] = values
+            locales[locale] = groups
+            media.previews = locales
+        } else {
+            var locales = media.screenshots ?? [:]
+            var groups = locales[locale] ?? [:]
+            var values = groups[deviceClass.rawValue] ?? []
+            for path in paths where !values.contains(path) { values.append(path) }
+            groups[deviceClass.rawValue] = values
+            locales[locale] = groups
+            media.screenshots = locales
+        }
+        self.media = media
+    }
+
+    mutating func removeMediaPath(_ path: String, locale: String,
+                                  deviceClass: DeviceClass, previews: Bool = false) {
+        var media = self.media ?? Media()
+        if previews {
+            var locales = media.previews ?? [:]
+            var groups = locales[locale] ?? [:]
+            groups[deviceClass.rawValue]?.removeAll { $0 == path }
+            locales[locale] = groups
+            media.previews = locales
+        } else {
+            var locales = media.screenshots ?? [:]
+            var groups = locales[locale] ?? [:]
+            groups[deviceClass.rawValue]?.removeAll { $0 == path }
+            locales[locale] = groups
+            media.screenshots = locales
+        }
+        self.media = media
+    }
+
+    func reviewText(_ field: ReviewTextField) -> String {
+        guard let review else { return "" }
+        return switch field {
+        case .firstName: review.contactFirstName ?? ""
+        case .lastName: review.contactLastName ?? ""
+        case .email: review.contactEmail ?? ""
+        case .phone: review.contactPhone ?? ""
+        case .notes: review.notes ?? ""
+        case .applePrimaryCategory: review.applePrimaryCategory ?? ""
+        case .appleSecondaryCategory: review.appleSecondaryCategory ?? ""
+        case .googleCategory: review.googleCategory ?? ""
+        }
+    }
+
+    mutating func setReviewText(_ value: String, field: ReviewTextField) {
+        var review = self.review ?? Review()
+        switch field {
+        case .firstName: review.contactFirstName = value
+        case .lastName: review.contactLastName = value
+        case .email: review.contactEmail = value
+        case .phone: review.contactPhone = value
+        case .notes: review.notes = value
+        case .applePrimaryCategory: review.applePrimaryCategory = value
+        case .appleSecondaryCategory: review.appleSecondaryCategory = value
+        case .googleCategory: review.googleCategory = value
+        }
+        self.review = review
+    }
     mutating func setStore(_ store: Store, enabled: Bool) {
         switch store {
         case .apple:

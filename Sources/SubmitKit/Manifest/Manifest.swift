@@ -60,14 +60,33 @@ extension Manifest {
         public var revenuecat: RevenueCat?
         public var adapty: Adapty?
 
+        public init(provider: Provider = .none, revenuecat: RevenueCat? = nil,
+                    adapty: Adapty? = nil) {
+            self.provider = provider
+            self.revenuecat = revenuecat
+            self.adapty = adapty
+        }
+
         public struct RevenueCat: Codable, Sendable, Equatable {
             public var projectId: String
             public var appIds: AppIds
+
+            public init(projectId: String, appIds: AppIds = AppIds()) {
+                self.projectId = projectId
+                self.appIds = appIds
+            }
 
             public struct AppIds: Codable, Sendable, Equatable {
                 public var appStore: String?
                 public var macAppStore: String?
                 public var playStore: String?
+
+                public init(appStore: String? = nil, macAppStore: String? = nil,
+                            playStore: String? = nil) {
+                    self.appStore = appStore
+                    self.macAppStore = macAppStore
+                    self.playStore = playStore
+                }
 
                 enum CodingKeys: String, CodingKey {
                     case appStore = "app_store"
@@ -79,6 +98,7 @@ extension Manifest {
 
         public struct Adapty: Codable, Sendable, Equatable {
             public var appId: String
+            public init(appId: String) { self.appId = appId }
         }
     }
 
@@ -99,10 +119,24 @@ extension Manifest {
         public var apple: AppleRelease?
         public var google: GoogleRelease?
 
+        public init(versionName: String? = nil, build: Build? = nil,
+                    apple: AppleRelease? = nil, google: GoogleRelease? = nil) {
+            self.versionName = versionName
+            self.build = build
+            self.apple = apple
+            self.google = google
+        }
+
         public struct Build: Codable, Sendable, Equatable {
             public var ios: String?
             public var macos: String?
             public var android: String?
+
+            public init(ios: String? = nil, macos: String? = nil, android: String? = nil) {
+                self.ios = ios
+                self.macos = macos
+                self.android = android
+            }
         }
 
         public struct AppleRelease: Codable, Sendable, Equatable {
@@ -134,6 +168,11 @@ extension Manifest {
         public var defaultLocale: String
         public var locales: [String: Locale]
 
+        public init(defaultLocale: String, locales: [String: Locale]) {
+            self.defaultLocale = defaultLocale
+            self.locales = locales
+        }
+
         /// One language of the store listing.
         ///
         /// The clearable fields use `Managed`. A name is not clearable,
@@ -150,10 +189,14 @@ extension Manifest {
             public var privacyPolicyUrl: Managed<String> = .unmanaged
             public var google: GoogleOverride?
 
+            public init(name: String? = nil) { self.name = name }
+
             public struct GoogleOverride: Codable, Sendable, Equatable {
                 public var shortDescription: Managed<String> = .unmanaged
                 public var video: Managed<String> = .unmanaged
                 public var whatsNew: Managed<String> = .unmanaged
+
+                public init() {}
             }
         }
     }
@@ -169,6 +212,15 @@ extension Manifest {
         public var previews: [String: [String: [String]]]?
         public var icon: String?            // Google only
         public var featureGraphic: String?  // Google only
+
+        public init(screenshots: [String: [String: [String]]]? = nil,
+                    previews: [String: [String: [String]]]? = nil,
+                    icon: String? = nil, featureGraphic: String? = nil) {
+            self.screenshots = screenshots
+            self.previews = previews
+            self.icon = icon
+            self.featureGraphic = featureGraphic
+        }
     }
 
     /// Spec 6.3. The pixel dimensions pick the bucket, never the folder name.
@@ -183,6 +235,11 @@ extension Manifest {
     public struct Pricing: Codable, Sendable, Equatable {
         public var base: Price
         public var autoConvertOtherTerritories: Bool?
+
+        public init(base: Price, autoConvertOtherTerritories: Bool? = nil) {
+            self.base = base
+            self.autoConvertOtherTerritories = autoConvertOtherTerritories
+        }
     }
 
     public struct Purchase: Codable, Sendable, Equatable {
@@ -193,6 +250,18 @@ extension Manifest {
         public var reviewNote: String?
         public var entitlements: [String]?
         public var locales: [String: ProductLocale]?
+
+        public init(id: String, kind: Kind, name: String? = nil, price: Price? = nil,
+                    reviewNote: String? = nil, entitlements: [String]? = nil,
+                    locales: [String: ProductLocale]? = nil) {
+            self.id = id
+            self.kind = kind
+            self.name = name
+            self.price = price
+            self.reviewNote = reviewNote
+            self.entitlements = entitlements
+            self.locales = locales
+        }
 
         public enum Kind: String, Codable, Sendable, CaseIterable {
             case consumable
@@ -206,6 +275,12 @@ extension Manifest {
         public var groupName: String?
         public var plans: [Plan]
 
+        public init(groupId: String, groupName: String? = nil, plans: [Plan] = []) {
+            self.groupId = groupId
+            self.groupName = groupName
+            self.plans = plans
+        }
+
         public struct Plan: Codable, Sendable, Equatable {
             public var id: String
             /// ISO 8601, for example `P1M`. Spec 6.6.2 holds the Adapty map.
@@ -215,17 +290,40 @@ extension Manifest {
             public var entitlements: [String]?
             public var packageKey: String?   // RevenueCat only
             public var locales: [String: ProductLocale]?
+
+            public init(id: String, duration: String, basePlanId: String? = nil,
+                        price: Price? = nil, entitlements: [String]? = nil,
+                        packageKey: String? = nil,
+                        locales: [String: ProductLocale]? = nil) {
+                self.id = id
+                self.duration = duration
+                self.basePlanId = basePlanId
+                self.price = price
+                self.entitlements = entitlements
+                self.packageKey = packageKey
+                self.locales = locales
+            }
         }
     }
 
     public struct ProductLocale: Codable, Sendable, Equatable {
         public var name: String?
         public var description: String?
+
+        public init(name: String? = nil, description: String? = nil) {
+            self.name = name
+            self.description = description
+        }
     }
 
     public struct Entitlement: Codable, Sendable, Equatable {
         public var key: String
         public var name: String?
+
+        public init(key: String, name: String? = nil) {
+            self.key = key
+            self.name = name
+        }
     }
 
     public struct Offering: Codable, Sendable, Equatable {
@@ -233,6 +331,14 @@ extension Manifest {
         public var name: String?
         public var isCurrent: Bool?
         public var products: [String]?
+
+        public init(key: String, name: String? = nil, isCurrent: Bool? = nil,
+                    products: [String]? = nil) {
+            self.key = key
+            self.name = name
+            self.isCurrent = isCurrent
+            self.products = products
+        }
     }
 }
 
@@ -248,6 +354,35 @@ extension Manifest {
         public var contactPhone: String?
         public var demoAccountRequired: Bool?
         public var notes: String?
+        public var applePrimaryCategory: String?
+        public var appleSecondaryCategory: String?
+        public var googleCategory: String?
+        public var ageRatingAnswers: [String: Bool]?
+        public var dataSafetyAnswers: [String: Bool]?
+        public var usesNonExemptEncryption: Bool?
+
+        public init(contactFirstName: String? = nil, contactLastName: String? = nil,
+                    contactEmail: String? = nil, contactPhone: String? = nil,
+                    demoAccountRequired: Bool? = nil, notes: String? = nil,
+                    applePrimaryCategory: String? = nil,
+                    appleSecondaryCategory: String? = nil,
+                    googleCategory: String? = nil,
+                    ageRatingAnswers: [String: Bool]? = nil,
+                    dataSafetyAnswers: [String: Bool]? = nil,
+                    usesNonExemptEncryption: Bool? = nil) {
+            self.contactFirstName = contactFirstName
+            self.contactLastName = contactLastName
+            self.contactEmail = contactEmail
+            self.contactPhone = contactPhone
+            self.demoAccountRequired = demoAccountRequired
+            self.notes = notes
+            self.applePrimaryCategory = applePrimaryCategory
+            self.appleSecondaryCategory = appleSecondaryCategory
+            self.googleCategory = googleCategory
+            self.ageRatingAnswers = ageRatingAnswers
+            self.dataSafetyAnswers = dataSafetyAnswers
+            self.usesNonExemptEncryption = usesNonExemptEncryption
+        }
     }
 }
 
