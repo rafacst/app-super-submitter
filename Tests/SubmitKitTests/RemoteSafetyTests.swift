@@ -32,3 +32,34 @@ import Testing
     #expect(StateReader.revenueCatNextPagePath(next, expectedPrefix: "/v2/projects/other/products")
         == nil)
 }
+
+@Test func applePaginationOnlyFollowsTrustedBuildLinks() {
+    let next = "https://api.appstoreconnect.apple.com/v1/builds?cursor=next_42"
+
+    #expect(UploadService.appleNextPagePath(next) == "/v1/builds?cursor=next_42")
+    #expect(UploadService.appleNextPagePath(
+        "https://evil.example/v1/builds?cursor=stolen") == nil)
+    #expect(UploadService.appleNextPagePath(
+        "https://api.appstoreconnect.apple.com/v1/apps?cursor=wrong-resource") == nil)
+}
+
+@Test func googleReconciliationRequiresTheExactTrackAndDraftRelease() {
+    let payload = JSON(data: Data("""
+        {"tracks":[
+          {"track":"beta","releases":[{"status":"draft","versionCodes":["42"]}]},
+          {"track":"production","releases":[
+            {"status":"completed","versionCodes":["42"]},
+            {"status":"draft","versionCodes":["43"]}
+          ]}
+        ]}
+        """.utf8))
+
+    #expect(UploadService.googleTrackContainsCommittedVersion(
+        payload, track: "beta", versionCode: 42))
+    #expect(UploadService.googleTrackContainsCommittedVersion(
+        payload, track: "production", versionCode: 43))
+    #expect(!UploadService.googleTrackContainsCommittedVersion(
+        payload, track: "production", versionCode: 42))
+    #expect(!UploadService.googleTrackContainsCommittedVersion(
+        payload, track: "alpha", versionCode: 42))
+}
