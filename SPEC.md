@@ -1422,7 +1422,7 @@ things: what failed, which store, and what to do next.
 
 ## 16. User interface
 
-One window. Nine tabs, in the order of the work. One Settings window.
+One window. Ten tabs, in the order of the work. One Settings window.
 
 ### 16.1 The shell
 
@@ -1437,7 +1437,7 @@ The window holds three parts.
 
 **The position of the tabs.** Settings holds one picker, **Navigation:
 Sidebar or Top bar**. The sidebar is the default. The top bar shows the same
-nine tabs as a segmented control and moves the app switcher into the toolbar.
+ten tabs as a segmented control and moves the app switcher into the toolbar.
 The two positions render the same views. Nothing else changes.
 
 `// ponytail: one preference, two containers, one set of views. No second
@@ -1489,13 +1489,18 @@ The onboarding writes nothing. One click skips it.
 | 3 | Details | What does the listing say? | `listing` |
 | 4 | Media | What does the listing show? | `media` |
 | 5 | Money | What does it cost, and what can I buy? | `pricing`, `purchases`, `subscriptions`, `entitlements`, `offerings` |
-| 6 | Review info | What does the reviewer need? | `review` |
-| 7 | Plan | What changes, exactly? | none. It reads. |
-| 8 | Submit | Do it. | none. It writes. |
-| 9 | Release | Is it ready, and shall I send it? | none. It releases. |
+| 6 | Marketing | How does the App Store sell it? | `marketing` |
+| 7 | Review info | What does the reviewer need? | `review` |
+| 8 | Plan | What changes, exactly? | none. It reads. |
+| 9 | Submit | Do it. | none. It writes. |
+| 10 | Release | Is it ready, and shall I send it? | none. It releases. |
 
-Tabs 1 to 6 edit the manifest. Tab 7 reads. Tab 8 writes the drafts. Tab 9
+Tabs 1 to 7 edit the manifest. Tab 8 reads. Tab 9 writes the drafts. Tab 10
 holds the only irreversible buttons in the app.
+
+Tab 6 is the one tab that reaches a single store. Every field on it writes to
+the App Store, and Google Play has no equivalent for any of it, so the tab
+says that once in its header rather than in every section.
 
 #### Tab 1 — Stores
 

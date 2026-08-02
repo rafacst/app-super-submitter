@@ -247,6 +247,7 @@ final class AppState {
         case .details: .details
         case .media: .media
         case .money: .money
+        case .marketing: .marketing
         case .reviewInfo: .reviewInfo
         default: nil
         }
@@ -585,6 +586,30 @@ final class AppState {
         panel.allowedContentTypes = allowedExtensions.compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK else { return }
         importPackages(from: panel.urls)
+    }
+
+    /// Chooses one file and answers its URL. The build picker imports and
+    /// parses; this one only names a path, because the artifacts next to a
+    /// build carry no metadata that the app reads.
+    func chooseOneFile(allowedExtensions: [String]) -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = "Choose a file"
+        panel.message = "Choose \(allowedExtensions.sorted().map { ".\($0)" }.joined(separator: " or "))."
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = allowedExtensions.compactMap { UTType(filenameExtension: $0) }
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
+    }
+
+    /// A path relative to the manifest, when the file sits under it. The
+    /// manifest travels in a repository, so an absolute path from one machine
+    /// is useless on the next.
+    func relativePath(for url: URL) -> String {
+        guard let root = manifestRoot?.standardizedFileURL.path else { return url.path }
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix(root + "/") else { return path }
+        return String(path.dropFirst(root.count + 1))
     }
 
     func useReleaseVersion(_ version: String) {
@@ -1128,6 +1153,7 @@ final class AppState {
         case .details: target = .details
         case .media: target = .media
         case .money: target = .money
+        case .marketing: target = .marketing
         case .reviewInfo: target = .reviewInfo
         case .plan: target = nil
         default: return nil
@@ -1306,7 +1332,7 @@ final class AppState {
         planPriceInputs = [:]
     }
 
-    private func saveManifestReportingErrors() {
+    func saveManifestReportingErrors() {
         do {
             try save()
             invalidatePlan()

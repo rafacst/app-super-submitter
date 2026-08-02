@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// The nine tabs, in the order of the work. Spec section 16.3.
+/// The ten tabs, in the order of the work. Spec section 16.3.
 enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case stores = 1
     case build
     case details
     case media
     case money
+    case marketing
     case reviewInfo
     case plan
     case submit
@@ -21,6 +22,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .details: "Details"
         case .media: "Media"
         case .money: "Money"
+        case .marketing: "Marketing"
         case .reviewInfo: "Review info"
         case .plan: "Plan"
         case .submit: "Submit"
@@ -35,6 +37,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .details: "text.alignleft"
         case .media: "photo.on.rectangle"
         case .money: "creditcard"
+        case .marketing: "megaphone"
         case .reviewInfo: "checkmark.shield"
         case .plan: "arrow.left.arrow.right"
         case .submit: "arrow.up.circle"
@@ -50,6 +53,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .details: "What does the listing say?"
         case .media: "What does the listing show?"
         case .money: "What does it cost, and what can I buy?"
+        case .marketing: "How does the App Store sell it?"
         case .reviewInfo: "What does the reviewer need?"
         case .plan: "What changes, exactly?"
         case .submit: "Do it."
@@ -74,7 +78,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     var zone: Zone {
         switch self {
-        case .stores, .build, .details, .media, .money, .reviewInfo: .edits
+        case .stores, .build, .details, .media, .money, .marketing, .reviewInfo: .edits
         case .plan: .reads
         case .submit: .writes
         case .release: .releases

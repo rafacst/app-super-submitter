@@ -558,7 +558,7 @@ public enum Validator {
             result.append(Finding(
                 id: "marketing.pageCount", severity: .error,
                 message: "\(pages.count) custom product pages exceed the App Store limit of 35.",
-                location: "Details · Custom product pages", fix: .details))
+                location: "Marketing · Custom product pages", fix: .marketing))
         }
         for page in marketing.customProductPages ?? [] {
             for (code, locale) in (page.locales ?? [:]).sorted(by: { $0.key < $1.key }) {
@@ -566,7 +566,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "marketing.page.\(page.key).\(code)", severity: .error,
                     message: "The promotional text of \(page.key) is \(text.count) characters. The limit is 170.",
-                    location: "Details · \(page.key) · \(code)", fix: .details))
+                    location: "Marketing · \(page.key) · \(code)", fix: .marketing))
             }
         }
 
@@ -576,19 +576,19 @@ public enum Validator {
                 result.append(Finding(
                     id: "marketing.traffic.\(experiment.key)", severity: .error,
                     message: "The experiment \(experiment.key) sends \(proportion) percent of the traffic. The range is 1 to 100.",
-                    location: "Details · \(experiment.key)", fix: .details))
+                    location: "Marketing · \(experiment.key)", fix: .marketing))
             }
             if experiment.treatments.isEmpty {
                 result.append(Finding(
                     id: "marketing.treatments.\(experiment.key)", severity: .error,
                     message: "The experiment \(experiment.key) holds no treatment, so it compares nothing.",
-                    location: "Details · \(experiment.key)", fix: .details))
+                    location: "Marketing · \(experiment.key)", fix: .marketing))
             }
             if experiment.treatments.count > 3 {
                 result.append(Finding(
                     id: "marketing.treatmentCount.\(experiment.key)", severity: .error,
                     message: "\(experiment.treatments.count) treatments exceed the App Store limit of 3.",
-                    location: "Details · \(experiment.key)", fix: .details))
+                    location: "Marketing · \(experiment.key)", fix: .marketing))
             }
         }
 
@@ -602,7 +602,7 @@ public enum Validator {
                     result.append(Finding(
                         id: "marketing.event.\(event.key).\(code).\(field)", severity: .error,
                         message: "The event \(field) is \(value.count) characters. The limit is \(limit).",
-                        location: "Details · \(event.key) · \(code)", fix: .details))
+                        location: "Marketing · \(event.key) · \(code)", fix: .marketing))
                 }
             }
         }
@@ -611,7 +611,7 @@ public enum Validator {
             result.append(Finding(
                 id: "marketing.eulaLength", severity: .error,
                 message: "The licence agreement is \(eula.text.count) characters. The limit is 10000.",
-                location: "Review info · Licence agreement", fix: .reviewInfo))
+                location: "Marketing · Licence agreement", fix: .marketing))
         }
 
         if let path = marketing.routingCoverage {
@@ -619,12 +619,12 @@ public enum Validator {
                 result.append(Finding(
                     id: "marketing.routingMissing", severity: .error,
                     message: "The manifest names the routing coverage \(path) and the file does not exist.",
-                    location: "Media · Routing coverage", fix: .media))
+                    location: "Marketing · Routing coverage", fix: .marketing))
             } else if !path.lowercased().hasSuffix(".geojson") {
                 result.append(Finding(
                     id: "marketing.routingType", severity: .error,
                     message: "The routing app coverage must be a .geojson file.",
-                    location: "Media · Routing coverage", fix: .media))
+                    location: "Marketing · Routing coverage", fix: .marketing))
             }
         }
 
@@ -632,7 +632,7 @@ public enum Validator {
             result.append(Finding(
                 id: "marketing.appleOnly", severity: .warning,
                 message: "The marketing block reaches the App Store only. Google Play offers no equivalent for any of it.",
-                location: "Details · Marketing", fix: .details))
+                location: "Marketing · Marketing", fix: .marketing))
         }
         return result
     }

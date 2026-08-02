@@ -60,6 +60,19 @@ struct TabIcon: View {
             p.addLine(to: .init(x: 8.9, y: 9))
             p.addCurve(to: .init(x: 8.9, y: 11.8), control1: .init(x: 9.67, y: 9), control2: .init(x: 9.67, y: 11.8))
             p.addLine(to: .init(x: 6.1, y: 11.8))
+        case .marketing:
+            // A cone that speaks outward: the store telling somebody.
+            p.move(to: .init(x: 2, y: 6.4))
+            p.addLine(to: .init(x: 6.2, y: 6.4))
+            p.addLine(to: .init(x: 11.6, y: 3.2))
+            p.addLine(to: .init(x: 11.6, y: 12.8))
+            p.addLine(to: .init(x: 6.2, y: 9.6))
+            p.addLine(to: .init(x: 2, y: 9.6))
+            p.closeSubpath()
+            p.move(to: .init(x: 4.6, y: 9.6))
+            p.addLine(to: .init(x: 5.4, y: 13.4))
+            p.move(to: .init(x: 13.4, y: 6.6))
+            p.addLine(to: .init(x: 13.4, y: 9.4))
         case .reviewInfo:
             p.addRoundedRect(in: CGRect(x: 2.5, y: 2.5, width: 11, height: 11), cornerSize: .init(width: 1.5, height: 1.5))
             p.move(to: .init(x: 5.3, y: 8.2))

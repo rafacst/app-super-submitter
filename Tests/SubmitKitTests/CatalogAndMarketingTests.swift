@@ -440,3 +440,36 @@ private func plan(_ manifest: Manifest, duration: String = "P1M",
     let again = try ManifestFile.decode(try ManifestFile.encode(manifest))
     #expect(again == manifest)
 }
+
+// MARK: - The marketing YAML block
+
+@Test func theMarketingTabOwnsItsOwnYAMLBlock() throws {
+    #expect(ManifestBlock.marketing.keys == ["marketing"])
+    // No two tabs may claim one key, or an edit on one would drop the other.
+    let all = ManifestBlock.allCases.flatMap(\.keys)
+    #expect(Set(all).count == all.count)
+}
+
+@Test func theRawMarketingBlockRoundTripsThroughTheEditor() throws {
+    var manifest = bothStores()
+    var marketing = Manifest.Marketing()
+    marketing.events = [.init(key: "tournament", badge: "BADGE_LIVE_EVENT")]
+    manifest.marketing = marketing
+
+    let raw = try ManifestFile.encode(manifest, block: .marketing)
+    #expect(raw.contains("marketing:"))
+    #expect(raw.contains("tournament"))
+
+    let applied = try ManifestFile.apply(raw, block: .marketing, to: manifest)
+    #expect(applied.marketing?.events?.first?.key == "tournament")
+    // The block writes its own key and nothing else.
+    #expect(applied.apps.apple?.appId == manifest.apps.apple?.appId)
+}
+
+@Test func aMarketingEditCannotReachAnotherTabsKey() {
+    let manifest = bothStores()
+    #expect(throws: ManifestBlockError.self) {
+        try ManifestFile.apply("pricing:\n  base:\n    amount: 1\n    currency: USD\n",
+                               block: .marketing, to: manifest)
+    }
+}

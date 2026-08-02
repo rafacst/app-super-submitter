@@ -178,6 +178,7 @@ extension AppState {
         case .details: .details
         case .media: .media
         case .money: .money
+        case .marketing: .marketing
         case .reviewInfo: .reviewInfo
         case .plan: .plan
         }

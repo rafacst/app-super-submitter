@@ -8,7 +8,7 @@ import Yams
 /// `// ponytail: slice the encoded document by top-level key. A second
 /// // per-tab serializer would be a second place for the schema to drift.`
 public enum ManifestBlock: String, Sendable, CaseIterable {
-    case stores, build, details, media, money, reviewInfo
+    case stores, build, details, media, money, marketing, reviewInfo
 
     /// The top-level keys of `store.yaml` that this tab writes.
     public var keys: [String] {
@@ -19,6 +19,7 @@ public enum ManifestBlock: String, Sendable, CaseIterable {
         case .media: ["media"]
         case .money: ["monetization", "pricing", "purchases", "subscriptions",
                       "entitlements", "offerings"]
+        case .marketing: ["marketing"]
         case .reviewInfo: ["review"]
         }
     }

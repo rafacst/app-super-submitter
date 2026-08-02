@@ -189,6 +189,27 @@ extension Manifest {
             /// id, so the app creates a new configuration when the file
             /// content changes and never before.
             public var deviceTierConfig: String?
+
+            public init(track: String? = nil, tracks: [String]? = nil, status: String? = nil,
+                        userFraction: Double? = nil, inAppUpdatePriority: Int? = nil,
+                        countries: [String]? = nil, includeRestOfWorld: Bool? = nil,
+                        mappingFile: String? = nil, nativeDebugSymbols: String? = nil,
+                        expansionFileMain: String? = nil, expansionFilePatch: String? = nil,
+                        externalApk: ExternalApk? = nil, deviceTierConfig: String? = nil) {
+                self.track = track
+                self.tracks = tracks
+                self.status = status
+                self.userFraction = userFraction
+                self.inAppUpdatePriority = inAppUpdatePriority
+                self.countries = countries
+                self.includeRestOfWorld = includeRestOfWorld
+                self.mappingFile = mappingFile
+                self.nativeDebugSymbols = nativeDebugSymbols
+                self.expansionFileMain = expansionFileMain
+                self.expansionFilePatch = expansionFilePatch
+                self.externalApk = externalApk
+                self.deviceTierConfig = deviceTierConfig
+            }
         }
 
         /// The metadata of an APK that the developer hosts, not Google.

@@ -63,6 +63,10 @@ struct BuildTab: View {
                     versionWarning(mismatch)
                 }
             }
+            if state.stores.contains(.google) {
+                AndroidArtifactsSection()
+                GoogleTracksSection()
+            }
         }
     }
 

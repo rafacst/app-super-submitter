@@ -142,7 +142,7 @@ public struct PlanStep: Sendable, Equatable, Identifiable {
 /// Where a validation error is fixed. SubmitKit names the tab; the app maps it
 /// to its own `Tab`, so the kit never imports SwiftUI.
 public enum FixTarget: String, Sendable, Equatable {
-    case stores, build, details, media, money, reviewInfo, plan
+    case stores, build, details, media, money, marketing, reviewInfo, plan
 }
 
 public struct Finding: Sendable, Equatable, Identifiable {

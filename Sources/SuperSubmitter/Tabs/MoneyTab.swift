@@ -163,6 +163,10 @@ struct MoneyTab: View {
                             TextField("Entitlements (comma-separated)",
                                       text: state.purchaseBinding(index: index, field: .entitlement))
                         }
+                        catalogRow(target: .purchase(index),
+                                   active: state.purchaseActiveBinding(index: index),
+                                   activeLabel: "On sale")
+                        OfferEditor(target: .purchase(index))
                     }.moneyPanel()
                 }
                 Button("Add in-app purchase", action: state.addPurchase)
@@ -183,6 +187,7 @@ struct MoneyTab: View {
                                 Image(systemName: "trash")
                             }
                         }
+                        gracePeriodRow(groupIndex: groupIndex)
                         ForEach(Array(group.plans.enumerated()), id: \.offset) { planIndex, _ in
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
@@ -199,6 +204,13 @@ struct MoneyTab: View {
                                     TextField("Entitlements", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .entitlement))
                                     TextField("Package", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .packageKey)).frame(width: 100)
                                 }
+                                catalogRow(
+                                    target: .plan(group: groupIndex, plan: planIndex),
+                                    active: state.planActiveBinding(groupIndex: groupIndex,
+                                                                    planIndex: planIndex),
+                                    activeLabel: "Base plan active")
+                                migrationRow(groupIndex: groupIndex, planIndex: planIndex)
+                                OfferEditor(target: .plan(group: groupIndex, plan: planIndex))
                             }.padding(.leading, 14)
                         }
                         Button("Add plan") { state.addPlan(to: groupIndex) }.controlSize(.small)
@@ -206,6 +218,56 @@ struct MoneyTab: View {
                 }
                 Button("Add subscription group", action: state.addSubscriptionGroup)
             }
+        }
+    }
+
+    /// The sale switch and the tax treatment. Both reach Google alone; the
+    /// App Store keeps them in App Store Connect.
+    private func catalogRow(target: OfferTarget, active: Binding<Bool>,
+                            activeLabel: String) -> some View {
+        HStack(spacing: 10) {
+            Toggle(activeLabel, isOn: active)
+                .disabled(!state.stores.contains(.google))
+            TextField("Tax category", text: state.taxBinding(target, withdrawal: false))
+                .frame(width: 190)
+            TextField("Withdrawal right", text: state.taxBinding(target, withdrawal: true))
+                .frame(width: 210)
+            Text("Google only")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The one control in the app that charges an existing customer. It is
+    /// drawn in the warning colour, and the plan warns again.
+    private func migrationRow(groupIndex: Int, planIndex: Int) -> some View {
+        let binding = state.planMigrateBinding(groupIndex: groupIndex, planIndex: planIndex)
+        return HStack(spacing: 8) {
+            Toggle("Migrate the existing subscribers to this price", isOn: binding)
+                .disabled(!state.stores.contains(.google))
+            if binding.wrappedValue {
+                StatePill(text: "Charges a real customer",
+                          foreground: Theme.yellow, background: Theme.yellowBg)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Apple keeps one grace period for the whole app. The tab says so, and
+    /// the validator warns when two groups disagree.
+    private func gracePeriodRow(groupIndex: Int) -> some View {
+        let binding = state.gracePeriodBinding(groupIndex: groupIndex)
+        return HStack(spacing: 10) {
+            Picker("Billing grace period", selection: binding) {
+                Text("None").tag(0)
+                Text("3 days").tag(3)
+                Text("16 days").tag(16)
+                Text("28 days").tag(28)
+            }
+            .frame(width: 260)
+            Text("The App Store keeps one for the whole app.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+            Spacer(minLength: 0)
         }
     }
 

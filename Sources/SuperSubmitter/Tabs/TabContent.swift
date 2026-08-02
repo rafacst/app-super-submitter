@@ -26,6 +26,7 @@ struct TabContent: View {
         case .details: DetailsTab()
         case .media: MediaTab()
         case .money: MoneyTab()
+        case .marketing: MarketingTab()
         case .reviewInfo: ReviewInfoTab()
         case .plan: PlanTab()
         case .submit: SubmitTab()
