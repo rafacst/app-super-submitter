@@ -76,8 +76,10 @@ import Testing
     try Data("two".utf8).write(to: second)
 
     let firstHash = try Checksums.sha256(directory: root)
-    #expect(firstHash == Checksums.sha256(directory: root))
+    let repeatedHash = try Checksums.sha256(directory: root)
+    #expect(firstHash == repeatedHash)
 
     try Data("changed".utf8).write(to: second)
-    #expect(try Checksums.sha256(directory: root) != firstHash)
+    let changedHash = try Checksums.sha256(directory: root)
+    #expect(changedHash != firstHash)
 }

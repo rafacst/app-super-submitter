@@ -482,9 +482,9 @@ struct BuildFromProjectView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!flow.canUpload)
-                QuietButton(title: "Keep the artifact and stop") { flow.run.move(to: .complete) }
+                QuietButton(title: "Keep the artifact and stop") { flow.keepArtifact() }
             }
-            if flow.project?.platform == .android, flow.state != .building {
+            if flow.project?.platform == .android, !flow.state.isActive {
                 QuietButton(title: "Choose Built AAB") { flow.chooseBuiltBundle() }
             }
             if flow.candidate != nil, flow.project == nil, flow.state != .complete {
@@ -584,12 +584,12 @@ struct BuildFromProjectView: View {
 
     private var successCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(flow.candidate == nil
-                 ? "The artifact is kept."
-                 : "The build reached the store.")
+            Text(flow.artifactOnly ? "The artifact is kept." : "The build reached the store.")
                 .font(.system(size: 15, weight: .semibold))
             if let candidate = flow.candidate {
-                Text("\(candidate.productIdentifier) \(candidate.marketingVersion) (\(candidate.buildVersion)) is in the store as a draft. Nothing was sent for review.")
+                Text(flow.artifactOnly
+                     ? "\(candidate.productIdentifier) \(candidate.marketingVersion) (\(candidate.buildVersion)) was kept locally and was not uploaded."
+                     : "\(candidate.productIdentifier) \(candidate.marketingVersion) (\(candidate.buildVersion)) is in the store as a draft. Nothing was sent for review.")
                     .font(.system(size: 12.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }

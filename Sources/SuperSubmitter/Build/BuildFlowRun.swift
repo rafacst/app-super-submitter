@@ -29,6 +29,7 @@ extension BuildFlow {
         failure = nil
         logLines = []
         candidate = nil
+        artifactOnly = false
         uploadProgress = 0
         startedAt = Date()
         run.move(to: .building)
@@ -211,13 +212,12 @@ extension BuildFlow {
         case .ios, .macos:
             let info = try await AppleBuildService(storage: storage)
                 .inspect(archive: artifact, platform: run.platform)
-            let data = try? Data(contentsOf: artifact.appendingPathComponent("Info.plist"))
             candidate = BuildCandidate(
                 platform: run.platform, productName: info.applicationName,
                 productIdentifier: info.bundleIdentifier,
                 marketingVersion: info.shortVersion, buildVersion: info.buildVersion,
                 artifactPath: artifact.path, artifactSize: info.size,
-                sha256: data.map(Checksums.sha256) ?? "",
+                sha256: try Checksums.sha256(directory: artifact),
                 signingSummary: .init(style: snapshot.signingStyle, team: info.team,
                                       identity: info.signingIdentity, profile: info.profileName,
                                       verified: info.signatureVerified,
@@ -359,12 +359,14 @@ extension BuildFlow {
         showUploadConfirmation = false
         failure = nil
         uploadProgress = 0
+        artifactOnly = false
         run.move(to: .uploading)
         try? storage.save(run)
 
         task = Task { [weak self] in
             guard let self else { return }
             await recheckRemote(for: candidate)
+            guard !Task.isCancelled else { return await finishCancel() }
             guard blocking == nil else {
                 run.move(to: .needsUploadConfirmation)
                 return
@@ -421,7 +423,12 @@ extension BuildFlow {
     /// upload-spec 8.16. The poll survives a relaunch, and **Stop waiting**
     /// never pretends that the upload was cancelled.
     func pollApple(_ candidate: BuildCandidate) async {
-        guard let app, let appID = app.manifest.apps.apple?.appId else { return }
+        guard let app, let appID = app.manifest.apps.apple?.appId, !appID.isEmpty else {
+            run.move(to: .recoveryRequired)
+            processingLabel = "The upload finished, but no App Store app is linked for processing checks."
+            try? storage.save(run)
+            return
+        }
         let service = UploadService(api: app.readOnlyAPI())
         var attempt = 0
         while !Task.isCancelled, attempt < 40 {
@@ -583,6 +590,7 @@ extension BuildFlow {
     /// upload-spec 5.1: a poll and a cleanup may outlive the app process, so
     /// a relaunch picks them up instead of leaving a stranded edit behind.
     func resumeUnfinishedRuns() {
+        guard !run.state.isActive else { return }
         guard let stranded = storage.unfinishedRuns().first else { return }
         run = stranded
         switch stranded.state {
@@ -613,6 +621,13 @@ extension BuildFlow {
         Task { await refreshPreflight() }
     }
 
+    func keepArtifact() {
+        artifactOnly = true
+        successLink = nil
+        run.move(to: .complete)
+        try? storage.save(run)
+    }
+
     func reset() {
         task?.cancel()
         task = nil
@@ -632,6 +647,7 @@ extension BuildFlow {
         warnings = []
         processingLabel = nil
         successLink = nil
+        artifactOnly = false
         uploadProgress = 0
     }
 

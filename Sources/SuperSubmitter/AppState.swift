@@ -73,6 +73,7 @@ final class AppState {
     @ObservationIgnored var eventTask: Task<Void, Never>?
     @ObservationIgnored var runContinuation: AsyncStream<RunEvent>.Continuation?
     @ObservationIgnored var pollTask: Task<Void, Never>?
+    @ObservationIgnored var stateGeneration = 0
     @ObservationIgnored var applePrivateKeyPEM = ""
     @ObservationIgnored var googleCredential: GoogleServiceAccount?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
@@ -269,7 +270,7 @@ final class AppState {
             }
             yamlDirty = false
             yamlError = nil
-            plan = nil
+            invalidatePlan()
         } catch {
             yamlError = error.localizedDescription
         }
@@ -390,7 +391,8 @@ final class AppState {
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
             let credential = try GoogleServiceAccount(
                 data: Data(contentsOf: url), fileName: url.lastPathComponent)
-            try KeychainCredentials.save(credential, kind: .google, account: credentialAccount)
+            try KeychainCredentials.save(credential, kind: .google,
+                                         account: try requireCredentialAccount())
             googleCredential = credential
             googleCredentialFileName = url.lastPathComponent
             googleAccountEmail = credential.clientEmail
@@ -419,15 +421,22 @@ final class AppState {
         let credential = AppleCredential(keyID: appleKeyID, issuerID: appleIssuerID,
                                          privateKeyPEM: applePrivateKeyPEM,
                                          fileName: appleCredentialFileName)
+        guard let account = credentialAccount else {
+            appleConnection = .failed("Link or create an app before saving credentials.")
+            return
+        }
+        let generation = stateGeneration
         appleConnection = .testing
         Task {
             do {
-                try KeychainCredentials.save(credential, kind: .apple, account: credentialAccount)
+                try KeychainCredentials.save(credential, kind: .apple, account: account)
                 let apps = try await StoreConnectionClient().appleApps(credential: credential)
+                guard generation == stateGeneration else { return }
                 remoteAppleApps = apps
                 let suffix = apps.count == 1 ? "app" : "apps"
                 appleConnection = .connected("Connected · \(apps.count) \(suffix) visible")
             } catch {
+                guard generation == stateGeneration else { return }
                 appleConnection = .failed(error.localizedDescription)
             }
         }
@@ -688,7 +697,8 @@ final class AppState {
     func revenueCatKeyChanged() {
         do {
             try KeychainCredentials.save(RevenueCatCredential(apiKey: revenueCatAPIKey),
-                                         kind: .revenueCat, account: credentialAccount)
+                                         kind: .revenueCat,
+                                         account: try requireCredentialAccount())
             revenueCatConnection = .notTested
         } catch { errorMessage = error.localizedDescription }
     }
@@ -979,7 +989,7 @@ final class AppState {
         do {
             try KeychainCredentials.save(
                 ReviewerCredential(username: reviewerUsername, password: reviewerPassword),
-                kind: .reviewAccount, account: credentialAccount)
+                kind: .reviewAccount, account: try requireCredentialAccount())
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -1071,10 +1081,18 @@ final class AppState {
         try ManifestFile.save(manifest, to: manifestURL)
     }
 
-    var credentialAccount: String {
-        guard !linkedApps.isEmpty,
-              linkedApps.indices.contains(selectedAppIndex) else { return "demo" }
+    var credentialAccount: String? {
+        guard linkedApps.indices.contains(selectedAppIndex) else { return nil }
         return linkedApps[selectedAppIndex].id.uuidString
+    }
+
+    private func requireCredentialAccount() throws -> String {
+        guard let credentialAccount else {
+            throw CocoaError(.fileNoSuchFile,
+                             userInfo: [NSLocalizedDescriptionKey:
+                                "Link or create an app before saving credentials."])
+        }
+        return credentialAccount
     }
 
     /// The folder that holds `store.yaml`. The run log, the console state, and
@@ -1117,6 +1135,7 @@ final class AppState {
     }
 
     func resetRunState() {
+        stateGeneration &+= 1
         runTask?.cancel()
         runTask = nil
         runContinuation?.finish()
@@ -1127,6 +1146,9 @@ final class AppState {
         pollTask?.cancel()
         pollTask = nil
         plan = nil
+        actualState = ActualState()
+        consoleRows = []
+        consoleMarks = []
         planError = nil
         planReading = false
         acknowledged = []
@@ -1146,6 +1168,7 @@ final class AppState {
     }
 
     private func loadCredentials() {
+        guard let credentialAccount else { return }
         do {
             let apple = try KeychainCredentials.load(
                 AppleCredential.self, kind: .apple, account: credentialAccount)
@@ -1180,7 +1203,8 @@ final class AppState {
             issuerID: appleIssuerID.trimmingCharacters(in: .whitespacesAndNewlines),
             privateKeyPEM: applePrivateKeyPEM,
             fileName: appleCredentialFileName)
-        try KeychainCredentials.save(credential, kind: .apple, account: credentialAccount)
+        try KeychainCredentials.save(credential, kind: .apple,
+                                     account: try requireCredentialAccount())
     }
 
     private func syncStoreFieldsFromManifest() {
@@ -1198,8 +1222,18 @@ final class AppState {
     }
 
     private func saveManifestReportingErrors() {
-        do { try save() }
+        do {
+            try save()
+            invalidatePlan()
+        }
         catch { errorMessage = "The manifest could not be saved. \(error.localizedDescription)" }
+    }
+
+    func invalidatePlan() {
+        stateGeneration &+= 1
+        planReading = false
+        plan = nil
+        acknowledged = []
     }
 
     private func persistLinkedApps() {
@@ -1269,4 +1303,3 @@ final class AppState {
                    options: .regularExpression) != nil
     }
 }
-

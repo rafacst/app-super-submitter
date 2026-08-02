@@ -36,6 +36,7 @@ final class BuildFlow {
     var failure: BuildFailure?
     var processingLabel: String?
     var successLink: String?
+    var artifactOnly = false
     var uploadProgress = 0.0
     var blocking: String?
     var warnings: [String] = []
@@ -151,6 +152,8 @@ final class BuildFlow {
     /// upload-spec 8.1 to 8.8 and 9.3 to 9.8. Read-only. Nothing here builds.
     func refreshPreflight() async {
         guard let project else { return }
+        candidate = nil
+        artifactOnly = false
         // A saved link is not proof that the folder still holds the project.
         guard FileManager.default.fileExists(atPath: project.containerPath) else {
             fail(BuildFailure(
@@ -319,22 +322,27 @@ final class BuildFlow {
 
     func chooseScheme(_ scheme: String) {
         project?.selection.scheme = scheme
-        Task { await refreshPreflight() }
+        restartPreflight()
     }
 
     func chooseVariant(_ variant: GradleVariant) {
         project?.selection.module = variant.module
         project?.selection.variantTask = variant.qualifiedTask
-        Task { await refreshPreflight() }
+        restartPreflight()
     }
 
     func chooseJDK(_ home: String) {
         project?.selection.javaHome = home
-        Task { await refreshPreflight() }
+        restartPreflight()
     }
 
     func choosePlatform(_ platform: BuildPlatform) {
         run.platform = platform
-        Task { await refreshPreflight() }
+        restartPreflight()
+    }
+
+    private func restartPreflight() {
+        task?.cancel()
+        task = Task { [weak self] in await self?.refreshPreflight() }
     }
 }

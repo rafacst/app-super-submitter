@@ -33,6 +33,7 @@ extension AppState {
     /// Reads every store, then diffs. Spec section 7.2. This writes nothing.
     func readStores() async {
         guard !planReading else { return }
+        let generation = stateGeneration
         planReading = true
         planError = nil
         let manifest = self.manifest
@@ -46,6 +47,7 @@ extension AppState {
                                                       provider: provider)
         let result = Planner.plan(Planner.Input(manifest: manifest, actual: actual,
                                                 stores: stores, root: root, packages: packages))
+        guard generation == stateGeneration else { return }
         // A new plan invalidates the runner that held the old one.
         runContinuation?.finish()
         runContinuation = nil
@@ -105,7 +107,7 @@ extension AppState {
         manifest.release = release
         saveManifest()
         // The plan must read the store again now that a build landed.
-        plan = nil
+        invalidatePlan()
     }
 
     func saveManifest() {
@@ -157,8 +159,10 @@ extension AppState {
 
     func startRun(from start: Int = 0) {
         guard let plan, !plan.steps.isEmpty else { return }
+        guard !isRunning else { return }
         guard start > 0 || canApply else { return }
-        runTask?.cancel()
+        let previous = runTask
+        previous?.cancel()
         runFailure = nil
         providerFailure = nil
         runDone = false
@@ -178,7 +182,11 @@ extension AppState {
         // One runner owns one stream for its whole life: a second stream would
         // leave a retry writing into a finished one and the tab would freeze.
         let runner = start > 0 ? (self.runner ?? makeRunner(for: plan)) : makeRunner(for: plan)
-        runTask = Task { await runner.run(from: start) }
+        runTask = Task {
+            _ = await previous?.result
+            guard !Task.isCancelled else { return }
+            await runner.run(from: start)
+        }
     }
 
     private func makeRunner(for plan: PlanResult) -> Runner {
@@ -200,7 +208,7 @@ extension AppState {
     private func handle(_ event: RunEvent) {
         switch event {
         case .step(let index, let state, let meta):
-            guard stepStates.indices.contains(index) else { return }
+            guard stepStates.indices.contains(index), stepMeta.indices.contains(index) else { return }
             stepStates[index] = state
             stepMeta[index] = meta
             if state == .running {
@@ -241,13 +249,19 @@ extension AppState {
     }
 
     func cancelRun() {
-        runTask?.cancel()
-        runTask = nil
-        Task { [runner] in await runner?.undo() }
-        runIndex = -1
-        runProgress = 0
-        runDone = false
-        runDetail = ""
+        let previous = runTask
+        previous?.cancel()
+        runDetail = "Cleaning up the interrupted run…"
+        runTask = Task { [weak self, runner] in
+            _ = await previous?.result
+            await runner?.undo()
+            guard let self else { return }
+            runIndex = -1
+            runProgress = 0
+            runDone = false
+            runDetail = ""
+            runTask = nil
+        }
     }
 
     /// Spec 11.1, button 1.
@@ -259,18 +273,26 @@ extension AppState {
     /// Spec 11.1, button 2. The undo deletes the Google edit and archives what
     /// this run created in the provider. It removes no Apple screenshot.
     func undoRun() {
-        Task { [runner] in await runner?.undo() }
         runFailure = nil
-        runIndex = -1
-        stepStates = Array(repeating: .pending, count: runSteps.count)
+        runDetail = "Undoing the recoverable parts of this run…"
+        let previous = runTask
+        previous?.cancel()
+        runTask = Task { [weak self, runner] in
+            _ = await previous?.result
+            await runner?.undo()
+            guard let self else { return }
+            runIndex = -1
+            runDetail = ""
+            stepStates = Array(repeating: .pending, count: runSteps.count)
+            runTask = nil
+        }
     }
 
     /// Spec 11.2, button 2.
     func retryProviderSync() {
         providerFailure = nil
-        Task { [weak self, runner] in
+        Task { [runner] in
             await runner?.retryProvider()
-            self?.providerFailure = nil
         }
     }
 
@@ -409,20 +431,22 @@ extension AppState {
     /// The app polls a store only after a release for review.
     func startPolling() {
         pollTask?.cancel()
-        guard statuses.values.contains(where: { $0.phase.isReleased }) else { return }
+        guard statuses.values.contains(where: { $0.phase.needsPolling }) else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let interval = self?.pollInterval else { return }
                 try? await Task.sleep(for: .seconds(interval))
                 guard !Task.isCancelled else { return }
                 await self?.pollStatuses()
+                guard self?.statuses.values.contains(where: { $0.phase.needsPolling }) == true
+                else { return }
             }
         }
     }
 
     func pollStatuses() async {
         let reader = ReleaseStatusReader(api: readOnlyAPI())
-        for store in stores where statuses[store]?.phase.isReleased == true {
+        for store in stores where statuses[store]?.phase.needsPolling == true {
             do {
                 let fresh: StoreStatus
                 switch store {

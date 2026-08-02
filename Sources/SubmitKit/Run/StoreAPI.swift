@@ -367,4 +367,45 @@ public enum Checksums {
     public static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
+
+    /// A stable checksum of a directory artifact. Relative paths and every
+    /// regular file's bytes participate, so changing any archive member
+    /// changes the value shown to the developer.
+    public static func sha256(directory root: URL) throws -> String {
+        let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: keys,
+            options: []) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        let rootPath = root.standardizedFileURL.path
+        let entries = enumerator.compactMap { $0 as? URL }.sorted { $0.path < $1.path }
+        var hasher = SHA256()
+        for entry in entries {
+            let values = try entry.resourceValues(forKeys: Set(keys))
+            guard values.isRegularFile == true || values.isSymbolicLink == true else { continue }
+            let path = entry.standardizedFileURL.path
+            guard path.hasPrefix(rootPath + "/") else { continue }
+            update(&hasher, with: Data(path.dropFirst(rootPath.count + 1).utf8))
+            if values.isSymbolicLink == true {
+                let destination = try FileManager.default.destinationOfSymbolicLink(atPath: path)
+                update(&hasher, with: Data(destination.utf8))
+                continue
+            }
+            do {
+                let handle = try FileHandle(forReadingFrom: entry)
+                defer { try? handle.close() }
+                while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
+                    hasher.update(data: chunk)
+                }
+            }
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func update(_ hasher: inout SHA256, with data: Data) {
+        var length = UInt64(data.count).littleEndian
+        withUnsafeBytes(of: &length) { hasher.update(bufferPointer: $0) }
+        hasher.update(data: data)
+    }
 }

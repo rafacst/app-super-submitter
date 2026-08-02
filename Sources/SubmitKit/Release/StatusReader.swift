@@ -22,6 +22,12 @@ public struct StoreStatus: Sendable, Equatable {
         public var isReleased: Bool {
             self != .noDraft && self != .draft
         }
+
+        /// Terminal store states do not need a background poll. Approved is
+        /// still transitional because it may later become live.
+        public var needsPolling: Bool {
+            self == .inQueue || self == .inReview || self == .approved
+        }
     }
 
     public var store: Store
