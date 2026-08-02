@@ -61,3 +61,15 @@ private func temporaryRoot() throws -> URL {
     #expect(line.contains("/v1/appStoreVersions"))
     #expect(line.contains("dry"))
 }
+
+@Test func aRunLogUsesOwnerOnlyPermissions() async throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let log = try RunLog(root: root)
+    await log.close()
+
+    let mode = try FileManager.default.attributesOfItem(atPath: log.url.path)[.posixPermissions]
+        as? NSNumber
+
+    #expect(mode?.intValue == 0o600)
+}
