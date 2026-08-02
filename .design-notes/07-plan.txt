@@ -1,0 +1,89 @@
+<div>  { padding:20px 28px 40px; flex-direction:column; gap:18px }
+  <sc-if>
+    <div>  { flex-direction:column; gap:16px; align-items:flex-start; max-width:620px }
+      <div>  { align-items:center; gap:11px }
+        <div>  { width:26px; height:26px; border-radius:50%; background:var(--greenBg); color:var(--green); align-items:center; justify-content:center; font-size:14px }
+          · ✓
+        <div>  { font-size:17px; font-weight:600; letter-spacing:-.01em }
+          · Nothing to change.
+      <div>  { font-size:13px; line-height:1.6; color:var(--text2) }
+        · Both stores match what these tabs hold. The last read ran at 14:02. A second apply would write nothing.
+      <div>  { border:.5px solid var(--sep); border-radius:9px; background:var(--raised); width:100%; overflow:hidden }
+        <sc-for>
+          <div>  { align-items:center; gap:12px; padding:10px 15px; font-size:12.5px }
+            <div>  { width:110px; font-weight:500 }
+              · {{ m.system }}
+            <div>  { color:var(--text2) }
+              · {{ m.line }}
+            <div>  { color:var(--green); font-size:11.5px }
+              · In sync
+      <div>  { gap:9px }
+        <button>  { font-size:12.5px; padding:6px 14px; border-radius:7px; border:.5px solid var(--sep); background:var(--field); color:var(--text) }
+          · Read the stores again
+        <button>  { font-size:12.5px; padding:6px 14px; border-radius:7px; border:none; background:var(--accent); color:var(--accentText); font-weight:500 | on={{ goTab9 }} }
+          · Go to Release
+  <sc-if>
+    <div>  { flex-direction:column; gap:18px }
+      <div>  { gap:26px; align-items:center; border:.5px solid var(--sep); border-radius:9px; background:var(--raised); padding:13px 18px }
+        <div>  { flex-direction:column; gap:1px }
+          <div>  { letter-spacing:-.02em }
+            · 24
+          <div>  { font-size:11px; color:var(--text2) }
+            · writes
+        <div>  { width:1px; height:28px; background:var(--sep2) }
+        <div>  { flex-direction:column; gap:1px }
+          <div>  { letter-spacing:-.02em }
+            · 13
+          <div>  { font-size:11px; color:var(--text2) }
+            · uploads
+        <div>  { width:1px; height:28px; background:var(--sep2) }
+        <div>  { flex-direction:column; gap:1px }
+          <div>  { letter-spacing:-.02em }
+            · 142.6 MB
+          <div>  { font-size:11px; color:var(--text2) }
+            · to upload
+        <div>
+        <div>  { font-size:11.5px; color:var(--text2); max-width:300px; line-height:1.5 }
+          · This plan writes nothing to a customer. It ends with a draft in each store.
+      <div>  { border:1px solid {{ validationBorder }}; border-radius:9px; background:{{ validationBg }}; overflow:hidden }
+        <div>  { padding:10px 15px; align-items:center; gap:9px }
+          <div>  { font-size:12.5px; font-weight:600; color:{{ validationHeaderColor }} }
+            · {{ validationHeader }}
+          <div>  { font-size:11.5px; color:var(--text2) }
+            · {{ validationNote }}
+        <sc-for>
+          <div>  { align-items:center; gap:11px; padding:10px 15px; background:var(--content) }
+            <div>  { padding:2px 7px; border-radius:5px; background:{{ v.bg }}; color:{{ v.fg }}; width:58px }
+              · {{ v.kind }}
+            <div>  { min-width:0; flex-direction:column; gap:2px }
+              <div>  { font-size:12.5px }
+                · {{ v.text }}
+              <div>  { font-size:11.5px; color:var(--text2) }
+                · {{ v.where }}
+            <sc-if>
+              <div>  { align-items:center; gap:6px; font-size:11.5px; color:var(--text2) | on={{ v.ack }} }
+                <div>  { width:14px; height:14px; border-radius:3px; border:1px solid var(--sep); background:{{ v.ackBg }}; color:#fff; font-size:9px; align-items:center; justify-content:center }
+                  · {{ v.ackMark }}
+                · I accept this
+            <button>  { font-size:11.5px; padding:4px 11px; border-radius:6px; border:.5px solid var(--sep); background:var(--field); color:var(--text) | on={{ v.fix }} }
+              · {{ v.button }}
+      <div>  { gap:14px; align-items:flex-start }
+        <sc-for>
+          <div>  { min-width:0; border:.5px solid var(--sep); border-radius:9px; background:var(--raised); overflow:hidden }
+            <div>  { padding:9px 14px; align-items:baseline; justify-content:space-between }
+              <div>  { font-size:12.5px; font-weight:600 }
+                · {{ c.name }}
+              <div>  { color:var(--text2) }
+                · {{ c.summary }}
+            <div>  { padding:5px 0 }
+              <sc-for>
+                <div>  { gap:8px; padding:4px 14px; line-height:1.45; align-items:baseline }
+                  <div>  { width:9px; color:{{ r.color }}; font-weight:700 }
+                    · {{ r.sign }}
+                  <div>  { min-width:0; color:{{ r.color }} }
+                    · {{ r.text }}
+      <div>  { align-items:center; gap:16px }
+        <button>  { font-size:14px; font-weight:600; padding:11px 26px; border-radius:9px; border:none; background:{{ applyBg }}; color:{{ applyFg }} | on={{ apply }} }
+          · {{ applyLabel }}
+        <div>  { font-size:12px; color:var(--text2); line-height:1.5; max-width:520px }
+          · {{ applyNote }}

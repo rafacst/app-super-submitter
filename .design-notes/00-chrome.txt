@@ -1,0 +1,163 @@
+<div>  { gap:6px; align-items:center }
+  <span>  { opacity:.65 }
+    · Demo
+  <button>  { padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff | on={{ showOnboarding }} }
+    · Onboarding
+  <button>  { padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff | on={{ openSettings }} }
+    · Settings
+  <button>  { padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff | on={{ toggleMenuBar }} }
+    · Menu bar
+  <button>  { padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff | on={{ resetDemo }} }
+    · Reset
+<div>  { opacity:.6; font-size:10.5px }
+  · Happy path: Build → read package · Plan → Apply · Submit runs · Release → re-check → send
+<div>  { gap:26px; align-items:flex-start }
+  <sc-for>
+    <div>  { flex-direction:column; gap:8px }
+      <div>  { letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.72) }
+        · {{ pane.label }}
+      <div>  { font-family:'Public Sans',-apple-system,'Helvetica Neue',sans-serif; width:{{ winW }}px; height:{{ winH }}px; background:var(--bg); color:var(--text); border-radius:11px; box-shadow:0 22px 60px rgba(0,0,0,.42),0 0 0 .5px rgba(0,0,0,.35); overflow:hidden; flex-direction:column; position:relative; font-size:13px }
+        <sc-if>
+          <div>  { background:var(--sidebar) }
+            <div>  { height:56px; align-items:center; gap:14px; padding:0 14px }
+              <div>  { gap:8px }
+                <div>  { width:12px; height:12px; border-radius:50%; background:#ff5f57 }
+                <div>  { width:12px; height:12px; border-radius:50%; background:#febc2e }
+                <div>  { width:12px; height:12px; border-radius:50%; background:#28c840 }
+              <div>  { position:relative }
+                <div>  { height:32px; align-items:center; gap:10px; border:.5px solid var(--sep); border-radius:8px; background:{{ switcherChipBg }}; padding:0 9px 0 4px; box-shadow:0 1px 1.5px rgba(0,0,0,.09); min-width:0; overflow:hidden | on={{ toggleSwitcher }} }
+                  <div>  { width:24px; height:24px; border-radius:6px; background:var(--sunken); border:.5px solid var(--sep); align-items:center; justify-content:center; color:var(--text2) }
+                    · {{ currentApp.initials }}
+                  <div>  { font-size:12.5px; font-weight:600; line-height:1.15 }
+                    · {{ currentApp.name }}
+                  <div>  { gap:4px; align-items:center }
+                    <div>  { width:8px; height:8px; border-radius:50%; background:{{ currentApp.appleColor }} }
+                    <div>  { width:8px; height:8px; border-radius:2px; background:{{ currentApp.googleColor }} }
+                  <div>  { font-size:8px; color:var(--text3) }
+                    · ▾
+                <sc-if>
+                  <div>  { position:absolute; top:38px; left:0; width:292px; background:var(--content); border:.5px solid var(--sep); border-radius:9px; box-shadow:0 14px 36px rgba(0,0,0,.30); overflow:hidden }
+                    <div>  { padding:8px 12px 6px; letter-spacing:.07em; color:var(--text3) }
+                      · LINKED APPS
+                    <sc-for>
+                      <div>  { align-items:center; gap:10px; padding:8px 12px; background:{{ app.menuBg }} | on={{ app.select }} }
+                        <div>  { width:12px; font-size:10px; color:var(--accent) }
+                          · {{ app.tick }}
+                        <div>  { width:24px; height:24px; border-radius:6px; background:var(--sunken); border:.5px solid var(--sep); align-items:center; justify-content:center; color:var(--text2) }
+                          · {{ app.initials }}
+                        <div>  { min-width:0 }
+                          <div>  { font-size:12.5px; font-weight:500; overflow:hidden }
+                            · {{ app.name }}
+                          <div>  { font-size:10.5px; color:var(--text2); overflow:hidden }
+                            · {{ app.summary }}
+                        <div>  { gap:4px }
+                          <span>  { padding:1px 5px; border-radius:4px; background:{{ app.appleBg }}; color:{{ app.appleColor }} }
+                            · A {{ app.appleMark }}
+                          <span>  { padding:1px 5px; border-radius:4px; background:{{ app.googleBg }}; color:{{ app.googleColor }} }
+                            · G {{ app.googleMark }}
+                    <div>  { align-items:center; gap:10px; padding:9px 12px; color:var(--text2) }
+                      <div>  { width:12px }
+                      <div>  { width:24px; height:24px; border-radius:6px; border:1px dashed var(--sep); align-items:center; justify-content:center; font-size:13px; color:var(--text3); line-height:1 }
+                        · +
+                      <div>  { font-size:12.5px }
+                        · New app
+              <div>  { width:1px; height:26px; background:var(--sep) }
+              <div>  { height:32px; align-items:stretch; background:var(--sunken); border:.5px solid var(--sep); border-radius:8px; padding:2px; gap:1px }
+                <sc-for>
+                  <div>  { align-items:stretch; gap:1px }
+                    <div>  { width:{{ t.segRuleW }}px; background:var(--sep); margin:2px 4px }
+                    <div>  { align-items:center; justify-content:center; gap:4px; padding:0 7px; border-radius:6px; background:{{ t.segBg }}; color:{{ t.segFg }}; box-shadow:{{ t.segShadow }} | on={{ t.go }} }
+                      <div>  { width:14px; align-items:center; justify-content:center; opacity:.9 }
+                        · {{ t.icon }}
+                      <div>  { font-size:11.5px; font-weight:{{ t.segWeight }} }
+                        · {{ t.name }}
+                      <sc-if>
+                        <div>  { min-width:14px; height:14px; padding:0 4px; border-radius:7px; background:{{ t.badgeBg }}; color:{{ t.badgeFg }}; align-items:center; justify-content:center }
+                          · {{ t.badge }}
+              <div>  { min-width:8px }
+              <div>  { align-items:center; justify-content:center; width:28px; height:28px; border-radius:7px; color:var(--text2) | on={{ openSettings }} }
+                <svg>
+                  <circle>
+                  <circle>
+        <div>
+          <sc-if>
+            <div>  { width:240px; background:var(--sidebar); flex-direction:column }
+              <div>  { height:52px; align-items:center; padding:0 13px; gap:8px }
+                <div>  { width:12px; height:12px; border-radius:50%; background:#ff5f57 }
+                <div>  { width:12px; height:12px; border-radius:50%; background:#febc2e }
+                <div>  { width:12px; height:12px; border-radius:50%; background:#28c840 }
+              <div>  { padding:2px 8px 10px; flex-direction:column; gap:1px }
+                <div>  { font-size:10.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); padding:4px 8px 6px }
+                  · Apps
+                <sc-for>
+                  <div>  { align-items:center; gap:9px; padding:6px 8px; border-radius:6px; background:{{ app.bg }} | on={{ app.select }} }
+                    <div>  { width:26px; height:26px; border-radius:6px; background:var(--sunken); border:.5px solid var(--sep); align-items:center; justify-content:center; color:var(--text2) }
+                      · {{ app.initials }}
+                    <div>  { min-width:0; flex-direction:column; gap:2px }
+                      <div>  { font-size:12.5px; font-weight:500; overflow:hidden; color:{{ app.nameColor }} }
+                        · {{ app.name }}
+                      <div>  { gap:5px }
+                        <span>  { align-items:center; gap:3px; padding:1px 5px; border-radius:4px; background:{{ app.appleBg }}; color:{{ app.appleColor }} }
+                          · A {{ app.appleMark }}
+                        <span>  { align-items:center; gap:3px; padding:1px 5px; border-radius:4px; background:{{ app.googleBg }}; color:{{ app.googleColor }} }
+                          · G {{ app.googleMark }}
+                <div>  { align-items:center; gap:9px; padding:6px 8px; border-radius:6px; color:var(--text2) }
+                  <div>  { width:26px; height:26px; border-radius:6px; border:1px dashed var(--sep); align-items:center; justify-content:center; font-size:14px; color:var(--text3); line-height:1 }
+                    · +
+                  <div>  { font-size:12.5px }
+                    · New app
+              <div>  { height:.5px; background:var(--sep); margin:0 12px 8px }
+              <div>  { overflow:auto; padding:0 8px 12px; flex-direction:column; gap:1px }
+                <sc-for>
+                  <div>
+                    <div>  { height:{{ t.gapBefore }}px }
+                    <div>  { margin:0 8px }
+                    <div>  { height:{{ t.gapBefore }}px }
+                    <div>  { align-items:center; gap:9px; padding:5px 8px; border-radius:6px; background:{{ t.bg }}; color:{{ t.fg }} | on={{ t.go }} }
+                      <div>  { width:17px; align-items:center; justify-content:center; opacity:.9 }
+                        · {{ t.icon }}
+                      <div>  { font-size:13px; font-weight:{{ t.weight }} }
+                        · {{ t.name }}
+                      <sc-if>
+                        <div>  { min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:{{ t.badgeBg }}; color:{{ t.badgeFg }}; align-items:center; justify-content:center }
+                          · {{ t.badge }}
+                <div>
+                <div>  { align-items:center; gap:9px; padding:5px 8px; border-radius:6px; color:var(--text2) | on={{ openSettings }} }
+                  <div>  { width:17px; align-items:center; justify-content:center }
+                    <svg>
+                      <circle>
+                      <circle>
+                  <div>  { font-size:13px }
+                    · Settings…
+          <div>  { min-width:0; background:var(--content); flex-direction:column }
+            <div>  { height:52px; align-items:center; justify-content:space-between; gap:16px; padding:0 18px 0 20px; background:var(--raised) }
+              <div>  { flex-direction:column; gap:1px; min-width:0 }
+                <div>  { font-size:14px; font-weight:600; letter-spacing:-.01em }
+                  · {{ tabTitle }}
+                <div>  { font-size:11px; color:var(--text2); overflow:hidden }
+                  · {{ tabSubtitle }}
+              <div>  { align-items:center; gap:8px }
+                <sc-if>
+                  <div>  { align-items:center; gap:6px }
+                    <span>  { font-size:11px; color:var(--text2) }
+                      · Language
+                    <div>  { background:var(--sunken); border:.5px solid var(--sep); border-radius:6px; overflow:hidden; font-size:12px }
+                      <div>  { padding:4px 10px; background:{{ enBg }}; color:{{ enFg }}; font-family:var(--mono); font-size:11px | on={{ setEn }} }
+                        · en-US
+                      <div>  { padding:4px 10px; background:{{ ptBg }}; color:{{ ptFg }}; font-family:var(--mono); font-size:11px | on={{ setPt }} }
+                        · pt-BR
+                      <div>  { padding:4px 10px; color:var(--text2) }
+                        · + Add
+                <sc-if>
+                  <div>  { align-items:center; gap:7px; font-size:12px | on={{ toggleDryRun }} }
+                    <span>  { color:var(--text2) }
+                      · Dry run
+                    <div>  { width:34px; height:20px; border-radius:10px; background:{{ dryRunTrack }}; padding:2px; justify-content:{{ dryRunJustify }} }
+                      <div>  { width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3) }
+                <sc-if>
+                  <div>  { gap:7px }
+                    <button>  { font-size:12px; padding:4px 11px; border-radius:6px; border:.5px solid var(--sep); background:var(--field); color:var(--text) }
+                      · Copy as checklist
+                    <button>  { font-size:12px; padding:4px 11px; border-radius:6px; border:.5px solid var(--sep); background:var(--field); color:var(--text) | on={{ recheck }} }
+                      · Re-check
+            <div>  { overflow:auto }

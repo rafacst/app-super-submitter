@@ -1,0 +1,78 @@
+<div>  { position:absolute; background:rgba(0,0,0,.28); justify-content:center; align-items:flex-start }
+  <div>  { width:460px; background:var(--content); border-radius:0 0 12px 12px; box-shadow:0 18px 44px rgba(0,0,0,.4); padding:22px 26px 20px; flex-direction:column; gap:14px }
+    <div>  { font-size:15px; font-weight:600; letter-spacing:-.01em; line-height:1.35 }
+      · {{ sheetTitle }}
+    <div>  { border:.5px solid var(--sep); border-radius:8px; background:var(--sunken); overflow:hidden }
+      <sc-for>
+        <div>  { gap:12px; padding:7px 12px; font-size:12px }
+          <div>  { width:96px; color:var(--text2) }
+            · {{ r.k }}
+          <div>  { font-family:{{ r.font }} }
+            · {{ r.v }}
+    <div>  { font-size:12px; line-height:1.6; color:var(--text) }
+      · {{ sheetBody }}
+    <div>  { font-size:12px; line-height:1.6; color:var(--text2) }
+      · {{ sheetRecovery }}
+    <div>  { justify-content:flex-end; gap:9px }
+      <button>  { font-size:13px; padding:7px 16px; border-radius:7px; border:.5px solid var(--sep); background:var(--field); color:var(--text) | on={{ closeSheet }} }
+        · Cancel
+      <button>  { font-size:13px; font-weight:600; padding:7px 16px; border-radius:7px; border:none; background:var(--redFill); color:#fff; box-shadow:0 0 0 3px var(--redBg) | on={{ confirmSheet }} }
+        · {{ sheetConfirm }}
+<sc-if>
+  <div>  { position:absolute; background:rgba(0,0,0,.24); align-items:center; justify-content:center }
+    <div>  { width:480px; background:var(--bg); border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,.45); overflow:hidden }
+      <div>  { height:44px; align-items:center; padding:0 13px; gap:8px; background:var(--raised); position:relative }
+        <div>  { width:12px; height:12px; border-radius:50%; background:#ff5f57 | on={{ closeSettings }} }
+        <div>  { width:12px; height:12px; border-radius:50%; background:var(--sep) }
+        <div>  { width:12px; height:12px; border-radius:50%; background:var(--sep) }
+        <div>  { position:absolute; left:0; right:0; font-size:13px; font-weight:600 }
+          · Settings
+      <div>  { padding:20px 24px 22px; flex-direction:column; gap:16px; background:var(--content) }
+        <div>  { align-items:center; gap:14px }
+          <div>  { width:120px; font-size:12.5px; color:var(--text2) }
+            · Navigation
+          <div>  { background:var(--sunken); border:.5px solid var(--sep); border-radius:6px; overflow:hidden; font-size:12px }
+            <div>  { padding:4px 14px; background:{{ navSidebarBg }}; color:{{ navSidebarFg }} | on={{ setNavSidebar }} }
+              · Sidebar
+            <div>  { padding:4px 14px; background:{{ navTopBg }}; color:{{ navTopFg }} | on={{ setNavTop }} }
+              · Top bar
+        <div>  { align-items:center; gap:14px }
+          <div>  { width:120px; font-size:12.5px; color:var(--text2) }
+            · Poll interval
+          <div>  { border:.5px solid var(--sep); border-radius:6px; background:var(--field); padding:5px 9px; font-size:12px; width:130px; justify-content:space-between }
+            <span>
+              · 5 minutes
+            <span>  { color:var(--text3); font-size:9px }
+              · ▾
+        <div>  { align-items:flex-start; gap:14px }
+          <div>  { width:120px; font-size:12.5px; color:var(--text2) }
+            · Dry run
+          <div>  { flex-direction:column; gap:5px }
+            <div>  { align-items:center; gap:8px }
+              <div>  { width:14px; height:14px; border-radius:3px; background:var(--accent); color:#fff; font-size:9px; align-items:center; justify-content:center }
+                · ✓
+              <div>  { font-size:12.5px }
+                · On by default for a new app
+            <div>  { font-size:11.5px; color:var(--text2); max-width:270px; line-height:1.5 }
+              · A dry run logs every request and sends none.
+        <div>  { font-size:11.5px; color:var(--text2); line-height:1.5 }
+          · Settings holds no credential. The App Store and Google Play keys live on the Stores tab. The RevenueCat key lives on the Money tab.
+<sc-if>
+  <div>  { position:absolute; top:14px; right:14px; width:270px; background:var(--content); border:.5px solid var(--sep); border-radius:10px; box-shadow:0 16px 40px rgba(0,0,0,.35); overflow:hidden }
+    <div>  { padding:10px 14px; align-items:center; justify-content:space-between }
+      <div>  { font-size:12.5px; font-weight:600 }
+        · Fast Bill Split 3.2.0
+      <div>  { font-size:12px; color:var(--text3) | on={{ toggleMenuBar }} }
+        · ✕
+    <sc-for>
+      <div>  { align-items:center; gap:9px; padding:10px 14px }
+        <div>  { width:8px; height:8px; border-radius:{{ s.dotRadius }}; background:{{ s.dotColor }} }
+        <div>  { min-width:0 }
+          <div>  { font-size:12px }
+            · {{ s.store }}
+          <div>  { font-size:10.5px; color:var(--text2) }
+            · checked 2 minutes ago
+        <div>  { font-size:11.5px; color:{{ s.stateColor }} }
+          · {{ s.state }}
+    <div>  { padding:9px 14px; font-size:11.5px; color:var(--accent) }
+      · Open Super Submitter
