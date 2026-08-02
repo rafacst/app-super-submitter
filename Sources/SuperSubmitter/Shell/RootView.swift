@@ -8,6 +8,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppState.self) private var state
     @AppStorage("navigationPosition") private var position: NavigationPosition = .sidebar
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     var body: some View {
         @Bindable var state = state
@@ -31,7 +32,9 @@ struct RootView: View {
         .font(.system(size: 13))
         .overlay(alignment: .topLeading) { SwitcherPopover(position: position) }
         .sheet(isPresented: $state.showSettings) { SettingsPanel() }
-        .sheet(isPresented: $state.showOnboarding) { OnboardingPanel() }
+        .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
+            OnboardingPanel()
+        }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
         .alert("Super Submitter", isPresented: Binding(
@@ -73,23 +76,51 @@ private struct EmptyAppView: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        VStack(spacing: 13) {
-            Image(systemName: "doc.badge.plus")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Theme.text3)
-            Text("Link an app to begin")
-                .font(.system(size: 17, weight: .semibold))
-            Text("Create a new store.yaml or open an existing one. Super Submitter will not show editable store state until a real manifest is linked.")
-                .font(.system(size: 12.5))
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                StoreMark(store: .apple, size: 34)
+                Circle().fill(Theme.sep).frame(width: 5, height: 5)
+                StoreMark(store: .google, size: 34)
+            }
+            .padding(.bottom, 20)
+
+            Text("Point Super Submitter at your app")
+                .font(.system(size: 19, weight: .semibold))
+                .kerning(-0.3)
+            Text("Pick the folder your app is built in. We read the build and keep one small file beside it.")
+                .font(.system(size: 13))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 520)
-            HStack(spacing: 9) {
-                Button("Create new app") { state.chooseNewAppLocation() }
-                    .buttonStyle(.borderedProminent)
-                Button("Open store.yaml") { state.chooseExistingManifest() }
-                    .buttonStyle(.bordered)
+                .frame(maxWidth: 460)
+                .padding(.top, 7)
+
+            Button { state.chooseAppFolder() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.fill").font(.system(size: 12))
+                    Text("Select app folder").font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(Theme.accentText)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .padding(.top, 26)
+
+            Button { state.chooseExistingManifest() } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 11))
+                    Text("Continue work").font(.system(size: 12.5))
+                }
+                .foregroundStyle(Theme.text2)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 10)
+            .help("Open the store.yaml of an app you already set up")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
@@ -109,7 +140,7 @@ private struct ContentHeader: View {
                     .font(.system(size: 14, weight: .semibold))
                     .kerning(-0.14)
                 Text(state.manifestURL == nil
-                     ? "Which store manifest do you want to manage?"
+                     ? "Which app do you want to send to the stores?"
                      : state.selectedTab.question)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.text2)

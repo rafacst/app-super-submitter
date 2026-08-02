@@ -23,7 +23,7 @@ struct ReviewInfoTab: View {
     }
 
     private var reviewContact: some View {
-        Section_("Review contact") {
+        Section_("Review contact", icon: "person.crop.circle.fill", tint: Theme.accent) {
             HStack {
                 TextField("First name", text: state.reviewBinding(.firstName))
                 TextField("Last name", text: state.reviewBinding(.lastName))
@@ -37,7 +37,7 @@ struct ReviewInfoTab: View {
 
     private var demoAccount: some View {
         @Bindable var state = state
-        return Section_("Demo account") {
+        return Section_("Demo account", icon: "key.fill", tint: Theme.orange) {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("The reviewer needs an account to sign in",
                        isOn: state.demoAccountRequiredBinding)
@@ -54,7 +54,7 @@ struct ReviewInfoTab: View {
     }
 
     private var reviewNotes: some View {
-        Section_("Notes for the reviewer") {
+        Section_("Notes for the reviewer", icon: "note.text", tint: Theme.teal) {
             TextEditor(text: state.reviewBinding(.notes))
                 .font(.system(size: 12.5)).scrollContentBackground(.hidden)
                 .padding(7).frame(minHeight: 100)
@@ -65,7 +65,7 @@ struct ReviewInfoTab: View {
     }
 
     private var categories: some View {
-        Section_("Categories") {
+        Section_("Categories", icon: "square.grid.2x2.fill", tint: Theme.purple) {
             VStack(alignment: .leading, spacing: 9) {
                 if state.stores.contains(.apple) {
                     HStack {
@@ -87,7 +87,7 @@ struct ReviewInfoTab: View {
     }
 
     private var declarations: some View {
-        Section_("Store declarations") {
+        Section_("Store declarations", icon: "checkmark.shield.fill", tint: Theme.green) {
             VStack(spacing: 0) {
                 ActionRow(title: "Age rating", detail: "Answer the content questionnaire") {
                     state.showAgeRating = true
@@ -112,7 +112,7 @@ struct ReviewInfoTab: View {
     /// tab 9 also reads. A row is never done in one place and open in the
     /// other. Spec section 16.6.
     private var consoleSteps: some View {
-        Section_("Finish in the console") {
+        Section_("Finish in the console", icon: "arrow.up.forward.square.fill", tint: Theme.yellow) {
             VStack(spacing: 0) {
                 let rows = state.consoleRows.filter(\.onReviewTab)
                 if rows.isEmpty {

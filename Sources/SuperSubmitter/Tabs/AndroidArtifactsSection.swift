@@ -14,7 +14,7 @@ struct AndroidArtifactsSection: View {
     ]
 
     var body: some View {
-        Section_("Android artifacts") {
+        Section_("Android artifacts", icon: "shippingbox.fill", tint: Theme.playGreen) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Self.fileFields, id: \.self) { field in
                     HStack(spacing: 10) {
@@ -94,7 +94,7 @@ struct GoogleTracksSection: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        Section_("Google tracks and rollout") {
+        Section_("Google tracks and rollout", icon: "chart.line.uptrend.xyaxis", tint: Theme.playBlue) {
             VStack(alignment: .leading, spacing: 11) {
                 HStack(spacing: 10) {
                     LabeledContent("Release track") {

@@ -67,7 +67,8 @@ struct ReleaseTab: View {
         HStack(alignment: .top, spacing: 14) {
             ForEach(cards, id: \.name) { card in
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: 8) {
+                        SystemMark(name: card.name)
                         Text(card.name).font(.system(size: 12.5, weight: .semibold))
                         Spacer(minLength: 8)
                         Text("\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
@@ -152,6 +153,7 @@ struct ReleaseTab: View {
         let name = store == .apple ? "App Store" : "Google Play"
         let other = store == .apple ? "Google Play" : "The App Store"
         return ReleaseColumn(
+            store: store,
             lines: lines(store),
             label: released ? "Sent to \(name) review" : "Send to \(name) review",
             done: released,
@@ -295,6 +297,8 @@ private struct StatusCard: View {
 
     var body: some View {
         HStack(spacing: 11) {
+            StoreMark(store: status.store, size: 20)
+
             // A round dot is a draft. A square dot is in a queue. The two
             // read apart with no colour.
             Group {
@@ -331,6 +335,7 @@ private struct StatusCard: View {
 
 /// One of the two red buttons, with the text above it and the recovery below.
 private struct ReleaseColumn: View {
+    let store: Store
     let lines: String
     let label: String
     let done: Bool
@@ -343,6 +348,7 @@ private struct ReleaseColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            StoreLabel(store: store, size: 12.5)
             Text(lines)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text2)
@@ -371,5 +377,20 @@ private struct ReleaseColumn: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+
+/// The logo for a checklist card. The two providers carry no logo, so they take
+/// the glyph the Money tab already uses for a mirror.
+private struct SystemMark: View {
+    let name: String
+
+    var body: some View {
+        switch name {
+        case "App Store": StoreMark(store: .apple, size: 16)
+        case "Google Play": StoreMark(store: .google, size: 16)
+        default: IconChip(symbol: "arrow.triangle.2.circlepath", tint: Theme.orange, size: 18)
+        }
     }
 }

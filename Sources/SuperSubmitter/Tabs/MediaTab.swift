@@ -72,12 +72,13 @@ struct MediaTab: View {
         let previews = state.mediaPaths(deviceClass: device, previews: true)
         return VStack(alignment: .leading, spacing: 10) {
             Text("Video").font(.system(size: 12.5, weight: .semibold))
-            Text("Apple takes a 15–30 second video file. Google takes a YouTube URL.")
+            Text("Apple takes a 15 to 30 second video file. Google takes a YouTube URL.")
                 .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("App Store previews").font(.system(size: 11.5, weight: .semibold))
+                        StoreLabel(store: .apple, size: 11.5)
+                        Text("previews").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         Spacer()
                         Button("Choose videos…") {
                             state.chooseMediaFiles(deviceClass: device, previews: true)
@@ -105,7 +106,10 @@ struct MediaTab: View {
                 .mediaPanel()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Google Play YouTube URL").font(.system(size: 11.5, weight: .semibold))
+                    HStack(spacing: 6) {
+                        StoreLabel(store: .google, size: 11.5)
+                        Text("YouTube URL").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    }
                     TextField("https://youtube.com/watch?v=…",
                               text: state.listingBinding(.googleVideo))
                         .textFieldStyle(.roundedBorder)

@@ -40,9 +40,9 @@ struct Sidebar: View {
                     .accessibilityValue("App Store \(app.apple.mark), Google Play \(app.google.mark)")
                     .accessibilityAddTraits(index == state.selectedAppIndex ? .isSelected : [])
                 }
-                Button { state.chooseNewAppLocation() } label: { NewAppRow() }
+                Button { state.chooseAppFolder() } label: { NewAppRow() }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("New app")
+                    .accessibilityLabel("Add app")
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 10)
@@ -106,8 +106,9 @@ private struct NewAppRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
                 .frame(width: 26, height: 26)
-                .overlay(Text("+").font(.system(size: 14)).foregroundStyle(Theme.text3))
-            Text("New app").font(.system(size: 12.5))
+                .overlay(Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 11)).foregroundStyle(Theme.text3))
+            Text("Add app").font(.system(size: 12.5))
             Spacer(minLength: 0)
         }
         .foregroundStyle(Theme.text2)

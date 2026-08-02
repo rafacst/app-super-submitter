@@ -13,7 +13,7 @@ struct MoneyTab: View {
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 7))
             }
-            Section_("Subscription provider") {
+            Section_("Subscription provider", icon: "arrow.triangle.2.circlepath", tint: Theme.orange) {
                 Picker("Provider", selection: Binding(
                     get: { state.provider },
                     set: { value in state.setProvider(value) })) {
@@ -83,7 +83,7 @@ struct MoneyTab: View {
 
     private var priceSection: some View {
         @Bindable var state = state
-        return Section_("Base price") {
+        return Section_("Base price", icon: "dollarsign.circle.fill", tint: Theme.green) {
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
                     TextField("Amount", text: $state.priceAmount).frame(width: 90)
@@ -125,7 +125,7 @@ struct MoneyTab: View {
     }
 
     private var availabilitySection: some View {
-        Section_("Availability") {
+        Section_("Availability", icon: "globe", tint: Theme.teal) {
             HStack(spacing: 12) {
                 if state.stores.contains(.apple) {
                     Link("Edit App Store countries ↗",
@@ -141,7 +141,7 @@ struct MoneyTab: View {
 
     private var purchasesSection: some View {
         let purchases = state.manifest.purchases ?? []
-        return Section_("In-app purchases") {
+        return Section_("In-app purchases", icon: "cart.fill", tint: Theme.accent) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 7) {
@@ -176,7 +176,7 @@ struct MoneyTab: View {
 
     private var subscriptionsSection: some View {
         let groups = state.manifest.subscriptions ?? []
-        return Section_("Subscriptions") {
+        return Section_("Subscriptions", icon: "arrow.clockwise.circle.fill", tint: Theme.purple) {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { groupIndex, group in
                     VStack(alignment: .leading, spacing: 9) {
@@ -273,7 +273,7 @@ struct MoneyTab: View {
 
     private var providerCatalog: some View {
         HStack(alignment: .top, spacing: 14) {
-            Section_(state.provider == .adapty ? "Access levels" : "Entitlements") {
+            Section_(state.provider == .adapty ? "Access levels" : "Entitlements", icon: "lock.open.fill", tint: Theme.pink) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array((state.manifest.entitlements ?? []).enumerated()), id: \.offset) { index, _ in
                         HStack {
@@ -285,7 +285,7 @@ struct MoneyTab: View {
                     Button("Add entitlement", action: state.addEntitlement)
                 }.moneyPanel()
             }
-            Section_(state.provider == .adapty ? "Paywalls" : "Offerings") {
+            Section_(state.provider == .adapty ? "Paywalls" : "Offerings", icon: "rectangle.on.rectangle", tint: Theme.yellow) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array((state.manifest.offerings ?? []).enumerated()), id: \.offset) { index, _ in
                         VStack(alignment: .leading) {
@@ -307,16 +307,30 @@ struct MoneyTab: View {
     }
 }
 
+/// A titled block on a tab. The glyph carries the block faster than the words,
+/// so a long tab reads as a column of pictures first.
 struct Section_<Content: View>: View {
     let title: String
+    var icon: String?
+    var tint: Color = Theme.accent
     @ViewBuilder let content: Content
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title; self.content = content()
+
+    init(_ title: String, icon: String? = nil, tint: Color = Theme.accent,
+         @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.icon = icon
+        self.tint = tint
+        self.content = content()
     }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.system(size: 11, weight: .semibold)).textCase(.uppercase)
-                .foregroundStyle(Theme.text3)
+            HStack(spacing: 8) {
+                if let icon { IconChip(symbol: icon, tint: tint, size: 21) }
+                Text(title).font(.system(size: 11, weight: .semibold)).textCase(.uppercase)
+                    .kerning(0.4)
+                    .foregroundStyle(icon == nil ? Theme.text3 : Theme.text2)
+            }
             content
         }.frame(maxWidth: .infinity, alignment: .leading)
     }

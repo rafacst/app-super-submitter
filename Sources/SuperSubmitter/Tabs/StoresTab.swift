@@ -14,13 +14,13 @@ struct StoresTab: View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 14) {
                 StoreChoiceCard(
-                    name: "App Store",
-                    line: "iOS and Mac App Store. Written through the App Store Connect API.",
+                    store: .apple,
+                    line: "iOS and Mac. Written through the App Store Connect API.",
                     selected: state.stores.contains(.apple)) {
                         state.setStore(.apple, enabled: !state.stores.contains(.apple))
                     }
                 StoreChoiceCard(
-                    name: "Google Play",
+                    store: .google,
                     line: "Android. Written through the Android Publisher API.",
                     selected: state.stores.contains(.google)) {
                         state.setStore(.google, enabled: !state.stores.contains(.google))
@@ -29,7 +29,7 @@ struct StoresTab: View {
 
             if state.stores.contains(.apple) {
                 CredentialCard(
-                    title: "App Store credential",
+                    store: .apple,
                     status: state.appleConnection,
                     keychainNote: "The key is stored in the macOS Keychain. The original file is not copied.",
                     guideOpen: state.appleGuideOpen,
@@ -90,7 +90,7 @@ struct StoresTab: View {
 
             if state.stores.contains(.google) {
                 CredentialCard(
-                    title: "Google Play credential",
+                    store: .google,
                     status: state.googleConnection,
                     keychainNote: "The JSON is stored in the macOS Keychain. The original file is not copied.",
                     guideOpen: state.googleGuideOpen,
@@ -138,7 +138,7 @@ struct StoresTab: View {
                 "Create a key with the App Manager role. Copy the key id and the issuer id.",
                 "Download the .p8 file.",
             ],
-            warning: "Apple shows the .p8 file once. Save it now. A lost key cannot be downloaded again — you create a new key.",
+            warning: "Apple shows the .p8 file once. Save it now. A lost key cannot be downloaded again. You create a new one.",
             buttons: [GuideLink("Open Users and Access ↗",
                                 "https://appstoreconnect.apple.com/access/integrations/api")])
     }
@@ -159,7 +159,7 @@ struct StoresTab: View {
 }
 
 private struct StoreChoiceCard: View {
-    let name: String
+    let store: Store
     let line: String
     let selected: Bool
     let action: () -> Void
@@ -167,15 +167,13 @@ private struct StoreChoiceCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(name).font(.system(size: 13.5, weight: .semibold))
+                HStack(spacing: 10) {
+                    StoreMark(store: store, size: 22)
+                    Text(store.storeName).font(.system(size: 13.5, weight: .semibold))
                     Spacer()
-                    Circle()
-                        .fill(selected ? Theme.accent : .clear)
-                        .frame(width: 16, height: 16)
-                        .overlay(Circle().strokeBorder(Theme.sep, lineWidth: 1))
-                        .overlay(Text(selected ? "✓" : "")
-                            .font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(selected ? Theme.accent : Theme.sep)
                 }
                 Text(line)
                     .font(.system(size: 11.5))
@@ -215,7 +213,7 @@ private struct GuideContent {
 }
 
 private struct CredentialCard<Content: View>: View {
-    let title: String
+    let store: Store
     let status: ConnectionStatus
     let keychainNote: String
     let guideOpen: Bool
@@ -226,12 +224,18 @@ private struct CredentialCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(title).font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 10) {
+                StoreMark(store: store, size: 18)
+                Text("\(store.storeName) credential").font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 8)
-                Text(status.isConnected ? "● Connected" : status == .testing ? "● Testing" : "○ Not connected")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(status.isConnected ? Theme.green : status == .testing ? Theme.yellow : Theme.text2)
+                HStack(spacing: 6) {
+                    Image(systemName: status.isConnected ? "checkmark.circle.fill"
+                                    : status == .testing ? "clock.fill" : "circle.dashed")
+                        .font(.system(size: 11))
+                    Text(status.isConnected ? "Connected" : status == .testing ? "Testing" : "Not connected")
+                        .font(.system(size: 11.5))
+                }
+                .foregroundStyle(status.isConnected ? Theme.green : status == .testing ? Theme.yellow : Theme.text2)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 13)

@@ -35,7 +35,7 @@ struct MarketingTab: View {
 
     private var customProductPages: some View {
         let pages = state.marketing.customProductPages ?? []
-        return Section_("Custom product pages") {
+        return Section_("Custom product pages", icon: "doc.on.doc.fill", tint: Theme.accent) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 7) {
@@ -67,7 +67,7 @@ struct MarketingTab: View {
 
     private var experiments: some View {
         let items = state.marketing.experiments ?? []
-        return Section_("Product page experiments") {
+        return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 7) {
@@ -105,7 +105,7 @@ struct MarketingTab: View {
 
     private var events: some View {
         let items = state.marketing.events ?? []
-        return Section_("In-app events") {
+        return Section_("In-app events", icon: "calendar", tint: Theme.pink) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 7) {
@@ -141,7 +141,7 @@ struct MarketingTab: View {
     // MARK: - The licence agreement
 
     private var licenceAgreement: some View {
-        Section_("Licence agreement") {
+        Section_("Licence agreement", icon: "doc.text.fill", tint: Theme.teal) {
             VStack(alignment: .leading, spacing: 7) {
                 TextEditor(text: state.eulaTextBinding)
                     .font(.system(size: 12))
@@ -179,7 +179,7 @@ struct MarketingTab: View {
     }
 
     private var routingCoverage: some View {
-        Section_("Routing app coverage") {
+        Section_("Routing app coverage", icon: "map.fill", tint: Theme.green) {
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     TextField("assets/coverage.geojson", text: state.routingCoverageBinding)
@@ -196,7 +196,7 @@ struct MarketingTab: View {
     }
 
     private var nomination: some View {
-        Section_("Featuring nomination") {
+        Section_("Featuring nomination", icon: "star.fill", tint: Theme.yellow) {
             VStack(alignment: .leading, spacing: 7) {
                 TextField("Name", text: state.nominationBinding(.name))
                 Picker("Type", selection: state.nominationBinding(.type)) {
@@ -213,7 +213,7 @@ struct MarketingTab: View {
     }
 
     private var accessibility: some View {
-        Section_("Accessibility declaration") {
+        Section_("Accessibility declaration", icon: "figure.wave", tint: Theme.orange) {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(AppState.accessibilityFeatures, id: \.self) { feature in
                     Toggle(feature.split(separator: "_").map(\.capitalized).joined(separator: " "),
@@ -227,7 +227,7 @@ struct MarketingTab: View {
     }
 
     private var appClip: some View {
-        Section_("App Clip default experience") {
+        Section_("App Clip default experience", icon: "bolt.fill", tint: Theme.accent) {
             VStack(alignment: .leading, spacing: 7) {
                 Picker("Action", selection: state.appClipActionBinding) {
                     Text("None").tag("")

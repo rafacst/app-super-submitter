@@ -63,7 +63,13 @@ struct SubmitTab: View {
     private var stepList: some View {
         VStack(spacing: 0) {
             ForEach(Array(grouped.enumerated()), id: \.offset) { _, group in
-                HStack {
+                HStack(spacing: 7) {
+                    switch group.system {
+                    case PlanSystem.apple: StoreMark(store: .apple, size: 14)
+                    case PlanSystem.google: StoreMark(store: .google, size: 14)
+                    default: IconChip(symbol: "arrow.triangle.2.circlepath",
+                                      tint: Theme.orange, size: 16)
+                    }
                     Text(group.name)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.text2)
@@ -85,8 +91,8 @@ struct SubmitTab: View {
         .clipShape(RoundedRectangle(cornerRadius: 9))
     }
 
-    private var grouped: [(name: String, indices: [Int])] {
-        var result: [(String, [Int])] = []
+    private var grouped: [(name: String, system: PlanSystem, indices: [Int])] {
+        var result: [(String, PlanSystem, [Int])] = []
         for (index, step) in state.runSteps.enumerated() {
             let name = switch step.system {
             case PlanSystem.apple: "App Store"
@@ -94,9 +100,9 @@ struct SubmitTab: View {
             case PlanSystem.provider: state.provider == .adapty ? "Adapty" : "RevenueCat"
             }
             if result.last?.0 == name {
-                result[result.count - 1].1.append(index)
+                result[result.count - 1].2.append(index)
             } else {
-                result.append((name, [index]))
+                result.append((name, step.system, [index]))
             }
         }
         return result

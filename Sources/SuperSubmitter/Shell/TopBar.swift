@@ -118,7 +118,7 @@ struct SwitcherChip: View {
             .accessibilityLabel("Current app, \(app.name)")
             .accessibilityHint("Shows linked apps")
         } else {
-            Button("New app") { state.chooseNewAppLocation() }
+            Button("Select app folder") { state.chooseAppFolder() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
         }
@@ -177,15 +177,16 @@ struct SwitcherPopover: View {
 
                 Button {
                     state.switcherOpen = false
-                    state.chooseNewAppLocation()
+                    state.chooseAppFolder()
                 } label: {
                     HStack(spacing: 10) {
                         Color.clear.frame(width: 12)
                         RoundedRectangle(cornerRadius: 6)
                             .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
                             .frame(width: 24, height: 24)
-                            .overlay(Text("+").font(.system(size: 13)).foregroundStyle(Theme.text3))
-                        Text("New app").font(.system(size: 12.5))
+                            .overlay(Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 10)).foregroundStyle(Theme.text3))
+                        Text("Add app").font(.system(size: 12.5))
                         Spacer(minLength: 0)
                     }
                     .foregroundStyle(Theme.text2)

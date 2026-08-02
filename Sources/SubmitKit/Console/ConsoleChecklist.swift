@@ -189,7 +189,7 @@ public enum ConsoleChecklist {
             guard !group.isEmpty else { continue }
             lines.append("### \(system)\n")
             for row in group {
-                lines.append("- [ ] \(row.title) — \(row.reason) \(row.link)")
+                lines.append("- [ ] \(row.title): \(row.reason) \(row.link)")
             }
             lines.append("")
         }

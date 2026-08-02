@@ -273,7 +273,7 @@ struct BuildFromProjectView: View {
         var rows: [(String, String, PreflightRow.Status)] = []
         func add(_ label: String, _ value: String?, key: String = "",
                  blockingWhenEmpty: Bool = false) {
-            let text = (value?.isEmpty == false) ? value! : "—"
+            let text = (value?.isEmpty == false) ? value! : "Not read"
             let status: PreflightRow.Status
             if snapshot.isUncertain(key) {
                 status = .unknown
@@ -441,7 +441,7 @@ struct BuildFromProjectView: View {
             ("Version", candidate.marketingVersion),
             (candidate.platform == .android ? "Version code" : "Build", candidate.buildVersion),
             ("Size", candidate.sizeText),
-            ("SHA-256", candidate.sha256.isEmpty ? "—" : candidate.sha256),
+            ("SHA-256", candidate.sha256.isEmpty ? "Not read" : candidate.sha256),
             ("Path", candidate.artifactPath),
         ]
         if let subject = candidate.signingSummary.certificateSubject {

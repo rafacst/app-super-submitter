@@ -230,7 +230,8 @@ struct PlanTab: View {
             ForEach(plan.systems, id: \.self) { system in
                 let steps = plan.steps(for: system)
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: 8) {
+                        mark(for: system)
                         Text(name(for: system)).font(.system(size: 12.5, weight: .semibold))
                         Spacer(minLength: 8)
                         Text(summary(steps)).font(.system(size: 11)).foregroundStyle(Theme.text2)
@@ -263,6 +264,17 @@ struct PlanTab: View {
                 .overlay(RoundedRectangle(cornerRadius: 9)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
             }
+        }
+    }
+
+    /// The logo of the column. The provider has none, so it takes a glyph.
+    @ViewBuilder
+    private func mark(for system: PlanSystem) -> some View {
+        switch system {
+        case .apple: StoreMark(store: .apple, size: 16)
+        case .google: StoreMark(store: .google, size: 16)
+        case .provider: IconChip(symbol: "arrow.triangle.2.circlepath",
+                                 tint: Theme.orange, size: 18)
         }
     }
 

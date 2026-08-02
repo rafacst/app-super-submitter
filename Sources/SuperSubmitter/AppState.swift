@@ -312,44 +312,54 @@ final class AppState {
         activateLinkedApp(at: index)
     }
 
-    func chooseNewAppLocation() {
-        let panel = NSSavePanel()
-        panel.title = "Create a Super Submitter app"
-        panel.message = "Choose the repository folder and save its manifest as store.yaml."
-        panel.nameFieldStringValue = ManifestFile.defaultName
+    /// The one way in. The user picks the folder of an app that already exists.
+    /// We open the `store.yaml` that is already there, or we write a new one.
+    ///
+    /// Nobody who has built an app wants to "create a new app", so the app
+    /// never asks for one. It asks for the folder and does the rest.
+    func chooseAppFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Select your app folder"
+        panel.message = "Choose the folder of your app. Super Submitter keeps one small file inside it."
+        panel.prompt = "Select"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
 
-        do {
-            let newManifest = Manifest()
-            let folderName = url.deletingLastPathComponent().lastPathComponent
-            let appName = Self.displayName(from: folderName)
-            try ManifestFile.save(newManifest, to: url)
-            let record = LinkedAppRecord(id: UUID(), name: appName, manifestPath: url.path)
-            linkedApps.append(record)
-            persistLinkedApps()
-            selectedAppIndex = linkedApps.count - 1
-            activateLinkedApp(at: selectedAppIndex)
-            selectedTab = .stores
-        } catch {
-            errorMessage = error.localizedDescription
+        let url = folder.appendingPathComponent(ManifestFile.defaultName)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try ManifestFile.save(Manifest(), to: url)
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
         }
+        link(manifestAt: url)
     }
 
+    /// The second door, for a folder that already carries the file but is not
+    /// linked on this Mac yet.
     func chooseExistingManifest() {
         let panel = NSOpenPanel()
-        panel.title = "Open an existing store manifest"
-        panel.message = "Choose the store.yaml file for the app you want to manage."
+        panel.title = "Continue work on an app"
+        panel.message = "Choose the store.yaml file of the app you want to continue."
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        link(manifestAt: url)
+    }
 
+    /// Both doors end here: read the file, add it once, and select it.
+    private func link(manifestAt url: URL) {
         do {
             let loaded = try ManifestFile.load(from: url)
             if let index = linkedApps.firstIndex(where: { $0.manifestPath == url.path }) {
                 activateLinkedApp(at: index)
+                selectedTab = .stores
                 return
             }
             let defaultLocale = loaded.listing?.defaultLocale
@@ -370,7 +380,7 @@ final class AppState {
             activateLinkedApp(at: linkedApps.count - 1)
             selectedTab = .stores
         } catch {
-            errorMessage = "That file is not a valid store manifest. \(error.localizedDescription)"
+            errorMessage = "That file is not a valid store file. \(error.localizedDescription)"
         }
     }
 

@@ -11,14 +11,13 @@ struct SuperSubmitterApp: App {
         Window("Super Submitter", id: "main") {
             RootView()
                 .environment(state)
-                .frame(minWidth: 1040, minHeight: 720)
+                .frame(minWidth: 1120, minHeight: 720)
                 .task {
                     // The onboarding states the one promise of the product
                     // before the first credential.
-                    if !hasSeenOnboarding {
-                        state.showOnboarding = true
-                        hasSeenOnboarding = true
-                    }
+                    // RootView writes the flag when the panel closes. A flag
+                    // written here burns the onboarding if the panel never opens.
+                    if !hasSeenOnboarding { state.showOnboarding = true }
                 }
         }
         .defaultSize(width: 1280, height: 820)

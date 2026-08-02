@@ -111,7 +111,7 @@ struct BuildTab: View {
 
             VStack(alignment: .leading, spacing: 9) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("App Store").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    StoreLabel(store: .apple, size: 11, weight: .medium, color: Theme.text2)
                     if state.remoteAppleApps.isEmpty {
                         PickerActionRow(value: state.appleAppID.isEmpty ? "Connect and test App Store first" : state.appleBundleID) {
                             state.selectedTab = .stores
@@ -131,7 +131,7 @@ struct BuildTab: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Google Play").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
                     PickerActionRow(value: state.googlePackageName.isEmpty
                                     ? "Set and test a package on Stores"
                                     : state.googlePackageName) {

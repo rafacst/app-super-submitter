@@ -30,6 +30,21 @@ enum Theme {
     static let green = Color(light: 0x1C7F3C, dark: 0x42C463)
     static let yellow = Color(light: 0x9A6100, dark: 0xE2A336)
 
+    /// Four more hues, so a tab of nine sections is nine pictures and not one
+    /// blue wall. They carry no meaning of their own.
+    static let purple = Color(light: 0x6A35C9, dark: 0xB294FF)
+    static let teal = Color(light: 0x0C7681, dark: 0x4FCFDC)
+    static let pink = Color(light: 0xBE1F66, dark: 0xFF7FB6)
+    static let orange = Color(light: 0xB4531A, dark: 0xFF9A52)
+
+    /// The store brands. A logo is a fixed colour and never follows the
+    /// appearance, except the Apple mark, which is a silhouette.
+    static let appleMark = Color(light: 0x000000, dark: 0xFFFFFF)
+    static let playBlue = Color(hex: 0x00A0FF)
+    static let playGreen = Color(hex: 0x00E676)
+    static let playYellow = Color(hex: 0xFFCE00)
+    static let playRed = Color(hex: 0xFF3A44)
+
     static let greenBg = Color(light: Color(hex: 0x1C7F3C).opacity(0.10),
                                dark: Color(hex: 0x42C463).opacity(0.14))
     static let yellowBg = Color(light: Color(hex: 0x9A6100).opacity(0.10),

@@ -114,11 +114,11 @@ struct DetailsTab: View {
                 .font(.system(size: 11, weight: .semibold)).textCase(.uppercase)
                 .foregroundStyle(Theme.text3)
             if state.stores.contains(.apple) {
-                StoreTextPreview(title: "App Store · \(state.locale)", name: name,
+                StoreTextPreview(store: .apple, locale: state.locale, name: name,
                                  subtitle: subtitle, description: description)
             }
             if state.stores.contains(.google) {
-                StoreTextPreview(title: "Google Play · \(state.locale)", name: name,
+                StoreTextPreview(store: .google, locale: state.locale, name: name,
                                  subtitle: googleSubtitle, description: description)
             }
             Spacer(minLength: 0)
@@ -139,14 +139,19 @@ struct Tag: View {
 }
 
 private struct StoreTextPreview: View {
-    let title: String
+    let store: Store
+    let locale: String
     let name: String
     let subtitle: String
     let description: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.text2)
+            HStack(spacing: 6) {
+                StoreMark(store: store, size: 13)
+                Text("\(store.storeName) · \(locale)")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.text2)
+            }
             Text(name.isEmpty ? "Untitled app" : name).font(.system(size: 15, weight: .semibold))
             Text(subtitle).font(.system(size: 12)).foregroundStyle(Theme.text2)
             Text(description).font(.system(size: 11.5)).lineLimit(5)

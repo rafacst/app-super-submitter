@@ -5,31 +5,39 @@ import SwiftUI
 /// app, credential, package, price, product, or manifest value.
 enum OnboardingContent {
 
-    static let onboardingSteps: [(title: String, points: [String])] = [
-        ("Choose your stores. Connect each one.", [
-            "The App Store takes a .p8 key file, a key id, and an issuer id. Apple shows the file once.",
-            "Google Play takes a service account JSON, and an invitation to that account inside the Play Console. No API performs the invitation.",
-            "Every secret goes to the macOS Keychain. Nothing is written to a file in your repository.",
+    /// One step of the onboarding. The symbol carries the step faster than the
+    /// title, so every screen leads with a picture.
+    struct Step {
+        let title: String
+        let symbol: String
+        let points: [String]
+    }
+
+    static let onboardingSteps: [Step] = [
+        Step(title: "Connect your stores.", symbol: "key.fill", points: [
+            "The App Store takes a .p8 key, a key id, and an issuer id. Apple shows the file once.",
+            "Google Play takes a service account, invited by hand inside the Play Console.",
+            "Every secret goes to the macOS Keychain. Nothing lands in your repository.",
         ]),
-        ("Pick your build, or pick an app to update.", [
-            "Drop an .ipa, a .pkg, or an .aab. Or pick an app that already exists on either account.",
-            "We read the bundle id, the version, the build number, the languages, and the minimum OS out of the package.",
-            "We warn on the drop when the bundle id is wrong, when the build number is not higher than the store’s, or when the two packages disagree.",
+        Step(title: "Drop your build.", symbol: "shippingbox.fill", points: [
+            "An .ipa, a .pkg, or an .aab. Or pick an app that already exists on either account.",
+            "We read the bundle id, the version, the build, the languages, and the minimum OS.",
+            "A wrong bundle id or a low build number stops you on the drop, not in review.",
         ]),
-        ("Write the details once. We read what the build already knows.", [
-            "One form per language. Every field carries a counter against the limit that binds both stores.",
-            "Apple allows 30 characters of subtitle and Google allows 80. Press Different for Google and write both.",
-            "We never shorten your text. An over-limit field is an error you fix, not a truncation we perform.",
+        Step(title: "Write the listing once.", symbol: "text.alignleft", points: [
+            "One form per language. Every field counts against the limit that binds both stores.",
+            "Apple allows 30 characters of subtitle. Google allows 80. Write both with one switch.",
+            "We never shorten your text. You fix an over-limit field yourself.",
         ]),
-        ("Add the screenshots and the videos. We check every size.", [
-            "We read the dimensions of every file on the drop, before anything uploads.",
-            "A file that matches no bucket is rejected and named, with the nearest accepted size. We offer no resize, because a stretched screenshot fails a review.",
-            "Apple takes a video file, 15 to 30 seconds. Google takes a YouTube link and no file.",
+        Step(title: "Add the screenshots.", symbol: "photo.fill", points: [
+            "We read the size of every file on the drop, before anything uploads.",
+            "A wrong size is rejected and named. We offer no resize, because a stretched shot fails review.",
+            "Apple takes a video file, 15 to 30 seconds. Google takes a YouTube link.",
         ]),
-        ("Set the price and the purchases. We mirror them to RevenueCat or to Adapty.", [
-            "One amount, one currency, one base country. We show the price point Apple actually resolved before we write it.",
-            "One product id becomes the right object in each store, and the matching product in your provider.",
-            "The provider is optional. Choose None and nothing is mirrored.",
+        Step(title: "Set the price.", symbol: "creditcard.fill", points: [
+            "One amount, one currency, one base country. The stores convert the rest.",
+            "We show the price point Apple resolved before we write it.",
+            "One product id, mirrored to RevenueCat or to Adapty. Or to nothing at all.",
         ]),
     ]
 
