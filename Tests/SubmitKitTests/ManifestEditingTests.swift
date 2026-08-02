@@ -74,6 +74,37 @@ import Testing
     #expect(manifest.release?.versionName == "3.2.0")
 }
 
+@Test func importedListingCarriesPrivacyFieldsAndDownloadableMedia() {
+    var manifest = Manifest()
+    var imported = ImportedStoreListing()
+    var locale = ImportedStoreListing.Locale()
+    locale.name = "Example"
+    locale.privacyPolicyText = "Privacy details"
+    locale.privacyChoicesURL = "https://example.com/choices"
+    imported.locales["en-US"] = locale
+    imported.assets = [ImportedStoreAsset(
+        locale: "en-US", kind: "phoneScreenshots",
+        url: URL(string: "https://example.com/phone.png")!, fileName: "phone.png")]
+
+    manifest.mergeAppleImport(imported)
+
+    #expect(manifest.listingText(locale: "en-US", field: .privacyPolicyText) == "Privacy details")
+    #expect(manifest.listingText(locale: "en-US", field: .privacyChoicesURL)
+            == "https://example.com/choices")
+    #expect(imported.assets[0].deviceClass == .phone)
+}
+
+@Test func everySupportedRemoteImageTypeMapsToAManifestBucket() {
+    let types = ["phoneScreenshots", "sevenInchScreenshots", "tenInchScreenshots",
+                 "tvScreenshots", "wearScreenshots", "APP_IPHONE_67",
+                 "APP_IPAD_PRO_3GEN_129", "APP_APPLE_TV"]
+    for kind in types {
+        let asset = ImportedStoreAsset(locale: "en-US", kind: kind,
+            url: URL(string: "https://example.com/image.png")!, fileName: "image.png")
+        #expect(asset.deviceClass != nil)
+    }
+}
+
 @Test func aGoogleServiceAccountReadsTheOfficialJSONKeys() throws {
     let data = Data(#"""
     {
