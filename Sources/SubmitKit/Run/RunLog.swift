@@ -74,7 +74,7 @@ public actor RunLog {
     /// The file this run writes. It never changes, so a caller reads it
     /// without hopping onto the actor.
     public nonisolated let url: URL
-    private let handle: FileHandle
+    private var handle: FileHandle?
     private let encoder = JSONEncoder()
 
     /// - Parameter root: the folder that holds `store.yaml`.
@@ -86,13 +86,8 @@ public actor RunLog {
         if !FileManager.default.fileExists(atPath: file.path) {
             FileManager.default.createFile(atPath: file.path, contents: nil)
         }
-        let descriptor = Darwin.open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
-        guard descriptor >= 0 else {
-            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
-        }
-        _ = Darwin.fchmod(descriptor, 0o600)
-        handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         url = file
+        handle = try Self.openHandle(at: file)
     }
 
     public func append(_ call: APICall, at date: Date = Date()) {
@@ -102,12 +97,24 @@ public actor RunLog {
         }
         guard let data = try? encoder.encode(
             Line(time: RunLog.iso(date), call: call)) else { return }
+        if handle == nil { handle = try? Self.openHandle(at: url) }
+        guard let handle else { return }
         try? handle.write(contentsOf: data)
         try? handle.write(contentsOf: Data("\n".utf8))
     }
 
     public func close() {
-        try? handle.close()
+        if let handle { try? handle.close() }
+        handle = nil
+    }
+
+    private static func openHandle(at file: URL) throws -> FileHandle {
+        let descriptor = Darwin.open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+        guard descriptor >= 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        _ = Darwin.fchmod(descriptor, 0o600)
+        return FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
     }
 
     private static let stamp: DateFormatter = {

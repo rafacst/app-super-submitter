@@ -435,7 +435,8 @@ extension BuildFlow {
             attempt += 1
             do {
                 let state = try await service.appleProcessingState(
-                    appID: appID, marketingVersion: candidate.marketingVersion,
+                    appID: appID, platform: candidate.platform,
+                    marketingVersion: candidate.marketingVersion,
                     buildVersion: candidate.buildVersion)
                 switch state {
                 case .waitingToAppear:

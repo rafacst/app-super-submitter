@@ -59,7 +59,8 @@ public struct UploadService: Sendable {
                     || attributes["expired"].bool != true else { continue }
             let preRelease = JSON(data: try await api.apple(
                 "GET", "/v1/builds/\(build["id"].string ?? "")/preReleaseVersion").data)
-            guard preRelease["data"]["attributes"]["version"].string == marketingVersion else {
+            guard Self.applePreReleaseMatches(
+                preRelease, marketingVersion: marketingVersion, platform: platform) else {
                 continue
             }
             result.existingBuildID = build["id"].string
@@ -82,14 +83,16 @@ public struct UploadService: Sendable {
 
     /// Polls for the **exact** app, platform, version, and build number.
     /// It never assumes the newest remote build is this run's build.
-    public func appleProcessingState(appID: String, marketingVersion: String,
+    public func appleProcessingState(appID: String, platform: BuildPlatform,
+                                     marketingVersion: String,
                                      buildVersion: String) async throws -> AppleProcessing {
         for build in try await appleBuilds(appID: appID)
         where build["attributes"]["version"].string == buildVersion {
             guard let id = build["id"].string else { continue }
             let preRelease = JSON(data: try await api.apple(
                 "GET", "/v1/builds/\(id)/preReleaseVersion").data)
-            guard preRelease["data"]["attributes"]["version"].string == marketingVersion else {
+            guard Self.applePreReleaseMatches(
+                preRelease, marketingVersion: marketingVersion, platform: platform) else {
                 continue
             }
             switch build["attributes"]["processingState"].string ?? "PROCESSING" {
@@ -131,6 +134,14 @@ public struct UploadService: Sendable {
         var path = components.percentEncodedPath
         if let query = components.percentEncodedQuery { path += "?\(query)" }
         return path
+    }
+
+    static func applePreReleaseMatches(_ payload: JSON, marketingVersion: String,
+                                       platform: BuildPlatform) -> Bool {
+        let attributes = payload["data"]["attributes"]
+        let expectedPlatform = platform == .macos ? "MAC_OS" : "IOS"
+        return attributes["version"].string == marketingVersion
+            && attributes["platform"].string == expectedPlatform
     }
 
     // MARK: - Google
