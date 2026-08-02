@@ -1,52 +1,58 @@
+import SubmitKit
 import SwiftUI
 
-/// Tab 2. Two paths to the same state: drop a build, or pick an app that
-/// already exists.
+/// Tab 2. Dropped packages are parsed by SubmitKit and immediately update the
+/// release/build paths and build-derived listing fields in `store.yaml`.
 struct BuildTab: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top, spacing: 14) {
-                submitABuild
+                submitBuilds
                 Rectangle().fill(Theme.sep2).frame(width: 1)
-                updateAnApp
+                updateExistingApp
             }
 
-            if state.buildRead {
+            if !state.packages.isEmpty {
                 packageCards
                 filledLine
-                versionWarning
+                ForEach(validationMessages, id: \.self) { message in
+                    WarningLine(message: message)
+                }
+                if let mismatch = versionMismatch {
+                    versionWarning(mismatch)
+                }
             }
         }
         .frame(maxWidth: 980, alignment: .leading)
     }
 
-    // MARK: - The two paths
-
-    private var submitABuild: some View {
+    private var submitBuilds: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("Submit a build").font(.system(size: 13, weight: .semibold))
             VStack(spacing: 9) {
-                DropWell(
-                    title: state.buildRead ? "FastBillSplit.ipa · 118.4 MB" : "iOS or macOS package",
-                    prompt: ".ipa or .pkg · drop here or")
-                DropWell(
-                    title: state.buildRead ? "app-release.aab · 42.1 MB" : "Android package",
-                    prompt: ".aab · drop here or")
-            }
-            if !state.buildRead {
-                Button {
-                    state.buildRead = true
-                } label: {
-                    Text("Simulate a drop of both packages")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.accentText)
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 6)
-                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
+                PackageDropWell(
+                    title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
+                    prompt: ".ipa · drop here or",
+                    extensions: ["ipa"], reading: state.readingPackages.contains(.ipa),
+                    error: state.packageErrors[.ipa],
+                    choose: { state.chooseBuildFiles(allowedExtensions: ["ipa"]) },
+                    accept: state.importPackages)
+                PackageDropWell(
+                    title: state.packages[.pkg]?.url.lastPathComponent ?? "Mac App Store package",
+                    prompt: ".pkg · drop here or",
+                    extensions: ["pkg"], reading: state.readingPackages.contains(.pkg),
+                    error: state.packageErrors[.pkg],
+                    choose: { state.chooseBuildFiles(allowedExtensions: ["pkg"]) },
+                    accept: state.importPackages)
+                PackageDropWell(
+                    title: state.packages[.aab]?.url.lastPathComponent ?? "Android package",
+                    prompt: ".aab · drop here or",
+                    extensions: ["aab"], reading: state.readingPackages.contains(.aab),
+                    error: state.packageErrors[.aab],
+                    choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
+                    accept: state.importPackages)
             }
         }
         .padding(.horizontal, 16)
@@ -57,18 +63,62 @@ struct BuildTab: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
-    private var updateAnApp: some View {
+    private var updateExistingApp: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("Update an app that exists").font(.system(size: 13, weight: .semibold))
+
             VStack(alignment: .leading, spacing: 9) {
-                PickerRow(label: "App Store", value: "Fast Bill Split", trailing: "1234567890")
-                PickerRow(label: "Google Play", value: "com.fastbillsplit.app", trailing: nil)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("App Store").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    if state.remoteAppleApps.isEmpty {
+                        PickerActionRow(value: state.appleAppID.isEmpty ? "Connect and test App Store first" : state.appleBundleID) {
+                            state.selectedTab = .stores
+                        }
+                    } else {
+                        Menu {
+                            ForEach(state.remoteAppleApps) { app in
+                                Button("\(app.name) · \(app.identifier)") {
+                                    state.chooseRemoteAppleApp(app)
+                                }
+                            }
+                        } label: {
+                            PickerLabel(value: state.appleBundleID.isEmpty ? "Choose an app" : state.appleBundleID)
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Google Play").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    PickerActionRow(value: state.googlePackageName.isEmpty
+                                    ? "Set and test a package on Stores"
+                                    : state.googlePackageName) {
+                        state.selectedTab = .stores
+                    }
+                }
             }
-            Text("Both paths end in the same state. Picking an app reads its current listing into the forms.")
+
+            Text("App Store apps come from the connected account. Android Publisher cannot list apps, so Google uses the tested package name from Stores.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .top, spacing: 10) {
+                QuietButton(
+                    title: state.listingImportStatus == .testing ? "Reading…" : "Read current listings",
+                    action: state.importExistingListing)
+                    .disabled(state.listingImportStatus == .testing)
+                switch state.listingImportStatus {
+                case .connected(let message):
+                    Text(message).foregroundStyle(Theme.green)
+                case .failed(let message):
+                    Text(message).foregroundStyle(Theme.red)
+                default:
+                    EmptyView()
+                }
+            }
+            .font(.system(size: 11.5))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 15)
@@ -78,58 +128,23 @@ struct BuildTab: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
-    // MARK: - What the build holds
+    private var sortedPackages: [AppPackage] {
+        AppPackage.Kind.allCases.compactMap { state.packages[$0] }
+    }
 
     private var packageCards: some View {
         HStack(alignment: .top, spacing: 14) {
-            ForEach(DemoData.packages) { package in
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 11) {
-                        RoundedRectangle(cornerRadius: 9)
-                            .fill(Theme.sunken)
-                            .overlay(RoundedRectangle(cornerRadius: 9)
-                                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-                            .frame(width: 38, height: 38)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(package.title).font(.system(size: 13, weight: .semibold))
-                            Text(package.file)
-                                .font(Theme.mono(11))
-                                .foregroundStyle(Theme.text2)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 12)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(package.rows) { row in
-                            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                Text(row.key)
-                                    .foregroundStyle(Theme.text2)
-                                    .frame(width: 112, alignment: .leading)
-                                Text(row.value)
-                                    .font(row.mono ? Theme.mono(12) : .system(size: 12))
-                                Spacer(minLength: 0)
-                            }
-                            .font(.system(size: 12))
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 5)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            ForEach(sortedPackages, id: \.kind) { package in
+                PackageCard(package: package)
             }
         }
     }
 
     private var filledLine: some View {
-        HStack(spacing: 14) {
-            Text("We filled 8 fields on the Details tab.").font(.system(size: 12.5))
+        let count = sortedPackages.reduce(0) { $0 + $1.filledFieldCount }
+        return HStack(spacing: 14) {
+            Text("Read \(count) build fields and saved their manifest values.")
+                .font(.system(size: 12.5))
             QuietButton(title: "Open Details") { state.selectedTab = .details }
             Spacer(minLength: 0)
         }
@@ -140,20 +155,44 @@ struct BuildTab: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
-    private var versionWarning: some View {
+    private var versionMismatch: (apple: String, google: String)? {
+        let apple = state.packages[.ipa]?.versionName ?? state.packages[.pkg]?.versionName
+        let google = state.packages[.aab]?.versionName
+        guard let apple, let google, apple != google else { return nil }
+        return (apple, google)
+    }
+
+    private var validationMessages: [String] {
+        sortedPackages.compactMap { package in
+            switch package.kind {
+            case .ipa, .pkg:
+                guard let expected = state.manifest.apps.apple?.bundleId,
+                      !expected.isEmpty, let actual = package.identifier,
+                      expected != actual else { return nil }
+                return "\(package.url.lastPathComponent) uses \(actual), but the selected App Store app uses \(expected)."
+            case .aab:
+                guard let expected = state.manifest.apps.google?.packageName,
+                      !expected.isEmpty, let actual = package.identifier,
+                      expected != actual else { return nil }
+                return "\(package.url.lastPathComponent) uses \(actual), but the selected Google Play app uses \(expected)."
+            }
+        }
+    }
+
+    private func versionWarning(_ mismatch: (apple: String, google: String)) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text("!").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.yellow)
             VStack(alignment: .leading, spacing: 3) {
-                Text("The version name differs between the two packages.")
+                Text("The version name differs between the Apple and Android packages.")
                     .font(.system(size: 12.5, weight: .medium))
-                Text("The .ipa reads 3.2.0 and the .aab reads 3.2.0-rc4. Google Play shows the release name to nobody, but the two stores then hold two different numbers. Set one name on the Build tab.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.text2)
-                    .lineSpacing(3)
+                Text("Apple reads \(mismatch.apple); Google reads \(mismatch.google). Choose the release name that the manifest should use.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            QuietButton(title: "Use 3.2.0")
+            QuietButton(title: "Use \(mismatch.apple)") {
+                state.useReleaseVersion(mismatch.apple)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
@@ -162,60 +201,146 @@ struct BuildTab: View {
     }
 }
 
-private struct DropWell: View {
+private struct PackageDropWell: View {
     let title: String
     let prompt: String
+    let extensions: Set<String>
+    let reading: Bool
+    let error: String?
+    let choose: () -> Void
+    let accept: ([URL]) -> Void
+    @State private var targeted = false
 
     var body: some View {
-        HStack(spacing: 11) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Theme.field)
-                .overlay(RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-                .frame(width: 26, height: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 12, weight: .medium))
-                HStack(spacing: 3) {
-                    Text(prompt).foregroundStyle(Theme.text2)
-                    Text("choose a file…").foregroundStyle(Theme.accent)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 11) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Theme.field)
+                    .overlay(RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                    .frame(width: 26, height: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(reading ? "Reading \(title)…" : title)
+                        .font(.system(size: 12, weight: .medium))
+                    HStack(spacing: 3) {
+                        Text(prompt).foregroundStyle(Theme.text2)
+                        Button("choose a file…", action: choose)
+                            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    }
+                    .font(.system(size: 11))
                 }
-                .font(.system(size: 11))
+                Spacer(minLength: 0)
+                if reading { ProgressView().controlSize(.small) }
             }
-            Spacer(minLength: 0)
+            if let error {
+                Text(error).font(.system(size: 10.5)).foregroundStyle(Theme.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+        .background(targeted ? Theme.field : Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            .strokeBorder(targeted ? Theme.accent : Theme.sep,
+                          style: StrokeStyle(lineWidth: targeted ? 1.5 : 1, dash: [3, 3])))
+        .dropDestination(for: URL.self) { urls, _ in
+            let accepted = urls.filter { extensions.contains($0.pathExtension.lowercased()) }
+            guard !accepted.isEmpty else { return false }
+            accept(accepted)
+            return true
+        } isTargeted: { targeted = $0 }
     }
 }
 
-private struct PickerRow: View {
-    let label: String
-    let value: String
-    let trailing: String?
+private struct PackageCard: View {
+    let package: AppPackage
+
+    var rows: [(String, String)] {
+        [
+            (package.kind == .aab ? "Package name" : "Bundle id", package.identifier ?? "Not found"),
+            ("Version name", package.versionName ?? "Not found"),
+            (package.kind == .aab ? "Version code" : "Build number", package.buildNumber ?? "Not found"),
+            ("App name", package.appName ?? "Not found"),
+            ("Languages", package.locales.isEmpty ? "None declared" : package.locales.joined(separator: ", ")),
+            (package.kind == .aab ? "Minimum SDK" : "Minimum OS", package.minimumOS ?? "Not found"),
+            ("Devices", package.deviceClasses.isEmpty ? "Not declared" : package.deviceClasses.joined(separator: ", ")),
+            ("Encryption", package.usesNonExemptEncryption.map { $0 ? "Uses non-exempt encryption" : "No non-exempt encryption" } ?? "Not applicable"),
+            ("Privacy", "\(package.privacyHints.count) hints found"),
+        ]
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
-            HStack {
-                HStack(spacing: 6) {
-                    Text(value)
-                    if let trailing {
-                        Text(trailing).foregroundStyle(Theme.text2)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 11) {
+                RoundedRectangle(cornerRadius: 9).fill(Theme.sunken)
+                    .overlay(RoundedRectangle(cornerRadius: 9)
+                        .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                    .frame(width: 38, height: 38)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(package.kind.rawValue.uppercased()) · \(package.url.lastPathComponent)")
+                        .font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    Text(package.url.path).font(Theme.mono(10.5)).foregroundStyle(Theme.text2).lineLimit(1)
                 }
-                Spacer()
-                Text("▾").font(.system(size: 9)).foregroundStyle(Theme.text3)
+                Spacer(minLength: 0)
             }
-            .font(.system(size: 12))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .padding(.horizontal, 15).padding(.vertical, 12)
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(row.0).foregroundStyle(Theme.text2).frame(width: 105, alignment: .leading)
+                        Text(row.1).font(Theme.mono(11.5))
+                        Spacer(minLength: 0)
+                    }
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 15).padding(.vertical, 5)
+                }
+            }
+            .padding(.vertical, 4)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+}
+
+private struct PickerLabel: View {
+    let value: String
+    var body: some View {
+        HStack {
+            Text(value)
+            Spacer()
+            Text("▾").font(.system(size: 9)).foregroundStyle(Theme.text3)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 9).padding(.vertical, 6)
+        .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+}
+
+private struct PickerActionRow: View {
+    let value: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) { PickerLabel(value: value) }
+            .buttonStyle(.plain)
+    }
+}
+
+private struct WarningLine: View {
+    let message: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("!").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.red)
+            Text(message).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.red, lineWidth: 1))
     }
 }

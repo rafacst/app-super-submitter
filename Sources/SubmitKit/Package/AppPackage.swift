@@ -6,7 +6,7 @@ import Foundation
 /// can omit any of them, and a missing field is not an error. The developer
 /// then types it.
 public struct AppPackage: Sendable, Equatable {
-    public enum Kind: String, Sendable, CaseIterable {
+    public enum Kind: String, Sendable, CaseIterable, Hashable {
         case ipa, pkg, aab
 
         public var store: Store {

@@ -133,10 +133,10 @@ struct SwitcherPopover: View {
                     .padding(.top, 8)
                     .padding(.bottom, 6)
 
-                ForEach(Array(DemoData.apps.enumerated()), id: \.offset) { index, app in
+                ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
                     let selected = index == state.selectedAppIndex
                     Button {
-                        state.selectedAppIndex = index
+                        state.selectApp(at: index)
                         state.switcherOpen = false
                     } label: {
                         HStack(spacing: 10) {
@@ -167,18 +167,25 @@ struct SwitcherPopover: View {
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
 
-                HStack(spacing: 10) {
-                    Color.clear.frame(width: 12)
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
-                        .frame(width: 24, height: 24)
-                        .overlay(Text("+").font(.system(size: 13)).foregroundStyle(Theme.text3))
-                    Text("New app").font(.system(size: 12.5))
-                    Spacer(minLength: 0)
+                Button {
+                    state.switcherOpen = false
+                    state.chooseNewAppLocation()
+                } label: {
+                    HStack(spacing: 10) {
+                        Color.clear.frame(width: 12)
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
+                            .frame(width: 24, height: 24)
+                            .overlay(Text("+").font(.system(size: 13)).foregroundStyle(Theme.text3))
+                        Text("New app").font(.system(size: 12.5))
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(Theme.text2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .contentShape(.rect)
                 }
-                .foregroundStyle(Theme.text2)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .buttonStyle(.plain)
             }
             .frame(width: 292)
             .background(Theme.content, in: RoundedRectangle(cornerRadius: 9))

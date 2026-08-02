@@ -21,9 +21,9 @@ struct Sidebar: View {
                     .padding(.top, 4)
                     .padding(.bottom, 6)
 
-                ForEach(Array(DemoData.apps.enumerated()), id: \.offset) { index, app in
+                ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
                     Button {
-                        state.selectedAppIndex = index
+                        state.selectApp(at: index)
                     } label: {
                         AppRow(app: app, selected: index == state.selectedAppIndex)
                     }
@@ -32,7 +32,9 @@ struct Sidebar: View {
                     .accessibilityValue("App Store \(app.apple.mark), Google Play \(app.google.mark)")
                     .accessibilityAddTraits(index == state.selectedAppIndex ? .isSelected : [])
                 }
-                NewAppRow()
+                Button { state.chooseNewAppLocation() } label: { NewAppRow() }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("New app")
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 10)

@@ -33,6 +33,15 @@ struct RootView: View {
         .sheet(isPresented: $state.showSettings) { SettingsPanel() }
         .sheet(isPresented: $state.showOnboarding) { OnboardingPanel() }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
+        .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
+        .alert("Super Submitter", isPresented: Binding(
+            get: { state.errorMessage != nil },
+            set: { if !$0 { state.errorMessage = nil } }
+        )) {
+            Button("OK") { state.errorMessage = nil }
+        } message: {
+            Text(state.errorMessage ?? "")
+        }
     }
 }
 
@@ -106,7 +115,7 @@ private struct LocalePicker: View {
         HStack(spacing: 6) {
             Text("Language").font(.system(size: 11)).foregroundStyle(Theme.text2)
             HStack(spacing: 0) {
-                ForEach(["en-US", "pt-BR"], id: \.self) { code in
+                ForEach(state.locales, id: \.self) { code in
                     let selected = state.locale == code
                     Button {
                         state.locale = code
@@ -123,11 +132,16 @@ private struct LocalePicker: View {
                     .accessibilityLabel(code)
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                Text("+ Add")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.text2)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                Button { state.showAddLocale = true } label: {
+                    Text("+ Add")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.text2)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add a locale")
             }
             .background(Theme.sunken)
             .clipShape(RoundedRectangle(cornerRadius: 6))
