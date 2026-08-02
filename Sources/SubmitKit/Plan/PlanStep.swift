@@ -58,14 +58,44 @@ public enum PlanOperation: Sendable, Equatable {
     case applePurchases
     case applePhasedRelease
     case appleAvailability
+    /// The subscription catalog: the groups, the subscriptions, the
+    /// localizations, and the prices. The offers attach to it.
+    case appleSubscriptions
+    case appleSubscriptionOffers
+    case appleGracePeriod
+    case appleCustomProductPages
+    case appleExperiments
+    case appleAppEvents
+    case appleEULA
+    case appleRoutingCoverage(path: String, bytes: Int64)
+    case appleNomination
+    case appleAccessibility
+    case appleAppClip
 
     case googleOpenEdit
     case googleListing(String)
     case googleDetails
     case googleImages(locale: String, imageType: String, files: [MediaUpload])
     case googleBundleUpload(path: String, bytes: Int64)
-    case googleTrack
+    case googleApkUpload(path: String, bytes: Int64)
+    case googleExternalApk
+    /// `kind` is `proguard` or `nativeCode`.
+    case googleDeobfuscation(kind: String, path: String, bytes: Int64)
+    /// `kind` is `main` or `patch`.
+    case googleExpansionFile(kind: String, path: String, bytes: Int64)
+    case googleCreateTrack(String)
+    case googleTrack(String)
     case googleProducts
+    case googleDeviceTierConfig(path: String)
+    /// The base plan and purchase option switches. Google keeps the product
+    /// and stops the sale, so neither call deletes anything.
+    case googleBasePlanState(productId: String, basePlanId: String, active: Bool)
+    case googlePurchaseOptionState(productId: String, purchaseOptionId: String, active: Bool)
+    case googleSubscriptionOffers(productId: String, basePlanId: String)
+    case googleOneTimeOffers(productId: String)
+    case googleMigratePrices(productId: String, basePlanId: String)
+    /// Spec section 8, rule 6. The app archives; it never deletes.
+    case googleArchiveSubscription(productId: String)
     case googleValidate
     case googleCommit
 

@@ -343,7 +343,7 @@ extension BuildFlow {
                       !packageName.isEmpty else { return }
                 let check = try await service.checkGoogle(
                     packageName: packageName,
-                    track: app.manifest.release?.google?.track ?? "production",
+                    track: app.manifest.googlePrimaryTrack,
                     versionCode: Int(candidate.buildVersion))
                 snapshot.remoteConflict = check.blocking
                     ?? "No conflict. The highest version code is \(check.highestVersionCode.map(String.init) ?? "none")."
@@ -495,7 +495,7 @@ extension BuildFlow {
                                message: "The inspected bundle has no valid positive version code.",
                                retainedArtifact: candidate.artifactPath)
         }
-        let track = app.manifest.release?.google?.track ?? "production"
+        let track = app.manifest.googlePrimaryTrack
         let service = UploadService(api: app.readOnlyAPI())
         record(preview: "POST edits · upload bundle · commit changesNotSentForReview=true")
         run.cleanupState = .pending
@@ -553,7 +553,7 @@ extension BuildFlow {
             return
         }
         let service = UploadService(api: app.readOnlyAPI())
-        let track = app.manifest.release?.google?.track ?? "production"
+        let track = app.manifest.googlePrimaryTrack
         if let landed = try? await service.reconcileGoogle(
             packageName: packageName, track: track,
             versionCode: Int(candidate.buildVersion) ?? 0), landed {

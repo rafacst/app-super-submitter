@@ -170,7 +170,7 @@ struct ReleaseTab: View {
                 ? ", phased over 7 days" : ""
             return "App Store · version \(version)\n\(Self.appleRelease(release))\(phased)."
         case .google:
-            let track = state.manifest.release?.google?.track ?? "production"
+            let track = state.manifest.googlePrimaryTrack
             let status = state.manifest.release?.google?.status ?? "completed"
             return "Google Play · version \(version)\n\(track) track, \(Self.googleRelease(status))."
         }

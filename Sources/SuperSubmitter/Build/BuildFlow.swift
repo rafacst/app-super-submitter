@@ -308,7 +308,7 @@ final class BuildFlow {
         do {
             let check = try await UploadService(api: app.readOnlyAPI()).checkGoogle(
                 packageName: packageName,
-                track: app.manifest.release?.google?.track ?? "production",
+                track: app.manifest.googlePrimaryTrack,
                 versionCode: nil)
             snapshot.remoteConflict = check.highestVersionCode
                 .map { "The highest version code in Google Play is \($0)." }

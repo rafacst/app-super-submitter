@@ -17,6 +17,10 @@ public struct Manifest: Codable, Sendable, Equatable {
     public var entitlements: [Entitlement]?
     public var offerings: [Offering]?
     public var review: Review?
+    /// The App Store resources that sell the app rather than ship it: the
+    /// custom product pages, the experiments, the in-app events, and the
+    /// small single-value resources next to them.
+    public var marketing: Marketing?
 
     public init() {}
 }
@@ -130,12 +134,20 @@ extension Manifest {
         public struct Build: Codable, Sendable, Equatable {
             public var ios: String?
             public var macos: String?
+            /// The App Bundle. Google prefers it, and the Play Console needs it
+            /// for a new app.
             public var android: String?
+            /// A plain APK. Google still accepts one for an existing app, and
+            /// an expansion file needs one. The manifest may name both, and
+            /// then the run uploads both into the same edit.
+            public var androidApk: String?
 
-            public init(ios: String? = nil, macos: String? = nil, android: String? = nil) {
+            public init(ios: String? = nil, macos: String? = nil, android: String? = nil,
+                        androidApk: String? = nil) {
                 self.ios = ios
                 self.macos = macos
                 self.android = android
+                self.androidApk = androidApk
             }
         }
 
@@ -145,12 +157,79 @@ extension Manifest {
         }
 
         public struct GoogleRelease: Codable, Sendable, Equatable {
+            /// The track that the release button releases. It is one track,
+            /// because a release is one irreversible call. Spec section 7.9.
             public var track: String?
+            /// Every track that an apply writes. One edit carries them all, so
+            /// a build reaches `internal` and `production` in one commit. The
+            /// primary `track` must appear here when both keys exist.
+            public var tracks: [String]?
             /// Read at release time, never at apply time. An apply always
             /// writes `draft`. Spec section 7.4.
             public var status: String?
             public var userFraction: Double?
             public var inAppUpdatePriority: Int?
+            /// The staged rollout by country. An empty list means every
+            /// country, and then Google receives no `countryTargeting`.
+            public var countries: [String]?
+            /// True keeps the release available outside `countries`.
+            public var includeRestOfWorld: Bool?
+            /// The ProGuard or R8 mapping file. Google needs it to read a
+            /// stack trace.
+            public var mappingFile: String?
+            /// The native debug symbols archive, for the NDK crash reports.
+            public var nativeDebugSymbols: String?
+            /// The APK expansion files. Google accepts them for an APK only,
+            /// never for an App Bundle.
+            public var expansionFileMain: String?
+            public var expansionFilePatch: String?
+            /// A privately hosted APK. Google Play organizations only.
+            public var externalApk: ExternalApk?
+            /// A device tier configuration file, as JSON. Google assigns the
+            /// id, so the app creates a new configuration when the file
+            /// content changes and never before.
+            public var deviceTierConfig: String?
+        }
+
+        /// The metadata of an APK that the developer hosts, not Google.
+        ///
+        /// The app computes the size and the two digests from the file. Every
+        /// other value comes from here, because the reader parses an App
+        /// Bundle and not the binary manifest of an APK.
+        ///
+        /// `// ponytail: the developer names six fields instead of the app
+        /// // shipping an AXML parser and a certificate reader. Add the parser
+        /// // when a user actually publishes a private app this way.`
+        public struct ExternalApk: Codable, Sendable, Equatable {
+            public var url: String
+            public var applicationLabel: String
+            public var versionCode: Int
+            public var versionName: String
+            public var minimumSdk: Int
+            public var certificateBase64s: [String]
+            public var maximumSdk: Int?
+            public var nativeCodes: [String]?
+            public var usesFeatures: [String]?
+            public var usesPermissions: [String]?
+            public var iconBase64: String?
+
+            public init(url: String, applicationLabel: String, versionCode: Int,
+                        versionName: String, minimumSdk: Int, certificateBase64s: [String],
+                        maximumSdk: Int? = nil, nativeCodes: [String]? = nil,
+                        usesFeatures: [String]? = nil, usesPermissions: [String]? = nil,
+                        iconBase64: String? = nil) {
+                self.url = url
+                self.applicationLabel = applicationLabel
+                self.versionCode = versionCode
+                self.versionName = versionName
+                self.minimumSdk = minimumSdk
+                self.certificateBase64s = certificateBase64s
+                self.maximumSdk = maximumSdk
+                self.nativeCodes = nativeCodes
+                self.usesFeatures = usesFeatures
+                self.usesPermissions = usesPermissions
+                self.iconBase64 = iconBase64
+            }
         }
 
         public enum ReleaseType: String, Codable, Sendable, CaseIterable {
@@ -158,6 +237,35 @@ extension Manifest {
             case afterApproval = "AFTER_APPROVAL"
             case scheduled = "SCHEDULED"
         }
+    }
+}
+
+// MARK: - the Google tracks
+
+public extension Manifest {
+    /// Every track that an apply writes. It is never empty.
+    ///
+    /// `// ponytail: one definition. Nine call sites held their own
+    /// // `?? "production"`, and the tenth would have drifted.`
+    var googleTracks: [String] {
+        let list = (release?.google?.tracks ?? []).filter { !$0.isEmpty }
+        guard list.isEmpty else { return list }
+        return [googlePrimaryTrack]
+    }
+
+    /// The track that the release button releases, and the track that the
+    /// status row reads.
+    var googlePrimaryTrack: String {
+        if let track = release?.google?.track, !track.isEmpty { return track }
+        return (release?.google?.tracks ?? []).first { !$0.isEmpty } ?? "production"
+    }
+
+    /// The `countryTargeting` body of a release, or nil for every country.
+    var googleCountryTargeting: [String: Any]? {
+        let countries = (release?.google?.countries ?? []).filter { !$0.isEmpty }
+        guard !countries.isEmpty else { return nil }
+        return ["countries": countries,
+                "includeRestOfWorld": release?.google?.includeRestOfWorld ?? false]
     }
 }
 
@@ -250,10 +358,19 @@ extension Manifest {
         public var reviewNote: String?
         public var entitlements: [String]?
         public var locales: [String: ProductLocale]?
+        /// False deactivates the Google purchase option. Google keeps the
+        /// product and stops the sale. Apple has no equivalent switch.
+        public var active: Bool?
+        /// The tax treatment. Google writes it on the product; Apple reads
+        /// its own category from App Store Connect.
+        public var tax: Tax?
+        /// The discounts on this product.
+        public var offers: [Offer]?
 
         public init(id: String, kind: Kind, name: String? = nil, price: Price? = nil,
                     reviewNote: String? = nil, entitlements: [String]? = nil,
-                    locales: [String: ProductLocale]? = nil) {
+                    locales: [String: ProductLocale]? = nil, active: Bool? = nil,
+                    tax: Tax? = nil, offers: [Offer]? = nil) {
             self.id = id
             self.kind = kind
             self.name = name
@@ -261,6 +378,9 @@ extension Manifest {
             self.reviewNote = reviewNote
             self.entitlements = entitlements
             self.locales = locales
+            self.active = active
+            self.tax = tax
+            self.offers = offers
         }
 
         public enum Kind: String, Codable, Sendable, CaseIterable {
@@ -274,11 +394,20 @@ extension Manifest {
         public var groupId: String
         public var groupName: String?
         public var plans: [Plan]
+        /// The billing grace period, in days. Apple accepts 3, 16, or 28 at
+        /// the app level. Google sets it on the base plan.
+        public var gracePeriodDays: Int?
+        /// The group name that the customer reads, per locale. Apple only.
+        public var locales: [String: ProductLocale]?
 
-        public init(groupId: String, groupName: String? = nil, plans: [Plan] = []) {
+        public init(groupId: String, groupName: String? = nil, plans: [Plan] = [],
+                    gracePeriodDays: Int? = nil,
+                    locales: [String: ProductLocale]? = nil) {
             self.groupId = groupId
             self.groupName = groupName
             self.plans = plans
+            self.gracePeriodDays = gracePeriodDays
+            self.locales = locales
         }
 
         public struct Plan: Codable, Sendable, Equatable {
@@ -290,11 +419,23 @@ extension Manifest {
             public var entitlements: [String]?
             public var packageKey: String?   // RevenueCat only
             public var locales: [String: ProductLocale]?
+            /// False deactivates the Google base plan and stops new sales.
+            /// An existing subscriber keeps the plan.
+            public var active: Bool?
+            public var tax: Tax?
+            /// The free trial and the introductory price.
+            public var offers: [Offer]?
+            /// True moves the existing subscribers to the new price. It
+            /// changes what a real customer pays, so the validator warns and
+            /// the default is false.
+            public var migrateExistingSubscribers: Bool?
 
             public init(id: String, duration: String, basePlanId: String? = nil,
                         price: Price? = nil, entitlements: [String]? = nil,
                         packageKey: String? = nil,
-                        locales: [String: ProductLocale]? = nil) {
+                        locales: [String: ProductLocale]? = nil, active: Bool? = nil,
+                        tax: Tax? = nil, offers: [Offer]? = nil,
+                        migrateExistingSubscribers: Bool? = nil) {
                 self.id = id
                 self.duration = duration
                 self.basePlanId = basePlanId
@@ -302,7 +443,75 @@ extension Manifest {
                 self.entitlements = entitlements
                 self.packageKey = packageKey
                 self.locales = locales
+                self.active = active
+                self.tax = tax
+                self.offers = offers
+                self.migrateExistingSubscribers = migrateExistingSubscribers
             }
+        }
+    }
+
+    /// One discount on a product or on a subscription plan.
+    ///
+    /// Both stores sell the same three shapes, and each store names them
+    /// differently. Spec section 6.5 holds the map.
+    public struct Offer: Codable, Sendable, Equatable {
+        public var id: String
+        public var kind: Kind
+        /// The offer duration, ISO 8601. A free trial needs it.
+        public var duration: String?
+        /// The price of an introductory offer. A free trial has none.
+        public var price: Price?
+        /// How many billing periods the offer runs. Apple calls it the
+        /// number of periods; Google calls it the recurrence count.
+        public var periods: Int?
+        /// The regions or territories. An empty list means every region.
+        public var regions: [String]?
+        public var eligibility: Eligibility?
+
+        public init(id: String, kind: Kind, duration: String? = nil, price: Price? = nil,
+                    periods: Int? = nil, regions: [String]? = nil,
+                    eligibility: Eligibility? = nil) {
+            self.id = id
+            self.kind = kind
+            self.duration = duration
+            self.price = price
+            self.periods = periods
+            self.regions = regions
+            self.eligibility = eligibility
+        }
+
+        public enum Kind: String, Codable, Sendable, CaseIterable {
+            case freeTrial = "free_trial"
+            case introPrice = "intro_price"
+            /// A code that the developer hands out. Apple calls it an offer
+            /// code; Google calls it a promotion.
+            case offerCode = "offer_code"
+        }
+
+        public enum Eligibility: String, Codable, Sendable, CaseIterable {
+            case new
+            case existing
+            case winBack = "win_back"
+        }
+    }
+
+    /// The tax treatment of one product.
+    public struct Tax: Codable, Sendable, Equatable {
+        /// The Google tax category, for example `TAX_CATEGORY_UNSPECIFIED`
+        /// or `TAX_CATEGORY_EBOOK`.
+        public var category: String?
+        /// The EU withdrawal right, for example
+        /// `WITHDRAWAL_RIGHT_DIGITAL_CONTENT`.
+        public var withdrawalRight: String?
+        /// True marks the product as sold by the developer in the EEA.
+        public var eeaWithdrawalRight: Bool?
+
+        public init(category: String? = nil, withdrawalRight: String? = nil,
+                    eeaWithdrawalRight: Bool? = nil) {
+            self.category = category
+            self.withdrawalRight = withdrawalRight
+            self.eeaWithdrawalRight = eeaWithdrawalRight
         }
     }
 
@@ -338,6 +547,173 @@ extension Manifest {
             self.name = name
             self.isCurrent = isCurrent
             self.products = products
+        }
+    }
+}
+
+// MARK: - marketing (App Store only)
+
+extension Manifest {
+    /// The App Store resources that shape how the store sells the app.
+    ///
+    /// Google offers no equivalent for any of these, so every block here
+    /// reaches one store. A missing block writes nothing.
+    public struct Marketing: Codable, Sendable, Equatable {
+        public var customProductPages: [CustomProductPage]?
+        public var experiments: [Experiment]?
+        public var events: [AppEvent]?
+        public var eula: EULA?
+        /// A GeoJSON file for a routing app. Apple reserves and uploads it
+        /// the same way as a screenshot.
+        public var routingCoverage: String?
+        public var nomination: Nomination?
+        public var accessibility: Accessibility?
+        public var appClip: AppClip?
+
+        public init() {}
+
+        /// One alternative product page. Apple allows up to 35.
+        public struct CustomProductPage: Codable, Sendable, Equatable {
+            public var key: String
+            public var name: String
+            public var visible: Bool?
+            /// The promotional text and the screenshots differ per page. The
+            /// screenshots reuse the media block by locale and device class.
+            public var locales: [String: PageLocale]?
+
+            public init(key: String, name: String, visible: Bool? = nil,
+                        locales: [String: PageLocale]? = nil) {
+                self.key = key
+                self.name = name
+                self.visible = visible
+                self.locales = locales
+            }
+
+            public struct PageLocale: Codable, Sendable, Equatable {
+                public var promotionalText: String?
+                public init(promotionalText: String? = nil) {
+                    self.promotionalText = promotionalText
+                }
+            }
+        }
+
+        /// One product page experiment. Apple runs it against the live page.
+        public struct Experiment: Codable, Sendable, Equatable {
+            public var key: String
+            public var name: String
+            /// The share of the traffic that the treatments take, 0 to 100.
+            public var trafficProportion: Int?
+            public var platform: Platform?
+            public var treatments: [Treatment]
+
+            public init(key: String, name: String, trafficProportion: Int? = nil,
+                        platform: Platform? = nil, treatments: [Treatment] = []) {
+                self.key = key
+                self.name = name
+                self.trafficProportion = trafficProportion
+                self.platform = platform
+                self.treatments = treatments
+            }
+
+            public struct Treatment: Codable, Sendable, Equatable {
+                public var key: String
+                public var name: String
+                public init(key: String, name: String) {
+                    self.key = key
+                    self.name = name
+                }
+            }
+        }
+
+        /// One in-app event.
+        public struct AppEvent: Codable, Sendable, Equatable {
+            public var key: String
+            /// `BADGE_LIVE_EVENT`, `BADGE_PREMIERE`, and the rest.
+            public var badge: String?
+            public var priority: String?
+            public var purpose: String?
+            public var locales: [String: EventLocale]?
+
+            public init(key: String, badge: String? = nil, priority: String? = nil,
+                        purpose: String? = nil, locales: [String: EventLocale]? = nil) {
+                self.key = key
+                self.badge = badge
+                self.priority = priority
+                self.purpose = purpose
+                self.locales = locales
+            }
+
+            public struct EventLocale: Codable, Sendable, Equatable {
+                public var name: String?
+                public var shortDescription: String?
+                public var longDescription: String?
+                public init(name: String? = nil, shortDescription: String? = nil,
+                            longDescription: String? = nil) {
+                    self.name = name
+                    self.shortDescription = shortDescription
+                    self.longDescription = longDescription
+                }
+            }
+        }
+
+        /// A custom licence agreement. Apple uses its own when this is absent.
+        public struct EULA: Codable, Sendable, Equatable {
+            public var text: String
+            /// The territories that receive it. Empty means every territory.
+            public var territories: [String]?
+
+            public init(text: String, territories: [String]? = nil) {
+                self.text = text
+                self.territories = territories
+            }
+        }
+
+        /// A request to the App Store editorial team.
+        public struct Nomination: Codable, Sendable, Equatable {
+            public var name: String
+            /// `APP_LAUNCH`, `APP_ENHANCEMENTS`, `IN_APP_EVENT`, and the rest.
+            public var type: String
+            public var description: String?
+            public var publishStartDate: String?
+            public var publishEndDate: String?
+
+            public init(name: String, type: String, description: String? = nil,
+                        publishStartDate: String? = nil, publishEndDate: String? = nil) {
+                self.name = name
+                self.type = type
+                self.description = description
+                self.publishStartDate = publishStartDate
+                self.publishEndDate = publishEndDate
+            }
+        }
+
+        /// The accessibility nutrition label.
+        public struct Accessibility: Codable, Sendable, Equatable {
+            /// The supported features, for example `VOICE_OVER`,
+            /// `LARGER_TEXT`, `SUFFICIENT_CONTRAST`.
+            public var supports: [String]
+            public init(supports: [String] = []) { self.supports = supports }
+        }
+
+        /// The default App Clip experience.
+        public struct AppClip: Codable, Sendable, Equatable {
+            /// `OPEN`, `VIEW`, `PLAY`.
+            public var action: String?
+            public var locales: [String: ClipLocale]?
+
+            public init(action: String? = nil, locales: [String: ClipLocale]? = nil) {
+                self.action = action
+                self.locales = locales
+            }
+
+            public struct ClipLocale: Codable, Sendable, Equatable {
+                public var subtitle: String?
+                public var title: String?
+                public init(subtitle: String? = nil, title: String? = nil) {
+                    self.subtitle = subtitle
+                    self.title = title
+                }
+            }
         }
     }
 }

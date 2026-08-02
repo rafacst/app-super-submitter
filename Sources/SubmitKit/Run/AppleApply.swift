@@ -341,7 +341,7 @@ extension Runner {
 
     /// Runs the `uploadOperations` from a reservation response. Each one names
     /// its own slice of the file.
-    private func executeUploadOperations(_ operations: JSON, data: Data, index: Int? = nil,
+    func executeUploadOperations(_ operations: JSON, data: Data, index: Int? = nil,
                                          label: String = "") async throws {
         let list = operations.array
         var sent = 0

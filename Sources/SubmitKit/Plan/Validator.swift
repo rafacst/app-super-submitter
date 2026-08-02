@@ -13,6 +13,8 @@ public enum Validator {
         result += media(input)
         result += build(input)
         result += money(input)
+        result += offers(input)
+        result += marketing(input)
         result += monetization(input)
         result += state(input)
         // The errors first: tab 7 shows them at the top.
@@ -241,6 +243,8 @@ public enum Validator {
                     location: "Build · \(store == .apple ? "iOS" : "Android")", fix: .build))
             }
         }
+        result += googleArtifacts(input)
+        result += googleTracks(input)
 
         if let package = input.packages[.ipa] ?? input.packages[.pkg] {
             if let bundleID = manifest.apps.apple?.bundleId, !bundleID.isEmpty,
@@ -292,6 +296,125 @@ public enum Validator {
         return result
     }
 
+    // MARK: - 10.3 The Google artifacts
+
+    /// The APK, the deobfuscation files, the expansion files, and the
+    /// externally hosted APK. Every rule here fails before a byte moves.
+    static func googleArtifacts(_ input: Planner.Input) -> [Finding] {
+        let manifest = input.manifest
+        guard input.stores.contains(.google) else { return [] }
+        let google = manifest.release?.google
+        var result: [Finding] = []
+
+        let files: [(String, String?, String)] = [
+            ("apk", manifest.release?.build?.androidApk, "the APK"),
+            ("mapping", google?.mappingFile, "the mapping file"),
+            ("symbols", google?.nativeDebugSymbols, "the native symbols"),
+            ("expansionMain", google?.expansionFileMain, "the main expansion file"),
+            ("expansionPatch", google?.expansionFilePatch, "the patch expansion file"),
+        ]
+        for (key, path, label) in files {
+            guard let path, !path.isEmpty else { continue }
+            if Planner.resolve(path, root: input.root) == nil {
+                result.append(Finding(
+                    id: "build.google.\(key)", severity: .error,
+                    message: "The manifest names \(label) \(path) and the file does not exist.",
+                    location: "Build · Android", fix: .build))
+            }
+        }
+
+        // Google attaches an expansion file to an APK. A bundle carries its
+        // assets inside, so the pair is a manifest mistake, not a store error.
+        let hasExpansion = [google?.expansionFileMain, google?.expansionFilePatch]
+            .contains { $0?.isEmpty == false }
+        if hasExpansion, manifest.release?.build?.androidApk?.isEmpty != false {
+            result.append(Finding(
+                id: "build.expansionNeedsApk", severity: .error,
+                message: "An expansion file needs an APK. The manifest names no androidApk build.",
+                location: "Build · Android", fix: .build))
+        }
+
+        if let external = google?.externalApk {
+            if !external.url.lowercased().hasPrefix("https://") {
+                result.append(Finding(
+                    id: "build.externalApk.url", severity: .error,
+                    message: "The externally hosted APK URL must use https.",
+                    location: "Build · Android", fix: .build))
+            }
+            if external.certificateBase64s.filter({ !$0.isEmpty }).isEmpty {
+                result.append(Finding(
+                    id: "build.externalApk.certificate", severity: .error,
+                    message: "The externally hosted APK names no signing certificate.",
+                    location: "Build · Android", fix: .build))
+            }
+            if external.versionCode <= 0 {
+                result.append(Finding(
+                    id: "build.externalApk.versionCode", severity: .error,
+                    message: "The externally hosted APK version code must be greater than zero.",
+                    location: "Build · Android", fix: .build))
+            }
+            result.append(Finding(
+                id: "build.externalApk.private", severity: .warning,
+                message: "Google accepts an externally hosted APK from a Google Play organization only. A normal account answers 403.",
+                location: "Build · Android", fix: .build))
+        }
+        return result
+    }
+
+    /// The track list and the country targeting.
+    static func googleTracks(_ input: Planner.Input) -> [Finding] {
+        let manifest = input.manifest
+        guard input.stores.contains(.google) else { return [] }
+        var result: [Finding] = []
+
+        let listed = (manifest.release?.google?.tracks ?? []).filter { !$0.isEmpty }
+        if !listed.isEmpty, let primary = manifest.release?.google?.track, !primary.isEmpty,
+           !listed.contains(primary) {
+            result.append(Finding(
+                id: "build.trackNotListed", severity: .error,
+                message: "The release track \(primary) is not in the tracks list. The release button would write a track that no apply prepared.",
+                location: "Build · Android", fix: .build))
+        }
+        if Set(listed).count != listed.count {
+            result.append(Finding(
+                id: "build.trackDuplicate", severity: .error,
+                message: "The tracks list names the same track twice.",
+                location: "Build · Android", fix: .build))
+        }
+
+        for code in (manifest.release?.google?.countries ?? []) {
+            guard code.count != 2 || code != code.uppercased() else { continue }
+            result.append(Finding(
+                id: "build.country.\(code)", severity: .error,
+                message: "\(code) is not a two-letter uppercase country code.",
+                location: "Build · Android", fix: .build))
+        }
+        // Google assigns the id and keeps every configuration, so a second
+        // apply makes a second configuration. No diff row can show that.
+        if let path = manifest.release?.google?.deviceTierConfig, !path.isEmpty {
+            if Planner.resolve(path, root: input.root) == nil {
+                result.append(Finding(
+                    id: "build.deviceTierMissing", severity: .error,
+                    message: "The manifest names the device tier configuration \(path) and the file does not exist.",
+                    location: "Build · Android", fix: .build))
+            } else {
+                result.append(Finding(
+                    id: "build.deviceTierRepeats", severity: .warning,
+                    message: "Every apply creates a new device tier configuration, because Google assigns the id and keeps the old one. Remove the key once the configuration is live.",
+                    location: "Build · Android", fix: .build))
+            }
+        }
+
+        if (manifest.release?.google?.countries ?? []).isEmpty,
+           manifest.release?.google?.includeRestOfWorld != nil {
+            result.append(Finding(
+                id: "build.restOfWorldAlone", severity: .warning,
+                message: "includeRestOfWorld does nothing while the countries list is empty. The release reaches every country.",
+                location: "Build · Android", fix: .build))
+        }
+        return result
+    }
+
     // MARK: - 10.4 Money
 
     static func money(_ input: Planner.Input) -> [Finding] {
@@ -336,6 +459,180 @@ public enum Validator {
                         location: "Money · Purchases", fix: .money))
                 }
             }
+        }
+        return result
+    }
+
+    // MARK: - 10.4 The offers and the catalog states
+
+    /// The discounts, the grace period, and the one call in the app that
+    /// reaches a paying customer.
+    static func offers(_ input: Planner.Input) -> [Finding] {
+        let manifest = input.manifest
+        var result: [Finding] = []
+
+        var everyOffer: [(String, Manifest.Offer)] = []
+        for purchase in manifest.purchases ?? [] {
+            everyOffer += (purchase.offers ?? []).map { (purchase.id, $0) }
+        }
+        for group in manifest.subscriptions ?? [] {
+            for plan in group.plans {
+                everyOffer += (plan.offers ?? []).map { (plan.id, $0) }
+            }
+        }
+
+        var seen: Set<String> = []
+        for (productID, offer) in everyOffer {
+            let location = "Money · \(productID) · \(offer.id)"
+            if !seen.insert("\(productID)/\(offer.id)").inserted {
+                result.append(Finding(
+                    id: "offer.duplicate.\(productID).\(offer.id)", severity: .error,
+                    message: "The product \(productID) names the offer \(offer.id) twice.",
+                    location: location, fix: .money))
+            }
+            if offer.kind == .freeTrial, offer.duration?.isEmpty != false {
+                result.append(Finding(
+                    id: "offer.trialDuration.\(offer.id)", severity: .error,
+                    message: "The free trial \(offer.id) names no duration.",
+                    location: location, fix: .money))
+            }
+            if offer.kind == .introPrice, offer.price == nil {
+                result.append(Finding(
+                    id: "offer.introPrice.\(offer.id)", severity: .error,
+                    message: "The introductory offer \(offer.id) names no price.",
+                    location: location, fix: .money))
+            }
+            if input.stores.contains(.apple), let duration = offer.duration,
+               AppleDurations.offerDuration(for: duration) == nil {
+                result.append(Finding(
+                    id: "offer.appleDuration.\(offer.id)", severity: .error,
+                    message: "The App Store offers no \(duration) offer duration. It accepts \(AppleDurations.offerDurations.keys.sorted().joined(separator: ", ")).",
+                    location: location, fix: .money))
+            }
+            // Google accepts a lowercase id with digits and dashes only.
+            if input.stores.contains(.google),
+               offer.id != offer.id.lowercased()
+                || offer.id.contains(where: { !$0.isLetter && !$0.isNumber && $0 != "-" }) {
+                result.append(Finding(
+                    id: "offer.googleId.\(offer.id)", severity: .error,
+                    message: "Google accepts a lowercase offer id with digits and dashes only. \(offer.id) does not match.",
+                    location: location, fix: .money))
+            }
+            if (offer.periods ?? 1) < 1 {
+                result.append(Finding(
+                    id: "offer.periods.\(offer.id)", severity: .error,
+                    message: "The offer \(offer.id) runs for fewer than one period.",
+                    location: location, fix: .money))
+            }
+        }
+
+        // Apple keeps one grace period for the whole app. Two different
+        // values in one manifest means the second one never reaches Apple.
+        let periods = Set((manifest.subscriptions ?? []).compactMap(\.gracePeriodDays))
+        if periods.count > 1, input.stores.contains(.apple) {
+            result.append(Finding(
+                id: "offer.gracePeriodDisagreement", severity: .warning,
+                message: "The manifest names \(periods.count) different grace periods. The App Store keeps one for the whole app, and the first group wins.",
+                location: "Money · Grace period", fix: .money))
+        }
+
+        for group in manifest.subscriptions ?? [] {
+            for plan in group.plans where plan.migrateExistingSubscribers == true {
+                result.append(Finding(
+                    id: "offer.migrate.\(plan.id)", severity: .warning,
+                    message: "The plan \(plan.id) migrates the existing subscribers. This changes what a paying customer is charged at the next renewal, and no call undoes it.",
+                    location: "Money · \(group.groupId) · \(plan.id)", fix: .money))
+            }
+        }
+        return result
+    }
+
+    // MARK: - 10.4 The App Store marketing resources
+
+    static func marketing(_ input: Planner.Input) -> [Finding] {
+        guard let marketing = input.manifest.marketing else { return [] }
+        var result: [Finding] = []
+
+        // Apple allows 35 custom product pages per app.
+        if let pages = marketing.customProductPages, pages.count > 35 {
+            result.append(Finding(
+                id: "marketing.pageCount", severity: .error,
+                message: "\(pages.count) custom product pages exceed the App Store limit of 35.",
+                location: "Details · Custom product pages", fix: .details))
+        }
+        for page in marketing.customProductPages ?? [] {
+            for (code, locale) in (page.locales ?? [:]).sorted(by: { $0.key < $1.key }) {
+                guard let text = locale.promotionalText, text.count > 170 else { continue }
+                result.append(Finding(
+                    id: "marketing.page.\(page.key).\(code)", severity: .error,
+                    message: "The promotional text of \(page.key) is \(text.count) characters. The limit is 170.",
+                    location: "Details · \(page.key) · \(code)", fix: .details))
+            }
+        }
+
+        for experiment in marketing.experiments ?? [] {
+            let proportion = experiment.trafficProportion ?? 50
+            if !(1...100).contains(proportion) {
+                result.append(Finding(
+                    id: "marketing.traffic.\(experiment.key)", severity: .error,
+                    message: "The experiment \(experiment.key) sends \(proportion) percent of the traffic. The range is 1 to 100.",
+                    location: "Details · \(experiment.key)", fix: .details))
+            }
+            if experiment.treatments.isEmpty {
+                result.append(Finding(
+                    id: "marketing.treatments.\(experiment.key)", severity: .error,
+                    message: "The experiment \(experiment.key) holds no treatment, so it compares nothing.",
+                    location: "Details · \(experiment.key)", fix: .details))
+            }
+            if experiment.treatments.count > 3 {
+                result.append(Finding(
+                    id: "marketing.treatmentCount.\(experiment.key)", severity: .error,
+                    message: "\(experiment.treatments.count) treatments exceed the App Store limit of 3.",
+                    location: "Details · \(experiment.key)", fix: .details))
+            }
+        }
+
+        for event in marketing.events ?? [] {
+            for (code, locale) in (event.locales ?? [:]).sorted(by: { $0.key < $1.key }) {
+                let checks = [("name", locale.name, 30),
+                              ("shortDescription", locale.shortDescription, 50),
+                              ("longDescription", locale.longDescription, 120)]
+                for (field, value, limit) in checks {
+                    guard let value, value.count > limit else { continue }
+                    result.append(Finding(
+                        id: "marketing.event.\(event.key).\(code).\(field)", severity: .error,
+                        message: "The event \(field) is \(value.count) characters. The limit is \(limit).",
+                        location: "Details · \(event.key) · \(code)", fix: .details))
+                }
+            }
+        }
+
+        if let eula = marketing.eula, eula.text.count > 10_000 {
+            result.append(Finding(
+                id: "marketing.eulaLength", severity: .error,
+                message: "The licence agreement is \(eula.text.count) characters. The limit is 10000.",
+                location: "Review info · Licence agreement", fix: .reviewInfo))
+        }
+
+        if let path = marketing.routingCoverage {
+            if Planner.resolve(path, root: input.root) == nil {
+                result.append(Finding(
+                    id: "marketing.routingMissing", severity: .error,
+                    message: "The manifest names the routing coverage \(path) and the file does not exist.",
+                    location: "Media · Routing coverage", fix: .media))
+            } else if !path.lowercased().hasSuffix(".geojson") {
+                result.append(Finding(
+                    id: "marketing.routingType", severity: .error,
+                    message: "The routing app coverage must be a .geojson file.",
+                    location: "Media · Routing coverage", fix: .media))
+            }
+        }
+
+        if input.stores.contains(.google), input.manifest.marketing != nil {
+            result.append(Finding(
+                id: "marketing.appleOnly", severity: .warning,
+                message: "The marketing block reaches the App Store only. Google Play offers no equivalent for any of it.",
+                location: "Details · Marketing", fix: .details))
         }
         return result
     }
@@ -481,7 +778,7 @@ public enum Validator {
                 location: "Plan · App Store", fix: .plan))
         }
 
-        let track = input.manifest.release?.google?.track ?? "production"
+        let track = input.manifest.googlePrimaryTrack
         if let google = input.actual.google,
            let draft = google.tracks[track], draft.status == "draft",
            let existing = draft.versionCodes.first,
@@ -513,6 +810,35 @@ public enum AppleDurations {
 
     public static func name(for duration: String) -> String? {
         map[duration.uppercased()]
+    }
+
+    /// The `subscriptionPeriod` value that App Store Connect accepts.
+    public static let apiPeriods: [String: String] = [
+        "P1W": "ONE_WEEK", "P1M": "ONE_MONTH", "P2M": "TWO_MONTHS",
+        "P3M": "THREE_MONTHS", "P6M": "SIX_MONTHS", "P1Y": "ONE_YEAR",
+    ]
+
+    public static func apiPeriod(for duration: String) -> String? {
+        apiPeriods[duration.uppercased()]
+    }
+
+    /// The offer duration. Apple accepts three short values that a
+    /// subscription period does not use, so this map is wider.
+    public static let offerDurations: [String: String] = [
+        "P3D": "THREE_DAYS", "P1W": "ONE_WEEK", "P2W": "TWO_WEEKS",
+        "P1M": "ONE_MONTH", "P2M": "TWO_MONTHS", "P3M": "THREE_MONTHS",
+        "P6M": "SIX_MONTHS", "P1Y": "ONE_YEAR",
+    ]
+
+    public static func offerDuration(for duration: String) -> String? {
+        offerDurations[duration.uppercased()]
+    }
+
+    /// Apple accepts three grace periods and no other value. The nearest one
+    /// wins, so a manifest never fails on a number that means the same thing.
+    public static func gracePeriod(days: Int) -> String {
+        let choices = [(3, "THREE_DAYS"), (16, "SIXTEEN_DAYS"), (28, "TWENTY_EIGHT_DAYS")]
+        return choices.min { abs($0.0 - days) < abs($1.0 - days) }?.1 ?? "SIXTEEN_DAYS"
     }
 }
 

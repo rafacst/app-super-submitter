@@ -49,6 +49,13 @@ public actor Runner {
     var googleEditID: String?
     var googleCommitted = false
     var googleVersionCode: Int?
+    /// The APK upload reports its own code. An expansion file attaches to an
+    /// APK and never to a bundle, so the two codes stay apart.
+    var googleApkVersionCode: Int?
+    /// The App Store subscription id of every product id that this run wrote.
+    /// The offers attach to it, so the offer step reads this and never
+    /// searches the store a second time.
+    var appleSubscriptionIDsByProduct: [String: String] = [:]
     var createdProviderObjects: [(kind: String, id: String)] = []
     let reviewerCredential: ReviewerCredential?
 
@@ -166,6 +173,18 @@ public actor Runner {
         case .applePurchases: try await applePurchases()
         case .applePhasedRelease: try await applePhasedRelease()
         case .appleAvailability: try await appleAvailability()
+        case .appleSubscriptions: try await appleSubscriptions()
+        case .appleSubscriptionOffers: try await appleSubscriptionOffers()
+        case .appleGracePeriod: try await appleGracePeriod()
+        case .appleCustomProductPages: try await appleCustomProductPages()
+        case .appleExperiments: try await appleExperiments()
+        case .appleAppEvents: try await appleAppEvents()
+        case .appleEULA: try await appleEULA()
+        case .appleRoutingCoverage(let path, _):
+            try await appleRoutingCoverage(path: path, index: index)
+        case .appleNomination: try await appleNomination()
+        case .appleAccessibility: try await appleAccessibility()
+        case .appleAppClip: try await appleAppClip()
 
         case .googleOpenEdit: try await googleOpenEdit()
         case .googleListing(let locale): try await googleListing(locale)
@@ -175,8 +194,32 @@ public actor Runner {
                                    index: index)
         case .googleBundleUpload(let path, _):
             try await googleBundleUpload(path: path, index: index)
-        case .googleTrack: try await googleTrack()
+        case .googleApkUpload(let path, _):
+            try await googleApkUpload(path: path, index: index)
+        case .googleExternalApk: try await googleExternalApk()
+        case .googleDeobfuscation(let kind, let path, _):
+            try await googleDeobfuscation(kind: kind, path: path, index: index)
+        case .googleExpansionFile(let kind, let path, _):
+            try await googleExpansionFile(kind: kind, path: path, index: index)
+        case .googleCreateTrack(let track): try await googleCreateTrack(track)
+        case .googleTrack(let track): try await googleTrack(track)
         case .googleProducts: try await googleProducts()
+        case .googleDeviceTierConfig(let path): try await googleDeviceTierConfig(path: path)
+        case .googleBasePlanState(let productId, let basePlanId, let active):
+            try await googleBasePlanState(productId: productId, basePlanId: basePlanId,
+                                          active: active)
+        case .googlePurchaseOptionState(let productId, let purchaseOptionId, let active):
+            try await googlePurchaseOptionState(productId: productId,
+                                                purchaseOptionId: purchaseOptionId,
+                                                active: active)
+        case .googleSubscriptionOffers(let productId, let basePlanId):
+            try await googleSubscriptionOffers(productId: productId, basePlanId: basePlanId)
+        case .googleOneTimeOffers(let productId):
+            try await googleOneTimeOffers(productId: productId)
+        case .googleMigratePrices(let productId, let basePlanId):
+            try await googleMigratePrices(productId: productId, basePlanId: basePlanId)
+        case .googleArchiveSubscription(let productId):
+            try await googleArchiveSubscription(productId: productId)
         case .googleValidate: try await googleValidate()
         case .googleCommit: try await googleCommit()
 

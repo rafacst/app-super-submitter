@@ -30,6 +30,50 @@ extension AppState {
         StoreAPI(credentials: credentials, record: { _ in })
     }
 
+    /// The reads that answer a question and change nothing: the generated
+    /// APKs, the device tier configurations, the build bundles, the build
+    /// icons, and the territory list. None of them belongs in the plan,
+    /// because none of them is a desired state.
+    func diagnostics() -> StoreDiagnostics {
+        StoreDiagnostics(api: readOnlyAPI())
+    }
+
+    /// What Google built from the uploaded bundle.
+    func googleGeneratedApks(versionCode: Int) async throws -> [StoreDiagnostics.GeneratedApk] {
+        guard let packageName = manifest.apps.google?.packageName, !packageName.isEmpty else {
+            return []
+        }
+        return try await diagnostics().generatedApks(packageName: packageName,
+                                                     versionCode: versionCode)
+    }
+
+    /// The device tier configurations that Google already holds.
+    func googleDeviceTierConfigs() async throws -> [StoreDiagnostics.DeviceTierConfig] {
+        guard let packageName = manifest.apps.google?.packageName, !packageName.isEmpty else {
+            return []
+        }
+        return try await diagnostics().deviceTierConfigs(packageName: packageName)
+    }
+
+    /// What is inside the build that the version holds: the app bundle, the
+    /// extensions, the download size, and the encryption flag.
+    func appleBuildBundles() async throws -> [StoreDiagnostics.BuildBundle] {
+        guard let buildID = actualState.apple?.attachedBuildId else { return [] }
+        return try await diagnostics().buildBundles(buildID: buildID)
+    }
+
+    /// Every icon that Apple extracted from the attached build.
+    func appleBuildIcons() async throws -> [String] {
+        guard let buildID = actualState.apple?.attachedBuildId else { return [] }
+        return try await diagnostics().buildIcons(buildID: buildID)
+    }
+
+    /// Every App Store territory id, for the availability and the licence
+    /// agreement. The developer has no other list to check a code against.
+    func appleTerritories() async throws -> [StoreDiagnostics.Territory] {
+        try await diagnostics().territories()
+    }
+
     /// Reads every store, then diffs. Spec section 7.2. This writes nothing.
     func readStores() async {
         guard !planReading else { return }
@@ -372,7 +416,7 @@ extension AppState {
         case .apple:
             return "Version \(version)"
         case .google:
-            let track = manifest.release?.google?.track ?? "production"
+            let track = manifest.googlePrimaryTrack
             return "Version \(version) · \(track)"
         }
     }
@@ -410,7 +454,7 @@ extension AppState {
                 else { throw ReleaseInputError.noGooglePackage }
                 _ = try await client.releaseGoogle(
                     packageName: packageName,
-                    track: manifest.release?.google?.track ?? "production",
+                    track: manifest.googlePrimaryTrack,
                     status: manifest.release?.google?.status ?? "completed",
                     userFraction: manifest.release?.google?.userFraction,
                     versionName: manifest.release?.versionName)
@@ -460,7 +504,7 @@ extension AppState {
                     guard let packageName = manifest.apps.google?.packageName else { continue }
                     fresh = try await reader.readGoogle(
                         packageName: packageName,
-                        track: manifest.release?.google?.track ?? "production")
+                        track: manifest.googlePrimaryTrack)
                 }
                 let previous = statuses[store]?.phase
                 statuses[store] = StoreStatus(store: store, phase: fresh.phase,

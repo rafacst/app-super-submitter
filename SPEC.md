@@ -43,8 +43,8 @@ The app does not do these things in v1. Each line gives the reason.
 
 | Not in v1 | Reason |
 |---|---|
-| Sales reports, analytics, customer reviews | A different product. All three APIs offer them. They add no value to a submission tool. |
-| Customers, purchases, refunds, and charts, in either provider | Run-time data. This app manages the catalog only. |
+| Sales reports, analytics, customer reviews | A different product. All three APIs offer them. They add no value to a submission tool. Section 3.1 holds the Google endpoints for a later version. |
+| Customers, purchases, refunds, and charts, in either provider | Run-time data. This app manages the catalog only. Section 3.1 holds the Google endpoints for a later version. |
 | Paywall design and A/B tests, in either provider | A design task, not a submission task. The app creates a paywall that holds the right products. The developer styles it in the dashboard. |
 | Adapty segments and audience targeting | The Adapty CLI reads segments and cannot write them. The app manages the default audience only. |
 | Notarization for direct macOS distribution | A different service (`notarytool`). This app handles the **Mac App Store** only. |
@@ -53,7 +53,66 @@ The app does not do these things in v1. Each line gives the reason.
 | A web dashboard, a server, or user accounts | The app runs on the developer machine. The stores hold the state. |
 | A local database | The manifest is the desired state. The APIs are the actual state. Git is the history. |
 | App Store Connect certificates, profiles, and devices | Xcode does this. Do not duplicate Xcode. |
-| Beta distribution (TestFlight, Play internal test) | A separate flow. A later milestone if users ask. |
+| Beta distribution (TestFlight, Play internal test) | A separate flow. A later milestone if users ask. Section 3.1 holds the Google endpoints. |
+
+### 3.1 The deferred Google Play surface
+
+Section 3 excludes these areas from v1. This section keeps them, because a
+later version implements them. Each row names the exact endpoints, so the
+work needs no second discovery pass. Milestone M8 in section 18 owns the
+list.
+
+Every row obeys the existing rules. Section 14 gives the rate limit bucket,
+the retry policy, and the backoff. Section 7.2 gives the dry run: the app
+builds every request and sends none. Section 11.4 gives the run log. A row
+that writes an irreversible change obeys section 7.9: one button, one store,
+and no chain.
+
+| # | Area | Endpoints | What it adds | Auth | Order |
+|---|---|---|---|---|---|
+| 1 | Customer reviews | `reviews.list`, `reviews.get`, `reviews.reply` | Read the reviews of the app. Answer one review. The reply limit is 350 characters. | The existing `androidpublisher` scope. Section 9.2 needs no change. | 1 |
+| 2 | Internal test distribution | `edits.testers.get`, `.patch`, `.update`; `edits.tracks` for `internal`, `alpha`, and `beta`; `internalappsharingartifacts.uploadbundle`, `.uploadapk` | Ship a build to the testers with no review. | The existing `androidpublisher` scope. | 1 |
+| 3 | The permission admin | `users.list`, `.create`, `.patch`, `.delete`; `grants.create`, `.patch`, `.delete` | Invite the service account and grant the app permission. This removes one console step from section 13. | The existing `androidpublisher` scope. The caller needs the account owner role. | 2 |
+| 4 | Run-time purchase state | `purchases.products.get`, `.acknowledge`, `.consume`; `purchases.subscriptionsv2.get`, `.revoke`; `purchases.voidedpurchases.list` | Verify one purchase token. Read the refund list. | The existing `androidpublisher` scope. | 2 |
+| 5 | Orders and refunds | `orders.get`, `orders.batchGet`, `orders.refund` | Read one order. Refund one order. A refund is irreversible, so section 7.9 applies to it. | The existing `androidpublisher` scope. | 3 |
+| 6 | External transactions | `externaltransactions.createexternaltransaction`, `.patchexternaltransaction`, `.getexternaltransaction` | Report a transaction of an alternative billing program. | The existing `androidpublisher` scope. | 3 |
+| 7 | Custom app publishing | `accounts.customApps.create` | Publish a private app to a managed Google Play organization. | A separate API. Verify the host and the scope first. | 3 |
+| 8 | Play Developer Reporting | `vitals.crashrate`, `vitals.anrrate`, `vitals.errors.reports`, `anomalies.list` | Read the crash rate, the ANR rate, and the release health. | A separate host `playdeveloperreporting.googleapis.com` and the scope `playdeveloperreporting`. Section 9.2 gains a second scope. | 3 |
+| 9 | Play Games Services | The publishing endpoints for `achievements`, `leaderboards`, and `events` | Manage the game configuration. It applies to a game only. | A separate API. Verify the scope first. | 3 |
+| 10 | Play Integrity | `decodeIntegrityToken` | Verify a run-time integrity verdict. This is not a submission step. | A separate host and the scope `playintegrity`. | 3 |
+| 11 | System APKs | `systemapks.variants.create`, `.get`, `.list`, `.download` | Build a system image variant. | **Blocked.** Google grants this to an Android system image partner only. A normal service account answers 403. | — |
+| — | ~~Generated APKs~~ | ~~`generatedapks.list`, `.download`~~ | **Implemented.** See section 7.11. | — | done |
+| — | ~~Device tier configurations~~ | ~~`deviceTierConfigs.create`, `.list`~~ | **Implemented.** See section 7.4 and section 7.11. | — | done |
+| 12 | App recovery | `apprecovery.create`, `.deploy`, `.cancel`, `.addTargeting`, `.list` | Roll a recovery action out to the installed base. | **Blocked by design.** A deploy reaches live users and no call undoes it. Section 7.9 allows one irreversible button per store, and the release button already owns it. | — |
+
+A blocked row ships no code. The app makes no call that a normal account
+cannot run, and it shows no button that always fails.
+
+Three rules hold the deferral honest.
+
+1. The app asks for one scope only. It adds a second scope when the developer
+   turns on a feature of row 8 or row 10, and never before.
+2. A deferred row never blocks a release button. Section 16.6 lists the
+   console steps, and none of these rows joins that list.
+3. A row that reads run-time data writes nothing to `store.yaml`. The
+   manifest holds the desired state, and run-time data is not a desired
+   state.
+
+### 3.2 The blocked App Store Connect surface
+
+The App Store Connect API offers these two areas, and this app implements
+neither. The reason is architectural in one case and commercial in the other,
+so neither waits for a milestone. The same rule as section 3.1 applies: the
+app ships no call that a normal account cannot run.
+
+| Area | Endpoints | Why it ships no code |
+|---|---|---|
+| Webhooks | `webhooks`, `webhookDeliveries`, `webhookPings` | Apple delivers an event to a public HTTPS URL. This app runs on the developer machine and it owns no server, so it can register a subscription that it can never receive. Section 3 excludes a server. The status poll of section 7.10 covers the same need. |
+| Alternative distribution | `alternativeDistributionPackages`, `alternativeDistributionKeys`, `marketplaceDomains`, `marketplaceSearchDetails` | Apple grants the entitlement to a registered EU marketplace operator only. A normal account answers 403 on every call. |
+
+Two Apple areas stay open for a later milestone instead, because a normal
+account can run them: `nominations`, the featuring request, and
+`accessibilityDeclarations`.
 
 ---
 
@@ -128,15 +187,24 @@ release:
     ios: build/App.ipa
     macos: build/App.pkg
     android: build/app.aab
+    androidApk: null             # optional. A bundle and an APK may coexist.
   apple:
     releaseType: AFTER_APPROVAL  # MANUAL | AFTER_APPROVAL | SCHEDULED
     phasedRelease: true
   google:
-    track: production
+    track: production            # the one track that the release button sends
+    tracks: [internal, production]  # every track that an apply writes
     status: completed            # used at RELEASE time, not at apply time.
                                  # An apply always writes draft. See 7.4.
     userFraction: null           # required when status is inProgress
     inAppUpdatePriority: 0
+    countries: []                # empty means every country
+    includeRestOfWorld: false    # only meaningful with countries
+    mappingFile: build/mapping.txt        # ProGuard or R8
+    nativeDebugSymbols: build/symbols.zip
+    expansionFileMain: null      # APK only, never a bundle
+    expansionFilePatch: null
+    externalApk: null            # Google Play organizations only. See 3.1.
 
 listing:
   defaultLocale: en-US
@@ -351,11 +419,22 @@ The two models differ in shape. This is the mapping that saves the most work.
 | `plans[].duration` | Apple subscription duration | base plan billing period, ISO 8601, for example `P1M` |
 | `plans[].basePlanId` | not used | `basePlans.basePlanId` |
 | `plans[].locales` | `subscriptionLocalizations` v2 | base plan `regionalConfigs` and listing text on the parent subscription |
-| introductory offer | `subscriptionIntroductoryOffers` | `basePlans.offers` |
-| promotional offer | `subscriptionPromotionalOffers` | `basePlans.offers` |
+| `plans[].offers[]` kind `free_trial` | `subscriptionIntroductoryOffers`, `offerMode: FREE_TRIAL` | `basePlans.offers` with a `freePriceOverride` phase |
+| `plans[].offers[]` kind `intro_price` | `subscriptionIntroductoryOffers`, `offerMode: PAY_UP_FRONT` | `basePlans.offers` with an `absoluteDiscount` phase |
+| `plans[].offers[]` kind `offer_code` | `subscriptionOfferCodes` | `basePlans.offers` with a promotion targeting |
+| `offers[].eligibility` | `customerEligibilities` | `targeting`: acquisition, upgrade, or win back |
+| `plans[].active` | not used | `basePlans:activate` and `:deactivate` |
+| `plans[].tax`, `purchases[].tax` | not used, the console owns it | `taxAndComplianceSettings` |
+| `groupId` dropped from the manifest | not used | `subscriptions:archive` |
+| `subscriptions[].gracePeriodDays` | `subscriptionGracePeriods`, one per app | the base plan grace period |
 
 One Apple subscription group maps to one Google subscription product. Each
 Apple subscription inside the group maps to one Google base plan.
+
+An offer is the one place where the two stores disagree on the id rules.
+Google accepts a lowercase id with digits and dashes; Apple accepts more. The
+validator applies the Google rule when the manifest selects Google, and it
+stays quiet for an Apple-only manifest.
 
 `plans[].basePlanId` defaults to a slug of the duration, for example `monthly`
 or `annual`. Google needs it. Adapty needs it as `--android-base-plan-id`.
@@ -550,9 +629,39 @@ The order matters. The app performs the reversible writes first.
 8. `PATCH /v1/appStoreVersions/{id}/relationships/build` to attach the build.
 9. `POST` or `PATCH /v1/appStoreReviewDetails` for the contact and the notes.
 10. `PATCH /v1/ageRatingDeclarations/{id}` for the age rating answers.
-11. Apply the in-app purchases and the subscriptions. See section 7.7.
-12. `POST /v1/appStoreVersionPhasedReleases` when `phasedRelease` is true.
-13. `POST /v2/appAvailabilities` for the territories.
+11. Apply the in-app purchases. See section 7.7.
+12. Apply the subscription catalog: `POST` or `PATCH /v1/subscriptionGroups`,
+    `/v1/subscriptionGroupLocalizations`, `/v1/subscriptions`,
+    `/v1/subscriptionLocalizations`, and `/v1/subscriptionPrices`. The price
+    resolves to the nearest point of
+    `/v1/subscriptions/{id}/pricePoints`, the same rule as section 6.7.
+13. Apply the subscription offers on top of the catalog:
+    `POST /v1/subscriptionIntroductoryOffers` for a free trial and for an
+    introductory price, and `POST /v1/subscriptionOfferCodes` for a code.
+    Step 12 holds the ids that these need, so this step always follows it.
+14. `PATCH /v1/subscriptionGracePeriods/{id}` when a group names
+    `gracePeriodDays`. Apple keeps one grace period for the whole app, so the
+    first group that names one wins and the validator reports a disagreement.
+15. Apply the marketing block. See section 7.3.1.
+16. `POST /v1/appStoreVersionPhasedReleases` when `phasedRelease` is true.
+17. `POST /v2/appAvailabilities` for the territories.
+
+### 7.3.1 The App Store marketing resources
+
+Google offers no equivalent for any of these, so none of them appears on the
+Google side and the validator says so once. Each block writes only when the
+manifest holds it.
+
+| Manifest | Call | Note |
+|---|---|---|
+| `marketing.customProductPages` | `appCustomProductPages`, `appCustomProductPageVersions`, `appCustomProductPageLocalizations` | Apple allows 35 pages. The promotional text limit is 170. |
+| `marketing.experiments` | `/v2/appStoreVersionExperiments`, `appStoreVersionExperimentTreatments` | The app creates the experiment and **never starts it**. A running experiment changes what a real customer sees, and section 7.9 keeps that on a button. |
+| `marketing.events` | `appEvents`, `appEventLocalizations` | The name limit is 30, the short description 50, the long description 120. |
+| `marketing.eula` | `endUserLicenseAgreements` | The text limit is 10000. An absent block leaves the Apple standard agreement. |
+| `marketing.routingCoverage` | `routingAppCoverages` | A GeoJSON file. It reserves and uploads through the same `uploadOperations` list as a screenshot, section 7.5. |
+| `marketing.nomination` | `nominations` | A draft request to the editorial team. The app never submits it. |
+| `marketing.accessibility` | `accessibilityDeclarations` | `VOICE_OVER` becomes the attribute `supportsVoiceOver`. The state is `DRAFT`. |
+| `marketing.appClip` | `appClipDefaultExperiences`, `appClipDefaultExperienceLocalizations` | The Xcode target creates the clip. This writes what the store shows. |
 
 ### 7.4 Apply — Google
 
@@ -563,14 +672,34 @@ Google offers a real transaction. The app uses it.
 3. `PATCH .../edits/{editId}/details` for the contact fields.
 4. Upload the images. See section 7.5.
 5. Upload the bundle. See section 7.6.
-6. `PATCH .../edits/{editId}/tracks/{track}` with the release, the version
-   codes, the release notes, and the user fraction. The release `status` is
-   always `draft` in an apply, whatever the manifest says. Section 7.9 uses
-   the manifest value.
-7. `POST .../edits/{editId}:validate` to check the whole edit.
-8. `POST .../edits/{editId}:commit?changesNotSentForReview=true`.
+6. `POST .../edits/{editId}/apks` when the manifest names `build.androidApk`.
+   The manifest may name a bundle and an APK, and then both reach one edit.
+7. `POST .../edits/{editId}/apks/externallyHosted` when the manifest names
+   `google.externalApk`. Google stores the metadata and never the bytes. A
+   Google Play organization owns this call; a normal account answers 403.
+8. `POST .../edits/{editId}/apks/{versionCode}/deobfuscationFiles/{type}` for
+   `google.mappingFile` as `proguard` and for `google.nativeDebugSymbols` as
+   `nativeCode`. Both attach to the version code that step 5 or step 6
+   returned, so both follow an upload.
+9. `POST .../edits/{editId}/apks/{versionCode}/expansionFiles/{type}` for
+   `google.expansionFileMain` as `main` and `google.expansionFilePatch` as
+   `patch`. Google attaches an expansion file to an APK and never to a
+   bundle, so this reads the APK version code of step 6 alone.
+10. `POST .../edits/{editId}/tracks` for every track of `google.tracks` that
+    is neither a standard track nor already in the store. Google owns
+    `internal`, `alpha`, `beta`, and `production`, and it creates no other.
+11. `PATCH .../edits/{editId}/tracks/{track}` **for every track in
+    `google.tracks`**, with the release, the version codes, the release
+    notes, the user fraction, and the `countryTargeting` of
+    `google.countries`. One edit reaches every track, so a build lands in
+    `internal` and in `production` in one commit. The release `status` is
+    always `draft` in an apply, whatever the manifest says. Section 7.9 uses
+    the manifest value, and it releases the one track that `google.track`
+    names.
+12. `POST .../edits/{editId}:validate` to check the whole edit.
+13. `POST .../edits/{editId}:commit?changesNotSentForReview=true`.
 
-Step 8 needs an explanation, because it looks wrong. An **uncommitted Google
+Step 13 needs an explanation, because it looks wrong. An **uncommitted Google
 edit is invisible**. It exists only inside the API. The developer opens the
 Play Console and sees nothing. The edit also expires after about 7 days, and
 any other edit that commits first destroys it.
@@ -589,10 +718,28 @@ The result matches the Apple side: everything is uploaded, everything is
 visible in the console, and nothing is in review.
 
 The app deletes the edit with `DELETE .../edits/{editId}` when the run fails
-before step 8, or when the developer cancels. A Google edit expires after about 7 days of
+before step 13, or when the developer cancels. A Google edit expires after about 7 days of
 inactivity. It also becomes invalid when another edit commits first. The app
 detects the `editAlreadyCommitted` and `editExpired` errors and asks the
 developer to re-plan.
+
+### 7.4.1 The Google catalog, outside the edit
+
+Google keeps the monetization endpoints outside the edit, so these calls send
+no `editId` and the commit does not carry them. They run next to the two batch
+updates, and each one names one product, so a failure names the product that
+failed.
+
+| Manifest | Call | Note |
+|---|---|---|
+| `purchases[].active` | `oneTimeProducts/{id}/purchaseOptions:batchUpdateStates` | It stops the sale and keeps the product. |
+| `purchases[].offers` | `oneTimeProducts/{id}/purchaseOptions/{option}/offers:batchUpdate` | `allowMissing` covers the create and the update in one call. |
+| `subscriptions[].plans[].active` | `subscriptions/{id}/basePlans/{plan}:activate` or `:deactivate` | An existing subscriber keeps the plan. |
+| `subscriptions[].plans[].offers` | `subscriptions/{id}/basePlans/{plan}/offers:batchUpdate` | The free trial and the introductory price. |
+| `subscriptions[].plans[].migrateExistingSubscribers` | `subscriptions/{id}/basePlans:batchMigratePrices` | **It charges a real customer.** The manifest opts in per plan and the validator warns every time. |
+| a subscription that left the manifest | `subscriptions/{id}:archive` | Section 8, rule 6. The app archives; it never deletes. |
+| `purchases[].tax`, `plans[].tax` | inside the two batch updates | An absent block leaves the Play Console value alone. |
+| `release.google.deviceTierConfig` | `deviceTierConfigs` | Google assigns the id, so every apply creates a new configuration. The validator says so. |
 
 ### 7.5 Screenshot upload
 
@@ -823,9 +970,23 @@ only after a release for review.
   reports the release status and the user fraction.
 
 The poll interval is 5 minutes. The app posts a macOS notification on every
-state change. The app also supports Apple webhooks through
-`/v1/webhooks` when the developer supplies a public URL. Polling is the
-default because it needs no server.
+state change. The app does **not** use the App Store Connect webhooks, and
+section 3.2 gives the reason: Apple delivers an event to a public HTTPS URL,
+and this app owns no server. Polling needs none.
+
+### 7.11 The reads that change nothing
+
+These answer a question about what a store built. None of them belongs in the
+plan, because the plan compares a desired state to an actual state and none of
+these is a desired state. A diff row for one of them could never close.
+
+| Read | Call | Answers |
+|---|---|---|
+| The generated APKs | `generatedapks.list`, `generatedapks.download` | What Google actually built from the uploaded bundle. |
+| The device tier configurations | `deviceTierConfigs.list` | Which configurations Google already holds. |
+| The build bundles | `/v1/builds/{id}/buildBundles`, `/v1/buildBundles/{id}/buildBundleFileSizes` | What is inside a processed build: the app, every extension, the download size, and the encryption flag. |
+| The build icons | `/v1/builds/{id}/icons` | Which icons Apple extracted from the build. |
+| The territories | `/v1/territories` | Every territory id, so a code in the availability block or the licence agreement can be checked. |
 
 ---
 
@@ -1706,6 +1867,7 @@ place and open in the other.
 | M5 | The monetization sync, for RevenueCat and for Adapty. | Two catalog mappings over one manifest vocabulary. It builds on M4. |
 | M6 | Tab 6, tab 9, the two release buttons, the status polling, the notifications, the "Finish in the console" checklist. | The whole product. |
 | M7 | A CLI target over the same `SubmitKit` package, for CI. | Reuse, not a rewrite. |
+| M8 | The deferred Google Play surface of section 3.1, in the order that its last column gives. | The client already carries the auth, the retry, and the dry run. Each row adds calls, not architecture. |
 
 M0 to M6 make a shippable product. M5 is optional for a first release, because
 the manifest works with `provider: none`. M7 costs little, because

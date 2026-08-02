@@ -184,18 +184,53 @@ public enum Planner {
                 operation: .appleAgeRating))
         }
 
-        // 11. The purchases and the subscriptions.
-        let purchaseCount = (manifest.purchases?.count ?? 0)
-            + (manifest.subscriptions?.reduce(0) { $0 + $1.plans.count } ?? 0)
+        // 11. The purchases. The step counts the purchases alone, because the
+        // subscriptions take their own step and their own resources.
+        let purchaseCount = manifest.purchases?.count ?? 0
         if purchaseCount > 0 {
             steps.append(PlanStep(
                 id: "apple.purchases", system: .apple, kind: .change,
-                summary: "\(purchaseCount) products in the catalog",
+                summary: "\(purchaseCount) purchases in the catalog",
                 title: "Write \(purchaseCount) purchases",
                 requests: [RequestSketch("GET", "/v2/inAppPurchases"),
                            RequestSketch("POST", "/v2/inAppPurchases")],
                 operation: .applePurchases))
         }
+
+        // 11b. The subscription catalog, then the offers on top of it.
+        let planCount = manifest.subscriptions?.reduce(0) { $0 + $1.plans.count } ?? 0
+        if planCount > 0 {
+            steps.append(PlanStep(
+                id: "apple.subscriptions", system: .apple, kind: .change,
+                summary: "\(planCount) subscription plans in \(manifest.subscriptions?.count ?? 0) groups",
+                title: "Write \(planCount) subscriptions",
+                requests: [RequestSketch("POST", "/v1/subscriptionGroups"),
+                           RequestSketch("POST", "/v1/subscriptions"),
+                           RequestSketch("POST", "/v1/subscriptionLocalizations"),
+                           RequestSketch("POST", "/v1/subscriptionPrices")],
+                operation: .appleSubscriptions))
+        }
+        let offerCount = manifest.subscriptions?
+            .reduce(0) { $0 + $1.plans.reduce(0) { $0 + ($1.offers?.count ?? 0) } } ?? 0
+        if offerCount > 0 {
+            steps.append(PlanStep(
+                id: "apple.subscriptionOffers", system: .apple, kind: .change,
+                summary: "\(offerCount) subscription offers",
+                title: "Write \(offerCount) subscription offers",
+                requests: [RequestSketch("POST", "/v1/subscriptionIntroductoryOffers"),
+                           RequestSketch("POST", "/v1/subscriptionOfferCodes")],
+                operation: .appleSubscriptionOffers))
+        }
+        if let days = (manifest.subscriptions ?? []).compactMap(\.gracePeriodDays).first {
+            steps.append(PlanStep(
+                id: "apple.gracePeriod", system: .apple, kind: .change,
+                summary: "billing grace period \(AppleDurations.gracePeriod(days: days))",
+                title: "Write the billing grace period",
+                requests: [RequestSketch("PATCH", "/v1/subscriptionGracePeriods/{id}")],
+                operation: .appleGracePeriod))
+        }
+
+        steps += appleMarketingSteps(input)
 
         // 12 and 13.
         if manifest.release?.apple?.phasedRelease == true {
@@ -213,6 +248,88 @@ public enum Planner {
                 title: "Write the territory availability",
                 requests: [RequestSketch("POST", "/v2/appAvailabilities")],
                 operation: .appleAvailability))
+        }
+        return steps
+    }
+
+    // MARK: - The App Store marketing resources
+
+    /// Each block writes only when the manifest holds it. None of these has a
+    /// Google twin, so none of them appears on the Google side.
+    private static func appleMarketingSteps(_ input: Input) -> [PlanStep] {
+        guard let marketing = input.manifest.marketing else { return [] }
+        var steps: [PlanStep] = []
+
+        if let pages = marketing.customProductPages, !pages.isEmpty {
+            steps.append(PlanStep(
+                id: "apple.customProductPages", system: .apple, kind: .change,
+                summary: "\(pages.count) custom product pages",
+                title: "Write \(pages.count) custom product pages",
+                requests: [RequestSketch("POST", "/v1/appCustomProductPages"),
+                           RequestSketch("POST", "/v1/appCustomProductPageLocalizations")],
+                operation: .appleCustomProductPages))
+        }
+        if let experiments = marketing.experiments, !experiments.isEmpty {
+            let treatments = experiments.reduce(0) { $0 + $1.treatments.count }
+            steps.append(PlanStep(
+                id: "apple.experiments", system: .apple, kind: .change,
+                summary: "\(experiments.count) experiments  ·  \(treatments) treatments (not started)",
+                title: "Write \(experiments.count) product page experiments",
+                requests: [RequestSketch("POST", "/v2/appStoreVersionExperiments"),
+                           RequestSketch("POST", "/v2/appStoreVersionExperimentTreatments")],
+                operation: .appleExperiments))
+        }
+        if let events = marketing.events, !events.isEmpty {
+            steps.append(PlanStep(
+                id: "apple.events", system: .apple, kind: .change,
+                summary: "\(events.count) in-app events",
+                title: "Write \(events.count) in-app events",
+                requests: [RequestSketch("POST", "/v1/appEvents"),
+                           RequestSketch("POST", "/v1/appEventLocalizations")],
+                operation: .appleAppEvents))
+        }
+        if let eula = marketing.eula, !eula.text.isEmpty {
+            steps.append(PlanStep(
+                id: "apple.eula", system: .apple, kind: .change,
+                summary: "licence agreement  \(eula.text.count) characters",
+                title: "Write the licence agreement",
+                requests: [RequestSketch("POST", "/v1/endUserLicenseAgreements")],
+                operation: .appleEULA))
+        }
+        if let path = marketing.routingCoverage, let file = resolve(path, root: input.root) {
+            let bytes = fileSize(file)
+            steps.append(PlanStep(
+                id: "apple.routingCoverage", system: .apple, kind: .add,
+                summary: "routing coverage  \(file.lastPathComponent)  ·  \(bytesText(bytes))",
+                title: "Upload the routing app coverage",
+                requests: [RequestSketch("POST", "/v1/routingAppCoverages")],
+                operation: .appleRoutingCoverage(path: path, bytes: bytes),
+                uploadCount: 1, uploadBytes: bytes))
+        }
+        if let nomination = marketing.nomination {
+            steps.append(PlanStep(
+                id: "apple.nomination", system: .apple, kind: .change,
+                summary: "nomination  \(nomination.name)",
+                title: "Write the featuring nomination",
+                requests: [RequestSketch("POST", "/v1/nominations")],
+                operation: .appleNomination))
+        }
+        if let accessibility = marketing.accessibility, !accessibility.supports.isEmpty {
+            steps.append(PlanStep(
+                id: "apple.accessibility", system: .apple, kind: .change,
+                summary: "accessibility  \(accessibility.supports.count) features",
+                title: "Write the accessibility declaration",
+                requests: [RequestSketch("POST", "/v1/accessibilityDeclarations")],
+                operation: .appleAccessibility))
+        }
+        if marketing.appClip != nil {
+            steps.append(PlanStep(
+                id: "apple.appClip", system: .apple, kind: .change,
+                summary: "app clip default experience",
+                title: "Write the App Clip default experience",
+                requests: [RequestSketch("POST", "/v1/appClipDefaultExperiences"),
+                           RequestSketch("POST", "/v1/appClipDefaultExperienceLocalizations")],
+                operation: .appleAppClip))
         }
         return steps
     }
@@ -271,13 +388,83 @@ public enum Planner {
                 uploadCount: 1, uploadBytes: bytes))
         }
 
-        let track = manifest.release?.google?.track ?? "production"
-        body.append(PlanStep(
-            id: "google.track", system: .google, kind: .change,
-            summary: "track \(track)  release draft",
-            title: "Write the \(track) track, draft",
-            requests: [RequestSketch("PATCH", "/edits/{editId}/tracks/\(track)")],
-            operation: .googleTrack))
+        if let path = manifest.release?.build?.androidApk,
+           let file = resolve(path, root: input.root) {
+            let bytes = fileSize(file)
+            body.append(PlanStep(
+                id: "google.apk", system: .google, kind: .add,
+                summary: "apk \(file.lastPathComponent)  ·  \(bytesText(bytes))",
+                title: "Upload the APK \(file.lastPathComponent)",
+                requests: [RequestSketch("POST", "/edits/{editId}/apks")],
+                operation: .googleApkUpload(path: path, bytes: bytes),
+                uploadCount: 1, uploadBytes: bytes))
+        }
+
+        if let external = manifest.release?.google?.externalApk {
+            body.append(PlanStep(
+                id: "google.externalApk", system: .google, kind: .add,
+                summary: "externally hosted apk  \(external.versionName) (\(external.versionCode))",
+                title: "Register the externally hosted APK",
+                requests: [RequestSketch("POST", "/edits/{editId}/apks/externallyHosted")],
+                operation: .googleExternalApk))
+        }
+
+        // The mapping file and the symbols attach to an uploaded artifact, so
+        // they follow every upload step.
+        for (kind, path, label) in [
+            ("proguard", manifest.release?.google?.mappingFile, "the mapping file"),
+            ("nativeCode", manifest.release?.google?.nativeDebugSymbols, "the native symbols"),
+        ] {
+            guard let path, let file = resolve(path, root: input.root) else { continue }
+            let bytes = fileSize(file)
+            body.append(PlanStep(
+                id: "google.deobfuscation.\(kind)", system: .google, kind: .add,
+                summary: "\(label)  \(file.lastPathComponent)  ·  \(bytesText(bytes))",
+                title: "Upload \(label)",
+                requests: [RequestSketch("POST",
+                                         "/edits/{editId}/apks/{code}/deobfuscationFiles/\(kind)")],
+                operation: .googleDeobfuscation(kind: kind, path: path, bytes: bytes),
+                uploadCount: 1, uploadBytes: bytes))
+        }
+
+        for (kind, path) in [("main", manifest.release?.google?.expansionFileMain),
+                             ("patch", manifest.release?.google?.expansionFilePatch)] {
+            guard let path, let file = resolve(path, root: input.root) else { continue }
+            let bytes = fileSize(file)
+            body.append(PlanStep(
+                id: "google.expansion.\(kind)", system: .google, kind: .add,
+                summary: "\(kind) expansion file  \(file.lastPathComponent)  ·  \(bytesText(bytes))",
+                title: "Upload the \(kind) expansion file",
+                requests: [RequestSketch("POST",
+                                         "/edits/{editId}/apks/{code}/expansionFiles/\(kind)")],
+                operation: .googleExpansionFile(kind: kind, path: path, bytes: bytes),
+                uploadCount: 1, uploadBytes: bytes))
+        }
+
+        // Google owns the four standard tracks. Any other name is a custom
+        // closed test, and the edit creates it before it writes a release.
+        for track in manifest.googleTracks {
+            guard !Self.standardGoogleTracks.contains(track),
+                  actual?.tracks[track] == nil else { continue }
+            body.append(PlanStep(
+                id: "google.createTrack.\(track)", system: .google, kind: .add,
+                summary: "track \(track)  create",
+                title: "Create the \(track) track",
+                requests: [RequestSketch("POST", "/edits/{editId}/tracks")],
+                operation: .googleCreateTrack(track)))
+        }
+
+        let countries = (manifest.release?.google?.countries ?? []).filter { !$0.isEmpty }
+        for track in manifest.googleTracks {
+            var summary = "track \(track)  release draft"
+            if !countries.isEmpty { summary += "  ·  \(countries.count) countries" }
+            body.append(PlanStep(
+                id: "google.track.\(track)", system: .google, kind: .change,
+                summary: summary,
+                title: "Write the \(track) track, draft",
+                requests: [RequestSketch("PATCH", "/edits/{editId}/tracks/\(track)")],
+                operation: .googleTrack(track)))
+        }
 
         let productCount = (manifest.purchases?.count ?? 0)
             + (manifest.subscriptions?.count ?? 0)
@@ -289,6 +476,17 @@ public enum Planner {
                 requests: [RequestSketch("POST", "/monetization/onetimeproducts:batchUpdate"),
                            RequestSketch("POST", "/monetization/subscriptions:batchUpdate")],
                 operation: .googleProducts))
+        }
+        body += googleCatalogSteps(input)
+
+        if let path = manifest.release?.google?.deviceTierConfig,
+           resolve(path, root: input.root) != nil {
+            body.append(PlanStep(
+                id: "google.deviceTierConfig", system: .google, kind: .add,
+                summary: "device tier configuration",
+                title: "Create the device tier configuration",
+                requests: [RequestSketch("POST", "/deviceTierConfigs")],
+                operation: .googleDeviceTierConfig(path: path)))
         }
 
         guard !body.isEmpty else { return [] }
@@ -315,6 +513,94 @@ public enum Planner {
                                      "/edits/{editId}:commit?changesNotSentForReview=true")],
             operation: .googleCommit)
         return [open] + body + [validate, commit]
+    }
+
+    // MARK: - The Google catalog states, offers, and archives
+
+    /// These calls sit outside the edit, the same as the two batch updates.
+    /// Google keys them by the product, so each product takes its own step
+    /// and a failure names the product that failed.
+    private static func googleCatalogSteps(_ input: Input) -> [PlanStep] {
+        let manifest = input.manifest
+        var steps: [PlanStep] = []
+
+        for purchase in manifest.purchases ?? [] {
+            if let active = purchase.active {
+                steps.append(PlanStep(
+                    id: "google.purchaseOptionState.\(purchase.id)", system: .google,
+                    kind: .change,
+                    summary: "purchase option  \(purchase.id)  \(active ? "activate" : "deactivate")",
+                    title: "\(active ? "Activate" : "Deactivate") \(purchase.id)",
+                    requests: [RequestSketch(
+                        "POST", "/monetization/onetimeproducts/{id}/purchaseOptions:batchUpdateStates")],
+                    operation: .googlePurchaseOptionState(productId: purchase.id,
+                                                          purchaseOptionId: purchase.id,
+                                                          active: active)))
+            }
+            if let offers = purchase.offers, !offers.isEmpty {
+                steps.append(PlanStep(
+                    id: "google.oneTimeOffers.\(purchase.id)", system: .google, kind: .change,
+                    summary: "\(offers.count) offers on \(purchase.id)",
+                    title: "Write \(offers.count) offers on \(purchase.id)",
+                    requests: [RequestSketch(
+                        "POST",
+                        "/monetization/onetimeproducts/{id}/purchaseOptions/{option}/offers:batchUpdate")],
+                    operation: .googleOneTimeOffers(productId: purchase.id)))
+            }
+        }
+
+        for group in manifest.subscriptions ?? [] {
+            for plan in group.plans {
+                let basePlanId = plan.basePlanId ?? "default"
+                if let active = plan.active {
+                    steps.append(PlanStep(
+                        id: "google.basePlanState.\(plan.id)", system: .google, kind: .change,
+                        summary: "base plan  \(basePlanId)  \(active ? "activate" : "deactivate")",
+                        title: "\(active ? "Activate" : "Deactivate") the \(basePlanId) base plan",
+                        requests: [RequestSketch(
+                            "POST",
+                            "/monetization/subscriptions/{id}/basePlans/{plan}:\(active ? "activate" : "deactivate")")],
+                        operation: .googleBasePlanState(productId: plan.id,
+                                                        basePlanId: basePlanId,
+                                                        active: active)))
+                }
+                if let offers = plan.offers, !offers.isEmpty {
+                    steps.append(PlanStep(
+                        id: "google.subscriptionOffers.\(plan.id)", system: .google, kind: .change,
+                        summary: "\(offers.count) offers on \(plan.id)",
+                        title: "Write \(offers.count) offers on \(plan.id)",
+                        requests: [RequestSketch(
+                            "POST",
+                            "/monetization/subscriptions/{id}/basePlans/{plan}/offers:batchUpdate")],
+                        operation: .googleSubscriptionOffers(productId: plan.id,
+                                                             basePlanId: basePlanId)))
+                }
+                if plan.migrateExistingSubscribers == true {
+                    steps.append(PlanStep(
+                        id: "google.migratePrices.\(plan.id)", system: .google, kind: .change,
+                        summary: "migrate the existing subscribers of \(plan.id)",
+                        title: "Migrate the prices of \(plan.id)",
+                        requests: [RequestSketch(
+                            "POST",
+                            "/monetization/subscriptions/{id}/basePlans:batchMigratePrices")],
+                        operation: .googleMigratePrices(productId: plan.id,
+                                                        basePlanId: basePlanId)))
+                }
+            }
+        }
+
+        // Spec section 8, rule 6. A subscription that left the manifest is
+        // archived, never deleted, because an installed app still asks for it.
+        let wanted = Set((manifest.subscriptions ?? []).flatMap { $0.plans.map(\.id) })
+        for orphan in (input.actual.google?.subscriptionIds ?? []).subtracting(wanted).sorted() {
+            steps.append(PlanStep(
+                id: "google.archive.\(orphan)", system: .google, kind: .remove,
+                summary: "subscription  \(orphan)  archive",
+                title: "Archive the subscription \(orphan)",
+                requests: [RequestSketch("POST", "/monetization/subscriptions/{id}:archive")],
+                operation: .googleArchiveSubscription(productId: orphan)))
+        }
+        return steps
     }
 
     // MARK: - The provider, section 7.8
@@ -523,6 +809,9 @@ public enum Planner {
     static func applePath(_ manifest: Manifest) -> String? {
         manifest.release?.build?.ios ?? manifest.release?.build?.macos
     }
+
+    /// The tracks that every Play app already has. Google creates no other.
+    static let standardGoogleTracks: Set<String> = ["internal", "alpha", "beta", "production"]
 
     static func resolve(_ path: String, root: URL?) -> URL? {
         let url = path.hasPrefix("/")

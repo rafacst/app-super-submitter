@@ -98,7 +98,7 @@ public enum ConsoleChecklist {
         }
 
         if stores.contains(.google) {
-            let track = manifest.release?.google?.track ?? "production"
+            let track = manifest.googlePrimaryTrack
             let hasRelease = actual.google?.tracks[track]?.versionCodes.isEmpty == false
             result += [
                 ConsoleRow(

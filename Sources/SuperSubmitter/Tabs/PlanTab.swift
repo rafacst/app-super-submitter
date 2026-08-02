@@ -119,7 +119,7 @@ struct PlanTab: View {
         }
         if state.stores.contains(.google) {
             let code = state.actualState.google?.highestVersionCode.map(String.init) ?? "none"
-            let track = state.manifest.release?.google?.track ?? "production"
+            let track = state.manifest.googlePrimaryTrack
             rows.append(("Google Play",
                          "Version code \(code) in \(track). Listing, media, and purchases match."))
         }

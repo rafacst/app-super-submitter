@@ -28,7 +28,7 @@ public struct StateReader: Sendable {
             do {
                 state.google = try await readGoogle(
                     packageName: google.packageName,
-                    track: manifest.release?.google?.track ?? "production")
+                    track: manifest.googlePrimaryTrack)
             } catch {
                 state.failures.append("Google Play: \(error.localizedDescription)")
             }

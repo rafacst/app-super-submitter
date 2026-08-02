@@ -104,7 +104,7 @@ struct ReleaseSheet: View {
         .onExitCommand { dismiss() }
     }
 
-    private var track: String { state.manifest.release?.google?.track ?? "production" }
+    private var track: String { state.manifest.googlePrimaryTrack }
     private var version: String { state.manifest.release?.versionName ?? "no version" }
 
     private var recovery: String {
