@@ -113,6 +113,9 @@ final class AppState {
     var listingImportStatus: ConnectionStatus = .notTested
 
     // Tab 2.
+    /// Build from Project. upload-spec section 10.
+    @ObservationIgnored lazy var buildFlow = BuildFlow(app: self)
+    var showBuildFromProject = false
     var buildRead = false
     var packages: [AppPackage.Kind: AppPackage] = [:]
     var packageErrors: [AppPackage.Kind: String] = [:]

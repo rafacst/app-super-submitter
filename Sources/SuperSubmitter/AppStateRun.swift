@@ -62,6 +62,57 @@ extension AppState {
         planReading = false
     }
 
+    // MARK: - The build storage. upload-spec section 11.
+
+    var buildStorageSummary: String {
+        let storage = BuildStorage()
+        let archives = storage.retainedArchives()
+        let runs = (try? FileManager.default.contentsOfDirectory(
+            atPath: storage.runs.path))?.count ?? 0
+        return "\(archives.count) retained \(archives.count == 1 ? "archive" : "archives") · "
+            + "\(runs) \(runs == 1 ? "run" : "runs")"
+    }
+
+    func revealBuildStorage() {
+        let storage = BuildStorage()
+        try? FileManager.default.createDirectory(at: storage.root,
+                                                 withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([storage.root])
+    }
+
+    func pruneBuildStorage() {
+        let removed = BuildStorage().prune(olderThan: 30 * 24 * 60 * 60)
+        errorMessage = removed.isEmpty
+            ? "No run data is older than 30 days."
+            : "Removed \(removed.count) run \(removed.count == 1 ? "folder" : "folders"). Every retained archive and App Bundle is untouched."
+    }
+
+    /// Points `store.yaml` at the artifact that Build from Project produced,
+    /// so the existing Plan reads it. upload-spec section 13.
+    func adoptBuiltArtifact() {
+        guard let candidate = buildFlow.candidate else { return }
+        var release = manifest.release ?? Manifest.Release()
+        var build = release.build ?? Manifest.Release.Build()
+        switch candidate.platform {
+        case .ios: build.ios = candidate.artifactPath
+        case .macos: build.macos = candidate.artifactPath
+        case .android: build.android = candidate.artifactPath
+        }
+        release.build = build
+        if release.versionName?.isEmpty != false {
+            release.versionName = candidate.marketingVersion
+        }
+        manifest.release = release
+        saveManifest()
+        // The plan must read the store again now that a build landed.
+        plan = nil
+    }
+
+    func saveManifest() {
+        do { try save() }
+        catch { errorMessage = "The manifest could not be saved. \(error.localizedDescription)" }
+    }
+
     /// How far the resolved App Store price point sits from the request, as a
     /// fraction. Nil until a read supplies the point.
     var priceGap: Double? {

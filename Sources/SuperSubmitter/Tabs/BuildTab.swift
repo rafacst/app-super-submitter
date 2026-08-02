@@ -8,6 +8,45 @@ struct BuildTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            source
+            if state.showBuildFromProject {
+                BuildFromProjectView()
+            } else {
+                importSection
+            }
+        }
+        .frame(maxWidth: 980, alignment: .leading)
+    }
+
+    /// Two ways to get a build: run the project, or import a package that
+    /// something else produced. Both feed the same inspection and the same
+    /// upload confirmation. upload-spec 10.1 and 13.3.
+    private var source: some View {
+        HStack(spacing: 0) {
+            ForEach([false, true], id: \.self) { fromProject in
+                let selected = state.showBuildFromProject == fromProject
+                Button {
+                    state.showBuildFromProject = fromProject
+                } label: {
+                    Text(fromProject ? "Build from project" : "Import a package")
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? Theme.accentText : Theme.text)
+                        .padding(.horizontal, 14).padding(.vertical, 5)
+                        .background(selected ? Theme.accent : .clear)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .background(Theme.sunken)
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    private var importSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top, spacing: 14) {
                 submitBuilds
                 Rectangle().fill(Theme.sep2).frame(width: 1)
@@ -25,7 +64,6 @@ struct BuildTab: View {
                 }
             }
         }
-        .frame(maxWidth: 980, alignment: .leading)
     }
 
     private var submitBuilds: some View {
@@ -133,9 +171,23 @@ struct BuildTab: View {
     }
 
     private var packageCards: some View {
-        HStack(alignment: .top, spacing: 14) {
-            ForEach(sortedPackages, id: \.kind) { package in
-                PackageCard(package: package)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(sortedPackages, id: \.kind) { package in
+                    PackageCard(package: package)
+                }
+            }
+            // An imported package skips the source build and skips nothing
+            // else: the same inspection, signature check, identity comparison,
+            // remote conflict check, and upload confirmation apply.
+            HStack(spacing: 9) {
+                ForEach(sortedPackages, id: \.kind) { package in
+                    QuietButton(title: "Inspect and upload \(package.url.lastPathComponent)") {
+                        state.showBuildFromProject = true
+                        state.buildFlow.adoptImported(package.url)
+                    }
+                }
+                Spacer(minLength: 0)
             }
         }
     }

@@ -148,6 +148,26 @@ struct SettingsPanel: View {
                 }
             }
 
+            SettingRow("Build storage", alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.buildStorageSummary)
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Archives and App Bundles are kept outside your repository. Deleting run data removes the logs and the temporary files; it never deletes a retained archive or a bundle, and it never touches your project.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.text2)
+                        .lineSpacing(3)
+                        .frame(maxWidth: 300, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 7) {
+                        QuietButton(title: "Reveal") { state.revealBuildStorage() }
+                        QuietButton(title: "Delete run data older than 30 days") {
+                            state.pruneBuildStorage()
+                        }
+                    }
+                }
+            }
+
             Text("Settings holds no credential. The App Store and Google Play keys live on the Stores tab. The RevenueCat key lives on the Money tab.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)

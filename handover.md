@@ -73,6 +73,45 @@ for a new app, and the manifest path with **Show in Finder** and **Copy path**.
 The menu bar item and the sidebar health chips read the live plan and the live
 status.
 
+## Build from Project (upload-spec.md)
+
+Tab 2 now holds two sources: **Import a package** and **Build from project**.
+The second one links a folder, runs the project's own build tool, inspects
+what it produced, and uploads that exact file.
+
+- **No shell, ever.** Every tool runs as an absolute executable plus an
+  argument array. A folder named `Evil; rm -rf ~` stays one argument, and a
+  test asserts it.
+- **The artifact is authoritative.** The preflight is a snapshot; the built
+  archive or App Bundle decides what uploads. Any difference stops the run,
+  reruns the remote check, and asks for a new confirmation.
+- **Apple.** `xcrun xcodebuild` for the toolchain check, `-list -json`,
+  `-showBuildSettings -json`, `archive`, and `-exportArchive` with
+  `destination = upload`. The archive lands in Application Support, never in
+  the repository, and it survives a failed upload. The `.p8` reaches the disk
+  as a `0600` file in a `0700` folder for the length of one command.
+  `manageAppVersionAndBuildNumber` is always false.
+  `-allowProvisioningUpdates` is off unless the developer turns it on, and
+  every confirmation says which way it is set.
+- **Android.** The project's own `gradlew`, never a system Gradle. Modules and
+  variants come from Gradle's evaluated task model. Artifact discovery
+  compares a before and after snapshot, so it can never pick a stale or a
+  global newest `.aab`. `jarsigner -verify` from the selected JDK must pass.
+- **Google upload.** One edit is the transaction. The returned version code
+  must equal the inspected bundle's code. The track is written as `draft` and
+  the commit sends `changesNotSentForReview=true`.
+- **Ambiguity is not failure.** A lost commit response queries the actual
+  state before anything repeats. A failed cleanup marks the run
+  `needsAttention` and offers an idempotent retry. A poll survives a relaunch.
+- **Nothing is written to the project.** No version, no `versionCode`, no
+  signing configuration, no Gradle file, no permission bit.
+- An imported `.ipa`, `.pkg`, or `.aab` skips the source build and skips
+  nothing else: the same inspection, signature check, identity comparison,
+  remote conflict check, and upload confirmation.
+
+New files live under `Sources/SubmitKit/Build/` and
+`Sources/SuperSubmitter/Build/`.
+
 ## Verification completed
 
 ```sh
@@ -80,27 +119,33 @@ swift build
 swift test
 ```
 
-Both pass with no warnings. There are 75 Swift Testing tests. A launch smoke
+Both pass with no warnings. There are 112 Swift Testing tests. A launch smoke
 test runs the binary and it stays up.
 
 No live store call was executed, because this workspace holds no credential.
-Every request path, body, and header comes from the spec, not from a recorded
-response.
+No real Xcode or Gradle build was executed, because this workspace holds no
+fixture project. Every request path, body, header, and argument array comes
+from the two specs, not from a recorded response.
 
 ## What remains
 
 ### Deployment, not features
 
-- An Xcode app target: signing, notarization, entitlements, the production
-  icon catalog, and sandbox security-scoped bookmarks. The package still
-  builds a plain executable, so `UNUserNotificationCenter` is unavailable and
-  a status change bounces the Dock icon instead.
+- An Xcode app target: Developer ID signing, the hardened runtime,
+  notarization, stapling, and a Gatekeeper check on a clean Mac
+  (upload-spec 12.3 and 17.4). The package still builds a plain executable, so
+  `UNUserNotificationCenter` is unavailable and a status change bounces the
+  Dock icon instead. There is no Mac App Store variant and no sandbox branch,
+  which is the decision upload-spec section 1 fixed.
 - Open an existing app from disk, and remove or rename a linked app.
 
 ### Service work behind a live account
 
-- Redacted HTTP record and replay fixtures, so the apply flows run under test
-  without an account. This is the largest remaining gap in the test suite.
+- Redacted HTTP record and replay fixtures, so the apply and upload flows run
+  under test without an account. This is the largest remaining gap in the test
+  suite; the process layer already has a fake runner.
+- The manually gated integration matrices of upload-spec 15.4 and 15.5. They
+  need fixture projects and dedicated test store accounts.
 - Signed-host Keychain tests.
 - Apple in-app purchase localizations, price schedules, and availability per
   product. The runner writes the products; the per-product price schedule of
@@ -108,6 +153,25 @@ response.
 - RevenueCat write scopes. The plan verifies the read scopes and names a
   missing one; a write scope only proves itself on a write.
 - Per-store review notes, if the schema grows a second field.
+
+### Open decisions that were settled, and how
+
+upload-spec section 18 left seven choices open. These are the ones this
+implementation made, so a later change is a decision and not a bug fix.
+
+1. Apple pauses at the artifact confirmation by default. **Always review the
+   built artifact before upload** is on; turn it off and a build whose archive
+   matches the confirmed summary exactly continues to the upload by itself.
+   Android always pauses.
+2. Retention is manual: Settings deletes run data older than 30 days and never
+   deletes a retained archive or bundle.
+3. The linked folder keeps an ordinary bookmark, and the app rediscovers the
+   container before every build.
+4. Android discovery parses the plain `tasks --all` output. No init script is
+   written into the developer's project.
+5. Google commits an independently uploaded bundle to the configured track as
+   a draft at once.
+6. The certificate summary shows the subject and the fingerprint only.
 
 ### One spec conflict to settle
 
@@ -120,6 +184,11 @@ that mapping.
 
 ## Safety constraints
 
+- No shell. Every local tool runs as an executable plus an argument array.
+- The app never edits a version, a project file, a Gradle file, a signing
+  configuration, a certificate, a profile, or a keystore.
+- The built artifact, not the preflight, decides what uploads.
+- A fresh remote conflict check runs immediately before every upload.
 - Plan reads only. Apply leaves drafts. Release is the only review action.
 - Never combine the Apple and Google release buttons.
 - Apple has no sandbox; keep the dry run on by default for a new app.
