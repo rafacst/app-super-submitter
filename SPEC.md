@@ -191,6 +191,7 @@ release:
   apple:
     releaseType: AFTER_APPROVAL  # MANUAL | AFTER_APPROVAL | SCHEDULED
     phasedRelease: true
+    phasedReleaseState: ACTIVE   # ACTIVE | PAUSED
   google:
     track: production            # the one track that the release button sends
     tracks: [internal, production]  # every track that an apply writes
@@ -219,6 +220,9 @@ listing:
       promotionalText: "Now with receipt scanning."    # Apple only
       supportUrl: https://example.com/support
       marketingUrl: https://example.com
+      privacyPolicyUrl: https://example.com/privacy
+      privacyPolicyText: "How this app handles personal data."
+      privacyChoicesUrl: https://example.com/privacy/choices
       google:
         shortDescription: "Split any bill in seconds with your friends"
         video: https://youtube.com/watch?v=xxxx
@@ -303,13 +307,18 @@ review:
   contactPhone: "+351000000000"
   demoAccountRequired: false
   notes: "No login is necessary."
+  dataSafetyCSV: metadata/google-data-safety.csv  # current Play Console export
+  usesNonExemptEncryption: false
+  kidsAgeBand: FIVE_AND_UNDER
+  attachments: [metadata/review-notes.pdf]
 ```
 
 ### 5.3 Schema
 
-The app ships a JSON Schema for `store.yaml`. The editor validates against it
-on every keystroke. The schema is the contract. It lives at
-`Resources/store.schema.json`.
+The app ships a JSON Schema for `store.yaml` for editor integrations. It lives
+at `Sources/SubmitKit/Resources/store.schema.json`. The in-app YAML editor
+validates on every keystroke by decoding the same `Codable` model that the
+planner and runner use, so validation cannot drift from runtime decoding.
 
 ---
 
@@ -332,6 +341,8 @@ both APIs and names the binding limit.
 | `supportUrl` | `appStoreVersionLocalizations.supportUrl` | URL | `edits.details.contactWebsite` | URL | Google is app-level, not per-locale |
 | `google.video` | no equivalent | — | `edits.listings.video` | YouTube URL | Google only |
 | `privacyPolicyUrl` | `appInfoLocalizations.privacyPolicyUrl` | URL | Console only | — | See section 13 |
+| `privacyPolicyText` | `appInfoLocalizations.privacyPolicyText` | text | no equivalent | — | Apple only |
+| `privacyChoicesUrl` | `appInfoLocalizations.privacyChoicesUrl` | URL | no equivalent | — | Apple only |
 
 The app warns when the shared value exceeds the binding limit. The warning
 names the store, the field, the limit, and the overflow count. The developer
@@ -1309,6 +1320,13 @@ SuperSubmitter/             the macOS app target, SwiftUI, thin
 
 The app target holds views and no logic. Every rule from section 6 and
 section 10 lives in `SubmitKit` and has a unit test.
+
+`project.yml` is the reproducible XcodeGen source for the checked-in native
+`SuperSubmitter.xcodeproj`. That application target produces a conventional
+`SuperSubmitter.app`, compiles the asset catalog into `AppIcon.icns`, enables
+the hardened runtime, and uses the deliberately non-sandboxed entitlement set
+required by this developer tool. The same project owns native SubmitKit and UI
+test bundles and is the signing, archive, and notarization entry point.
 
 ### 12.2 Technology
 

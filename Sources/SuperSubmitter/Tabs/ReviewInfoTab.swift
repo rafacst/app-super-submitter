@@ -75,13 +75,6 @@ struct ReviewInfoTab: View {
                                   text: state.reviewBinding(.appleSecondaryCategory))
                     }
                 }
-                if state.stores.contains(.google) {
-                    HStack {
-                        TextField("Google category", text: state.reviewBinding(.googleCategory))
-                        Link("Open Play Console ↗",
-                             destination: URL(string: "https://play.google.com/console/")!)
-                    }
-                }
             }.reviewPanel()
         }
     }
@@ -104,6 +97,20 @@ struct ReviewInfoTab: View {
                 Divider()
                 Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
                     .padding(.horizontal, 14).padding(.vertical, 11)
+                Divider()
+                HStack {
+                    Text("Kids age band")
+                    TextField("Optional Apple age band",
+                              text: state.reviewMetadataBinding("kidsAgeBand"))
+                }
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                Divider()
+                HStack {
+                    Text("Review attachments")
+                    TextField("Paths, comma-separated",
+                              text: state.reviewMetadataBinding("attachments"))
+                }
+                .padding(.horizontal, 14).padding(.vertical, 9)
             }.reviewPanel(padding: 0)
         }
     }
@@ -225,8 +232,9 @@ private struct DataSafetySheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Google data safety").font(.title2.weight(.semibold))
-            Text("These answers are saved for planning; confirm them in Play Console before release.")
+            Text("For production, export the current CSV from Play Console and select it here. The file is sent unchanged because Google controls its columns and question IDs.")
                 .foregroundStyle(Theme.text2)
+            TextField("Data safety CSV path", text: state.reviewMetadataBinding("dataSafetyCSV"))
             ForEach(questions, id: \.0) { key, title in
                 Toggle(title, isOn: state.reviewAnswerBinding(group: "safety", key: key))
             }

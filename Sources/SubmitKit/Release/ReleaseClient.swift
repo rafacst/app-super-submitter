@@ -72,6 +72,21 @@ public struct ReleaseClient: Sendable {
         ])
     }
 
+    /// Releases a version Apple has already approved and is holding for the
+    /// developer. App Store Connect accepts this only in
+    /// `PENDING_DEVELOPER_RELEASE`, and the request cannot be undone.
+    public func releaseApprovedAppleVersion(versionID: String) async throws -> String {
+        let response = JSON(data: try await api.apple(
+            "POST", "/v1/appStoreVersionReleaseRequests", body: [
+                "data": [
+                    "type": "appStoreVersionReleaseRequests",
+                    "relationships": ["appStoreVersion": [
+                        "data": ["type": "appStoreVersions", "id": versionID]]],
+                ],
+            ]).data)
+        return response["data"]["id"].string ?? versionID
+    }
+
     /// Step 3 is the point of no return.
     ///
     /// Google treats `versionCodes` as the complete list, not as an addition.

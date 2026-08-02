@@ -32,12 +32,42 @@ extension Runner {
     }
 
     func googleDetails() async throws {
-        guard let review = manifest.review else { return }
         var body: [String: Any] = [:]
-        if let email = review.contactEmail, !email.isEmpty { body["contactEmail"] = email }
-        if let phone = review.contactPhone, !phone.isEmpty { body["contactPhone"] = phone }
+        if let email = manifest.review?.contactEmail, !email.isEmpty {
+            body["contactEmail"] = email
+        }
+        if let phone = manifest.review?.contactPhone, !phone.isEmpty {
+            body["contactPhone"] = phone
+        }
+        if let locale = manifest.listing?.defaultLocale {
+            let website = manifest.listingText(locale: locale, field: .supportURL)
+            if !website.isEmpty { body["contactWebsite"] = website }
+        }
         guard !body.isEmpty else { return }
         try await api.google("PATCH", try editPath("/details"), body: body)
+    }
+
+    func googleDataSafety() async throws {
+        if let path = manifest.review?.dataSafetyCSV, !path.isEmpty {
+            guard let url = resolve(path) else {
+                throw RunError.uploadFailed("The Data safety CSV \(path) could not be read.")
+            }
+            let safetyLabels = try String(contentsOf: url, encoding: .utf8)
+            try await api.google("POST", "\(googleBase)/dataSafety",
+                                 body: ["safetyLabels": safetyLabels])
+            return
+        }
+        guard let answers = manifest.review?.dataSafetyAnswers, !answers.isEmpty else { return }
+        let rows = answers.sorted(by: { $0.key < $1.key }).map {
+            "\(Self.csv($0.key)),\($0.value ? "TRUE" : "FALSE")"
+        }
+        let safetyLabels = (["question_id,answer"] + rows).joined(separator: "\n")
+        try await api.google("POST", "\(googleBase)/dataSafety",
+                             body: ["safetyLabels": safetyLabels])
+    }
+
+    func googleDeleteListing(_ locale: String) async throws {
+        try await api.google("DELETE", try editPath("/listings/\(locale)"))
     }
 
     /// Spec 7.5. Google uses one multipart upload and answers with the
@@ -45,6 +75,7 @@ extension Runner {
     func googleImages(locale: String, imageType: String, files: [MediaUpload],
                       index: Int) async throws {
         guard let editID = googleEditID else { throw RunError.missingEdit }
+        try await api.google("DELETE", try editPath("/listings/\(locale)/\(imageType)"))
         var uploaded = 0
         for file in files {
             try Task.checkCancellation()
@@ -215,7 +246,8 @@ extension Runner {
 
         let purchases = manifest.purchases ?? []
         if !purchases.isEmpty {
-            let requests = purchases.map { purchase -> [String: Any] in
+            var requests: [[String: Any]] = []
+            for purchase in purchases {
                 var product: [String: Any] = [
                     "packageName": manifest.apps.google?.packageName ?? "",
                     "productId": purchase.id,
@@ -223,31 +255,37 @@ extension Runner {
                 if let tax = Self.taxSettings(purchase.tax) {
                     product["taxAndComplianceSettings"] = tax
                 }
-                if let price = purchase.price {
-                    product["regionsVersion"] = ["version": "2022/02"]
+                let locales = purchase.locales ?? [:]
+                if locales.isEmpty {
                     product["listings"] = [[
                         "languageCode": manifest.listing?.defaultLocale ?? "en-US",
-                        "title": purchase.name ?? purchase.id,
-                    ]]
+                        "title": purchase.name ?? purchase.id]]
+                } else {
+                    product["listings"] = locales.sorted(by: { $0.key < $1.key }).map {
+                        ["languageCode": $0.key,
+                         "title": $0.value.name ?? purchase.name ?? purchase.id,
+                         "description": $0.value.description ?? ""]
+                    }
+                }
+                if let price = purchase.price {
+                    let pricing = try await googleRegionalPricing(price)
+                    product["regionsVersion"] = pricing.version
                     product["purchaseOptions"] = [[
                         "purchaseOptionId": purchase.id,
                         "buyOption": [:],
-                        "regionalPricingAndAvailabilityConfigs": [[
-                            "regionCode": price.territory ?? "US",
-                            "price": Self.money(price),
-                            "availability": "AVAILABLE",
-                        ]],
+                        "regionalPricingAndAvailabilityConfigs": pricing.configs,
                     ]]
                 }
-                return ["updateOneTimeProductRequest": ["oneTimeProduct": product,
-                                                        "allowMissing": true]]
+                requests.append(["updateOneTimeProductRequest": ["oneTimeProduct": product,
+                                                                  "allowMissing": true]])
             }
             try await api.google("POST", "\(base)/oneTimeProducts:batchUpdate",
                                  body: ["requests": requests])
         }
 
         for group in manifest.subscriptions ?? [] {
-            let requests = group.plans.map { plan -> [String: Any] in
+            var requests: [[String: Any]] = []
+            for plan in group.plans {
                 var subscription: [String: Any] = [
                     "packageName": manifest.apps.google?.packageName ?? "",
                     "productId": plan.id,
@@ -255,28 +293,60 @@ extension Runner {
                 if let tax = Self.taxSettings(plan.tax) {
                     subscription["taxAndComplianceSettings"] = tax
                 }
-                subscription["listings"] = [[
+                let locales = plan.locales ?? group.locales ?? [:]
+                subscription["listings"] = locales.isEmpty ? [[
                     "languageCode": manifest.listing?.defaultLocale ?? "en-US",
                     "title": group.groupName ?? group.groupId,
-                ]]
+                ]] : locales.sorted(by: { $0.key < $1.key }).map {
+                    ["languageCode": $0.key,
+                     "title": $0.value.name ?? group.groupName ?? group.groupId,
+                     "description": $0.value.description ?? ""]
+                }
                 var basePlan: [String: Any] = [
                     "basePlanId": plan.basePlanId ?? "default",
                     "autoRenewingBasePlanType": ["billingPeriodDuration": plan.duration],
                 ]
                 if let price = plan.price {
-                    basePlan["regionalConfigs"] = [[
-                        "regionCode": price.territory ?? "US",
-                        "price": Self.money(price),
-                    ]]
+                    let pricing = try await googleRegionalPricing(price)
+                    subscription["regionsVersion"] = pricing.version
+                    basePlan["regionalConfigs"] = pricing.configs.map { config in
+                        var value = config
+                        value.removeValue(forKey: "availability")
+                        return value
+                    }
                 }
                 subscription["basePlans"] = [basePlan]
-                return ["updateSubscriptionRequest": ["subscription": subscription,
-                                                      "allowMissing": true]]
+                requests.append(["updateSubscriptionRequest": ["subscription": subscription,
+                                                                "allowMissing": true]])
             }
             guard !requests.isEmpty else { continue }
             try await api.google("POST", "\(base)/subscriptions:batchUpdate",
                                  body: ["requests": requests])
         }
+    }
+
+    private func googleRegionalPricing(_ price: Price) async throws
+        -> (configs: [[String: Any]], version: [String: Any]) {
+        guard manifest.pricing?.autoConvertOtherTerritories != false else {
+            return ([["regionCode": price.territory ?? "US", "price": Self.money(price),
+                      "availability": "AVAILABLE"]], ["version": "2022/02"])
+        }
+        let response = try await api.google(
+            "POST", "\(googleBase)/pricing:convertRegionPrices",
+            body: ["price": Self.money(price)])
+        let object = (try JSONSerialization.jsonObject(with: response.data)) as? [String: Any]
+            ?? [:]
+        let converted = object["convertedRegionPrices"] as? [String: Any] ?? [:]
+        let configs: [[String: Any]] = converted.keys.sorted().compactMap { region in
+            guard let value = converted[region] as? [String: Any],
+                  let money = value["price"] as? [String: Any] else { return nil }
+            return ["regionCode": region, "price": money, "availability": "AVAILABLE"]
+        }
+        let version = object["regionVersion"] as? [String: Any] ?? ["version": "2022/02"]
+        return (configs.isEmpty
+            ? [["regionCode": price.territory ?? "US", "price": Self.money(price),
+                "availability": "AVAILABLE"]]
+            : configs, version)
     }
 
     func googleValidate() async throws {
@@ -295,6 +365,11 @@ extension Runner {
 
     private static func contentType(for url: URL) -> String {
         url.pathExtension.lowercased() == "png" ? "image/png" : "image/jpeg"
+    }
+
+    private static func csv(_ value: String) -> String {
+        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        return escaped.contains(",") || escaped.contains("\n") ? "\"\(escaped)\"" : escaped
     }
 
     /// The Google tax block, or nil when the manifest names nothing. An

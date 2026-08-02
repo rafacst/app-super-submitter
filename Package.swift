@@ -17,7 +17,7 @@ let package = Package(
         .target(
             name: "SubmitKit",
             dependencies: ["Yams"],
-            resources: [.copy("Resources/screenshot-sizes.json")]
+            resources: [.process("Resources")]
         ),
         // Views only. No logic.
         .executableTarget(
@@ -32,6 +32,10 @@ let package = Package(
             name: "SubmitKitTests",
             dependencies: ["SubmitKit"],
             resources: [.copy("Fixtures")]
+        ),
+        .testTarget(
+            name: "SuperSubmitterUITests",
+            dependencies: ["SuperSubmitter"]
         ),
     ]
 )

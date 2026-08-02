@@ -132,8 +132,17 @@ private enum Fixture {
         let manifest = stage.appendingPathComponent("base/manifest")
         try FileManager.default.createDirectory(at: manifest, withIntermediateDirectories: true)
 
-        let proto = try #require(Bundle.module.url(forResource: "Fixtures/AndroidManifest",
-                                                   withExtension: "pb"))
+        #if SWIFT_PACKAGE
+        let resources = Bundle.module
+        #else
+        let resources = Bundle(for: SubmitKitTestBundleToken.self)
+        #endif
+        #if SWIFT_PACKAGE
+        let resourceName = "Fixtures/AndroidManifest"
+        #else
+        let resourceName = "AndroidManifest"
+        #endif
+        let proto = try #require(resources.url(forResource: resourceName, withExtension: "pb"))
         try Data(contentsOf: proto).write(to: manifest.appendingPathComponent("AndroidManifest.xml"))
 
         for folder in ["values", "values-fr", "values-pt-rBR", "values-night", "values-v26"] {
@@ -184,3 +193,7 @@ private enum Fixture {
         return try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     }
 }
+
+#if !SWIFT_PACKAGE
+private final class SubmitKitTestBundleToken {}
+#endif

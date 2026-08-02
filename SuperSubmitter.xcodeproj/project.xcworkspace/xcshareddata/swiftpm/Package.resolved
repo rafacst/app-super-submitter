@@ -1,0 +1,24 @@
+{
+  "originHash" : "0dce56e3e76cbd51975ccc72a68580f6416b2018a85b22fb3e22e201e2baf577",
+  "pins" : [
+    {
+      "identity" : "posthog-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/PostHog/posthog-ios.git",
+      "state" : {
+        "revision" : "1c9b3178746c8102c854c2569047aedcfdec8a0c",
+        "version" : "3.69.0"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams.git",
+      "state" : {
+        "revision" : "3d6871d5b4a5cd519adf233fbb576e0a2af71c17",
+        "version" : "5.4.0"
+      }
+    }
+  ],
+  "version" : 3
+}

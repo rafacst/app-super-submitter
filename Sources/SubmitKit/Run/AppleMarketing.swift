@@ -86,24 +86,37 @@ extension Runner {
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             var attributes: [String: Any] = [:]
             put(&attributes, "promotionalText", text.promotionalText ?? "")
-            guard !attributes.isEmpty else { continue }
+            var localizationID: String?
             if let id = byLocale[locale] {
+                localizationID = id
                 try await api.apple(
                     "PATCH", "/v1/appCustomProductPageLocalizations/\(id)", body: [
                         "data": ["type": "appCustomProductPageLocalizations", "id": id,
                                  "attributes": attributes],
                     ])
-                continue
+            } else {
+                attributes["locale"] = locale
+                let created = JSON(data: try await api.apple(
+                    "POST", "/v1/appCustomProductPageLocalizations", body: [
+                        "data": [
+                            "type": "appCustomProductPageLocalizations",
+                            "attributes": attributes,
+                            "relationships": ["appCustomProductPageVersion": [
+                                "data": ["type": "appCustomProductPageVersions",
+                                         "id": versionID]]],
+                        ],
+                    ]).data)
+                localizationID = created["data"]["id"].string
             }
-            attributes["locale"] = locale
-            try await api.apple("POST", "/v1/appCustomProductPageLocalizations", body: [
-                "data": [
-                    "type": "appCustomProductPageLocalizations",
-                    "attributes": attributes,
-                    "relationships": ["appCustomProductPageVersion": [
-                        "data": ["type": "appCustomProductPageVersions", "id": versionID]]],
-                ],
-            ])
+            if let localizationID {
+                for (device, paths) in text.screenshots ?? [:] {
+                    try await appleMarketingScreenshots(
+                        paths, device: device,
+                        relationship: "appCustomProductPageLocalization",
+                        relationshipType: "appCustomProductPageLocalizations",
+                        relationshipID: localizationID)
+                }
+            }
         }
     }
 
@@ -158,19 +171,61 @@ extension Runner {
             let treatments = JSON(data: try await api.apple(
                 "GET",
                 "/v2/appStoreVersionExperiments/\(experimentID)/appStoreVersionExperimentTreatments?limit=200").data)
-            let known = Set(treatments["data"].array
-                .compactMap { $0["attributes"]["name"].string })
-            for treatment in experiment.treatments where !known.contains(treatment.key) {
-                try await api.apple("POST", "/v2/appStoreVersionExperimentTreatments", body: [
-                    "data": [
-                        "type": "appStoreVersionExperimentTreatments",
-                        "attributes": ["name": treatment.key,
-                                       "appIconName": NSNull()],
-                        "relationships": ["appStoreVersionExperiment": [
-                            "data": ["type": "appStoreVersionExperiments",
-                                     "id": experimentID]]],
-                    ],
-                ])
+            var known: [String: String] = [:]
+            for item in treatments["data"].array {
+                if let name = item["attributes"]["name"].string,
+                   let id = item["id"].string { known[name] = id }
+            }
+            for treatment in experiment.treatments {
+                var treatmentID = known[treatment.key]
+                if treatmentID == nil {
+                    let created = JSON(data: try await api.apple(
+                        "POST", "/v2/appStoreVersionExperimentTreatments", body: [
+                            "data": [
+                                "type": "appStoreVersionExperimentTreatments",
+                                "attributes": ["name": treatment.key,
+                                               "appIconName": NSNull()],
+                                "relationships": ["appStoreVersionExperiment": [
+                                    "data": ["type": "appStoreVersionExperiments",
+                                             "id": experimentID]]],
+                            ],
+                        ]).data)
+                    treatmentID = created["data"]["id"].string
+                }
+                guard let treatmentID else { continue }
+                let existingLocales = JSON(data: try await api.apple(
+                    "GET", "/v1/appStoreVersionExperimentTreatments/\(treatmentID)"
+                        + "/appStoreVersionExperimentTreatmentLocalizations?limit=50").data)
+                var localized: [String: String] = [:]
+                for item in existingLocales["data"].array {
+                    if let locale = item["attributes"]["locale"].string,
+                       let id = item["id"].string { localized[locale] = id }
+                }
+                for (locale, devices) in treatment.screenshots ?? [:] {
+                    var localizationID = localized[locale]
+                    if localizationID == nil {
+                        let created = JSON(data: try await api.apple(
+                            "POST", "/v1/appStoreVersionExperimentTreatmentLocalizations",
+                            body: [
+                                "data": [
+                                    "type": "appStoreVersionExperimentTreatmentLocalizations",
+                                    "attributes": ["locale": locale],
+                                    "relationships": ["appStoreVersionExperimentTreatment": [
+                                        "data": ["type": "appStoreVersionExperimentTreatments",
+                                                 "id": treatmentID]]],
+                                ],
+                            ]).data)
+                        localizationID = created["data"]["id"].string
+                    }
+                    guard let localizationID else { continue }
+                    for (device, paths) in devices {
+                        try await appleMarketingScreenshots(
+                            paths, device: device,
+                            relationship: "appStoreVersionExperimentTreatmentLocalization",
+                            relationshipType: "appStoreVersionExperimentTreatmentLocalizations",
+                            relationshipID: localizationID)
+                    }
+                }
             }
         }
     }
@@ -236,23 +291,35 @@ extension Runner {
             put(&attributes, "name", text.name ?? "")
             put(&attributes, "shortDescription", text.shortDescription ?? "")
             put(&attributes, "longDescription", text.longDescription ?? "")
-            guard !attributes.isEmpty else { continue }
+            var localizationID: String?
             if let id = byLocale[locale] {
+                localizationID = id
                 try await api.apple("PATCH", "/v1/appEventLocalizations/\(id)", body: [
                     "data": ["type": "appEventLocalizations", "id": id,
                              "attributes": attributes],
                 ])
-                continue
+            } else {
+                attributes["locale"] = locale
+                let created = JSON(data: try await api.apple(
+                    "POST", "/v1/appEventLocalizations", body: [
+                        "data": [
+                            "type": "appEventLocalizations",
+                            "attributes": attributes,
+                            "relationships": ["appEvent": [
+                                "data": ["type": "appEvents", "id": eventID]]],
+                        ],
+                    ]).data)
+                localizationID = created["data"]["id"].string
             }
-            attributes["locale"] = locale
-            try await api.apple("POST", "/v1/appEventLocalizations", body: [
-                "data": [
-                    "type": "appEventLocalizations",
-                    "attributes": attributes,
-                    "relationships": ["appEvent": [
-                        "data": ["type": "appEvents", "id": eventID]]],
-                ],
-            ])
+            if let localizationID {
+                for (kind, screenshots) in text.screenshots ?? [:] {
+                    let assetType = kind.lowercased() == "card"
+                        ? "EVENT_CARD" : "EVENT_DETAILS_PAGE"
+                    try await appleEventScreenshots(
+                        screenshots, assetType: assetType,
+                        localizationID: localizationID)
+                }
+            }
         }
     }
 
@@ -442,6 +509,21 @@ extension Runner {
             experienceID = id
         }
 
+        for advanced in clip.advancedExperiences ?? [] {
+            var attributes: [String: Any] = ["action": advanced.action]
+            put(&attributes, "businessCategory", advanced.businessCategory ?? "")
+            put(&attributes, "defaultLanguage", advanced.defaultLanguage ?? "")
+            put(&attributes, "link", advanced.link ?? "")
+            try await api.apple("POST", "/v1/appClipAdvancedExperiences", body: [
+                "data": [
+                    "type": "appClipAdvancedExperiences",
+                    "attributes": attributes,
+                    "relationships": ["appClip": [
+                        "data": ["type": "appClips", "id": clipID]]],
+                ],
+            ])
+        }
+
         guard let locales = clip.locales, !locales.isEmpty else { return }
         let existing = JSON(data: try await api.apple(
             "GET",
@@ -474,6 +556,77 @@ extension Runner {
                     "relationships": ["appClipDefaultExperience": [
                         "data": ["type": "appClipDefaultExperiences", "id": experienceID]]],
                 ],
+            ])
+        }
+    }
+
+    // MARK: - Marketing Screenshots
+
+    private func appleMarketingScreenshots(
+        _ paths: [String], device: String, relationship: String,
+        relationshipType: String, relationshipID: String) async throws {
+        guard let deviceClass = Manifest.DeviceClass(rawValue: device) else { return }
+        for path in paths {
+            guard let url = resolve(path),
+                  let info = try? AssetInspector.image(at: url),
+                  let displayType = try AssetInspector.appleDisplayType(
+                    for: info, deviceClass: deviceClass) else { continue }
+            let set = JSON(data: try await api.apple("POST", "/v1/appScreenshotSets", body: [
+                "data": [
+                    "type": "appScreenshotSets",
+                    "attributes": ["screenshotDisplayType": displayType],
+                    "relationships": [relationship: [
+                        "data": ["type": relationshipType, "id": relationshipID]]],
+                ],
+            ]).data)
+            guard let setID = set["data"]["id"].string else { continue }
+            try await appleUploadMarketingScreenshot(url, setID: setID)
+        }
+    }
+
+    private func appleUploadMarketingScreenshot(_ url: URL, setID: String) async throws {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        let reservation = JSON(data: try await api.apple("POST", "/v1/appScreenshots", body: [
+            "data": [
+                "type": "appScreenshots",
+                "attributes": ["fileName": url.lastPathComponent, "fileSize": data.count],
+                "relationships": ["appScreenshotSet": [
+                    "data": ["type": "appScreenshotSets", "id": setID]]],
+            ],
+        ]).data)
+        guard let id = reservation["data"]["id"].string else { return }
+        try await executeUploadOperations(
+            reservation["data"]["attributes"]["uploadOperations"], data: data)
+        try await api.apple("PATCH", "/v1/appScreenshots/\(id)", body: [
+            "data": ["type": "appScreenshots", "id": id,
+                     "attributes": ["uploaded": true,
+                                    "sourceFileChecksum": Checksums.md5(data)]],
+        ])
+    }
+
+    private func appleEventScreenshots(_ paths: [String], assetType: String,
+                                       localizationID: String) async throws {
+        for path in paths {
+            guard let url = resolve(path) else { continue }
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
+            let reservation = JSON(data: try await api.apple(
+                "POST", "/v1/appEventScreenshots", body: [
+                    "data": [
+                        "type": "appEventScreenshots",
+                        "attributes": ["fileName": url.lastPathComponent,
+                                       "appEventAssetType": assetType,
+                                       "fileSize": data.count],
+                        "relationships": ["appEventLocalization": [
+                            "data": ["type": "appEventLocalizations",
+                                     "id": localizationID]]],
+                    ],
+                ]).data)
+            guard let id = reservation["data"]["id"].string else { continue }
+            try await executeUploadOperations(
+                reservation["data"]["attributes"]["uploadOperations"], data: data)
+            try await api.apple("PATCH", "/v1/appEventScreenshots/\(id)", body: [
+                "data": ["type": "appEventScreenshots", "id": id,
+                         "attributes": ["uploaded": true]],
             ])
         }
     }

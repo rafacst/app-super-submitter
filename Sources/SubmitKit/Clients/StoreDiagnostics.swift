@@ -160,6 +160,33 @@ public struct StoreDiagnostics: Sendable {
         }
     }
 
+    public struct AppCategory: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var platform: String?
+        public var parentId: String?
+
+        public init(id: String, platform: String? = nil, parentId: String? = nil) {
+            self.id = id
+            self.platform = platform
+            self.parentId = parentId
+        }
+    }
+
+    public func appCategories(platform: String? = nil) async throws -> [AppCategory] {
+        var path = "/v1/appCategories?limit=200"
+        if let platform, !platform.isEmpty {
+            path += "&filter%5Bplatforms%5D=\(platform)"
+        }
+        let payload = JSON(data: try await api.apple("GET", path).data)
+        return payload["data"].array.compactMap { item in
+            guard let id = item["id"].string else { return nil }
+            return AppCategory(
+                id: id,
+                platform: item["attributes"]["platforms"].array.first?.string,
+                parentId: item["relationships"]["parent"]["data"]["id"].string)
+        }
+    }
+
     /// Every App Store territory. The availability block, the licence
     /// agreement, and the price territory all name one of these ids, and the
     /// developer has no other list to check a code against.

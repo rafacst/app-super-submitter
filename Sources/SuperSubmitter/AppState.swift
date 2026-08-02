@@ -34,7 +34,7 @@ enum ConnectionStatus: Equatable {
 enum PurchaseTextField { case id, name, amount, currency, entitlement }
 enum PlanTextField { case id, duration, basePlanID, amount, currency, entitlement, packageKey }
 
-private struct CatalogPriceInput {
+struct CatalogPriceInput {
     var amount: String
     var currency: String
 }
@@ -149,6 +149,7 @@ final class AppState {
     var moneyError: String?
     private var purchasePriceInputs: [Int: CatalogPriceInput] = [:]
     private var planPriceInputs: [String: CatalogPriceInput] = [:]
+    var offerPriceInputs: [String: CatalogPriceInput] = [:]
 
     // Tab 6.
     var reviewerUsername = ""
@@ -1140,6 +1141,28 @@ final class AppState {
         })
     }
 
+    func reviewMetadataBinding(_ key: String) -> Binding<String> {
+        Binding(get: {
+            if key == "kidsAgeBand" { return self.manifest.review?.kidsAgeBand ?? "" }
+            if key == "dataSafetyCSV" { return self.manifest.review?.dataSafetyCSV ?? "" }
+            return (self.manifest.review?.attachments ?? []).joined(separator: ", ")
+        }, set: { value in
+            var review = self.manifest.review ?? Manifest.Review()
+            if key == "kidsAgeBand" {
+                review.kidsAgeBand = value.isEmpty ? nil : value
+            } else if key == "dataSafetyCSV" {
+                review.dataSafetyCSV = value.isEmpty ? nil : value
+            } else {
+                let paths = value.split(separator: ",").map {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                }.filter { !$0.isEmpty }
+                review.attachments = paths.isEmpty ? nil : paths
+            }
+            self.manifest.review = review
+            self.saveManifestReportingErrors()
+        })
+    }
+
     // MARK: - The badges
 
     /// The count of open items per tab, and how loud each one is.
@@ -1340,6 +1363,7 @@ final class AppState {
         priceTerritory = manifest.pricing?.base.territory ?? ""
         purchasePriceInputs = [:]
         planPriceInputs = [:]
+        offerPriceInputs = [:]
     }
 
     func saveManifestReportingErrors() {

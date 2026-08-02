@@ -35,6 +35,12 @@ struct DetailsTab: View {
                     editor("Marketing URL", field: .marketingURL, tag: "Apple only")
                 }
                 editor("Privacy policy URL", field: .privacyPolicyURL)
+                if state.stores.contains(.apple) {
+                    editor("Privacy policy text", field: .privacyPolicyText,
+                           multiline: true, tag: "Apple only")
+                    editor("Privacy choices URL", field: .privacyChoicesURL,
+                           tag: "Apple only")
+                }
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)

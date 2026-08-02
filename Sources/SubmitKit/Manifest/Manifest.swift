@@ -154,6 +154,19 @@ extension Manifest {
         public struct AppleRelease: Codable, Sendable, Equatable {
             public var releaseType: ReleaseType?
             public var phasedRelease: Bool?
+            /// Controls an existing phased release as well as creating one.
+            public var phasedReleaseState: PhasedReleaseState?
+            public init(releaseType: ReleaseType? = nil, phasedRelease: Bool? = nil,
+                        phasedReleaseState: PhasedReleaseState? = nil) {
+                self.releaseType = releaseType
+                self.phasedRelease = phasedRelease
+                self.phasedReleaseState = phasedReleaseState
+            }
+        }
+
+        public enum PhasedReleaseState: String, Codable, Sendable, CaseIterable {
+            case active = "ACTIVE"
+            case paused = "PAUSED"
         }
 
         public struct GoogleRelease: Codable, Sendable, Equatable {
@@ -316,6 +329,8 @@ extension Manifest {
             public var supportUrl: Managed<String> = .unmanaged
             public var marketingUrl: Managed<String> = .unmanaged      // Apple only
             public var privacyPolicyUrl: Managed<String> = .unmanaged
+            public var privacyPolicyText: Managed<String> = .unmanaged
+            public var privacyChoicesUrl: Managed<String> = .unmanaged
             public var google: GoogleOverride?
 
             public init(name: String? = nil) { self.name = name }
@@ -364,10 +379,29 @@ extension Manifest {
     public struct Pricing: Codable, Sendable, Equatable {
         public var base: Price
         public var autoConvertOtherTerritories: Bool?
+        /// App Store availability by ISO 3166-1 alpha-3 territory id.
+        public var territories: [TerritoryAvailability]?
 
-        public init(base: Price, autoConvertOtherTerritories: Bool? = nil) {
+        public init(base: Price, autoConvertOtherTerritories: Bool? = nil,
+                    territories: [TerritoryAvailability]? = nil) {
             self.base = base
             self.autoConvertOtherTerritories = autoConvertOtherTerritories
+            self.territories = territories
+        }
+    }
+
+    public struct TerritoryAvailability: Codable, Sendable, Equatable {
+        public var territory: String
+        public var available: Bool
+        public var preOrderEnabled: Bool?
+        public var releaseDate: String?
+
+        public init(territory: String, available: Bool = true,
+                    preOrderEnabled: Bool? = nil, releaseDate: String? = nil) {
+            self.territory = territory
+            self.available = available
+            self.preOrderEnabled = preOrderEnabled
+            self.releaseDate = releaseDate
         }
     }
 
@@ -387,11 +421,21 @@ extension Manifest {
         public var tax: Tax?
         /// The discounts on this product.
         public var offers: [Offer]?
+        /// Apple review asset and catalog controls.
+        public var reviewScreenshot: String?
+        public var availableTerritories: [String]?
+        public var contentHosting: Bool?
+        public var content: String?
+        public var promotedPurchase: Bool?
 
         public init(id: String, kind: Kind, name: String? = nil, price: Price? = nil,
                     reviewNote: String? = nil, entitlements: [String]? = nil,
                     locales: [String: ProductLocale]? = nil, active: Bool? = nil,
-                    tax: Tax? = nil, offers: [Offer]? = nil) {
+                    tax: Tax? = nil, offers: [Offer]? = nil,
+                    reviewScreenshot: String? = nil,
+                    availableTerritories: [String]? = nil,
+                    contentHosting: Bool? = nil, content: String? = nil,
+                    promotedPurchase: Bool? = nil) {
             self.id = id
             self.kind = kind
             self.name = name
@@ -402,6 +446,11 @@ extension Manifest {
             self.active = active
             self.tax = tax
             self.offers = offers
+            self.reviewScreenshot = reviewScreenshot
+            self.availableTerritories = availableTerritories
+            self.contentHosting = contentHosting
+            self.content = content
+            self.promotedPurchase = promotedPurchase
         }
 
         public enum Kind: String, Codable, Sendable, CaseIterable {
@@ -508,6 +557,8 @@ extension Manifest {
             /// A code that the developer hands out. Apple calls it an offer
             /// code; Google calls it a promotion.
             case offerCode = "offer_code"
+            case promotional
+            case winBack = "win_back"
         }
 
         public enum Eligibility: String, Codable, Sendable, CaseIterable {
@@ -612,8 +663,11 @@ extension Manifest {
 
             public struct PageLocale: Codable, Sendable, Equatable {
                 public var promotionalText: String?
-                public init(promotionalText: String? = nil) {
+                public var screenshots: [String: [String]]?
+                public init(promotionalText: String? = nil,
+                            screenshots: [String: [String]]? = nil) {
                     self.promotionalText = promotionalText
+                    self.screenshots = screenshots
                 }
             }
         }
@@ -639,9 +693,12 @@ extension Manifest {
             public struct Treatment: Codable, Sendable, Equatable {
                 public var key: String
                 public var name: String
-                public init(key: String, name: String) {
+                public var screenshots: [String: [String: [String]]]?
+                public init(key: String, name: String,
+                            screenshots: [String: [String: [String]]]? = nil) {
                     self.key = key
                     self.name = name
+                    self.screenshots = screenshots
                 }
             }
         }
@@ -668,11 +725,15 @@ extension Manifest {
                 public var name: String?
                 public var shortDescription: String?
                 public var longDescription: String?
+                /// `card` and `details` map to Apple's two event asset types.
+                public var screenshots: [String: [String]]?
                 public init(name: String? = nil, shortDescription: String? = nil,
-                            longDescription: String? = nil) {
+                            longDescription: String? = nil,
+                            screenshots: [String: [String]]? = nil) {
                     self.name = name
                     self.shortDescription = shortDescription
                     self.longDescription = longDescription
+                    self.screenshots = screenshots
                 }
             }
         }
@@ -721,10 +782,27 @@ extension Manifest {
             /// `OPEN`, `VIEW`, `PLAY`.
             public var action: String?
             public var locales: [String: ClipLocale]?
+            public var advancedExperiences: [AdvancedExperience]?
 
-            public init(action: String? = nil, locales: [String: ClipLocale]? = nil) {
+            public init(action: String? = nil, locales: [String: ClipLocale]? = nil,
+                        advancedExperiences: [AdvancedExperience]? = nil) {
                 self.action = action
                 self.locales = locales
+                self.advancedExperiences = advancedExperiences
+            }
+
+            public struct AdvancedExperience: Codable, Sendable, Equatable {
+                public var action: String
+                public var businessCategory: String?
+                public var defaultLanguage: String?
+                public var link: String?
+                public init(action: String, businessCategory: String? = nil,
+                            defaultLanguage: String? = nil, link: String? = nil) {
+                    self.action = action
+                    self.businessCategory = businessCategory
+                    self.defaultLanguage = defaultLanguage
+                    self.link = link
+                }
             }
 
             public struct ClipLocale: Codable, Sendable, Equatable {
@@ -753,20 +831,26 @@ extension Manifest {
         public var notes: String?
         public var applePrimaryCategory: String?
         public var appleSecondaryCategory: String?
-        public var googleCategory: String?
         public var ageRatingAnswers: [String: Bool]?
         public var dataSafetyAnswers: [String: Bool]?
+        /// A current Data safety CSV exported from Play Console. Google owns
+        /// this evolving format, so this exact file takes precedence over the
+        /// compact answer map when it is present.
+        public var dataSafetyCSV: String?
         public var usesNonExemptEncryption: Bool?
+        public var kidsAgeBand: String?
+        public var attachments: [String]?
 
         public init(contactFirstName: String? = nil, contactLastName: String? = nil,
                     contactEmail: String? = nil, contactPhone: String? = nil,
                     demoAccountRequired: Bool? = nil, notes: String? = nil,
                     applePrimaryCategory: String? = nil,
                     appleSecondaryCategory: String? = nil,
-                    googleCategory: String? = nil,
                     ageRatingAnswers: [String: Bool]? = nil,
                     dataSafetyAnswers: [String: Bool]? = nil,
-                    usesNonExemptEncryption: Bool? = nil) {
+                    dataSafetyCSV: String? = nil,
+                    usesNonExemptEncryption: Bool? = nil,
+                    kidsAgeBand: String? = nil, attachments: [String]? = nil) {
             self.contactFirstName = contactFirstName
             self.contactLastName = contactLastName
             self.contactEmail = contactEmail
@@ -775,10 +859,12 @@ extension Manifest {
             self.notes = notes
             self.applePrimaryCategory = applePrimaryCategory
             self.appleSecondaryCategory = appleSecondaryCategory
-            self.googleCategory = googleCategory
             self.ageRatingAnswers = ageRatingAnswers
             self.dataSafetyAnswers = dataSafetyAnswers
+            self.dataSafetyCSV = dataSafetyCSV
             self.usesNonExemptEncryption = usesNonExemptEncryption
+            self.kidsAgeBand = kidsAgeBand
+            self.attachments = attachments
         }
     }
 }

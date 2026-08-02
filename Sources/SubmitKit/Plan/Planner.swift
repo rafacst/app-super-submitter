@@ -37,6 +37,7 @@ public enum Planner {
         if input.stores.contains(.google) { result.steps += googleSteps(input) }
         result.steps += providerSteps(input)
         result.findings = Validator.findings(input)
+        markUnverifiedComparisons(&result)
         return result
     }
 
@@ -102,6 +103,10 @@ public enum Planner {
                          managedText(manifest, code, .subtitle), info?.subtitle)
             appendChange(&infoChanges, "privacyPolicyUrl",
                          managedText(manifest, code, .privacyPolicyURL), info?.privacyPolicyUrl)
+            appendChange(&infoChanges, "privacyPolicyText",
+                         managedText(manifest, code, .privacyPolicyText), info?.privacyPolicyText)
+            appendChange(&infoChanges, "privacyChoicesUrl",
+                         managedText(manifest, code, .privacyChoicesURL), info?.privacyChoicesUrl)
             if !infoChanges.isEmpty {
                 steps.append(PlanStep(
                     id: "apple.info.\(code)", system: .apple, kind: info == nil ? .add : .change,
@@ -160,10 +165,20 @@ public enum Planner {
                                          "/v1/appStoreVersions/{id}/relationships/build")],
                 operation: .appleAttachBuild))
         }
+        if let encryption = manifest.review?.usesNonExemptEncryption,
+           encryption != actual?.buildUsesNonExemptEncryption {
+            steps.append(PlanStep(
+                id: "apple.buildCompliance", system: .apple, kind: .change,
+                summary: "export compliance declaration",
+                title: "Write the build export compliance declaration",
+                requests: [RequestSketch("PATCH", "/v1/builds/{id}")],
+                operation: .appleBuildCompliance))
+        }
 
         // 9. The review details.
         if let review = manifest.review,
-           review.contactEmail?.isEmpty == false || review.notes?.isEmpty == false {
+           review.contactEmail?.isEmpty == false || review.notes?.isEmpty == false
+            || review.attachments?.isEmpty == false {
             steps.append(PlanStep(
                 id: "apple.reviewDetails", system: .apple,
                 kind: actual?.reviewDetailId == nil ? .add : .change,
@@ -175,10 +190,12 @@ public enum Planner {
         }
 
         // 10. The age rating.
-        if let answers = manifest.review?.ageRatingAnswers, !answers.isEmpty {
+        if manifest.review?.ageRatingAnswers?.isEmpty == false
+            || manifest.review?.kidsAgeBand?.isEmpty == false {
+            let answerCount = manifest.review?.ageRatingAnswers?.count ?? 0
             steps.append(PlanStep(
                 id: "apple.ageRating", system: .apple, kind: .change,
-                summary: "age rating  \(answers.count) answers",
+                summary: "age rating  \(answerCount) answers",
                 title: "Write the age rating answers",
                 requests: [RequestSketch("PATCH", "/v1/ageRatingDeclarations/{id}")],
                 operation: .appleAgeRating))
@@ -193,7 +210,12 @@ public enum Planner {
                 summary: "\(purchaseCount) purchases in the catalog",
                 title: "Write \(purchaseCount) purchases",
                 requests: [RequestSketch("GET", "/v2/inAppPurchases"),
-                           RequestSketch("POST", "/v2/inAppPurchases")],
+                           RequestSketch("POST", "/v2/inAppPurchases"),
+                           RequestSketch("POST", "/v1/inAppPurchasePriceSchedules"),
+                           RequestSketch("POST", "/v2/inAppPurchaseLocalizations"),
+                           RequestSketch("POST", "/v1/inAppPurchaseAvailabilities"),
+                           RequestSketch("POST", "/v1/inAppPurchaseContents"),
+                           RequestSketch("POST", "/v1/promotedPurchases")],
                 operation: .applePurchases))
         }
 
@@ -218,7 +240,9 @@ public enum Planner {
                 summary: "\(offerCount) subscription offers",
                 title: "Write \(offerCount) subscription offers",
                 requests: [RequestSketch("POST", "/v1/subscriptionIntroductoryOffers"),
-                           RequestSketch("POST", "/v1/subscriptionOfferCodes")],
+                           RequestSketch("POST", "/v1/subscriptionOfferCodes"),
+                           RequestSketch("POST", "/v1/subscriptionPromotionalOffers"),
+                           RequestSketch("POST", "/v1/winBackOffers")],
                 operation: .appleSubscriptionOffers))
         }
         if let days = (manifest.subscriptions ?? []).compactMap(\.gracePeriodDays).first {
@@ -233,7 +257,9 @@ public enum Planner {
         steps += appleMarketingSteps(input)
 
         // 12 and 13.
-        if manifest.release?.apple?.phasedRelease == true {
+        if manifest.release?.apple?.phasedRelease == true,
+           (manifest.release?.apple?.phasedReleaseState?.rawValue ?? "ACTIVE")
+            != actual?.phasedReleaseState {
             steps.append(PlanStep(
                 id: "apple.phased", system: .apple, kind: .add,
                 summary: "phased release over 7 days",
@@ -241,7 +267,24 @@ public enum Planner {
                 requests: [RequestSketch("POST", "/v1/appStoreVersionPhasedReleases")],
                 operation: .applePhasedRelease))
         }
-        if manifest.pricing?.autoConvertOtherTerritories != nil {
+        if let pricing = manifest.pricing,
+           pricing.base.amount != actual?.currentPriceAmount {
+            steps.append(PlanStep(
+                id: "apple.appPrice", system: .apple, kind: .change,
+                summary: "app price schedule",
+                title: "Write the app price schedule",
+                requests: [RequestSketch("POST", "/v1/appPriceSchedules")],
+                operation: .appleAppPrice))
+        }
+        let wantedAvailability = Dictionary(uniqueKeysWithValues:
+            (manifest.pricing?.territories ?? []).map { ($0.territory, $0.available) })
+        let autoAvailabilityDiffers = manifest.pricing?.autoConvertOtherTerritories.map {
+            $0 != actual?.availableInNewTerritories
+        } ?? false
+        let territoryAvailabilityDiffers = wantedAvailability.contains {
+            actual?.territoryAvailability[$0.key] != $0.value
+        }
+        if autoAvailabilityDiffers || territoryAvailabilityDiffers {
             steps.append(PlanStep(
                 id: "apple.availability", system: .apple, kind: .change,
                 summary: "territory availability",
@@ -366,13 +409,44 @@ public enum Planner {
             }
         }
 
-        if manifest.review?.contactEmail?.isEmpty == false {
+        let website = manifest.listing.map {
+            manifest.listingText(locale: $0.defaultLocale, field: .supportURL)
+        } ?? ""
+        let emailDiffers = manifest.review?.contactEmail.map {
+            $0 != actual?.contactEmail
+        } ?? false
+        let phoneDiffers = manifest.review?.contactPhone.map {
+            $0 != actual?.contactPhone
+        } ?? false
+        let contactDiffers = emailDiffers || phoneDiffers
+            || (!website.isEmpty && website != actual?.contactWebsite)
+        if contactDiffers {
             body.append(PlanStep(
                 id: "google.details", system: .google, kind: .change,
                 summary: "contact  \(manifest.review?.contactEmail ?? "")",
                 title: "Write the contact details",
                 requests: [RequestSketch("PATCH", "/edits/{editId}/details")],
                 operation: .googleDetails))
+        }
+
+        if manifest.review?.dataSafetyCSV?.isEmpty == false
+            || manifest.review?.dataSafetyAnswers?.isEmpty == false {
+            body.append(PlanStep(
+                id: "google.dataSafety", system: .google, kind: .change,
+                summary: "data safety declaration",
+                title: "Write the Google data safety declaration",
+                requests: [RequestSketch("POST", "/applications/{package}/dataSafety")],
+                operation: .googleDataSafety))
+        }
+
+        let wantedLocales = Set(manifest.listing?.locales.keys ?? [:].keys)
+        for locale in Set(actual?.listings.keys ?? [:].keys).subtracting(wantedLocales).sorted() {
+            body.append(PlanStep(
+                id: "google.deleteListing.\(locale)", system: .google, kind: .remove,
+                summary: "listing \(locale) delete",
+                title: "Delete the \(locale) listing",
+                requests: [RequestSketch("DELETE", "/edits/{editId}/listings/\(locale)")],
+                operation: .googleDeleteListing(locale)))
         }
 
         body += mediaSteps(input, store: .google)
@@ -709,29 +783,31 @@ public enum Planner {
                     held = input.actual.google?
                         .imageHashes["\(code)/\(uploads[0].bucket)"] ?? []
                 }
-                // Spec 7.5: an upload whose checksum already matches is
-                // skipped, and that is what makes an apply idempotent.
-                let pending = uploads.filter { upload in
-                    !held.contains(store == .apple ? upload.md5 : upload.sha256)
-                }
-                guard !pending.isEmpty else { continue }
-                let bytes = pending.reduce(Int64(0)) { $0 + $1.bytes }
-                let label = store == .apple ? "screenshots" : "\(pending[0].bucket)"
+                let desired = uploads.map { store == .apple ? $0.md5 : $0.sha256 }
+                let orderedMatches = store == .apple
+                    ? input.actual.apple?.screenshotChecksumOrder[
+                        "\(code)/\(uploads[0].bucket)"] == desired
+                    : held == Set(desired)
+                guard !orderedMatches else { continue }
+                let bytes = uploads.reduce(Int64(0)) { $0 + $1.bytes }
+                let label = store == .apple ? "screenshots" : "\(uploads[0].bucket)"
                 steps.append(PlanStep(
                     id: "\(store.rawValue).media.\(code).\(deviceClass.rawValue)",
                     system: store == .apple ? .apple : .google, kind: .add,
-                    summary: "\(pending.count) \(label)  ·  \(bytesText(bytes))  (\(code))",
-                    title: "Upload \(pending.count) \(label) for \(code)",
+                    summary: "replace with \(uploads.count) \(label)  ·  \(bytesText(bytes))  (\(code))",
+                    title: "Reconcile \(uploads.count) \(label) for \(code)",
                     requests: store == .apple
-                        ? [RequestSketch("POST", "/v1/appScreenshotSets"),
+                        ? [RequestSketch("DELETE", "/v1/appScreenshots/{id}"),
+                           RequestSketch("POST", "/v1/appScreenshotSets"),
                            RequestSketch("POST", "/v1/appScreenshots")]
-                        : [RequestSketch("POST", "/edits/{editId}/listings/\(code)/images")],
+                        : [RequestSketch("DELETE", "/edits/{editId}/listings/\(code)/images"),
+                           RequestSketch("POST", "/edits/{editId}/listings/\(code)/images")],
                     operation: store == .apple
                         ? .appleScreenshots(locale: code, deviceClass: deviceClass.rawValue,
-                                            files: pending)
-                        : .googleImages(locale: code, imageType: pending[0].bucket,
-                                        files: pending),
-                    uploadCount: pending.count, uploadBytes: bytes))
+                                            files: uploads)
+                        : .googleImages(locale: code, imageType: uploads[0].bucket,
+                                        files: uploads),
+                    uploadCount: uploads.count, uploadBytes: bytes))
             }
 
             // Apple takes a video file. Google takes a YouTube URL and no file.
@@ -742,8 +818,10 @@ public enum Planner {
                 guard !paths.isEmpty else { continue }
                 let files: [MediaUpload] = paths.compactMap { path in
                     guard let url = resolve(path, root: input.root) else { return nil }
+                    guard let previewType = AssetInspector.applePreviewType(for: deviceClass)
+                    else { return nil }
                     return MediaUpload(path: path, url: url, bytes: fileSize(url), md5: "",
-                                       sha256: "", bucket: deviceClass.rawValue)
+                                       sha256: "", bucket: previewType)
                 }
                 guard !files.isEmpty else { continue }
                 let bytes = files.reduce(Int64(0)) { $0 + $1.bytes }
@@ -757,6 +835,52 @@ public enum Planner {
                     operation: .applePreviews(locale: code, deviceClass: deviceClass.rawValue,
                                               files: files),
                     uploadCount: files.count, uploadBytes: bytes))
+            }
+        }
+        if store == .google {
+            let locale = manifest.listing?.defaultLocale ?? "en-US"
+            for (path, type) in [(manifest.media?.icon, "icon"),
+                                 (manifest.media?.featureGraphic, "featureGraphic")] {
+                guard let path, let url = resolve(path, root: input.root),
+                      let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { continue }
+                let upload = MediaUpload(path: path, url: url, bytes: Int64(data.count), md5: "",
+                                         sha256: Checksums.sha256(data), bucket: type)
+                let held = input.actual.google?.imageHashes["\(locale)/\(type)"] ?? []
+                guard held != [upload.sha256] else { continue }
+                steps.append(PlanStep(
+                    id: "google.media.\(type)", system: .google, kind: .change,
+                    summary: "replace \(type)  ·  \(bytesText(upload.bytes))",
+                    title: "Upload the Google \(type)",
+                    requests: [RequestSketch("DELETE", "/edits/{editId}/listings/\(locale)/\(type)"),
+                               RequestSketch("POST", "/edits/{editId}/listings/\(locale)/\(type)")],
+                    operation: .googleImages(locale: locale, imageType: type, files: [upload]),
+                    uploadCount: 1, uploadBytes: upload.bytes))
+            }
+
+            var desiredKeys: Set<String> = []
+            for (locale, groups) in manifest.media?.screenshots ?? [:] {
+                for device in Manifest.DeviceClass.allCases
+                where groups[device.rawValue]?.isEmpty == false {
+                    if let type = AssetInspector.googleImageType(for: device) {
+                        desiredKeys.insert("\(locale)/\(type)")
+                    }
+                }
+            }
+            if manifest.media?.icon != nil { desiredKeys.insert("\(locale)/icon") }
+            if manifest.media?.featureGraphic != nil {
+                desiredKeys.insert("\(locale)/featureGraphic")
+            }
+            for key in Set(input.actual.google?.imageHashes.keys ?? [:].keys)
+                .subtracting(desiredKeys).sorted() {
+                let pieces = key.split(separator: "/", maxSplits: 1).map(String.init)
+                guard pieces.count == 2 else { continue }
+                guard manifest.listing?.locales[pieces[0]] != nil else { continue }
+                steps.append(PlanStep(
+                    id: "google.media.delete.\(pieces[0]).\(pieces[1])", system: .google,
+                    kind: .remove, summary: "delete \(pieces[1]) (\(pieces[0]))",
+                    title: "Delete the dropped \(pieces[1])",
+                    requests: [RequestSketch("DELETE", "/edits/{editId}/listings/\(key)")],
+                    operation: .googleImages(locale: pieces[0], imageType: pieces[1], files: [])))
             }
         }
         return steps
@@ -804,6 +928,32 @@ public enum Planner {
     static func googleShortDescription(_ manifest: Manifest, _ code: String) -> String {
         let override = manifest.listingText(locale: code, field: .googleShortDescription)
         return override.isEmpty ? manifest.listingText(locale: code, field: .subtitle) : override
+    }
+
+    private static func markUnverifiedComparisons(_ result: inout PlanResult) {
+        let prefixes = [
+            "apple.reviewDetails", "apple.purchases", "apple.subscriptions",
+            "apple.subscriptionOffers",
+            "apple.gracePeriod", "apple.customProductPages", "apple.experiments",
+            "apple.events", "apple.eula", "apple.nomination", "apple.accessibility",
+            "apple.appClip", "google.dataSafety", "google.products",
+            "google.purchaseOptionState", "google.oneTimeOffers",
+            "google.basePlanState", "google.subscriptionOffers",
+            "google.migratePrices", "provider.attach", "provider.offering",
+        ]
+        var ids: [String] = []
+        for index in result.steps.indices
+        where prefixes.contains(where: { result.steps[index].id.hasPrefix($0) }) {
+            result.steps[index].comparison = .unverified
+            result.steps[index].summary = "unverified · " + result.steps[index].summary
+            ids.append(result.steps[index].id)
+        }
+        if !ids.isEmpty {
+            result.findings.append(Finding(
+                id: "plan.unverified", severity: .warning,
+                message: "\(ids.count) plan rows cannot be compared with readable store state; they are explicitly marked unverified and may repeat on the next apply.",
+                location: "Plan", fix: .plan))
+        }
     }
 
     static func applePath(_ manifest: Manifest) -> String? {

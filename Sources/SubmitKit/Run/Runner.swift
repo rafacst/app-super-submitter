@@ -164,15 +164,18 @@ public actor Runner {
         case .appleVersionLocale(let locale): try await appleVersionLocale(locale)
         case .appleScreenshots(let locale, _, let files):
             try await appleScreenshots(locale: locale, files: files, index: index)
-        case .applePreviews(let locale, _, let files):
-            try await applePreviews(locale: locale, files: files, index: index)
+        case .applePreviews(let locale, let displayType, let files):
+            try await applePreviews(locale: locale, displayType: displayType,
+                                    files: files, index: index)
         case .appleBuildUpload(let path, _): try await appleBuildUpload(path: path, index: index)
         case .appleAttachBuild: try await appleAttachBuild()
+        case .appleBuildCompliance: try await appleBuildCompliance()
         case .appleReviewDetails: try await appleReviewDetails()
         case .appleAgeRating: try await appleAgeRating()
         case .applePurchases: try await applePurchases()
         case .applePhasedRelease: try await applePhasedRelease()
         case .appleAvailability: try await appleAvailability()
+        case .appleAppPrice: try await appleAppPrice()
         case .appleSubscriptions: try await appleSubscriptions()
         case .appleSubscriptionOffers: try await appleSubscriptionOffers()
         case .appleGracePeriod: try await appleGracePeriod()
@@ -189,6 +192,8 @@ public actor Runner {
         case .googleOpenEdit: try await googleOpenEdit()
         case .googleListing(let locale): try await googleListing(locale)
         case .googleDetails: try await googleDetails()
+        case .googleDataSafety: try await googleDataSafety()
+        case .googleDeleteListing(let locale): try await googleDeleteListing(locale)
         case .googleImages(let locale, let imageType, let files):
             try await googleImages(locale: locale, imageType: imageType, files: files,
                                    index: index)

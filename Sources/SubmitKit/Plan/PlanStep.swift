@@ -4,6 +4,11 @@ public enum ChangeKind: String, Sendable, Equatable {
     case add = "+", change = "~", remove = "-"
 }
 
+public enum ComparisonConfidence: String, Sendable, Equatable {
+    case verified
+    case unverified
+}
+
 /// One request, named before it is sent.
 ///
 /// A dry run logs these and sends nothing, which is the whole point of the
@@ -53,11 +58,13 @@ public enum PlanOperation: Sendable, Equatable {
     case applePreviews(locale: String, deviceClass: String, files: [MediaUpload])
     case appleBuildUpload(path: String, bytes: Int64)
     case appleAttachBuild
+    case appleBuildCompliance
     case appleReviewDetails
     case appleAgeRating
     case applePurchases
     case applePhasedRelease
     case appleAvailability
+    case appleAppPrice
     /// The subscription catalog: the groups, the subscriptions, the
     /// localizations, and the prices. The offers attach to it.
     case appleSubscriptions
@@ -75,6 +82,8 @@ public enum PlanOperation: Sendable, Equatable {
     case googleOpenEdit
     case googleListing(String)
     case googleDetails
+    case googleDataSafety
+    case googleDeleteListing(String)
     case googleImages(locale: String, imageType: String, files: [MediaUpload])
     case googleBundleUpload(path: String, bytes: Int64)
     case googleApkUpload(path: String, bytes: Int64)
@@ -119,10 +128,12 @@ public struct PlanStep: Sendable, Equatable, Identifiable {
     public var operation: PlanOperation
     public var uploadCount: Int
     public var uploadBytes: Int64
+    public var comparison: ComparisonConfidence
 
     public init(id: String, system: PlanSystem, kind: ChangeKind, summary: String,
                 title: String, requests: [RequestSketch], operation: PlanOperation,
-                uploadCount: Int = 0, uploadBytes: Int64 = 0) {
+                uploadCount: Int = 0, uploadBytes: Int64 = 0,
+                comparison: ComparisonConfidence = .verified) {
         self.id = id
         self.system = system
         self.kind = kind
@@ -132,6 +143,7 @@ public struct PlanStep: Sendable, Equatable, Identifiable {
         self.operation = operation
         self.uploadCount = uploadCount
         self.uploadBytes = uploadBytes
+        self.comparison = comparison
     }
 
     /// The upload steps are the ones that need a progress bar and a cancel

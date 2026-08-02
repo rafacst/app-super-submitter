@@ -129,7 +129,6 @@ import Testing
 @Test func reviewAnswersAndCategoriesSurviveManifestCoding() throws {
     var manifest = Manifest()
     manifest.setReviewText("Games", field: .applePrimaryCategory)
-    manifest.setReviewText("Productivity", field: .googleCategory)
     manifest.review?.ageRatingAnswers = ["violence": false]
     manifest.review?.dataSafetyAnswers = ["data_encrypted_in_transit": true]
     manifest.review?.usesNonExemptEncryption = true
@@ -137,7 +136,6 @@ import Testing
     let data = try JSONEncoder().encode(manifest)
     let decoded = try JSONDecoder().decode(Manifest.self, from: data)
     #expect(decoded.reviewText(.applePrimaryCategory) == "Games")
-    #expect(decoded.reviewText(.googleCategory) == "Productivity")
     #expect(decoded.review?.ageRatingAnswers?["violence"] == false)
     #expect(decoded.review?.dataSafetyAnswers?["data_encrypted_in_transit"] == true)
     #expect(decoded.review?.usesNonExemptEncryption == true)

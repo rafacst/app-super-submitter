@@ -238,6 +238,11 @@ extension Runner {
                                                          territory: territory, pricePoint: point)
                     case .offerCode:
                         try await appleOfferCode(offer, subscriptionID: subscriptionID)
+                    case .promotional:
+                        try await applePromotionalOffer(offer, subscriptionID: subscriptionID)
+                    case .winBack:
+                        try await appleWinBackOffer(offer, subscriptionID: subscriptionID,
+                                                    pricePoint: point)
                     }
                 }
             }
@@ -305,6 +310,50 @@ extension Runner {
                 ],
                 "relationships": ["subscription": [
                     "data": ["type": "subscriptions", "id": subscriptionID]]],
+            ],
+        ])
+    }
+
+    private func applePromotionalOffer(_ offer: Manifest.Offer,
+                                       subscriptionID: String) async throws {
+        try await api.apple("POST", "/v1/subscriptionPromotionalOffers", body: [
+            "data": [
+                "type": "subscriptionPromotionalOffers",
+                "attributes": [
+                    "name": offer.id,
+                    "offerCode": offer.id,
+                    "duration": AppleDurations.offerDuration(for: offer.duration ?? "P1M")
+                        ?? "ONE_MONTH",
+                    "offerMode": offer.price == nil ? "FREE_TRIAL" : "PAY_UP_FRONT",
+                    "numberOfPeriods": offer.periods ?? 1,
+                ],
+                "relationships": ["subscription": [
+                    "data": ["type": "subscriptions", "id": subscriptionID]]],
+            ],
+        ])
+    }
+
+    private func appleWinBackOffer(_ offer: Manifest.Offer, subscriptionID: String,
+                                   pricePoint: String?) async throws {
+        var relationships: [String: Any] = [
+            "subscription": ["data": ["type": "subscriptions", "id": subscriptionID]],
+        ]
+        if let pricePoint {
+            relationships["subscriptionPricePoint"] = [
+                "data": ["type": "subscriptionPricePoints", "id": pricePoint]]
+        }
+        try await api.apple("POST", "/v1/winBackOffers", body: [
+            "data": [
+                "type": "winBackOffers",
+                "attributes": [
+                    "referenceName": offer.id,
+                    "offerId": offer.id,
+                    "duration": AppleDurations.offerDuration(for: offer.duration ?? "P1M")
+                        ?? "ONE_MONTH",
+                    "offerMode": offer.price == nil ? "FREE_TRIAL" : "PAY_UP_FRONT",
+                    "numberOfPeriods": offer.periods ?? 1,
+                ],
+                "relationships": relationships,
             ],
         ])
     }
