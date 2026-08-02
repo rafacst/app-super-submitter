@@ -35,6 +35,7 @@ struct RootView: View {
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
             OnboardingPanel()
         }
+        .sheet(isPresented: $state.showExistingAppImport) { ExistingAppImportSheet() }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
         .alert("Super Submitter", isPresented: Binding(
@@ -94,36 +95,62 @@ private struct EmptyAppView: View {
                 .frame(maxWidth: 460)
                 .padding(.top, 7)
 
-            Button { state.chooseAppFolder() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "folder.fill").font(.system(size: 12))
-                    Text("Select app folder").font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 16) {
+                EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
+                              detail: "Choose its project folder and prepare a fresh store submission.",
+                              tint: Theme.accent, action: state.chooseAppFolder)
+                EntryModeCard(symbol: "arrow.triangle.2.circlepath",
+                              title: "Update existing apps",
+                              detail: "Connect your store accounts, select one or many apps, and import their current data.",
+                              tint: Theme.teal) {
+                    state.showExistingAppImport = true
                 }
-                .foregroundStyle(Theme.accentText)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
-                .contentShape(.rect)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 26)
+            .frame(maxWidth: 720)
+            .padding(.top, 28)
 
-            Button { state.chooseExistingManifest() } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 11))
-                    Text("Continue work").font(.system(size: 12.5))
-                }
+            Button("Open an existing store.yaml") { state.chooseExistingManifest() }
+                .buttonStyle(.plain)
+                .font(.system(size: 12.5))
                 .foregroundStyle(Theme.text2)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 10)
-            .help("Open the store.yaml of an app you already set up")
+                .padding(.top, 15)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
+    }
+}
+
+private struct EntryModeCard: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                IconChip(symbol: symbol, tint: tint, size: 42)
+                Text(title).font(.system(size: 16, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.text2)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Label("Continue", systemImage: "arrow.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, minHeight: 190, alignment: .leading)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(tint.opacity(0.42), lineWidth: 1))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(detail)
     }
 }
 
