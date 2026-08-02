@@ -1,21 +1,9 @@
 import SubmitKit
 import SwiftUI
 
-/// What the app shows before it holds a real app.
-///
-/// Every screen that reads a store now reads a store. What is left here is the
-/// empty-state app list, which needs three rows to explain the switcher, and
-/// the onboarding copy, which is prose and not data.
-enum DemoData {
-
-    /// The placeholder app list. It appears only while no app is linked.
-    static let apps: [DemoApp] = [
-        DemoApp(name: "No app yet", initials: "—",
-                summary: "Press New app to create a store.yaml",
-                apple: .blocked, google: .blocked),
-    ]
-
-    // MARK: - The onboarding
+/// Static instructional copy. It describes behavior but supplies no example
+/// app, credential, package, price, product, or manifest value.
+enum OnboardingContent {
 
     static let onboardingSteps: [(title: String, points: [String])] = [
         ("Choose your stores. Connect each one.", [
@@ -45,12 +33,8 @@ enum DemoData {
         ]),
     ]
 
-    static let onboardingPackageRows: [DemoKeyValue] = [
-        .init("Bundle id", "com.fastbillsplit.app"),
-        .init("Version", "3.2.0"),
-        .init("Build", "412"),
-        .init("Languages", "en-US, pt-BR"),
-        .init("Minimum OS", "iOS 17.0"),
+    static let packageFields = [
+        "Bundle identifier", "Version", "Build", "Languages", "Minimum OS",
     ]
 }
 
@@ -84,23 +68,11 @@ enum StoreHealth {
     }
 }
 
-struct DemoApp: Identifiable {
+struct AppSummary: Identifiable {
     let name: String
     let initials: String
     let summary: String
     let apple: StoreHealth
     let google: StoreHealth
     var id: String { name }
-}
-
-struct DemoKeyValue: Identifiable {
-    let key: String
-    let value: String
-    let mono: Bool
-    init(_ key: String, _ value: String, mono: Bool = false) {
-        self.key = key
-        self.value = value
-        self.mono = mono
-    }
-    var id: String { key }
 }

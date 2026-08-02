@@ -77,6 +77,7 @@ private struct TabSegment: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(state.manifestURL == nil)
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -87,33 +88,40 @@ private struct TabSegment: View {
 struct SwitcherChip: View {
     @Environment(AppState.self) private var state
 
+    @ViewBuilder
     var body: some View {
-        let app = state.currentApp
-        Button {
-            state.switcherOpen.toggle()
-        } label: {
-            HStack(spacing: 10) {
-                InitialsBadge(text: app.initials, size: 24)
-                Text(app.name).font(.system(size: 12.5, weight: .semibold))
-                HStack(spacing: 4) {
-                    Circle().fill(app.apple.color).frame(width: 8, height: 8)
-                    RoundedRectangle(cornerRadius: 2).fill(app.google.color).frame(width: 8, height: 8)
+        if let app = state.currentApp {
+            Button {
+                state.switcherOpen.toggle()
+            } label: {
+                HStack(spacing: 10) {
+                    InitialsBadge(text: app.initials, size: 24)
+                    Text(app.name).font(.system(size: 12.5, weight: .semibold))
+                    HStack(spacing: 4) {
+                        Circle().fill(app.apple.color).frame(width: 8, height: 8)
+                        RoundedRectangle(cornerRadius: 2).fill(app.google.color)
+                            .frame(width: 8, height: 8)
+                    }
+                    Text("▾").font(.system(size: 8)).foregroundStyle(Theme.text3)
                 }
-                Text("▾").font(.system(size: 8)).foregroundStyle(Theme.text3)
+                .padding(.leading, 4)
+                .padding(.trailing, 9)
+                .frame(height: 32)
+                .background(state.switcherOpen ? Theme.sunken : Theme.field,
+                            in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                .shadow(color: .black.opacity(0.09), radius: 0.75, y: 1)
+                .contentShape(.rect)
             }
-            .padding(.leading, 4)
-            .padding(.trailing, 9)
-            .frame(height: 32)
-            .background(state.switcherOpen ? Theme.sunken : Theme.field,
-                        in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-            .shadow(color: .black.opacity(0.09), radius: 0.75, y: 1)
-            .contentShape(.rect)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Current app, \(app.name)")
+            .accessibilityHint("Shows linked apps")
+        } else {
+            Button("New app") { state.chooseNewAppLocation() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Current app, \(app.name)")
-        .accessibilityHint("Shows linked apps")
     }
 }
 
@@ -123,7 +131,7 @@ struct SwitcherPopover: View {
     let position: NavigationPosition
 
     var body: some View {
-        if state.switcherOpen, position == .topBar {
+        if state.switcherOpen, position == .topBar, !state.appRows.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text("LINKED APPS")
                     .font(.system(size: 10, weight: .medium))

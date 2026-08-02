@@ -21,6 +21,14 @@ struct Sidebar: View {
                     .padding(.top, 4)
                     .padding(.bottom, 6)
 
+                if state.appRows.isEmpty {
+                    Text("No apps linked")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.text3)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 7)
+                }
+
                 ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
                     Button {
                         state.selectApp(at: index)
@@ -68,7 +76,7 @@ struct Sidebar: View {
 }
 
 private struct AppRow: View {
-    let app: DemoApp
+    let app: AppSummary
     let selected: Bool
 
     var body: some View {
@@ -137,6 +145,7 @@ private struct TabRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(state.manifestURL == nil)
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

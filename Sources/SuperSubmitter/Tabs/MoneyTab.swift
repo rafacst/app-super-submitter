@@ -44,10 +44,10 @@ struct MoneyTab: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .bottom) {
                 LabeledContent("Secret v2 API key") {
-                    SecureField("sk_…", text: $state.revenueCatAPIKey).frame(width: 250)
+                    SecureField("Secret API key", text: $state.revenueCatAPIKey).frame(width: 250)
                 }
                 LabeledContent("Project ID") {
-                    TextField("proj…", text: $state.revenueCatProjectID).frame(width: 220)
+                    TextField("RevenueCat project ID", text: $state.revenueCatProjectID).frame(width: 220)
                 }
                 Button("Test connection", action: state.testRevenueCatConnection)
                     .disabled(state.revenueCatAPIKey.isEmpty || state.revenueCatProjectID.isEmpty)

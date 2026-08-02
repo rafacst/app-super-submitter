@@ -189,14 +189,13 @@ final class AppState {
         if !linkedApps.isEmpty { activateLinkedApp(at: 0) }
     }
 
-    var appRows: [DemoApp] {
-        guard !linkedApps.isEmpty else { return DemoData.apps }
+    var appRows: [AppSummary] {
         return linkedApps.enumerated().map { index, record in
             let url = URL(fileURLWithPath: record.manifestPath)
             let loaded = index == selectedAppIndex ? manifest : (try? ManifestFile.load(from: url))
             let version = loaded?.release?.versionName ?? "No version"
             let selected = index == selectedAppIndex
-            return DemoApp(
+            return AppSummary(
                 name: record.name,
                 initials: Self.initials(for: record.name),
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
@@ -282,13 +281,12 @@ final class AppState {
         NSWorkspace.shared.activateFileViewerSelecting([manifestURL])
     }
 
-    var currentApp: DemoApp {
-        let rows = appRows
-        return rows[min(selectedAppIndex, max(0, rows.count - 1))]
+    var currentApp: AppSummary? {
+        guard appRows.indices.contains(selectedAppIndex) else { return nil }
+        return appRows[selectedAppIndex]
     }
 
     var stores: Set<Store> {
-        if linkedApps.isEmpty, manifestURL == nil { return [.apple, .google] }
         var result: Set<Store> = []
         if manifest.apps.apple != nil { result.insert(.apple) }
         if manifest.apps.google != nil { result.insert(.google) }
@@ -296,8 +294,7 @@ final class AppState {
     }
 
     var locales: [String] {
-        let values = manifest.listing?.locales.keys.sorted() ?? []
-        return values.isEmpty && linkedApps.isEmpty ? ["en-US", "pt-BR"] : values
+        manifest.listing?.locales.keys.sorted() ?? []
     }
 
     // MARK: - Linked apps and manifest editing
@@ -331,6 +328,38 @@ final class AppState {
             selectedTab = .stores
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func chooseExistingManifest() {
+        let panel = NSOpenPanel()
+        panel.title = "Open an existing store manifest"
+        panel.message = "Choose the store.yaml file for the app you want to manage."
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let loaded = try ManifestFile.load(from: url)
+            if let index = linkedApps.firstIndex(where: { $0.manifestPath == url.path }) {
+                activateLinkedApp(at: index)
+                return
+            }
+            let defaultLocale = loaded.listing?.defaultLocale
+            let listedName = defaultLocale.flatMap { loaded.listing?.locales[$0]?.name }
+            let folderName = url.deletingLastPathComponent().lastPathComponent
+            let name = listedName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let record = LinkedAppRecord(
+                id: UUID(),
+                name: name?.isEmpty == false ? name! : Self.displayName(from: folderName),
+                manifestPath: url.path)
+            linkedApps.append(record)
+            persistLinkedApps()
+            activateLinkedApp(at: linkedApps.count - 1)
+            selectedTab = .stores
+        } catch {
+            errorMessage = "That file is not a valid store manifest. \(error.localizedDescription)"
         }
     }
 

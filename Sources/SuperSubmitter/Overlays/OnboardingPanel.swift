@@ -57,14 +57,14 @@ struct OnboardingPanel: View {
                     Rectangle().fill(Theme.sep2).frame(height: 1)
                 }
 
-                Text(DemoData.onboardingSteps[step].title)
+                Text(OnboardingContent.onboardingSteps[step].title)
                     .font(.system(size: 23, weight: .semibold))
                     .kerning(-0.46)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(DemoData.onboardingSteps[step].points, id: \.self) { point in
+                    ForEach(OnboardingContent.onboardingSteps[step].points, id: \.self) { point in
                         HStack(alignment: .top, spacing: 10) {
                             Circle().fill(Theme.text3).frame(width: 4, height: 4).padding(.top, 7)
                             Text(point)
@@ -103,7 +103,7 @@ struct OnboardingPanel: View {
                         .overlay(RoundedRectangle(cornerRadius: 3)
                             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
                         .frame(width: 22, height: 27)
-                    Text("AuthKey_9F2KQ4X8L1.p8")
+                    Text("Private key selected")
                         .font(Theme.mono(11)).foregroundStyle(Theme.text2)
                 }
                 HStack(spacing: 7) {
@@ -135,8 +135,8 @@ struct OnboardingPanel: View {
             HStack(spacing: 10) {
                 Hatched(cornerRadius: 8).frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("FastBillSplit.ipa").font(.system(size: 12, weight: .semibold))
-                    Text("118.4 MB · read in 1.2s")
+                    Text("Selected package").font(.system(size: 12, weight: .semibold))
+                    Text("Metadata is read locally")
                         .font(.system(size: 11)).foregroundStyle(Theme.text2)
                 }
                 Spacer(minLength: 0)
@@ -144,13 +144,13 @@ struct OnboardingPanel: View {
             .padding(13)
 
             VStack(spacing: 0) {
-                ForEach(DemoData.onboardingPackageRows) { row in
+                ForEach(OnboardingContent.packageFields, id: \.self) { field in
                     HStack(spacing: 10) {
-                        Text(row.key)
+                        Text(field)
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.text2)
                             .frame(width: 96, alignment: .leading)
-                        Text(row.value).font(Theme.mono(11))
+                        Text("Read from package").font(Theme.mono(11))
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 13)
@@ -159,7 +159,7 @@ struct OnboardingPanel: View {
             }
             .padding(.vertical, 5)
 
-            Text("8 fields filled on the Details tab.")
+            Text("Only values present in the package are filled.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.green)
                 .padding(.horizontal, 13)
@@ -177,9 +177,9 @@ struct OnboardingPanel: View {
                 HStack {
                     Text("Subtitle").font(.system(size: 11, weight: .medium))
                     Spacer()
-                    Text("26 / 30").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    Text("0 / 30").font(.system(size: 11)).foregroundStyle(Theme.text2)
                 }
-                MiniWell("Split any bill in seconds")
+                MiniWell("Enter the app subtitle")
                 Text("Different for Google")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.accent)
             }
@@ -187,12 +187,11 @@ struct OnboardingPanel: View {
                 HStack {
                     Text("Keywords").font(.system(size: 11, weight: .medium))
                     Spacer()
-                    Text("104 / 100").font(.system(size: 11)).foregroundStyle(Theme.red)
+                    Text("0 / 100").font(.system(size: 11)).foregroundStyle(Theme.text2)
                 }
-                MiniWell("bill,split,tip,receipt,restaurant,dinner,share,check,tab,friends,group,payment",
-                         border: Theme.red, borderWidth: 1)
-                Text("Over the limit. We never shorten it for you.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.red)
+                MiniWell("Enter the App Store keywords")
+                Text("Limits are checked as you type.")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.text2)
             }
         }
         .padding(13)
@@ -207,7 +206,7 @@ struct OnboardingPanel: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Phone").font(.system(size: 11.5, weight: .semibold))
                 Spacer()
-                Text("3 of 10").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                Text("No files selected").font(.system(size: 11)).foregroundStyle(Theme.text2)
             }
             HStack(alignment: .top, spacing: 8) {
                 ForEach(0..<2, id: \.self) { _ in
@@ -224,7 +223,7 @@ struct OnboardingPanel: View {
                         .overlay(RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(Theme.red, lineWidth: 1))
                         .frame(height: 104)
-                    Text("1179 × 2555\nno bucket")
+                    Text("Invalid size\nrejected")
                         .font(.system(size: 10)).foregroundStyle(Theme.red)
                 }
             }
@@ -244,9 +243,9 @@ struct OnboardingPanel: View {
     private var moneyArt: some View {
         VStack(alignment: .leading, spacing: 9) {
             VStack(spacing: 8) {
-                PriceLine("You asked for", "4.99 USD", color: Theme.text)
-                PriceLine("Apple resolved", "4.99 USD", color: Theme.green)
-                PriceLine("Google base region", "4.99 USD", color: Theme.green)
+                PriceLine("Requested price", "Not configured", color: Theme.text2)
+                PriceLine("Apple price point", "Read from store", color: Theme.text2)
+                PriceLine("Google base region", "Read from store", color: Theme.text2)
             }
             .padding(.horizontal, 13)
             .padding(.vertical, 12)

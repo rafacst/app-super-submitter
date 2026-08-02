@@ -53,12 +53,43 @@ private struct ContentArea: View {
         VStack(spacing: 0) {
             ContentHeader()
             Hairline()
-            ScrollView {
-                TabContent(tab: state.selectedTab)
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if state.manifestURL == nil {
+                EmptyAppView()
+            } else {
+                ScrollView {
+                    TabContent(tab: state.selectedTab)
+                        .padding(20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(Theme.content)
             }
-            .background(Theme.content)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.content)
+    }
+}
+
+private struct EmptyAppView: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(spacing: 13) {
+            Image(systemName: "doc.badge.plus")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(Theme.text3)
+            Text("Link an app to begin")
+                .font(.system(size: 17, weight: .semibold))
+            Text("Create a new store.yaml or open an existing one. Super Submitter will not show editable store state until a real manifest is linked.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.text2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 520)
+            HStack(spacing: 9) {
+                Button("Create new app") { state.chooseNewAppLocation() }
+                    .buttonStyle(.borderedProminent)
+                Button("Open store.yaml") { state.chooseExistingManifest() }
+                    .buttonStyle(.bordered)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
@@ -74,17 +105,19 @@ private struct ContentHeader: View {
         @Bindable var state = state
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(state.selectedTab.title)
+                Text(state.manifestURL == nil ? "Welcome" : state.selectedTab.title)
                     .font(.system(size: 14, weight: .semibold))
                     .kerning(-0.14)
-                Text(state.selectedTab.question)
+                Text(state.manifestURL == nil
+                     ? "Which store manifest do you want to manage?"
+                     : state.selectedTab.question)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
 
             // Every editing tab shows its own block of store.yaml. Spec 16.1.
-            if state.yamlBlock != nil {
+            if state.manifestURL != nil, state.yamlBlock != nil {
                 Button {
                     state.showYAML.toggle()
                 } label: {
@@ -104,7 +137,7 @@ private struct ContentHeader: View {
                 .accessibilityValue(state.showYAML ? "On" : "Off")
             }
 
-            switch state.selectedTab {
+            if state.manifestURL != nil { switch state.selectedTab {
             case .details, .media:
                 LocalePicker()
             case .plan:
@@ -124,7 +157,7 @@ private struct ContentHeader: View {
                 }
             default:
                 EmptyView()
-            }
+            } }
         }
         .padding(.leading, 20)
         .padding(.trailing, 18)

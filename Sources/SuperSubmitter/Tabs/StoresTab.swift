@@ -40,10 +40,10 @@ struct StoresTab: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .bottom, spacing: 12) {
                             EditableField(label: "App id", value: $state.appleAppID,
-                                          prompt: "1234567890", width: 145)
+                                          prompt: "Numeric App Store ID", width: 170)
                                 .onChange(of: state.appleAppID) { state.updateAppleAppFields() }
                             EditableField(label: "Bundle id", value: $state.appleBundleID,
-                                          prompt: "com.example.app", width: 240)
+                                          prompt: "Reverse-DNS bundle identifier", width: 240)
                                 .onChange(of: state.appleBundleID) { state.updateAppleAppFields() }
                             if !state.remoteAppleApps.isEmpty {
                                 Menu("Choose visible app") {
@@ -72,10 +72,10 @@ struct StoresTab: View {
                                 })
                             VStack(alignment: .leading, spacing: 8) {
                                 EditableField(label: "Key id", value: $state.appleKeyID,
-                                              prompt: "9F2KQ4X8L1")
+                                              prompt: "Key ID")
                                     .onChange(of: state.appleKeyID) { state.appleCredentialFieldsChanged() }
                                 EditableField(label: "Issuer id", value: $state.appleIssuerID,
-                                              prompt: "57246542-…")
+                                              prompt: "Issuer UUID")
                                     .onChange(of: state.appleIssuerID) { state.appleCredentialFieldsChanged() }
                             }
                         }
@@ -100,7 +100,7 @@ struct StoresTab: View {
                 ) {
                     VStack(alignment: .leading, spacing: 12) {
                         EditableField(label: "Package name", value: $state.googlePackageName,
-                                      prompt: "com.example.app", width: 300)
+                                      prompt: "Reverse-DNS package name", width: 300)
                             .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
                         FileWell(
                             name: state.googleCredentialFileName,
