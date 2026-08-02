@@ -63,3 +63,21 @@ import Testing
     #expect(!UploadService.googleTrackContainsCommittedVersion(
         payload, track: "alpha", versionCode: 42))
 }
+
+@Test func directoryChecksumCoversEveryFileAndIsStable() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("checksum-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data("one".utf8).write(to: root.appendingPathComponent("a.txt"))
+    try FileManager.default.createDirectory(at: root.appendingPathComponent("nested"),
+                                            withIntermediateDirectories: true)
+    let second = root.appendingPathComponent("nested/b.txt")
+    try Data("two".utf8).write(to: second)
+
+    let firstHash = try Checksums.sha256(directory: root)
+    #expect(firstHash == Checksums.sha256(directory: root))
+
+    try Data("changed".utf8).write(to: second)
+    #expect(try Checksums.sha256(directory: root) != firstHash)
+}
