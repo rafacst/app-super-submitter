@@ -299,8 +299,13 @@ extension Runner {
         // Apple takes minutes to process a build. The tab shows a live timer
         // and a cancel button while this polls. Spec 7.6, steps 5 and 6.
         let started = Date()
+        let deadline = started.addingTimeInterval(60 * 60)
         while true {
             try Task.checkCancellation()
+            guard Date() <= deadline else {
+                throw RunError.processingFailed(
+                    "Apple did not finish processing the build within one hour.")
+            }
             try await Task.sleep(for: .seconds(15))
             let state = JSON(data: try await api.apple("GET", "/v1/buildUploads/\(uploadID)").data)
             let value = state["data"]["attributes"]["state"]["state"].string ?? "IN_PROGRESS"
@@ -315,12 +320,16 @@ extension Runner {
             }
         }
 
-        let builds = JSON(data: try await api.apple(
-            "GET", "/v1/builds?filter%5Bapp%5D=\(appleAppID)&limit=20").data)
-        appleBuildID = builds["data"].array.first {
-            $0["attributes"]["version"].string == buildNumber
-                || $0["attributes"]["version"].int == Int(buildNumber)
-        }?["id"].string ?? builds["data"].array.first?["id"].string
+        for attempt in 0..<30 {
+            let builds = JSON(data: try await api.apple(
+                "GET", "/v1/builds?filter%5Bapp%5D=\(appleAppID)&sort=-uploadedDate&limit=200").data)
+            if let match = Self.matchingBuildID(in: builds, buildNumber: buildNumber) {
+                appleBuildID = match
+                break
+            }
+            if attempt < 29 { try await Task.sleep(for: .seconds(2)) }
+        }
+        guard appleBuildID != nil else { throw RunError.missingBuild }
     }
 
     func appleAttachBuild() async throws {
@@ -342,8 +351,8 @@ extension Runner {
                   let urlString = operation["url"].string else { continue }
             let offset = operation["offset"].int ?? 0
             let length = operation["length"].int ?? data.count
-            let end = min(offset + length, data.count)
-            guard offset < end else { continue }
+            guard let range = Self.validUploadRange(offset: offset, length: length,
+                                                    dataCount: data.count) else { continue }
             var headers: [String: String] = [:]
             for header in operation["requestHeaders"].array {
                 guard let name = header["name"].string,
@@ -352,7 +361,7 @@ extension Runner {
             }
             try await api.appleUploadOperation(method: method, urlString: urlString,
                                                headers: headers,
-                                               body: data.subdata(in: offset..<end))
+                                               body: data.subdata(in: range))
             sent += 1
             if let index {
                 report(index: index, fraction: Double(sent) / Double(max(1, list.count)),
@@ -374,6 +383,21 @@ extension Runner {
             }
             try await Task.sleep(for: .seconds(2))
         }
+        throw RunError.processingFailed("The uploaded asset did not finish processing in time.")
+    }
+
+    static func matchingBuildID(in response: JSON, buildNumber: String) -> String? {
+        response["data"].array.first {
+            $0["attributes"]["version"].string == buildNumber
+                || $0["attributes"]["version"].int == Int(buildNumber)
+        }?["id"].string
+    }
+
+    static func validUploadRange(offset: Int, length: Int, dataCount: Int) -> Range<Int>? {
+        guard offset >= 0, length > 0, dataCount >= 0, offset < dataCount else { return nil }
+        let (sum, overflow) = offset.addingReportingOverflow(length)
+        let end = overflow ? dataCount : min(sum, dataCount)
+        return offset < end ? offset..<end : nil
     }
 
     // MARK: - The review resources

@@ -47,10 +47,13 @@ public struct StateReader: Sendable {
         var result = ActualState.Apple()
 
         let infos = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appInfos?limit=1").data)
-        if let infoID = infos["data"][0]["id"].string {
+            "GET", "/v1/apps/\(appID)/appInfos?limit=200").data)
+        let info = infos["data"].array.first {
+            $0["attributes"]["appStoreState"].string == "PREPARE_FOR_SUBMISSION"
+        } ?? infos["data"].array.first
+        if let info, let infoID = info["id"].string {
             result.appInfoId = infoID
-            let relationships = infos["data"][0]["relationships"]
+            let relationships = info["relationships"]
             result.primaryCategory = relationships["primaryCategory"]["data"]["id"].string
             result.secondaryCategory = relationships["secondaryCategory"]["data"]["id"].string
 
@@ -73,8 +76,15 @@ public struct StateReader: Sendable {
         }
 
         let versions = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appStoreVersions?limit=1").data)
-        if let version = versions["data"].array.first {
+            "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
+        let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
+                                  "REJECTED", "METADATA_REJECTED"])
+        let editableVersion = versions["data"].array.first {
+            let state = $0["attributes"]["appVersionState"].string
+                ?? $0["attributes"]["appStoreState"].string ?? ""
+            return editableStates.contains(state)
+        }
+        if let version = editableVersion ?? versions["data"].array.first {
             let versionID = version["id"].string
             result.versionId = versionID
             result.versionString = version["attributes"]["versionString"].string
@@ -277,7 +287,7 @@ public struct StateReader: Sendable {
                                     ("offerings", "project_configuration:offerings:read")] {
             do {
                 _ = try await api.revenueCat("GET", "\(base)/\(collection)?limit=1")
-            } catch ConnectionError.http(let status, _) where status == 403 || status == 401 {
+            } catch ConnectionError.http(let status, _) where status == 403 {
                 result.missingScopes.append(scope)
             }
         }
@@ -293,21 +303,22 @@ public struct StateReader: Sendable {
         }
 
         for (id, _) in result.appIdentifiers {
-            var cursor: String?
-            repeat {
-                let query = cursor.map { "&starting_after=\($0)" } ?? ""
-                let page = JSON(data: try await api.revenueCat(
-                    "GET", "\(base)/products?app_id=\(id)&limit=100\(query)").data)
+            let expectedPrefix = "\(base)/products"
+            var path: String? = "\(expectedPrefix)?app_id=\(id)&limit=100"
+            var visited: Set<String> = []
+            for _ in 0..<100 {
+                guard let current = path, visited.insert(current).inserted else { break }
+                let page = JSON(data: try await api.revenueCat("GET", current).data)
                 for product in page["items"].array {
                     guard let storeID = product["store_identifier"].string,
                           let productID = product["id"].string else { continue }
                     result.productIds["\(storeID)@\(id)"] = productID
                     result.productIds[storeID] = productID
                 }
-                cursor = page["next_page"].string == nil
-                    ? nil
-                    : page["items"].array.last?["id"].string
-            } while cursor != nil
+                path = page["next_page"].string.flatMap {
+                    Self.revenueCatNextPagePath($0, expectedPrefix: expectedPrefix)
+                }
+            }
         }
 
         let entitlements = JSON(data: try await api.revenueCat("GET", "\(base)/entitlements").data)
@@ -339,6 +350,15 @@ public struct StateReader: Sendable {
 
     static func escape(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
+    }
+
+    static func revenueCatNextPagePath(_ value: String, expectedPrefix: String) -> String? {
+        guard let components = URLComponents(string: value) else { return nil }
+        if let host = components.host, host.lowercased() != "api.revenuecat.com" { return nil }
+        let path = components.percentEncodedPath
+        guard path == expectedPrefix else { return nil }
+        guard let query = components.percentEncodedQuery, !query.isEmpty else { return nil }
+        return "\(path)?\(query)"
     }
 
     /// The nearest price point to the requested amount. The app never rounds a

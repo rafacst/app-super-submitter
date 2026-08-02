@@ -67,7 +67,7 @@ public actor Runner {
         let sink: CallRecorder = { call in
             let now = Date()
             emit(.log(call.line(at: now)))
-            if let runLog { Task { await runLog.append(call, at: now) } }
+            await runLog?.append(call, at: now)
         }
         self.api = StoreAPI(credentials: credentials, record: sink)
         self.appleVersionID = actual.apple?.versionId
@@ -85,6 +85,7 @@ public actor Runner {
             let step = plan.steps[index]
             guard !Task.isCancelled else {
                 await cleanUpGoogleEdit()
+                await log?.close()
                 return
             }
             emit(.step(index: index, state: .running, meta: ""))
@@ -105,6 +106,7 @@ public actor Runner {
                 emit(.step(index: index, state: .done, meta: "\(ms) ms"))
             } catch is CancellationError {
                 await cleanUpGoogleEdit()
+                await log?.close()
                 return
             } catch {
                 // A provider failure never blocks a store draft. The run
@@ -119,6 +121,7 @@ public actor Runner {
                     stepIndex: index, system: step.system,
                     message: error.localizedDescription,
                     canUndoGoogleEdit: googleEditID != nil && !googleCommitted)))
+                await log?.close()
                 return
             }
         }

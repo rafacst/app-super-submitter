@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// One API call, as the run log records it. Spec section 11.4.
@@ -19,12 +20,30 @@ public struct APICall: Sendable, Codable, Equatable {
                 dryRun: Bool = false) {
         self.system = system
         self.method = method
-        self.path = path
+        self.path = Self.sanitizedPath(path)
         self.status = status
         self.durationMs = durationMs
         self.requestId = requestId
-        self.error = error
+        self.error = error.map(Self.sanitizedError)
         self.dryRun = dryRun
+    }
+
+    private static func sanitizedPath(_ path: String) -> String {
+        let withoutFragment = path.split(separator: "#", maxSplits: 1,
+                                         omittingEmptySubsequences: false)[0]
+        return String(withoutFragment.split(separator: "?", maxSplits: 1,
+                                            omittingEmptySubsequences: false)[0])
+    }
+
+    private static func sanitizedError(_ error: String) -> String {
+        let redacted = Redactor().redact(error)
+        var result = ""
+        result.reserveCapacity(min(2_048, redacted.utf8.count))
+        for character in redacted {
+            guard result.utf8.count + String(character).utf8.count <= 2_048 else { break }
+            result.append(character)
+        }
+        return result
     }
 
     /// The line that tab 8 shows, and the shape the mockup asked for.
@@ -67,8 +86,12 @@ public actor RunLog {
         if !FileManager.default.fileExists(atPath: file.path) {
             FileManager.default.createFile(atPath: file.path, contents: nil)
         }
-        handle = try FileHandle(forWritingTo: file)
-        try handle.seekToEnd()
+        let descriptor = Darwin.open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+        guard descriptor >= 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        _ = Darwin.fchmod(descriptor, 0o600)
+        handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         url = file
     }
 

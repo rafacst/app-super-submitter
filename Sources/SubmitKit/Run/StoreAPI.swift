@@ -33,7 +33,7 @@ public struct StoreCredentials: Sendable {
     }
 }
 
-public typealias CallRecorder = @Sendable (APICall) -> Void
+public typealias CallRecorder = @Sendable (APICall) async -> Void
 
 /// One HTTP client for every store call.
 ///
@@ -153,15 +153,17 @@ public actor StoreAPI {
 
     /// The dry run never reaches this type, but it still has to appear in the
     /// log. Spec section 7.2: a dry run builds every request and sends none.
-    public func recordDryRun(system: PlanSystem, method: String, path: String) {
-        record(APICall(system: system.rawValue, method: method, path: path, dryRun: true))
+    public func recordDryRun(system: PlanSystem, method: String, path: String) async {
+        await record(APICall(system: system.rawValue, method: method, path: path, dryRun: true))
     }
 
     // MARK: - The one request path
 
     private func perform(_ request: URLRequest, system: PlanSystem,
-                         path: String) async throws -> Result {
+                         path: String, retryOverride: Bool? = nil) async throws -> Result {
         let method = request.httpMethod ?? "GET"
+        let mayRetry = retryOverride
+            ?? ["GET", "HEAD", "PUT", "DELETE", "OPTIONS"].contains(method.uppercased())
         var attempt = 0
         while true {
             attempt += 1
@@ -177,33 +179,34 @@ public actor StoreAPI {
                 let requestID = headers["x-request-id"] ?? headers["x-guploader-uploadid"]
                 readRateLimits(system: system, headers: headers)
 
-                if Self.retryable.contains(http.statusCode), attempt < Self.maxAttempts {
-                    record(APICall(system: system.rawValue, method: method, path: path,
-                                   status: http.statusCode, durationMs: duration,
-                                   requestId: requestID, error: "retrying"))
+                if mayRetry, Self.retryable.contains(http.statusCode), attempt < Self.maxAttempts {
+                    await record(APICall(system: system.rawValue, method: method, path: path,
+                                         status: http.statusCode, durationMs: duration,
+                                         requestId: requestID, error: "retrying"))
                     try await backOff(attempt: attempt, retryAfter: headers["retry-after"])
                     continue
                 }
                 guard (200..<300).contains(http.statusCode) else {
                     let detail = APIError.message(from: data)
                         ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
-                    record(APICall(system: system.rawValue, method: method, path: path,
-                                   status: http.statusCode, durationMs: duration,
-                                   requestId: requestID, error: detail))
+                    await record(APICall(system: system.rawValue, method: method, path: path,
+                                         status: http.statusCode, durationMs: duration,
+                                         requestId: requestID, error: detail))
                     throw ConnectionError.http(http.statusCode, detail)
                 }
-                record(APICall(system: system.rawValue, method: method, path: path,
-                               status: http.statusCode, durationMs: duration,
-                               requestId: requestID))
+                await record(APICall(system: system.rawValue, method: method, path: path,
+                                     status: http.statusCode, durationMs: duration,
+                                     requestId: requestID))
                 return Result(data: data, status: http.statusCode, headers: headers)
             } catch let error as ConnectionError {
                 throw error
             } catch {
                 // A transport failure. The same retry budget applies.
                 let duration = Int(Date().timeIntervalSince(started) * 1000)
-                record(APICall(system: system.rawValue, method: method, path: path,
-                               durationMs: duration, error: error.localizedDescription))
-                guard attempt < Self.maxAttempts, !(error is CancellationError) else { throw error }
+                await record(APICall(system: system.rawValue, method: method, path: path,
+                                     durationMs: duration, error: error.localizedDescription))
+                guard mayRetry, attempt < Self.maxAttempts,
+                      !(error is CancellationError) else { throw error }
                 try await backOff(attempt: attempt, retryAfter: nil)
             }
         }
@@ -211,7 +214,7 @@ public actor StoreAPI {
 
     /// Exponential backoff with full jitter, base 1 second, cap 60 seconds.
     private func backOff(attempt: Int, retryAfter: String?) async throws {
-        if let retryAfter, let seconds = Double(retryAfter) {
+        if let retryAfter, let seconds = Double(retryAfter), seconds.isFinite, seconds >= 0 {
             try await Task.sleep(for: .seconds(min(seconds, 60)))
             return
         }
@@ -278,7 +281,8 @@ public actor StoreAPI {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data((components.percentEncodedQuery ?? "").utf8)
-        let result = try await perform(request, system: .google, path: "/token")
+        let result = try await perform(request, system: .google, path: "/token",
+                                       retryOverride: true)
         let payload = try JSONDecoder().decode(GoogleToken.self, from: result.data)
         googleToken = (payload.accessToken,
                        Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3_600)))

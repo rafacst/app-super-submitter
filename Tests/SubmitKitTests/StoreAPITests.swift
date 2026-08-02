@@ -57,34 +57,37 @@ private func stubSession() -> URLSession {
     return URLSession(configuration: configuration)
 }
 
-@Test func aNonIdempotentPostIsNotRetriedAfterAServerFailure() async {
-    StubURLProtocol.state.configure { request, _ in
-        (HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil,
-                         headerFields: ["Retry-After": "0"])!, Data("failed".utf8))
+@Suite(.serialized)
+struct StoreAPIRetryTests {
+    @Test func aNonIdempotentPostIsNotRetriedAfterAServerFailure() async {
+        StubURLProtocol.state.configure { request, _ in
+            (HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil,
+                             headerFields: ["Retry-After": "0"])!, Data("failed".utf8))
+        }
+        let api = StoreAPI(credentials: StoreCredentials(revenueCatKey: "fake-test-key"),
+                           record: { _ in }, session: stubSession())
+
+        do {
+            _ = try await api.revenueCat("POST", "/v2/projects/project/products", body: [:])
+            Issue.record("The request should fail.")
+        } catch {}
+
+        #expect(StubURLProtocol.state.requestCount == 1)
     }
-    let api = StoreAPI(credentials: StoreCredentials(revenueCatKey: "fake-test-key"),
-                       record: { _ in }, session: stubSession())
 
-    do {
-        _ = try await api.revenueCat("POST", "/v2/projects/project/products", body: [:])
-        Issue.record("The request should fail.")
-    } catch {}
+    @Test func anIdempotentGetMayRetryATransientFailure() async throws {
+        StubURLProtocol.state.configure { request, count in
+            let status = count == 1 ? 503 : 200
+            return (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil,
+                                    headerFields: ["Retry-After": "0"])!, Data("{}".utf8))
+        }
+        let api = StoreAPI(credentials: StoreCredentials(revenueCatKey: "fake-test-key"),
+                           record: { _ in }, session: stubSession())
 
-    #expect(StubURLProtocol.state.requestCount == 1)
-}
+        _ = try await api.revenueCat("GET", "/v2/projects/project/products")
 
-@Test func anIdempotentGetMayRetryATransientFailure() async throws {
-    StubURLProtocol.state.configure { request, count in
-        let status = count == 1 ? 503 : 200
-        return (HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil,
-                                headerFields: ["Retry-After": "0"])!, Data("{}".utf8))
+        #expect(StubURLProtocol.state.requestCount == 2)
     }
-    let api = StoreAPI(credentials: StoreCredentials(revenueCatKey: "fake-test-key"),
-                       record: { _ in }, session: stubSession())
-
-    _ = try await api.revenueCat("GET", "/v2/projects/project/products")
-
-    #expect(StubURLProtocol.state.requestCount == 2)
 }
 
 @Test func apiCallLogsDropQueriesAndRedactBoundedErrors() {
