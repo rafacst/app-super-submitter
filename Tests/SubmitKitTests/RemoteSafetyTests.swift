@@ -43,6 +43,19 @@ import Testing
         "https://api.appstoreconnect.apple.com/v1/apps?cursor=wrong-resource") == nil)
 }
 
+@Test func appleBuildIdentityIncludesTheRequestedPlatform() {
+    let ios = JSON(data: Data("""
+        {"data":{"attributes":{"version":"2.0","platform":"IOS"}}}
+        """.utf8))
+
+    #expect(UploadService.applePreReleaseMatches(
+        ios, marketingVersion: "2.0", platform: .ios))
+    #expect(!UploadService.applePreReleaseMatches(
+        ios, marketingVersion: "2.0", platform: .macos))
+    #expect(!UploadService.applePreReleaseMatches(
+        ios, marketingVersion: "1.9", platform: .ios))
+}
+
 @Test func googleReconciliationRequiresTheExactTrackAndDraftRelease() {
     let payload = JSON(data: Data("""
         {"tracks":[

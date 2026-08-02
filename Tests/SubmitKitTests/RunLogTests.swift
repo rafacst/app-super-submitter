@@ -73,3 +73,16 @@ private func temporaryRoot() throws -> URL {
 
     #expect(mode?.intValue == 0o600)
 }
+
+@Test func aRunLogCanAppendAgainAfterACompletedPhase() async throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let log = try RunLog(root: root)
+    await log.append(APICall(system: "google", method: "POST", path: "/first"))
+    await log.close()
+    await log.append(APICall(system: "provider", method: "POST", path: "/retry"))
+    await log.close()
+
+    let lines = try String(contentsOf: log.url, encoding: .utf8).split(separator: "\n")
+    #expect(lines.count == 2)
+}
