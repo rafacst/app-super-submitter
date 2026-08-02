@@ -79,9 +79,11 @@ Tab 2 now holds two sources: **Import a package** and **Build from project**.
 The second one links a folder, runs the project's own build tool, inspects
 what it produced, and uploads that exact file.
 
-- **No shell, ever.** Every tool runs as an absolute executable plus an
-  argument array. A folder named `Evil; rm -rf ~` stays one argument, and a
-  test asserts it.
+- **No shell command construction or evaluation.** Super Submitter launches
+  every top-level tool as an absolute executable plus an argument array. A
+  folder named `Evil; rm -rf ~` stays one argument, and a test asserts it.
+  The selected project's own tools may still run their own scripts as part of
+  a normal Xcode or Gradle build, which the confirmation states explicitly.
 - **The artifact is authoritative.** The preflight is a snapshot; the built
   archive or App Bundle decides what uploads. Any difference stops the run,
   reruns the remote check, and asks for a new confirmation.
@@ -119,7 +121,7 @@ swift build
 swift test
 ```
 
-Both pass with no warnings. There are 112 Swift Testing tests. A launch smoke
+Both pass with no warnings. There are 131 Swift Testing tests. A launch smoke
 test runs the binary and it stays up.
 
 No live store call was executed, because this workspace holds no credential.
@@ -184,7 +186,9 @@ that mapping.
 
 ## Safety constraints
 
-- No shell. Every local tool runs as an executable plus an argument array.
+- Super Submitter never constructs or evaluates a shell command. Every
+  top-level local tool runs as an executable plus an argument array; selected
+  Xcode and Gradle projects can execute their own build scripts.
 - The app never edits a version, a project file, a Gradle file, a signing
   configuration, a certificate, a profile, or a keystore.
 - The built artifact, not the preflight, decides what uploads.

@@ -113,7 +113,7 @@ single **Build & Upload** button.
 
 These rules are implementation requirements, not recommendations.
 
-1. **No shell.** Launch a fixed executable with an argument array. Never pass
+1. **No shell command construction or evaluation.** Launch a fixed executable with an argument array. Never pass
    project-controlled text to `/bin/sh -c`, `zsh -c`, command substitution, or
    an interpolated script.
 2. **No silent project writes.** Discovery, preflight, build, and upload do not
@@ -1258,7 +1258,9 @@ stored state, and target selection.
 
 ### 12.2 Required controls
 
-- Fixed, resolved executables and argument arrays; no shell evaluation.
+- Fixed, resolved executables and argument arrays; Super Submitter performs no
+  shell evaluation. Project-controlled Xcode and Gradle builds may execute
+  their own build scripts after the explicit trust confirmation.
 - Project-controlled names remain single arguments even if they contain spaces,
   quotes, semicolons, dollar signs, or newlines.
 - Folder-scoped discovery with symlink-escape prevention.
@@ -1390,7 +1392,9 @@ Inject a fake `ProcessRunner` that can:
 - attempt to print known secret fixtures; and
 - simulate a child process tree.
 
-Assertions must prove no shell is launched and no secret reaches retained logs.
+Assertions must prove Super Submitter never launches a shell to interpret a
+constructed command and that no secret reaches retained logs. Fixture build
+tools may launch their own scripts, matching real Xcode and Gradle behavior.
 
 ### 15.3 API tests
 
@@ -1528,7 +1532,8 @@ without an exact artifact confirmation and remote conflict check.
 - [ ] The developer explicitly selects a folder before discovery.
 - [ ] The app warns that builds execute project-controlled code.
 - [ ] Discovery remains within the selected root and handles symlink escapes.
-- [ ] Every process uses an executable plus argv; no shell command executes.
+- [ ] Every top-level process uses an executable plus argv; Super Submitter
+  constructs and evaluates no shell command.
 - [ ] The app never edits a version, project, signing configuration, or source.
 - [ ] Final artifact metadata is displayed before upload.
 - [ ] A fresh remote conflict check runs immediately before upload.
