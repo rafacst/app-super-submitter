@@ -217,7 +217,12 @@ public struct AndroidBuildService: Sendable {
         var result: [GradleVariant] = []
         for rawLine in output.split(separator: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
-            let name = line.split(separator: " ").first.map(String.init) ?? ""
+            let fields = line.components(separatedBy: " - ")
+            guard fields.count >= 2 else { continue }
+            let name = fields[0].trimmingCharacters(in: .whitespaces)
+            let description = fields.dropFirst().joined(separator: " - ")
+                .trimmingCharacters(in: .whitespaces)
+            guard description.lowercased().hasPrefix("assembles bundle") else { continue }
             guard name.contains("bundle") else { continue }
             let pieces = name.split(separator: ":").map(String.init)
             let task = pieces.last ?? ""
@@ -226,8 +231,8 @@ public struct AndroidBuildService: Sendable {
             guard !variant.isEmpty, variant.first?.isUppercase == true else { continue }
             // A debug or a test variant never reaches a store.
             let lowered = variant.lowercased()
-            guard !lowered.contains("debug"), !lowered.contains("test"),
-                  !lowered.contains("androidtest") else { continue }
+            guard !lowered.hasSuffix("debug"), !lowered.hasSuffix("androidtest"),
+                  !lowered.hasSuffix("unittest") else { continue }
             let module = pieces.count > 1
                 ? ":" + pieces.dropLast().joined(separator: ":").trimmingCharacters(
                     in: CharacterSet(charactersIn: ":"))
@@ -363,7 +368,8 @@ public struct AndroidBuildService: Sendable {
                 subject = String(trimmed.dropFirst("X.509,".count))
                     .trimmingCharacters(in: .whitespaces)
             }
-            if fingerprint == nil, trimmed.lowercased().contains("sha256") ,
+            let normalized = trimmed.lowercased().replacingOccurrences(of: "-", with: "")
+            if fingerprint == nil, normalized.hasPrefix("sha256"),
                let range = trimmed.range(of: ":") {
                 fingerprint = String(trimmed[range.upperBound...])
                     .trimmingCharacters(in: .whitespaces)

@@ -64,14 +64,17 @@ public extension ManifestFile {
 
         let trimmed = yaml.trimmingCharacters(in: .whitespacesAndNewlines)
         let edited: Yams.Node.Mapping
-        if trimmed.isEmpty || trimmed.hasPrefix("#") {
+        if trimmed.isEmpty {
             edited = Yams.Node.Mapping()
-        } else {
-            guard let parsed = try Yams.compose(yaml: yaml),
-                  case .mapping(let value) = parsed else {
+        } else if let parsed = try Yams.compose(yaml: yaml) {
+            guard case .mapping(let value) = parsed else {
                 throw ManifestBlockError.notAMapping
             }
             edited = value
+        } else {
+            // A comments-only document composes to nil and represents an empty
+            // block. A leading comment followed by YAML still composes above.
+            edited = Yams.Node.Mapping()
         }
 
         for key in edited.keys {

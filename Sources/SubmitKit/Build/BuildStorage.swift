@@ -117,15 +117,18 @@ public struct BuildStorage: Sendable {
 
     // MARK: - Retention
 
-    /// Removes run folders and archives older than the age, and reports what
-    /// it removed. It never touches the selected source repository.
+    /// Removes completed run and scratch folders older than the age, and
+    /// reports what it removed. It keeps resumable work and never touches the
+    /// selected source repository or retained archives.
     @discardableResult
     public func prune(olderThan age: TimeInterval, now: Date = Date()) -> [URL] {
         var removed: [URL] = []
+        let unfinishedIDs = Set(unfinishedRuns().map { $0.id.uuidString })
         for base in [runs, scratch] {
             let folders = (try? FileManager.default.contentsOfDirectory(
                 at: base, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
             for folder in folders {
+                guard !unfinishedIDs.contains(folder.lastPathComponent) else { continue }
                 let date = (try? folder.resourceValues(forKeys: [.contentModificationDateKey])
                     .contentModificationDate) ?? now
                 guard now.timeIntervalSince(date) > age else { continue }
@@ -156,11 +159,13 @@ public struct BuildStorage: Sendable {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
         let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
         let result = String(scalars)
-        return result.isEmpty ? "unknown" : result
+        return result.isEmpty || result == "." || result == ".." ? "unknown" : result
     }
 
     static func stamp(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter.string(from: date)

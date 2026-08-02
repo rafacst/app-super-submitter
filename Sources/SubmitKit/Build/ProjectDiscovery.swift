@@ -147,7 +147,10 @@ public enum ProjectDiscovery {
         let values = try? url.resourceValues(forKeys: [.isSymbolicLinkKey])
         guard values?.isSymbolicLink == true else { return false }
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
-        return !resolved.path.hasPrefix(root.standardizedFileURL.path)
+        let baseComponents = root.standardizedFileURL.pathComponents
+        let targetComponents = resolved.pathComponents
+        guard targetComponents.count >= baseComponents.count else { return true }
+        return !targetComponents.starts(with: baseComponents)
     }
 
     /// The workspace that a container list recommends, or nil when the choice

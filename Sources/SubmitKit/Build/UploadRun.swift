@@ -177,19 +177,20 @@ public struct BuildFailure: Codable, Sendable, Equatable, Error, LocalizedError 
 
     /// The text that **Copy Redacted Diagnostics** puts on the pasteboard.
     public func report(redactor: Redactor = Redactor()) -> String {
+        func clean(_ value: String) -> String { redactor.redact(value) }
         var lines = [
             "# Super Submitter diagnostics",
             "",
-            "Stage: \(stage)",
+            "Stage: \(clean(stage))",
             "Category: \(category.rawValue)",
-            "Message: \(message)",
+            "Message: \(clean(message))",
         ]
-        if let underlying { lines.append("Underlying: \(underlying)") }
-        if let recovery { lines.append("Recovery: \(recovery)") }
-        if let retainedArtifact { lines.append("Retained artifact: \(retainedArtifact)") }
-        if let retainedRemoteEdit { lines.append("Retained edit: \(retainedRemoteEdit)") }
+        if let underlying { lines.append("Underlying: \(clean(underlying))") }
+        if let recovery { lines.append("Recovery: \(clean(recovery))") }
+        if let retainedArtifact { lines.append("Retained artifact: \(clean(retainedArtifact))") }
+        if let retainedRemoteEdit { lines.append("Retained edit: \(clean(retainedRemoteEdit))") }
         if let diagnostics {
-            lines += ["", "```", redactor.redact(diagnostics), "```"]
+            lines += ["", "```", clean(diagnostics), "```"]
         }
         return lines.joined(separator: "\n")
     }
