@@ -24,14 +24,14 @@ private func has(_ list: [Finding], _ id: String) -> Bool {
 
 // MARK: - 10.1 Text
 
-@Test func aFieldOverTheBindingLimitIsAnError() {
+@Test func aFieldOverTheBindingLimitIsAnError() throws {
     var manifest = base()
     manifest.setListingText(String(repeating: "a", count: 31), locale: "en-US", field: .subtitle)
 
     let list = findings(manifest)
-    let subtitle = try? #require(list.first { $0.id == "text.en-US.subtitle" })
-    #expect(subtitle?.severity == .error)
-    #expect(subtitle?.fix == .details)
+    let subtitle = try #require(list.first { $0.id == "text.en-US.subtitle" })
+    #expect(subtitle.severity == .error)
+    #expect(subtitle.fix == .details)
 }
 
 @Test func aGoogleOverrideRaisesTheSubtitleLimitToEighty() {
@@ -101,15 +101,15 @@ private func has(_ list: [Finding], _ id: String) -> Bool {
     #expect(has(findings(manifest, packages: [.ipa: package]), "build.bundleId"))
 }
 
-@Test func aVersionNameMismatchIsOnlyAWarning() {
+@Test func aVersionNameMismatchIsOnlyAWarning() throws {
     let manifest = base()
     var package = AppPackage(kind: .aab, url: URL(fileURLWithPath: "/tmp/a.aab"))
     package.identifier = "com.example.app"
     package.versionName = "1.0.0-rc4"
 
     let list = findings(manifest, packages: [.aab: package])
-    let finding = try? #require(list.first { $0.id == "build.versionName.google" })
-    #expect(finding?.severity == .warning)
+    let finding = try #require(list.first { $0.id == "build.versionName.google" })
+    #expect(finding.severity == .warning)
 }
 
 // MARK: - 10.4 Money
@@ -144,12 +144,12 @@ private func has(_ list: [Finding], _ id: String) -> Bool {
     #expect(has(findings(manifest), "provider.offering.default.com.example.ghost"))
 }
 
-@Test func noOfferingIsOnlyAWarning() {
+@Test func noOfferingIsOnlyAWarning() throws {
     var manifest = base()
     manifest.monetization = Manifest.Monetization(provider: .revenuecat)
 
-    let finding = try? #require(findings(manifest).first { $0.id == "provider.noOffering" })
-    #expect(finding?.severity == .warning)
+    let finding = try #require(findings(manifest).first { $0.id == "provider.noOffering" })
+    #expect(finding.severity == .warning)
 }
 
 @Test func aRevenueCatBundleIdentifierMismatchIsAnError() {
@@ -207,16 +207,16 @@ private func has(_ list: [Finding], _ id: String) -> Bool {
 
 // MARK: - 10.6 State
 
-@Test func metadataWritesNeedTheAppleVersionToBeInPrepareForSubmission() {
+@Test func metadataWritesNeedTheAppleVersionToBeInPrepareForSubmission() throws {
     let manifest = base()
     var actual = ActualState()
     var apple = ActualState.Apple()
     apple.versionState = "WAITING_FOR_REVIEW"
     actual.apple = apple
 
-    let finding = try? #require(findings(manifest, actual).first { $0.id == "state.appleVersion" })
-    #expect(finding?.severity == .error)
-    #expect(finding?.fix == .plan)
+    let finding = try #require(findings(manifest, actual).first { $0.id == "state.appleVersion" })
+    #expect(finding.severity == .error)
+    #expect(finding.fix == .plan)
 }
 
 @Test func anOpenReviewSubmissionBlocksTheApply() {

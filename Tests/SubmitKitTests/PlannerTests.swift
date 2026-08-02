@@ -98,7 +98,7 @@ private func input(_ manifest: Manifest, _ actual: ActualState = ActualState(),
     #expect(steps.contains { $0.id == "provider.offering.default" })
 }
 
-@Test func aProviderObjectThatTheManifestDroppedIsArchivedAndNeverDeleted() {
+@Test func aProviderObjectThatTheManifestDroppedIsArchivedAndNeverDeleted() throws {
     var manifest = sampleManifest()
     manifest.monetization = Manifest.Monetization(
         provider: .adapty, adapty: Manifest.Monetization.Adapty(appId: "app"))
@@ -111,9 +111,9 @@ private func input(_ manifest: Manifest, _ actual: ActualState = ActualState(),
     actual.provider = provider
 
     let steps = Planner.plan(input(manifest, actual)).steps(for: .provider)
-    let archive = try? #require(steps.first { $0.id == "provider.archive.retired" })
-    #expect(archive?.kind == .remove)
-    if case .providerArchive(let kind, let key)? = archive?.operation {
+    let archive = try #require(steps.first { $0.id == "provider.archive.retired" })
+    #expect(archive.kind == .remove)
+    if case .providerArchive(let kind, let key) = archive.operation {
         #expect(kind == "offering")
         #expect(key == "retired")
     } else {

@@ -9,7 +9,9 @@ struct TabContent: View {
     let tab: Tab
 
     var body: some View {
-        if state.showYAML, let block = state.yamlBlock {
+        if (tab == .details || tab == .media), state.locales.isEmpty {
+            MissingLocaleView()
+        } else if state.showYAML, let block = state.yamlBlock {
             YAMLEditor(block: block)
         } else {
             form
@@ -29,5 +31,22 @@ struct TabContent: View {
         case .submit: SubmitTab()
         case .release: ReleaseTab()
         }
+    }
+}
+
+private struct MissingLocaleView: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Add the first locale")
+                .font(.system(size: 14, weight: .semibold))
+            Text("Details and media belong to a locale. Add the app’s real default locale before entering listing content.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.text2)
+            Button("Add locale") { state.showAddLocale = true }
+                .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

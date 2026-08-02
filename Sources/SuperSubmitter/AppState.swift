@@ -34,6 +34,11 @@ enum ConnectionStatus: Equatable {
 enum PurchaseTextField { case id, name, amount, currency, entitlement }
 enum PlanTextField { case id, duration, basePlanID, amount, currency, entitlement, packageKey }
 
+private struct CatalogPriceInput {
+    var amount: String
+    var currency: String
+}
+
 enum MediaInputError: LocalizedError {
     case tooMany(limit: Int)
 
@@ -126,7 +131,7 @@ final class AppState {
     var mediaError: String?
 
     // Tab 3.
-    var locale = "en-US"
+    var locale = ""
 
     // The YAML toggle that every editing tab holds. Spec 16.1.
     var showYAML = false
@@ -144,6 +149,8 @@ final class AppState {
     var priceCurrency = ""
     var priceTerritory = ""
     var moneyError: String?
+    private var purchasePriceInputs: [Int: CatalogPriceInput] = [:]
+    private var planPriceInputs: [String: CatalogPriceInput] = [:]
 
     // Tab 6.
     var reviewerUsername = ""
@@ -315,10 +322,9 @@ final class AppState {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
-            var newManifest = Manifest()
+            let newManifest = Manifest()
             let folderName = url.deletingLastPathComponent().lastPathComponent
             let appName = Self.displayName(from: folderName)
-            newManifest.addLocale("en-US", name: appName)
             try ManifestFile.save(newManifest, to: url)
             let record = LinkedAppRecord(id: UUID(), name: appName, manifestPath: url.path)
             linkedApps.append(record)
@@ -787,6 +793,7 @@ final class AppState {
     func removePurchase(at index: Int) {
         guard manifest.purchases?.indices.contains(index) == true else { return }
         manifest.purchases?.remove(at: index)
+        purchasePriceInputs = [:]
         saveManifestReportingErrors()
     }
 
@@ -796,8 +803,8 @@ final class AppState {
             return switch field {
             case .id: item.id
             case .name: item.name ?? ""
-            case .amount: item.price.map { "\($0.amount)" } ?? ""
-            case .currency: item.price?.currency ?? ""
+            case .amount: self.purchasePriceInput(index).amount
+            case .currency: self.purchasePriceInput(index).currency
             case .entitlement: item.entitlements?.joined(separator: ",") ?? ""
             }
         }, set: { value in
@@ -806,27 +813,47 @@ final class AppState {
             case .id: self.manifest.purchases?[index].id = value
             case .name: self.manifest.purchases?[index].name = value
             case .amount:
-                if value.isEmpty {
-                    self.manifest.purchases?[index].price = nil
-                    self.moneyError = nil
-                } else if let amount = Decimal(string: value) {
-                    let old = self.manifest.purchases?[index].price
-                    self.manifest.purchases?[index].price = Price(
-                        amount: amount, currency: old?.currency ?? "USD")
-                    self.moneyError = nil
-                } else {
-                    self.moneyError = "Purchase prices must be valid decimal amounts."
-                }
+                var input = self.purchasePriceInput(index)
+                input.amount = value
+                self.purchasePriceInputs[index] = input
+                self.commitPurchasePrice(index)
+                return
             case .currency:
-                let old = self.manifest.purchases?[index].price
-                self.manifest.purchases?[index].price = Price(
-                    amount: old?.amount ?? 0, currency: value.uppercased())
+                var input = self.purchasePriceInput(index)
+                input.currency = value.uppercased()
+                self.purchasePriceInputs[index] = input
+                self.commitPurchasePrice(index)
+                return
             case .entitlement:
                 self.manifest.purchases?[index].entitlements = value.split(separator: ",")
                     .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             }
             self.saveManifestReportingErrors()
         })
+    }
+
+    private func purchasePriceInput(_ index: Int) -> CatalogPriceInput {
+        if let input = purchasePriceInputs[index] { return input }
+        let price = manifest.purchases?[safe: index]?.price
+        return CatalogPriceInput(amount: price.map { "\($0.amount)" } ?? "",
+                                 currency: price?.currency ?? "")
+    }
+
+    private func commitPurchasePrice(_ index: Int) {
+        guard manifest.purchases?.indices.contains(index) == true else { return }
+        let input = purchasePriceInput(index)
+        switch PriceDraft.resolve(amount: input.amount, currency: input.currency) {
+        case .empty:
+            manifest.purchases?[index].price = nil
+            moneyError = nil
+        case .invalid(let message):
+            moneyError = "Purchase: \(message)"
+            return
+        case .valid(let price):
+            manifest.purchases?[index].price = price
+            moneyError = nil
+        }
+        saveManifestReportingErrors()
     }
 
     func purchaseKindBinding(index: Int) -> Binding<Manifest.Purchase.Kind> {
@@ -848,6 +875,7 @@ final class AppState {
     func removeSubscriptionGroup(at index: Int) {
         guard manifest.subscriptions?.indices.contains(index) == true else { return }
         manifest.subscriptions?.remove(at: index)
+        planPriceInputs = [:]
         saveManifestReportingErrors()
     }
 
@@ -874,6 +902,7 @@ final class AppState {
         guard manifest.subscriptions?.indices.contains(groupIndex) == true,
               manifest.subscriptions?[groupIndex].plans.indices.contains(planIndex) == true else { return }
         manifest.subscriptions?[groupIndex].plans.remove(at: planIndex)
+        planPriceInputs = [:]
         saveManifestReportingErrors()
     }
 
@@ -886,8 +915,8 @@ final class AppState {
             case .id: plan.id
             case .duration: plan.duration
             case .basePlanID: plan.basePlanId ?? ""
-            case .amount: plan.price.map { "\($0.amount)" } ?? ""
-            case .currency: plan.price?.currency ?? ""
+            case .amount: self.planPriceInput(groupIndex, planIndex).amount
+            case .currency: self.planPriceInput(groupIndex, planIndex).currency
             case .entitlement: plan.entitlements?.joined(separator: ",") ?? ""
             case .packageKey: plan.packageKey ?? ""
             }
@@ -899,21 +928,17 @@ final class AppState {
             case .duration: self.manifest.subscriptions?[groupIndex].plans[planIndex].duration = value
             case .basePlanID: self.manifest.subscriptions?[groupIndex].plans[planIndex].basePlanId = value
             case .amount:
-                if value.isEmpty {
-                    self.manifest.subscriptions?[groupIndex].plans[planIndex].price = nil
-                    self.moneyError = nil
-                } else if let amount = Decimal(string: value) {
-                    let old = self.manifest.subscriptions?[groupIndex].plans[planIndex].price
-                    self.manifest.subscriptions?[groupIndex].plans[planIndex].price =
-                        Price(amount: amount, currency: old?.currency ?? "USD")
-                    self.moneyError = nil
-                } else {
-                    self.moneyError = "Subscription prices must be valid decimal amounts."
-                }
+                var input = self.planPriceInput(groupIndex, planIndex)
+                input.amount = value
+                self.planPriceInputs[self.planPriceKey(groupIndex, planIndex)] = input
+                self.commitPlanPrice(groupIndex, planIndex)
+                return
             case .currency:
-                let old = self.manifest.subscriptions?[groupIndex].plans[planIndex].price
-                self.manifest.subscriptions?[groupIndex].plans[planIndex].price =
-                    Price(amount: old?.amount ?? 0, currency: value.uppercased())
+                var input = self.planPriceInput(groupIndex, planIndex)
+                input.currency = value.uppercased()
+                self.planPriceInputs[self.planPriceKey(groupIndex, planIndex)] = input
+                self.commitPlanPrice(groupIndex, planIndex)
+                return
             case .entitlement:
                 self.manifest.subscriptions?[groupIndex].plans[planIndex].entitlements =
                     Self.csv(value)
@@ -921,6 +946,38 @@ final class AppState {
             }
             self.saveManifestReportingErrors()
         })
+    }
+
+    private func planPriceKey(_ groupIndex: Int, _ planIndex: Int) -> String {
+        "\(groupIndex):\(planIndex)"
+    }
+
+    private func planPriceInput(_ groupIndex: Int, _ planIndex: Int) -> CatalogPriceInput {
+        let key = planPriceKey(groupIndex, planIndex)
+        if let input = planPriceInputs[key] { return input }
+        let price = manifest.subscriptions?[safe: groupIndex]?.plans[safe: planIndex]?.price
+        return CatalogPriceInput(amount: price.map { "\($0.amount)" } ?? "",
+                                 currency: price?.currency ?? "")
+    }
+
+    private func commitPlanPrice(_ groupIndex: Int, _ planIndex: Int) {
+        guard manifest.subscriptions?.indices.contains(groupIndex) == true,
+              manifest.subscriptions?[groupIndex].plans.indices.contains(planIndex) == true else {
+            return
+        }
+        let input = planPriceInput(groupIndex, planIndex)
+        switch PriceDraft.resolve(amount: input.amount, currency: input.currency) {
+        case .empty:
+            manifest.subscriptions?[groupIndex].plans[planIndex].price = nil
+            moneyError = nil
+        case .invalid(let message):
+            moneyError = "Subscription: \(message)"
+            return
+        case .valid(let price):
+            manifest.subscriptions?[groupIndex].plans[planIndex].price = price
+            moneyError = nil
+        }
+        saveManifestReportingErrors()
     }
 
     func entitlementBinding(index: Int, name: Bool) -> Binding<String> {
@@ -1131,7 +1188,7 @@ final class AppState {
             try load(from: url)
             locale = manifest.listing?.defaultLocale
                 ?? manifest.listing?.locales.keys.sorted().first
-                ?? "en-US"
+                ?? ""
             syncEditingStateFromManifest()
             packages = [:]
             packageErrors = [:]
@@ -1241,6 +1298,8 @@ final class AppState {
         priceAmount = manifest.pricing.map { "\($0.base.amount)" } ?? ""
         priceCurrency = manifest.pricing?.base.currency ?? ""
         priceTerritory = manifest.pricing?.base.territory ?? ""
+        purchasePriceInputs = [:]
+        planPriceInputs = [:]
     }
 
     private func saveManifestReportingErrors() {
