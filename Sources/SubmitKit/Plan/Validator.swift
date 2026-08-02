@@ -10,6 +10,7 @@ public enum Validator {
     public static func findings(_ input: Planner.Input) -> [Finding] {
         var result: [Finding] = []
         result += text(input)
+        result += review(input)
         result += media(input)
         result += build(input)
         result += money(input)
@@ -21,6 +22,25 @@ public enum Validator {
         return result.sorted { lhs, rhs in
             lhs.severity == rhs.severity ? lhs.id < rhs.id : lhs.severity == .error
         }
+    }
+
+    static func review(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.google) else { return [] }
+        if let path = input.manifest.review?.dataSafetyCSV, !path.isEmpty,
+           Planner.resolve(path, root: input.root) == nil {
+            return [Finding(
+                id: "review.dataSafetyCSV.missing", severity: .error,
+                message: "The Google Data safety CSV \(path) does not exist.",
+                location: "Review Info · Google data safety", fix: .reviewInfo)]
+        }
+        if input.manifest.review?.dataSafetyCSV?.isEmpty != false,
+           input.manifest.review?.dataSafetyAnswers?.isEmpty == false {
+            return [Finding(
+                id: "review.dataSafetyCSV.recommended", severity: .warning,
+                message: "Use a current CSV exported from Play Console for a complete Data safety declaration. Google's question template changes over time.",
+                location: "Review Info · Google data safety", fix: .reviewInfo)]
+        }
+        return []
     }
 
     // MARK: - 10.1 Text

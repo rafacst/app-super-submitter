@@ -2,13 +2,13 @@ import Foundation
 
 public enum ListingTextField: String, Sendable, CaseIterable {
     case name, subtitle, description, whatsNew, keywords, promotionalText
-    case supportURL, marketingURL, privacyPolicyURL
+    case supportURL, marketingURL, privacyPolicyURL, privacyPolicyText, privacyChoicesURL
     case googleShortDescription, googleWhatsNew, googleVideo
 }
 
 public enum ReviewTextField: String, Sendable, CaseIterable {
     case firstName, lastName, email, phone, notes
-    case applePrimaryCategory, appleSecondaryCategory, googleCategory
+    case applePrimaryCategory, appleSecondaryCategory
 }
 
 /// Small, tested mutations used by the SwiftUI form. Keeping these in
@@ -60,6 +60,8 @@ public extension Manifest {
         case .supportURL: locale.supportUrl.value ?? ""
         case .marketingURL: locale.marketingUrl.value ?? ""
         case .privacyPolicyURL: locale.privacyPolicyUrl.value ?? ""
+        case .privacyPolicyText: locale.privacyPolicyText.value ?? ""
+        case .privacyChoicesURL: locale.privacyChoicesUrl.value ?? ""
         case .googleShortDescription: locale.google?.shortDescription.value ?? ""
         case .googleWhatsNew: locale.google?.whatsNew.value ?? ""
         case .googleVideo: locale.google?.video.value ?? ""
@@ -82,6 +84,8 @@ public extension Manifest {
         case .supportURL: locale.supportUrl = managed
         case .marketingURL: locale.marketingUrl = managed
         case .privacyPolicyURL: locale.privacyPolicyUrl = managed
+        case .privacyPolicyText: locale.privacyPolicyText = managed
+        case .privacyChoicesURL: locale.privacyChoicesUrl = managed
         case .googleShortDescription:
             var google = locale.google ?? Listing.Locale.GoogleOverride()
             google.shortDescription = managed
@@ -216,7 +220,6 @@ public extension Manifest {
         case .notes: review.notes ?? ""
         case .applePrimaryCategory: review.applePrimaryCategory ?? ""
         case .appleSecondaryCategory: review.appleSecondaryCategory ?? ""
-        case .googleCategory: review.googleCategory ?? ""
         }
     }
 
@@ -230,7 +233,6 @@ public extension Manifest {
         case .notes: review.notes = value
         case .applePrimaryCategory: review.applePrimaryCategory = value
         case .appleSecondaryCategory: review.appleSecondaryCategory = value
-        case .googleCategory: review.googleCategory = value
         }
         self.review = review
     }

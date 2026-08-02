@@ -62,6 +62,10 @@ extension Runner {
         put(&attributes, "subtitle", manifest.listingText(locale: locale, field: .subtitle))
         put(&attributes, "privacyPolicyUrl",
             manifest.listingText(locale: locale, field: .privacyPolicyURL))
+        put(&attributes, "privacyPolicyText",
+            manifest.listingText(locale: locale, field: .privacyPolicyText))
+        put(&attributes, "privacyChoicesUrl",
+            manifest.listingText(locale: locale, field: .privacyChoicesURL))
         guard !attributes.isEmpty else { return }
 
         if let id = appleInfoLocalizationIDs[locale] {
@@ -125,6 +129,22 @@ extension Runner {
         var setsByBucket: [String: String] = [:]
         var uploaded = 0
 
+        // Replacing the relationship is the only reliable way to make both
+        // deletion and ordering match the manifest. Checksums in the planner
+        // keep this path off a no-op apply.
+        for bucket in Set(files.map(\.bucket)) {
+            let setID = try await appleScreenshotSet(displayType: bucket,
+                                                     localizationID: localizationID)
+            setsByBucket[bucket] = setID
+            let existing = JSON(data: try await api.apple(
+                "GET", "/v1/appScreenshotSets/\(setID)/appScreenshots?limit=50").data)
+            for item in existing["data"].array {
+                if let id = item["id"].string {
+                    try await api.apple("DELETE", "/v1/appScreenshots/\(id)")
+                }
+            }
+        }
+
         for file in files {
             try Task.checkCancellation()
             let setID: String
@@ -186,19 +206,28 @@ extension Runner {
         return id
     }
 
-    func applePreviews(locale: String, files: [MediaUpload], index: Int) async throws {
+    func applePreviews(locale: String, displayType: String, files: [MediaUpload],
+                       index: Int) async throws {
         guard let localizationID = appleVersionLocalizationIDs[locale] else {
             throw RunError.missingLocalization(locale)
         }
         var uploaded = 0
+        let sets = JSON(data: try await api.apple(
+            "GET", "/v1/appStoreVersionLocalizations/\(localizationID)/appPreviewSets?limit=50").data)
+        if let setID = sets["data"].array.first(where: {
+            $0["attributes"]["previewType"].string == displayType
+        })?["id"].string {
+            let existing = JSON(data: try await api.apple(
+                "GET", "/v1/appPreviewSets/\(setID)/appPreviews?limit=50").data)
+            for item in existing["data"].array {
+                if let id = item["id"].string {
+                    try await api.apple("DELETE", "/v1/appPreviews/\(id)")
+                }
+            }
+        }
         for file in files {
             try Task.checkCancellation()
             _ = try await AssetInspector.validatePreview(at: file.url)
-            // ponytail: one display type for the previews. Add a video-track
-            // probe when a developer ships previews for two display types at
-            // once and complains that both landed in the same set.
-            let displayType = "APP_IPHONE_67"
-
             let sets = JSON(data: try await api.apple(
                 "GET",
                 "/v1/appStoreVersionLocalizations/\(localizationID)/appPreviewSets?limit=50").data)
@@ -339,6 +368,15 @@ extension Runner {
                             body: ["data": ["type": "builds", "id": buildID]])
     }
 
+    func appleBuildCompliance() async throws {
+        guard let buildID = appleBuildID ?? actual.apple?.attachedBuildId,
+              let value = manifest.review?.usesNonExemptEncryption else { return }
+        try await api.apple("PATCH", "/v1/builds/\(buildID)", body: [
+            "data": ["type": "builds", "id": buildID,
+                     "attributes": ["usesNonExemptEncryption": value]],
+        ])
+    }
+
     /// Runs the `uploadOperations` from a reservation response. Each one names
     /// its own slice of the file.
     func executeUploadOperations(_ operations: JSON, data: Data, index: Int? = nil,
@@ -420,23 +458,56 @@ extension Runner {
             try await api.apple("PATCH", "/v1/appStoreReviewDetails/\(id)", body: [
                 "data": ["type": "appStoreReviewDetails", "id": id, "attributes": attributes],
             ])
+            try await appleReviewAttachments(review.attachments ?? [], reviewDetailID: id)
             return
         }
-        try await api.apple("POST", "/v1/appStoreReviewDetails", body: [
+        let created = JSON(data: try await api.apple("POST", "/v1/appStoreReviewDetails", body: [
             "data": [
                 "type": "appStoreReviewDetails",
                 "attributes": attributes,
                 "relationships": ["appStoreVersion": [
                     "data": ["type": "appStoreVersions", "id": versionID]]],
             ],
-        ])
+        ]).data)
+        if let id = created["data"]["id"].string {
+            try await appleReviewAttachments(review.attachments ?? [], reviewDetailID: id)
+        }
+    }
+
+    private func appleReviewAttachments(_ paths: [String],
+                                        reviewDetailID: String) async throws {
+        for path in paths {
+            guard let url = resolve(path) else { continue }
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
+            let reservation = JSON(data: try await api.apple(
+                "POST", "/v1/appStoreReviewAttachments", body: [
+                    "data": [
+                        "type": "appStoreReviewAttachments",
+                        "attributes": ["fileName": url.lastPathComponent,
+                                       "fileSize": data.count],
+                        "relationships": ["appStoreReviewDetail": [
+                            "data": ["type": "appStoreReviewDetails",
+                                     "id": reviewDetailID]]],
+                    ],
+                ]).data)
+            guard let id = reservation["data"]["id"].string else { continue }
+            try await executeUploadOperations(
+                reservation["data"]["attributes"]["uploadOperations"], data: data)
+            try await api.apple("PATCH", "/v1/appStoreReviewAttachments/\(id)", body: [
+                "data": ["type": "appStoreReviewAttachments", "id": id,
+                         "attributes": ["uploaded": true,
+                                        "sourceFileChecksum": Checksums.md5(data)]],
+            ])
+        }
     }
 
     func appleAgeRating() async throws {
-        guard let id = actual.apple?.ageRatingDeclarationId,
-              let answers = manifest.review?.ageRatingAnswers, !answers.isEmpty else { return }
+        guard let id = actual.apple?.ageRatingDeclarationId else { return }
+        var attributes: [String: Any] = manifest.review?.ageRatingAnswers ?? [:]
+        if let band = manifest.review?.kidsAgeBand { attributes["kidsAgeBand"] = band }
+        guard !attributes.isEmpty else { return }
         try await api.apple("PATCH", "/v1/ageRatingDeclarations/\(id)", body: [
-            "data": ["type": "ageRatingDeclarations", "id": id, "attributes": answers],
+            "data": ["type": "ageRatingDeclarations", "id": id, "attributes": attributes],
         ])
     }
 
@@ -462,19 +533,174 @@ extension Runner {
             ]
             // Re-read by the natural key first. Spec section 14 forbids a
             // blind create.
+            let purchaseID: String
             if let id = byProductID[purchase.id] {
+                purchaseID = id
                 try await api.apple("PATCH", "/v2/inAppPurchases/\(id)", body: [
                     "data": ["type": "inAppPurchases", "id": id,
                              "attributes": ["name": purchase.name ?? purchase.id,
                                             "reviewNote": purchase.reviewNote ?? ""]],
                 ])
             } else {
-                try await api.apple("POST", "/v2/inAppPurchases", body: [
+                let created = JSON(data: try await api.apple("POST", "/v2/inAppPurchases", body: [
                     "data": [
                         "type": "inAppPurchases",
                         "attributes": attributes,
                         "relationships": ["app": ["data": ["type": "apps", "id": appleAppID]]],
                     ],
+                ]).data)
+                guard let id = created["data"]["id"].string else { continue }
+                purchaseID = id
+            }
+            try await applePurchaseDetails(purchase, purchaseID: purchaseID)
+        }
+    }
+
+    private func applePurchaseDetails(_ purchase: Manifest.Purchase,
+                                      purchaseID: String) async throws {
+        let versions = JSON(data: try await api.apple(
+            "GET", "/v2/inAppPurchases/\(purchaseID)/inAppPurchaseVersions?limit=50").data)
+        var purchaseVersionID = versions["data"].array.first?["id"].string
+        if purchaseVersionID == nil, purchase.locales?.isEmpty == false {
+            let created = JSON(data: try await api.apple(
+                "POST", "/v1/inAppPurchaseVersions", body: [
+                    "data": [
+                        "type": "inAppPurchaseVersions",
+                        "relationships": ["inAppPurchase": [
+                            "data": ["type": "inAppPurchases", "id": purchaseID]]],
+                    ],
+                ]).data)
+            purchaseVersionID = created["data"]["id"].string
+        }
+        var localizationIDs: [String: String] = [:]
+        if let purchaseVersionID {
+            let existing = JSON(data: try await api.apple(
+                "GET", "/v1/inAppPurchaseVersions/\(purchaseVersionID)"
+                    + "/inAppPurchaseLocalizations?limit=200").data)
+            for item in existing["data"].array {
+                if let locale = item["attributes"]["locale"].string,
+                   let id = item["id"].string { localizationIDs[locale] = id }
+            }
+        }
+        for (locale, text) in (purchase.locales ?? [:]).sorted(by: { $0.key < $1.key }) {
+            let attributes = ["locale": locale, "name": text.name ?? purchase.id,
+                              "description": text.description ?? ""]
+            if let id = localizationIDs[locale] {
+                try await api.apple("PATCH", "/v2/inAppPurchaseLocalizations/\(id)", body: [
+                    "data": ["type": "inAppPurchaseLocalizations", "id": id,
+                             "attributes": attributes],
+                ])
+            } else if let purchaseVersionID {
+                try await api.apple("POST", "/v2/inAppPurchaseLocalizations", body: [
+                    "data": [
+                        "type": "inAppPurchaseLocalizations",
+                        "attributes": attributes,
+                        "relationships": ["inAppPurchaseVersion": [
+                            "data": ["type": "inAppPurchaseVersions",
+                                     "id": purchaseVersionID]]],
+                    ],
+                ])
+            }
+        }
+        if let price = purchase.price {
+            let territory = price.territory ?? "USA"
+            let points = JSON(data: try await api.apple(
+                "GET", "/v2/inAppPurchases/\(purchaseID)/pricePoints"
+                    + "?filter%5Bterritory%5D=\(territory)&limit=200").data)
+            if let point = Self.nearestPricePoint(points, to: price.amount) {
+                let priceID = "price-\(UUID().uuidString)"
+                try await api.apple("POST", "/v1/inAppPurchasePriceSchedules", body: [
+                    "data": [
+                        "type": "inAppPurchasePriceSchedules",
+                        "relationships": [
+                            "inAppPurchase": ["data": ["type": "inAppPurchases",
+                                                        "id": purchaseID]],
+                            "baseTerritory": ["data": ["type": "territories",
+                                                        "id": territory]],
+                            "manualPrices": ["data": [["type": "inAppPurchasePrices",
+                                                         "id": priceID]]],
+                        ],
+                    ],
+                    "included": [[
+                        "type": "inAppPurchasePrices", "id": priceID,
+                        "attributes": ["startDate": NSNull(), "endDate": NSNull()],
+                        "relationships": ["inAppPurchasePricePoint": [
+                            "data": ["type": "inAppPurchasePricePoints", "id": point]]],
+                    ]],
+                ])
+            }
+        }
+        if let territories = purchase.availableTerritories, !territories.isEmpty {
+            try await api.apple("POST", "/v1/inAppPurchaseAvailabilities", body: [
+                "data": [
+                    "type": "inAppPurchaseAvailabilities",
+                    "attributes": ["availableInNewTerritories": false],
+                    "relationships": [
+                        "inAppPurchase": ["data": ["type": "inAppPurchases",
+                                                    "id": purchaseID]],
+                        "availableTerritories": ["data": territories.map {
+                            ["type": "territories", "id": $0]
+                        }],
+                    ],
+                ],
+            ])
+        }
+        if let hosting = purchase.contentHosting {
+            try await api.apple("PATCH", "/v2/inAppPurchases/\(purchaseID)", body: [
+                "data": ["type": "inAppPurchases", "id": purchaseID,
+                         "attributes": ["contentHosting": hosting]],
+            ])
+        }
+        if purchase.promotedPurchase == true {
+            try await api.apple("POST", "/v1/promotedPurchases", body: [
+                "data": ["type": "promotedPurchases",
+                         "attributes": ["visibleForAllUsers": true],
+                         "relationships": [
+                            "app": ["data": ["type": "apps", "id": appleAppID]],
+                            "inAppPurchaseV2": ["data": ["type": "inAppPurchases",
+                                                           "id": purchaseID]],
+                         ]],
+            ])
+        }
+        if let path = purchase.reviewScreenshot, let url = resolve(path) {
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
+            let reservation = JSON(data: try await api.apple(
+                "POST", "/v1/inAppPurchaseAppStoreReviewScreenshots", body: [
+                    "data": ["type": "inAppPurchaseAppStoreReviewScreenshots",
+                             "attributes": ["fileName": url.lastPathComponent,
+                                            "fileSize": data.count],
+                             "relationships": ["inAppPurchaseV2": [
+                                "data": ["type": "inAppPurchases", "id": purchaseID]]]],
+                ]).data)
+            if let id = reservation["data"]["id"].string {
+                try await executeUploadOperations(
+                    reservation["data"]["attributes"]["uploadOperations"], data: data)
+                try await api.apple("PATCH",
+                    "/v1/inAppPurchaseAppStoreReviewScreenshots/\(id)", body: [
+                        "data": ["type": "inAppPurchaseAppStoreReviewScreenshots", "id": id,
+                                 "attributes": ["uploaded": true]],
+                    ])
+            }
+        }
+        if let path = purchase.content, let url = resolve(path) {
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
+            let reservation = JSON(data: try await api.apple(
+                "POST", "/v1/inAppPurchaseContents", body: [
+                    "data": [
+                        "type": "inAppPurchaseContents",
+                        "attributes": ["fileName": url.lastPathComponent,
+                                       "fileSize": data.count],
+                        "relationships": ["inAppPurchaseV2": [
+                            "data": ["type": "inAppPurchases", "id": purchaseID]]],
+                    ],
+                ]).data)
+            if let id = reservation["data"]["id"].string {
+                try await executeUploadOperations(
+                    reservation["data"]["attributes"]["uploadOperations"], data: data)
+                try await api.apple("PATCH", "/v1/inAppPurchaseContents/\(id)", body: [
+                    "data": ["type": "inAppPurchaseContents", "id": id,
+                             "attributes": ["uploaded": true,
+                                            "sourceFileChecksum": Checksums.md5(data)]],
                 ])
             }
         }
@@ -490,10 +716,23 @@ extension Runner {
 
     func applePhasedRelease() async throws {
         guard let versionID = appleVersionID else { throw RunError.missingVersion }
+        let desired: String = switch manifest.release?.apple?.phasedReleaseState {
+        case .paused: "PAUSED"
+        case .active, nil: "ACTIVE"
+        }
+        let current = JSON(data: try await api.apple(
+            "GET", "/v1/appStoreVersions/\(versionID)/appStoreVersionPhasedRelease").data)
+        if let id = current["data"]["id"].string {
+            try await api.apple("PATCH", "/v1/appStoreVersionPhasedReleases/\(id)", body: [
+                "data": ["type": "appStoreVersionPhasedReleases", "id": id,
+                         "attributes": ["phasedReleaseState": desired]],
+            ])
+            return
+        }
         try await api.apple("POST", "/v1/appStoreVersionPhasedReleases", body: [
             "data": [
                 "type": "appStoreVersionPhasedReleases",
-                "attributes": ["phasedReleaseState": "INACTIVE"],
+                "attributes": ["phasedReleaseState": desired],
                 "relationships": ["appStoreVersion": [
                     "data": ["type": "appStoreVersions", "id": versionID]]],
             ],
@@ -501,13 +740,65 @@ extension Runner {
     }
 
     func appleAvailability() async throws {
-        try await api.apple("POST", "/v2/appAvailabilities", body: [
-            "data": [
+        let requested = manifest.pricing?.territories ?? []
+        let included: [[String: Any]] = requested.enumerated().map { index, item in
+            var attributes: [String: Any] = ["available": item.available]
+            if let preorder = item.preOrderEnabled { attributes["preOrderEnabled"] = preorder }
+            if let date = item.releaseDate { attributes["releaseDate"] = date }
+            return [
+                "type": "territoryAvailabilities", "id": "territory-\(index)",
+                "attributes": attributes,
+                "relationships": ["territory": [
+                    "data": ["type": "territories", "id": item.territory]]],
+            ]
+        }
+        var data: [String: Any] = [
                 "type": "appAvailabilities",
                 "attributes": ["availableInNewTerritories":
                                 manifest.pricing?.autoConvertOtherTerritories ?? true],
-                "relationships": ["app": ["data": ["type": "apps", "id": appleAppID]]],
+                "relationships": [
+                    "app": ["data": ["type": "apps", "id": appleAppID]],
+                    "territoryAvailabilities": ["data": included.map {
+                        ["type": "territoryAvailabilities", "id": $0["id"] as Any]
+                    }],
+                ],
+            ]
+        let method: String
+        let path: String
+        if let id = actual.apple?.appAvailabilityId {
+            method = "PATCH"
+            path = "/v2/appAvailabilities/\(id)"
+            data["id"] = id
+        } else {
+            method = "POST"
+            path = "/v2/appAvailabilities"
+        }
+        try await api.apple(method, path, body: ["data": data, "included": included])
+    }
+
+    func appleAppPrice() async throws {
+        guard let price = manifest.pricing?.base else { return }
+        let territory = price.territory ?? "USA"
+        let points = JSON(data: try await api.apple(
+            "GET", "/v3/appPricePoints?filter%5Bapp%5D=\(appleAppID)"
+                + "&filter%5Bterritory%5D=\(territory)&limit=200").data)
+        guard let point = Self.nearestPricePoint(points, to: price.amount) else { return }
+        let appPriceID = "price-\(UUID().uuidString)"
+        try await api.apple("POST", "/v1/appPriceSchedules", body: [
+            "data": [
+                "type": "appPriceSchedules",
+                "relationships": [
+                    "app": ["data": ["type": "apps", "id": appleAppID]],
+                    "baseTerritory": ["data": ["type": "territories", "id": territory]],
+                    "manualPrices": ["data": [["type": "appPrices", "id": appPriceID]]],
+                ],
             ],
+            "included": [[
+                "type": "appPrices", "id": appPriceID,
+                "attributes": ["startDate": NSNull(), "endDate": NSNull()],
+                "relationships": ["appPricePoint": [
+                    "data": ["type": "appPricePoints", "id": point]]],
+            ]],
         ])
     }
 

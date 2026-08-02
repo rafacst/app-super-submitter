@@ -1,0 +1,99 @@
+name: SuperSubmitter
+options:
+  minimumXcodeGenVersion: 2.44.1
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  Yams:
+    url: https://github.com/jpsim/Yams.git
+    from: 5.1.0
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios.git
+    from: 3.59.3
+targets:
+  SubmitKit:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/SubmitKit
+        excludes:
+          - Resources
+      - path: Sources/SubmitKit/Resources
+        buildPhase: resources
+    dependencies:
+      - package: Yams
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rafacst.supersubmitter.submitkit
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: 6.0
+  SuperSubmitter:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/SuperSubmitter
+        excludes:
+          - Resources
+      - path: Sources/SuperSubmitter/Resources/AppIcon.png
+        buildPhase: resources
+      - path: Supporting/Assets.xcassets
+        buildPhase: resources
+    dependencies:
+      - target: SubmitKit
+      - package: PostHog
+        product: PostHog
+    entitlements:
+      path: SuperSubmitter.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rafacst.supersubmitter
+        PRODUCT_NAME: SuperSubmitter
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: 6.0
+        MACOSX_DEPLOYMENT_TARGET: 14.0
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Super Submitter
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Rafa CST
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+  SubmitKitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/SubmitKitTests
+        excludes:
+          - Fixtures
+      - path: Tests/SubmitKitTests/Fixtures
+        buildPhase: resources
+    dependencies:
+      - target: SubmitKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  SuperSubmitterUITests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/SuperSubmitterUITests
+    dependencies:
+      - target: SuperSubmitter
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  SuperSubmitter:
+    build:
+      targets:
+        SuperSubmitter: all
+        SubmitKitTests: [test]
+        SuperSubmitterUITests: [test]
+    test:
+      targets:
+        - SubmitKitTests
+        - SuperSubmitterUITests

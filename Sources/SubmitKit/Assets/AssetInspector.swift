@@ -148,13 +148,29 @@ public enum AssetInspector {
         }
     }
 
+    public static func applePreviewType(for deviceClass: Manifest.DeviceClass) -> String? {
+        switch deviceClass {
+        case .phone: "APP_IPHONE_67"
+        case .tablet7, .tablet10: "APP_IPAD_PRO_3GEN_129"
+        case .desktop: "APP_DESKTOP"
+        case .tv: "APP_APPLE_TV"
+        case .vision: "APP_APPLE_VISION_PRO"
+        case .watch: nil
+        }
+    }
+
     private struct ScreenshotCatalog: Decodable {
         let apple: [String: [[Int]]]
         let appleDisplayTypes: [String: String]
     }
 
     private static func catalog() throws -> ScreenshotCatalog {
-        guard let url = Bundle.module.url(forResource: "screenshot-sizes", withExtension: "json"),
+        #if SWIFT_PACKAGE
+        let resourceBundle = Bundle.module
+        #else
+        let resourceBundle = Bundle(for: SubmitKitBundleToken.self)
+        #endif
+        guard let url = resourceBundle.url(forResource: "screenshot-sizes", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let catalog = try? JSONDecoder().decode(ScreenshotCatalog.self, from: data) else {
             throw AssetInspectionError.missingDimensionCatalog
@@ -174,3 +190,7 @@ public enum AssetInspector {
         abs(lhs.0 - rhs.0) + abs(lhs.1 - rhs.1)
     }
 }
+
+#if !SWIFT_PACKAGE
+private final class SubmitKitBundleToken {}
+#endif

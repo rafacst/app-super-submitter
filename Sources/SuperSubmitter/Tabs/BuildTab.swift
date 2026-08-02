@@ -14,6 +14,7 @@ struct BuildTab: View {
             } else {
                 importSection
             }
+            StoreDiagnosticsPanel()
         }
         .frame(maxWidth: 980, alignment: .leading)
     }

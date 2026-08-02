@@ -80,7 +80,7 @@ extension Runner {
             switch offer.kind {
             case .freeTrial:
                 phase["freePriceOverride"] = [:]
-            case .introPrice, .offerCode:
+            case .introPrice, .offerCode, .promotional, .winBack:
                 if let price = offer.price {
                     phase["absoluteDiscount"] = Self.money(price)
                 }

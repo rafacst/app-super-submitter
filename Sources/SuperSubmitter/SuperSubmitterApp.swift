@@ -57,7 +57,12 @@ struct SuperSubmitterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+        #if SWIFT_PACKAGE
+        let iconBundle = Bundle.module
+        #else
+        let iconBundle = Bundle.main
+        #endif
+        if let iconURL = iconBundle.url(forResource: "AppIcon", withExtension: "png"),
            let icon = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = icon
         }

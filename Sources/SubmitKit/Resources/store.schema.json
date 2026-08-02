@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://super-submitter.app/schemas/store.schema.json",
+  "title": "Super Submitter store manifest",
+  "type": "object",
+  "required": ["version", "apps"],
+  "properties": {
+    "version": { "const": 1 },
+    "apps": {
+      "type": "object",
+      "properties": {
+        "apple": {
+          "type": "object",
+          "required": ["appId", "platforms", "bundleId"],
+          "properties": {
+            "appId": { "type": "string" },
+            "platforms": { "type": "array", "items": { "enum": ["IOS", "MAC_OS", "TV_OS", "VISION_OS"] } },
+            "bundleId": { "type": "string" }
+          }
+        },
+        "google": {
+          "type": "object",
+          "required": ["packageName"],
+          "properties": { "packageName": { "type": "string" } }
+        }
+      }
+    },
+    "release": {
+      "type": "object",
+      "properties": {
+        "versionName": { "type": "string" },
+        "build": {
+          "type": "object",
+          "properties": {
+            "ios": { "type": "string" }, "macos": { "type": "string" },
+            "android": { "type": "string" }, "androidApk": { "type": "string" }
+          }
+        },
+        "apple": {
+          "type": "object",
+          "properties": {
+            "releaseType": { "enum": ["MANUAL", "AFTER_APPROVAL", "SCHEDULED"] },
+            "phasedRelease": { "type": "boolean" },
+            "phasedReleaseState": { "enum": ["ACTIVE", "PAUSED"] }
+          }
+        },
+        "google": { "type": "object" }
+      }
+    },
+    "listing": {
+      "type": "object",
+      "required": ["defaultLocale", "locales"],
+      "properties": {
+        "defaultLocale": { "type": "string" },
+        "locales": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" }, "subtitle": { "$ref": "#/$defs/managedString" },
+              "description": { "$ref": "#/$defs/managedString" },
+              "whatsNew": { "$ref": "#/$defs/managedString" },
+              "keywords": { "$ref": "#/$defs/managedString" },
+              "promotionalText": { "$ref": "#/$defs/managedString" },
+              "supportUrl": { "$ref": "#/$defs/managedString" },
+              "marketingUrl": { "$ref": "#/$defs/managedString" },
+              "privacyPolicyUrl": { "$ref": "#/$defs/managedString" },
+              "privacyPolicyText": { "$ref": "#/$defs/managedString" },
+              "privacyChoicesUrl": { "$ref": "#/$defs/managedString" },
+              "google": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "screenshots": { "$ref": "#/$defs/mediaLocales" },
+        "previews": { "$ref": "#/$defs/mediaLocales" },
+        "icon": { "type": "string" }, "featureGraphic": { "type": "string" }
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "required": ["base"],
+      "properties": {
+        "base": { "$ref": "#/$defs/price" },
+        "autoConvertOtherTerritories": { "type": "boolean" },
+        "territories": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["territory", "available"],
+            "properties": {
+              "territory": { "type": "string" }, "available": { "type": "boolean" },
+              "preOrderEnabled": { "type": "boolean" }, "releaseDate": { "type": "string", "format": "date" }
+            }
+          }
+        }
+      }
+    },
+    "purchases": { "type": "array", "items": { "$ref": "#/$defs/purchase" } },
+    "subscriptions": { "type": "array", "items": { "type": "object" } },
+    "entitlements": { "type": "array", "items": { "type": "object" } },
+    "offerings": { "type": "array", "items": { "type": "object" } },
+    "marketing": { "type": "object" },
+    "monetization": { "type": "object" },
+    "review": {
+      "type": "object",
+      "properties": {
+        "contactFirstName": { "type": "string" }, "contactLastName": { "type": "string" },
+        "contactEmail": { "type": "string", "format": "email" }, "contactPhone": { "type": "string" },
+        "demoAccountRequired": { "type": "boolean" }, "notes": { "type": "string" },
+        "applePrimaryCategory": { "type": "string" }, "appleSecondaryCategory": { "type": "string" },
+        "ageRatingAnswers": { "$ref": "#/$defs/answers" },
+        "dataSafetyAnswers": { "$ref": "#/$defs/answers" },
+        "dataSafetyCSV": { "type": "string" },
+        "usesNonExemptEncryption": { "type": "boolean" },
+        "kidsAgeBand": { "type": "string" },
+        "attachments": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "managedString": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+    "answers": { "type": "object", "additionalProperties": { "type": "boolean" } },
+    "price": {
+      "type": "object", "required": ["amount", "currency"],
+      "properties": {
+        "amount": { "oneOf": [{ "type": "number" }, { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$" }] },
+        "currency": { "type": "string" }, "territory": { "type": "string" }
+      }
+    },
+    "mediaLocales": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "purchase": {
+      "type": "object", "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["consumable", "non_consumable", "non_renewing"] },
+        "name": { "type": "string" }, "price": { "$ref": "#/$defs/price" },
+        "reviewNote": { "type": "string" }, "reviewScreenshot": { "type": "string" },
+        "availableTerritories": { "type": "array", "items": { "type": "string" } },
+        "contentHosting": { "type": "boolean" }, "content": { "type": "string" },
+        "promotedPurchase": { "type": "boolean" },
+        "locales": { "type": "object" }, "offers": { "type": "array" }
+      }
+    }
+  }
+}

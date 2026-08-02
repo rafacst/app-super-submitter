@@ -1,6 +1,8 @@
 .build/
 .swiftpm/
 *.xcodeproj
+!SuperSubmitter.xcodeproj/
+!SuperSubmitter.xcodeproj/**
 .DS_Store
 .super-submitter/
 

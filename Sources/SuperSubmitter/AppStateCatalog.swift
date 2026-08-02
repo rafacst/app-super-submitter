@@ -14,6 +14,81 @@ enum OfferTextField { case id, duration, amount, currency, periods, regions }
 /// The catalog states, the tax settings, and the offers of tab 5.
 extension AppState {
 
+    var autoConvertPricesBinding: Binding<Bool> {
+        Binding(get: { self.manifest.pricing?.autoConvertOtherTerritories ?? true }, set: { value in
+            guard var pricing = self.manifest.pricing else { return }
+            pricing.autoConvertOtherTerritories = value
+            self.manifest.pricing = pricing
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    var appTerritoriesBinding: Binding<String> {
+        Binding(get: {
+            (self.manifest.pricing?.territories ?? []).filter(\.available)
+                .map(\.territory).joined(separator: ", ")
+        }, set: { value in
+            guard var pricing = self.manifest.pricing else { return }
+            let codes = Self.splitList(value).map { $0.uppercased() }
+            pricing.territories = codes.isEmpty ? nil : codes.map {
+                Manifest.TerritoryAvailability(territory: $0)
+            }
+            self.manifest.pricing = pricing
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func purchaseMetadataBinding(index: Int, key: String) -> Binding<String> {
+        Binding(get: {
+            guard let purchase = self.manifest.purchases?[safe: index] else { return "" }
+            switch key {
+            case "screenshot": return purchase.reviewScreenshot ?? ""
+            case "content": return purchase.content ?? ""
+            case "territories": return (purchase.availableTerritories ?? []).joined(separator: ", ")
+            case "localeName":
+                let locale = self.manifest.listing?.defaultLocale ?? ""
+                return purchase.locales?[locale]?.name ?? ""
+            default:
+                let locale = self.manifest.listing?.defaultLocale ?? ""
+                return purchase.locales?[locale]?.description ?? ""
+            }
+        }, set: { value in
+            guard self.manifest.purchases?.indices.contains(index) == true else { return }
+            switch key {
+            case "screenshot":
+                self.manifest.purchases?[index].reviewScreenshot = value.isEmpty ? nil : value
+            case "content":
+                self.manifest.purchases?[index].content = value.isEmpty ? nil : value
+            case "territories":
+                let codes = Self.splitList(value).map { $0.uppercased() }
+                self.manifest.purchases?[index].availableTerritories = codes.isEmpty ? nil : codes
+            case "localeName", "localeDescription":
+                let locale = self.manifest.listing?.defaultLocale ?? ""
+                var locales = self.manifest.purchases?[index].locales ?? [:]
+                var text = locales[locale] ?? Manifest.ProductLocale()
+                if key == "localeName" { text.name = value.isEmpty ? nil : value }
+                else { text.description = value.isEmpty ? nil : value }
+                locales[locale] = text
+                self.manifest.purchases?[index].locales = locales
+            default: break
+            }
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func purchaseFlagBinding(index: Int, key: String) -> Binding<Bool> {
+        Binding(get: {
+            guard let purchase = self.manifest.purchases?[safe: index] else { return false }
+            return key == "content" ? purchase.contentHosting ?? false
+                : purchase.promotedPurchase ?? false
+        }, set: { value in
+            guard self.manifest.purchases?.indices.contains(index) == true else { return }
+            if key == "content" { self.manifest.purchases?[index].contentHosting = value }
+            else { self.manifest.purchases?[index].promotedPurchase = value }
+            self.saveManifestReportingErrors()
+        })
+    }
+
     // MARK: - The states
 
     func purchaseActiveBinding(index: Int) -> Binding<Bool> {
@@ -115,6 +190,7 @@ extension AppState {
         list.append(Manifest.Offer(id: "offer-\(list.count + 1)", kind: .freeTrial,
                                    duration: "P1W", periods: 1))
         setOffers(list, for: target)
+        offerPriceInputs = [:]
         saveManifestReportingErrors()
     }
 
@@ -123,6 +199,7 @@ extension AppState {
         guard list.indices.contains(index) else { return }
         list.remove(at: index)
         setOffers(list, for: target)
+        offerPriceInputs = [:]
         saveManifestReportingErrors()
     }
 
@@ -145,8 +222,8 @@ extension AppState {
             return switch field {
             case .id: offer.id
             case .duration: offer.duration ?? ""
-            case .amount: offer.price.map { "\($0.amount)" } ?? ""
-            case .currency: offer.price?.currency ?? ""
+            case .amount: self.offerPriceInput(target, index).amount
+            case .currency: self.offerPriceInput(target, index).currency
             case .periods: offer.periods.map(String.init) ?? ""
             case .regions: (offer.regions ?? []).joined(separator: ", ")
             }
@@ -160,10 +237,12 @@ extension AppState {
                 let trimmed = value.trimmingCharacters(in: .whitespaces).uppercased()
                 list[index].duration = trimmed.isEmpty ? nil : trimmed
             case .amount, .currency:
-                let amount = field == .amount ? value : (list[index].price.map { "\($0.amount)" } ?? "")
-                let currency = field == .currency
-                    ? value.uppercased() : (list[index].price?.currency ?? "")
-                switch PriceDraft.resolve(amount: amount, currency: currency) {
+                let key = self.offerPriceKey(target, index)
+                var input = self.offerPriceInput(target, index)
+                if field == .amount { input.amount = value }
+                else { input.currency = value.uppercased() }
+                self.offerPriceInputs[key] = input
+                switch PriceDraft.resolve(amount: input.amount, currency: input.currency) {
                 case .empty:
                     list[index].price = nil
                     self.moneyError = nil
@@ -186,6 +265,21 @@ extension AppState {
             self.setOffers(list, for: target)
             self.saveManifestReportingErrors()
         })
+    }
+
+    private func offerPriceKey(_ target: OfferTarget, _ index: Int) -> String {
+        switch target {
+        case .purchase(let purchase): "purchase:\(purchase):\(index)"
+        case .plan(let group, let plan): "plan:\(group):\(plan):\(index)"
+        }
+    }
+
+    private func offerPriceInput(_ target: OfferTarget, _ index: Int) -> CatalogPriceInput {
+        let key = offerPriceKey(target, index)
+        if let input = offerPriceInputs[key] { return input }
+        let price = offers(for: target)[safe: index]?.price
+        return CatalogPriceInput(amount: price.map { "\($0.amount)" } ?? "",
+                                 currency: price?.currency ?? "")
     }
 
     func offerKindBinding(_ target: OfferTarget, index: Int) -> Binding<Manifest.Offer.Kind> {

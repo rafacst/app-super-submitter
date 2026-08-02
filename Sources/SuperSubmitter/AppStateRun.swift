@@ -12,6 +12,47 @@ import UserNotifications
 @MainActor
 extension AppState {
 
+    func appleReleaseTypeBinding() -> Binding<Manifest.Release.ReleaseType> {
+        Binding(get: { self.manifest.release?.apple?.releaseType ?? .manual }, set: { value in
+            var release = self.manifest.release ?? Manifest.Release()
+            var apple = release.apple ?? Manifest.Release.AppleRelease(
+                releaseType: nil, phasedRelease: nil,
+                phasedReleaseState: nil)
+            apple.releaseType = value
+            release.apple = apple
+            self.manifest.release = release
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func applePhasedReleaseBinding() -> Binding<Bool> {
+        Binding(get: { self.manifest.release?.apple?.phasedRelease ?? false }, set: { value in
+            var release = self.manifest.release ?? Manifest.Release()
+            var apple = release.apple ?? Manifest.Release.AppleRelease(
+                releaseType: nil, phasedRelease: nil,
+                phasedReleaseState: nil)
+            apple.phasedRelease = value
+            apple.phasedReleaseState = value ? (apple.phasedReleaseState ?? .active) : nil
+            release.apple = apple
+            self.manifest.release = release
+            self.saveManifestReportingErrors()
+        })
+    }
+
+    func applePhasedStateBinding() -> Binding<Manifest.Release.PhasedReleaseState> {
+        Binding(get: { self.manifest.release?.apple?.phasedReleaseState ?? .active }, set: { value in
+            var release = self.manifest.release ?? Manifest.Release()
+            var apple = release.apple ?? Manifest.Release.AppleRelease(
+                releaseType: nil, phasedRelease: nil,
+                phasedReleaseState: nil)
+            apple.phasedRelease = true
+            apple.phasedReleaseState = value
+            release.apple = apple
+            self.manifest.release = release
+            self.saveManifestReportingErrors()
+        })
+    }
+
     // MARK: - Tab 7. The plan
 
     var credentials: StoreCredentials {
@@ -73,6 +114,11 @@ extension AppState {
     /// agreement. The developer has no other list to check a code against.
     func appleTerritories() async throws -> [StoreDiagnostics.Territory] {
         try await diagnostics().territories()
+    }
+
+    func appleAppCategories() async throws -> [StoreDiagnostics.AppCategory] {
+        try await diagnostics().appCategories(
+            platform: manifest.apps.apple?.platforms.first?.rawValue)
     }
 
     /// Reads every store, then diffs. Spec section 7.2. This writes nothing.
@@ -465,9 +511,15 @@ extension AppState {
                       let versionID = actualState.apple?.versionId else {
                     throw ReleaseInputError.noAppleVersion
                 }
-                appleSubmissionID = try await client.releaseApple(
-                    appID: appID, platform: manifest.apps.apple?.platforms.first?.rawValue ?? "IOS",
-                    versionID: versionID)
+                if actualState.apple?.versionState == "PENDING_DEVELOPER_RELEASE" {
+                    appleSubmissionID = try await client.releaseApprovedAppleVersion(
+                        versionID: versionID)
+                } else {
+                    appleSubmissionID = try await client.releaseApple(
+                        appID: appID,
+                        platform: manifest.apps.apple?.platforms.first?.rawValue ?? "IOS",
+                        versionID: versionID)
+                }
                 statuses[.apple] = StoreStatus(store: .apple, phase: .inQueue,
                                                detail: detail(for: .apple), checkedAt: Date())
             case .google:

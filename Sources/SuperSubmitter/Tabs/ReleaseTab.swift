@@ -17,6 +17,7 @@ struct ReleaseTab: View {
                 checklist
             }
             status
+            if state.stores.contains(.apple) { appleReleaseControls }
             if let error = state.releaseError { failure(error) }
             sendToReview
         }
@@ -24,6 +25,31 @@ struct ReleaseTab: View {
             guard state.consoleRows.isEmpty, !state.stores.isEmpty else { return }
             state.loadConsoleMarks()
         }
+    }
+
+    private var appleReleaseControls: some View {
+        HStack(spacing: 14) {
+            Picker("App Store release", selection: state.appleReleaseTypeBinding()) {
+                Text("Manual").tag(Manifest.Release.ReleaseType.manual)
+                Text("After approval").tag(Manifest.Release.ReleaseType.afterApproval)
+                Text("Scheduled").tag(Manifest.Release.ReleaseType.scheduled)
+            }
+            .frame(width: 260)
+            Toggle("Phased release", isOn: state.applePhasedReleaseBinding())
+            if state.manifest.release?.apple?.phasedRelease == true {
+                Picker("State", selection: state.applePhasedStateBinding()) {
+                    Text("Active").tag(Manifest.Release.PhasedReleaseState.active)
+                    Text("Paused").tag(Manifest.Release.PhasedReleaseState.paused)
+                }
+                .frame(width: 180)
+            }
+            Spacer()
+        }
+        .font(.system(size: 12))
+        .padding(12)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     // MARK: - The checklist
@@ -151,11 +177,15 @@ struct ReleaseTab: View {
         let blockers = state.releaseBlockers(for: store)
         let blocked = !released && (!state.applied || !blockers.isEmpty)
         let name = store == .apple ? "App Store" : "Google Play"
+        let approvedApple = store == .apple
+            && state.actualState.apple?.versionState == "PENDING_DEVELOPER_RELEASE"
         let other = store == .apple ? "Google Play" : "The App Store"
         return ReleaseColumn(
             store: store,
             lines: lines(store),
-            label: released ? "Sent to \(name) review" : "Send to \(name) review",
+            label: released ? "Sent to \(name) review"
+                : approvedApple ? "Release the approved App Store version"
+                : "Send to \(name) review",
             done: released,
             blocked: blocked,
             hint: hint(store, released: released, blockers: blockers, other: other),

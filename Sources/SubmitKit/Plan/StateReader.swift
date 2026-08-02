@@ -20,7 +20,8 @@ public struct StateReader: Sendable {
         if stores.contains(.apple), let apple = manifest.apps.apple, !apple.appId.isEmpty {
             do {
                 state.apple = try await readApple(appID: apple.appId,
-                                                  basePrice: manifest.pricing?.base)
+                                                  basePrice: manifest.pricing?.base,
+                                                  versionName: manifest.release?.versionName)
             } catch { state.failures.append("App Store: \(error.localizedDescription)") }
         }
         if stores.contains(.google), let google = manifest.apps.google,
@@ -43,7 +44,8 @@ public struct StateReader: Sendable {
     // MARK: - The App Store
 
     public func readApple(appID: String,
-                          basePrice: Price? = nil) async throws -> ActualState.Apple {
+                          basePrice: Price? = nil,
+                          versionName: String? = nil) async throws -> ActualState.Apple {
         var result = ActualState.Apple()
 
         let infos = JSON(data: try await api.apple(
@@ -67,6 +69,8 @@ public struct StateReader: Sendable {
                 value.name = attributes["name"].string
                 value.subtitle = attributes["subtitle"].string
                 value.privacyPolicyUrl = attributes["privacyPolicyUrl"].string
+                value.privacyPolicyText = attributes["privacyPolicyText"].string
+                value.privacyChoicesUrl = attributes["privacyChoicesUrl"].string
                 result.infoLocales[locale] = value
             }
 
@@ -84,7 +88,12 @@ public struct StateReader: Sendable {
                 ?? $0["attributes"]["appStoreState"].string ?? ""
             return editableStates.contains(state)
         }
-        if let version = editableVersion ?? versions["data"].array.first {
+        let namedVersion = versionName.flatMap { wanted in
+            versions["data"].array.first {
+                $0["attributes"]["versionString"].string == wanted
+            }
+        }
+        if let version = namedVersion ?? editableVersion ?? versions["data"].array.first {
             let versionID = version["id"].string
             result.versionId = versionID
             result.versionString = version["attributes"]["versionString"].string
@@ -93,6 +102,10 @@ public struct StateReader: Sendable {
             result.attachedBuildId = version["relationships"]["build"]["data"]["id"].string
 
             if let versionID {
+                let phased = JSON(data: try await api.apple(
+                    "GET", "/v1/appStoreVersions/\(versionID)/appStoreVersionPhasedRelease").data)
+                result.phasedReleaseId = phased["data"]["id"].string
+                result.phasedReleaseState = phased["data"]["attributes"]["phasedReleaseState"].string
                 let localizations = JSON(data: try await api.apple(
                     "GET",
                     "/v1/appStoreVersions/\(versionID)/appStoreVersionLocalizations?limit=200").data)
@@ -129,6 +142,8 @@ public struct StateReader: Sendable {
                             guard let checksum, let type = byBucket[setID] else { continue }
                             result.screenshotChecksums["\(locale)/\(type)", default: []]
                                 .insert(checksum)
+                            result.screenshotChecksumOrder["\(locale)/\(type)", default: []]
+                                .append(checksum)
                         }
                     }
                 }
@@ -145,6 +160,10 @@ public struct StateReader: Sendable {
         result.highestBuildNumber = builds["data"].array
             .compactMap { $0["attributes"]["version"].int }
             .max()
+        if let buildID = result.attachedBuildId,
+           let build = builds["data"].array.first(where: { $0["id"].string == buildID }) {
+            result.buildUsesNonExemptEncryption = build["attributes"]["usesNonExemptEncryption"].bool
+        }
 
         let purchases = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/inAppPurchasesV2?limit=200").data)
@@ -171,10 +190,30 @@ public struct StateReader: Sendable {
             result.priceCurrency = basePrice.currency
         }
 
+        let schedule = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/appPriceSchedule"
+                + "?include=baseTerritory,manualPrices,manualPrices.appPricePoint").data)
+        for included in schedule["included"].array
+        where included["type"].string == "appPricePoints" {
+            if let text = included["attributes"]["customerPrice"].string {
+                result.currentPriceAmount = Decimal(string: text)
+                break
+            }
+        }
+
         let availabilities = JSON(data: try await api.apple(
-            "GET", "/v2/apps/\(appID)/appAvailabilityV2").data)
+            "GET", "/v2/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities").data)
+        result.appAvailabilityId = availabilities["data"]["id"].string
+        result.availableInNewTerritories = availabilities["data"]["attributes"]["availableInNewTerritories"].bool
         let territories = availabilities["data"]["relationships"]["territoryAvailabilities"]
         result.territoryCount = territories["meta"]["paging"]["total"].int
+        for item in availabilities["included"].array
+        where item["type"].string == "territoryAvailabilities" {
+            guard let code = item["relationships"]["territory"]["data"]["id"].string else {
+                continue
+            }
+            result.territoryAvailability[code] = item["attributes"]["available"].bool ?? false
+        }
 
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
@@ -208,7 +247,8 @@ public struct StateReader: Sendable {
                 result.listings[language] = value
 
                 for imageType in ["phoneScreenshots", "sevenInchScreenshots",
-                                  "tenInchScreenshots", "tvScreenshots", "wearScreenshots"] {
+                                  "tenInchScreenshots", "tvScreenshots", "wearScreenshots",
+                                  "icon", "featureGraphic"] {
                     let images = JSON(data: try await api.google(
                         "GET", "\(editBase)/listings/\(language)/\(imageType)").data)
                     let hashes = images["images"].array.compactMap { $0["sha256"].string }

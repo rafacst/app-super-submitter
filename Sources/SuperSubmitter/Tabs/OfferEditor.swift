@@ -76,6 +76,10 @@ struct OfferEditor: View {
             "App Store: an introductory offer with PAY_UP_FRONT. Google: an offer phase with an absolute discount."
         case .offerCode:
             "App Store: a subscription offer code. Google: an offer with a promotion targeting."
+        case .promotional:
+            "App Store: a promotional offer for existing subscribers. Google: a targeted offer phase."
+        case .winBack:
+            "App Store: a win-back offer for lapsed subscribers. Google: a returning-subscriber offer."
         }
     }
 }

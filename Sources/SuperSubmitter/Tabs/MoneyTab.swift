@@ -92,6 +92,9 @@ struct MoneyTab: View {
                     Text("Other territories are converted by the stores.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 }
+                Toggle("Convert the base price for every Google region",
+                       isOn: state.autoConvertPricesBinding)
+                    .disabled(!state.stores.contains(.google))
                 resolvedPoint
             }.moneyPanel()
         }
@@ -126,7 +129,9 @@ struct MoneyTab: View {
 
     private var availabilitySection: some View {
         Section_("Availability", icon: "globe", tint: Theme.teal) {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("App Store territory codes (comma-separated)",
+                          text: state.appTerritoriesBinding)
                 if state.stores.contains(.apple) {
                     Link("Edit App Store countries ↗",
                          destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
@@ -166,6 +171,32 @@ struct MoneyTab: View {
                         catalogRow(target: .purchase(index),
                                    active: state.purchaseActiveBinding(index: index),
                                    activeLabel: "On sale")
+                        HStack {
+                            TextField("Review screenshot path",
+                                      text: state.purchaseMetadataBinding(index: index,
+                                                                          key: "screenshot"))
+                            TextField("App Store territories",
+                                      text: state.purchaseMetadataBinding(index: index,
+                                                                          key: "territories"))
+                        }
+                        TextField("Apple-hosted content package path",
+                                  text: state.purchaseMetadataBinding(index: index,
+                                                                      key: "content"))
+                        HStack {
+                            TextField("Localized name",
+                                      text: state.purchaseMetadataBinding(index: index,
+                                                                          key: "localeName"))
+                            TextField("Localized description",
+                                      text: state.purchaseMetadataBinding(index: index,
+                                                                          key: "localeDescription"))
+                        }
+                        HStack {
+                            Toggle("Apple-hosted content",
+                                   isOn: state.purchaseFlagBinding(index: index, key: "content"))
+                            Toggle("Promoted purchase",
+                                   isOn: state.purchaseFlagBinding(index: index, key: "promoted"))
+                            Spacer()
+                        }
                         OfferEditor(target: .purchase(index))
                     }.moneyPanel()
                 }

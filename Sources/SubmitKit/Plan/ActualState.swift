@@ -29,9 +29,11 @@ public struct ActualState: Sendable, Equatable {
         /// "locale/displayType" to the set of `sourceFileChecksum` values that
         /// Apple already holds. An upload that matches is skipped. Spec 7.5.
         public var screenshotChecksums: [String: Set<String>] = [:]
+        public var screenshotChecksumOrder: [String: [String]] = [:]
         public var previewChecksums: [String: Set<String>] = [:]
         public var highestBuildNumber: Int?
         public var attachedBuildId: String?
+        public var buildUsesNonExemptEncryption: Bool?
         public var reviewDetailId: String?
         public var reviewContactEmail: String?
         public var ageRatingDeclarationId: String?
@@ -40,8 +42,14 @@ public struct ActualState: Sendable, Equatable {
         /// Spec 10.6. A second submission cannot open while one is open.
         public var hasOpenReviewSubmission = false
         public var priceAmount: Decimal?
+        public var currentPriceAmount: Decimal?
         public var priceCurrency: String?
         public var territoryCount: Int?
+        public var appAvailabilityId: String?
+        public var territoryAvailability: [String: Bool] = [:]
+        public var availableInNewTerritories: Bool?
+        public var phasedReleaseId: String?
+        public var phasedReleaseState: String?
 
         public init() {}
 
@@ -50,6 +58,8 @@ public struct ActualState: Sendable, Equatable {
             public var name: String?
             public var subtitle: String?
             public var privacyPolicyUrl: String?
+            public var privacyPolicyText: String?
+            public var privacyChoicesUrl: String?
             public init() {}
         }
 
