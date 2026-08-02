@@ -121,7 +121,7 @@ swift build
 swift test
 ```
 
-Both pass with no warnings. There are 131 Swift Testing tests. A launch smoke
+Both pass with no warnings. There are 132 Swift Testing tests. A launch smoke
 test runs the binary and it stays up.
 
 No live store call was executed, because this workspace holds no credential.

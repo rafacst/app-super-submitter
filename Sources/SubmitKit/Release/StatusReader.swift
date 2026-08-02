@@ -87,23 +87,30 @@ public struct ReleaseStatusReader: Sendable {
         let path = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
             + "/tracks/\(track)/releases"
         let payload = JSON(data: try await api.google("GET", path).data)
-        let release = payload["releases"].array.first ?? payload["tracks"][0]["releases"][0]
-        let status = release["status"].string ?? ""
-        let fraction = release["userFraction"].double
+        let release = payload["releases"].array.max { lhs, rhs in
+            Self.highestVersionCode(in: lhs) < Self.highestVersionCode(in: rhs)
+        } ?? JSON(data: Data("{}".utf8))
+        let state = release["releaseLifecycleState"].string ?? ""
         var detail = "\(track) track"
-        if let fraction, fraction > 0, fraction < 1 {
-            detail += " · \(Int(fraction * 100))% rollout"
+        if let name = release["releaseName"].string, !name.isEmpty {
+            detail += " · \(name)"
         }
-        return StoreStatus(store: .google, phase: Self.googlePhase(status), detail: detail,
+        return StoreStatus(store: .google, phase: Self.googlePhase(state), detail: detail,
                            checkedAt: Date())
+    }
+
+    private static func highestVersionCode(in release: JSON) -> Int {
+        release["activeArtifacts"].array.compactMap { $0["versionCode"].int }.max() ?? -1
     }
 
     static func googlePhase(_ status: String) -> StoreStatus.Phase {
         switch status {
-        case "draft": .draft
-        case "inProgress": .live
-        case "completed": .live
-        case "halted": .rejected
+        case "RELEASE_LIFECYCLE_STATE_DRAFT", "RELEASE_LIFECYCLE_STATE_NOT_SENT_FOR_REVIEW":
+            .draft
+        case "RELEASE_LIFECYCLE_STATE_IN_REVIEW": .inReview
+        case "RELEASE_LIFECYCLE_STATE_APPROVED_NOT_PUBLISHED": .approved
+        case "RELEASE_LIFECYCLE_STATE_NOT_APPROVED": .rejected
+        case "RELEASE_LIFECYCLE_STATE_PUBLISHED": .live
         default: .inQueue
         }
     }
