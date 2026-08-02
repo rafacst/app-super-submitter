@@ -97,8 +97,6 @@ final class AppState {
     /// Settings opens as a panel over the window, not as a second window.
     var showSettings = false
     var showOnboarding = false
-    var onboardingStep = 0
-    var menuBarOpen = false
     var releaseSheet: Store?
     var showAddLocale = false
 
@@ -140,7 +138,7 @@ final class AppState {
     var yamlError: String?
 
     // Tab 5.
-    var provider: Manifest.Provider = .revenuecat
+    var provider: Manifest.Provider = .none
     var revenueCatAPIKey = ""
     var revenueCatProjectID = ""
     var revenueCatConnection: ConnectionStatus = .notTested
@@ -203,6 +201,7 @@ final class AppState {
             let version = loaded?.release?.versionName ?? "No version"
             let selected = index == selectedAppIndex
             return AppSummary(
+                id: record.id,
                 name: record.name,
                 initials: Self.initials(for: record.name),
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
@@ -356,9 +355,14 @@ final class AppState {
             let listedName = defaultLocale.flatMap { loaded.listing?.locales[$0]?.name }
             let folderName = url.deletingLastPathComponent().lastPathComponent
             let name = listedName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let displayName = if let name, !name.isEmpty {
+                name
+            } else {
+                Self.displayName(from: folderName)
+            }
             let record = LinkedAppRecord(
                 id: UUID(),
-                name: name?.isEmpty == false ? name! : Self.displayName(from: folderName),
+                name: displayName,
                 manifestPath: url.path)
             linkedApps.append(record)
             persistLinkedApps()

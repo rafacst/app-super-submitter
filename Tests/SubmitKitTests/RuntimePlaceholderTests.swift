@@ -19,6 +19,7 @@ import Testing
         "Split any bill in seconds", "bill,split,tip,receipt", "1179 × 2555",
         "[\"en-US\", \"pt-BR\"]", "old?.currency ?? \"USD\"",
         "old?.amount ?? 0", "newManifest.addLocale(\"en-US\"",
+        "var locale = \"en-US\"", "?? \"en-US\"",
     ]
 
     for value in banned {

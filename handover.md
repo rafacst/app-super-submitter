@@ -6,11 +6,14 @@ Updated: 2026-08-02
 
 Every tab of the design is functional. The app reads both stores, plans the
 diff, applies the drafts, and releases one store per button. No screen renders
-demo data any more.
+demo data any more. Until a real `store.yaml` is created or opened, the app
+shows a true empty state and keeps all manifest-backed tabs disabled.
 
 ### Tabs 1 to 6 — the manifest form
 
-1. **New app** creates `store.yaml`, persists the linked app, and selects it.
+1. **New app** creates a blank `store.yaml`, persists the linked app, and
+   selects it. **Open store.yaml** links an existing manifest without changing
+   it.
 2. **Stores** adds and removes store blocks, imports Apple and Google
    credentials into the Keychain, tests both connections, and links to the
    consoles.
@@ -121,7 +124,7 @@ swift build
 swift test
 ```
 
-Both pass with no warnings. There are 132 Swift Testing tests. A launch smoke
+Both pass with no warnings. There are 134 Swift Testing tests. A launch smoke
 test runs the binary and it stays up.
 
 No live store call was executed, because this workspace holds no credential.
@@ -139,7 +142,7 @@ from the two specs, not from a recorded response.
   `UNUserNotificationCenter` is unavailable and a status change bounces the
   Dock icon instead. There is no Mac App Store variant and no sandbox branch,
   which is the decision upload-spec section 1 fixed.
-- Open an existing app from disk, and remove or rename a linked app.
+- Remove or rename a linked app.
 
 ### Service work behind a live account
 

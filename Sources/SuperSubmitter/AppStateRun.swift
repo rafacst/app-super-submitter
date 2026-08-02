@@ -331,7 +331,10 @@ extension AppState {
     }
 
     private var currentAppKey: String {
-        manifest.apps.apple?.appId ?? manifest.apps.google?.packageName ?? "app"
+        manifest.apps.apple?.appId
+            ?? manifest.apps.google?.packageName
+            ?? credentialAccount
+            ?? "unlinked"
     }
 
     /// Runs the read calls again and updates the states. It writes nothing.

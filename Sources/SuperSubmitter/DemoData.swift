@@ -69,10 +69,10 @@ enum StoreHealth {
 }
 
 struct AppSummary: Identifiable {
+    let id: UUID
     let name: String
     let initials: String
     let summary: String
     let apple: StoreHealth
     let google: StoreHealth
-    var id: String { name }
 }

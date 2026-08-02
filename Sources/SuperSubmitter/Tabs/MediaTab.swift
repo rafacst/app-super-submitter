@@ -188,7 +188,7 @@ private extension View {
     }
 }
 
-/// Shared with onboarding for placeholder artwork.
+/// Shared with onboarding for decorative artwork.
 struct Hatched: View {
     var cornerRadius: CGFloat = 6
     var body: some View {
