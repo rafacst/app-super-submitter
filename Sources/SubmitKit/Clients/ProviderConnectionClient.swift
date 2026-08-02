@@ -54,6 +54,76 @@ public struct AdaptyCLIClient: Sendable {
         let text = who.text.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? "Logged in" : text
     }
+
+    /// What the plan needs to know about the Adapty catalog. Spec 7.8.2,
+    /// steps 2 to 8. Every command here is a `list` or a `get`.
+    public struct Catalog: Sendable {
+        public var productIds: [String: String] = [:]
+        public var accessLevels: Set<String> = []
+        public var placements: Set<String> = []
+        public var paywalls: [String: String] = [:]
+        public var appIdentifiers: [String: String] = [:]
+    }
+
+    public func catalog(appID: String) throws -> Catalog {
+        var result = Catalog()
+        let app = try json(["apps", "get", appID])
+        result.appIdentifiers["apple"] = app["apple-bundle-id"].string
+            ?? app["apple_bundle_id"].string
+        result.appIdentifiers["google"] = app["google-bundle-id"].string
+            ?? app["google_bundle_id"].string
+
+        for level in items(try json(["access-levels", "list", "--app", appID])) {
+            guard let key = level["sdk_id"].string ?? level["sdk-id"].string else { continue }
+            result.accessLevels.insert(key)
+        }
+        for product in items(try json(["products", "list", "--app", appID])) {
+            guard let id = product["id"].string else { continue }
+            for key in [product["ios_product_id"].string, product["android_product_id"].string,
+                        product["ios-product-id"].string, product["android-product-id"].string] {
+                guard let key, !key.isEmpty else { continue }
+                result.productIds[key] = id
+            }
+        }
+        for paywall in items(try json(["paywalls", "list", "--app", appID])) {
+            guard let id = paywall["id"].string else { continue }
+            result.paywalls[paywall["title"].string ?? id] = id
+        }
+        for placement in items(try json(["placements", "list", "--app", appID])) {
+            guard let key = placement["developer_id"].string ?? placement["id"].string else {
+                continue
+            }
+            result.placements.insert(key)
+        }
+        return result
+    }
+
+    /// Runs one Adapty command and returns its JSON. Spec section 14: the app
+    /// never retries an Adapty command, because a repeated create duplicates.
+    @discardableResult
+    public func json(_ arguments: [String]) throws -> JSON {
+        let lookup = try runner.run("/usr/bin/which", ["adapty"])
+        guard lookup.status == 0, let executable = lookup.lines.first else {
+            throw ProviderConnectionError.adaptyMissing
+        }
+        var full = arguments
+        if !full.contains("--json") { full.append("--json") }
+        if arguments.contains("list"), !full.contains("--page-size") {
+            full += ["--page-size", "100"]
+        }
+        let result = try runner.run(executable, full)
+        guard result.status == 0 else {
+            throw ProviderConnectionError.adapty(
+                result.error.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return JSON(data: result.output)
+    }
+
+    private func items(_ json: JSON) -> [JSON] {
+        json["data"].array.isEmpty
+            ? (json["items"].array.isEmpty ? json.array : json["items"].array)
+            : json["data"].array
+    }
 }
 
 public enum ProviderConnectionError: Error, LocalizedError {

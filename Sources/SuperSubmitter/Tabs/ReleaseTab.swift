@@ -11,53 +11,56 @@ struct ReleaseTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            checklist
+            if state.consoleRows.isEmpty {
+                notReadYet
+            } else {
+                checklist
+            }
             status
+            if let error = state.releaseError { failure(error) }
             sendToReview
+        }
+        .task(id: state.manifestURL) {
+            guard state.consoleRows.isEmpty, !state.stores.isEmpty else { return }
+            state.loadConsoleMarks()
         }
     }
 
     // MARK: - The checklist
 
-    private var cards: [(name: String, rows: [DemoCheckRow])] {
-        var result: [(String, [DemoCheckRow])] = [
-            ("App Store", DemoData.appleChecklist),
-            ("Google Play", googleRows),
-        ]
-        if state.hasProvider {
-            result.append((state.provider == .adapty ? "Adapty" : "RevenueCat",
-                           DemoData.providerChecklist))
+    private var cards: [(name: String, rows: [ConsoleRow])] {
+        var result: [(String, [ConsoleRow])] = []
+        for system in ["App Store", "Google Play", "RevenueCat", "Adapty"] {
+            let rows = state.consoleRows.filter { $0.system == system }
+            guard !rows.isEmpty else { continue }
+            result.append((system, rows))
         }
         return result
     }
 
-    /// The content rating turns Done after a re-check. It is the row that
-    /// blocks the Google button, so it must be able to change.
-    private var googleRows: [DemoCheckRow] {
-        DemoData.googleChecklist.map { row in
-            guard row.id == "g1", state.rechecked else { return row }
-            return DemoCheckRow(row.id, row.title, row.reason, .done)
-        }
-    }
-
-    private func effectiveState(_ row: DemoCheckRow) -> CheckState {
-        if row.state == .unknown, state.checked.contains(row.id) { return .done }
-        return row.state
-    }
-
-    private var doneCount: (done: Int, total: Int) {
-        let all = cards.flatMap(\.rows)
-        return (all.filter { effectiveState($0) == .done }.count, all.count)
-    }
-
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("\(doneCount.done) of \(doneCount.total) steps are done")
+            Text("\(state.consoleDone) of \(state.consoleRows.count) steps are done")
                 .font(.system(size: 14, weight: .semibold))
             Text("Every row below happens in a console. No API performs it.")
                 .font(.system(size: 12)).foregroundStyle(Theme.text2)
             Spacer(minLength: 0)
         }
+    }
+
+    private var notReadYet: some View {
+        HStack(spacing: 11) {
+            Text("The checklist needs one read of the stores.")
+                .font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+            QuietButton(title: "Read the stores") { Task { await state.recheck() } }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     private var checklist: some View {
@@ -67,7 +70,7 @@ struct ReleaseTab: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text(card.name).font(.system(size: 12.5, weight: .semibold))
                         Spacer(minLength: 8)
-                        Text("\(card.rows.filter { effectiveState($0) == .done }.count) of \(card.rows.count)")
+                        Text("\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
                             .font(.system(size: 11)).foregroundStyle(Theme.text2)
                     }
                     .padding(.horizontal, 14)
@@ -75,7 +78,7 @@ struct ReleaseTab: View {
 
                     ForEach(card.rows) { row in
                         Hairline(color: Theme.sep2)
-                        ChecklistRow(row: row, state_: effectiveState(row))
+                        ChecklistRow(row: row)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,16 +93,34 @@ struct ReleaseTab: View {
 
     private var status: some View {
         HStack(spacing: 14) {
-            StatusCard(store: "App Store", detail: "Version 3.2.0 · build 412",
-                       released: state.appleReleased, applied: state.applied)
-            StatusCard(store: "Google Play", detail: "Version 3.2.0 · version code 412 · production",
-                       released: state.googleReleased, applied: state.applied)
+            ForEach(Store.allCases.filter { state.stores.contains($0) }) { store in
+                StatusCard(status: state.statuses[store]
+                    ?? StoreStatus(store: store, phase: .noDraft,
+                                   detail: state.detail(for: store)))
+            }
         }
     }
 
-    // MARK: - The two buttons
+    private func failure(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 11) {
+            StatePill(text: "Failed", foreground: Theme.red, background: Theme.redBg)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(message)
+                    .font(.system(size: 12))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("The other store is untouched. This app never chained the two.")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
+    }
 
-    private var googleBlocked: Bool { !state.rechecked && !state.checked.contains("g1") }
+    // MARK: - The two buttons
 
     private var sendToReview: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -111,51 +132,98 @@ struct ReleaseTab: View {
             }
 
             HStack(alignment: .top, spacing: 0) {
-                ReleaseColumn(
-                    lines: "App Store · version 3.2.0, build 412\nRelease after approval, phased over 7 days.",
-                    label: state.appleReleased ? "Sent to App Store review" : "Send to App Store review",
-                    done: state.appleReleased,
-                    blocked: false,
-                    hint: state.appleReleased
-                        ? "Sent at 14:11. You can cancel this submission only before the review starts."
-                        : "This sends the App Store and nothing else. Google Play stays a draft.",
-                    hintColor: Theme.text2
-                ) { state.releaseSheet = .apple }
-
-                Rectangle().fill(Theme.sep).frame(width: 1).padding(.horizontal, 18)
-
-                ReleaseColumn(
-                    lines: "Google Play · version 3.2.0, version code 412\nProduction track, completed rollout.",
-                    label: state.googleReleased ? "Sent to Google Play review" : "Send to Google Play review",
-                    done: state.googleReleased,
-                    blocked: googleBlocked,
-                    hint: state.googleReleased
-                        ? "Sent at 14:12. You can halt a staged rollout only. A completed rollout cannot be halted."
-                        : googleBlocked
-                            ? "Blocked: the content rating (IARC) is not done. Finish it in the Play Console, then press Re-check."
-                            : "This sends Google Play and nothing else. The App Store is untouched.",
-                    hintColor: googleBlocked && !state.googleReleased ? Theme.yellow : Theme.text2
-                ) { state.releaseSheet = .google }
+                if state.stores.contains(.apple) {
+                    column(.apple)
+                }
+                if state.stores.count == 2 {
+                    Rectangle().fill(Theme.sep).frame(width: 1).padding(.horizontal, 18)
+                }
+                if state.stores.contains(.google) {
+                    column(.google)
+                }
             }
+        }
+    }
+
+    private func column(_ store: Store) -> some View {
+        let released = store == .apple ? state.appleReleased : state.googleReleased
+        let blockers = state.releaseBlockers(for: store)
+        let blocked = !released && (!state.applied || !blockers.isEmpty)
+        let name = store == .apple ? "App Store" : "Google Play"
+        let other = store == .apple ? "Google Play" : "The App Store"
+        return ReleaseColumn(
+            lines: lines(store),
+            label: released ? "Sent to \(name) review" : "Send to \(name) review",
+            done: released,
+            blocked: blocked,
+            hint: hint(store, released: released, blockers: blockers, other: other),
+            hintColor: blocked && !released ? Theme.yellow : Theme.text2
+        ) { state.releaseSheet = store }
+    }
+
+    private func lines(_ store: Store) -> String {
+        let version = state.manifest.release?.versionName ?? "no version"
+        switch store {
+        case .apple:
+            let release = state.manifest.release?.apple?.releaseType?.rawValue ?? "MANUAL"
+            let phased = state.manifest.release?.apple?.phasedRelease == true
+                ? ", phased over 7 days" : ""
+            return "App Store · version \(version)\n\(Self.appleRelease(release))\(phased)."
+        case .google:
+            let track = state.manifest.release?.google?.track ?? "production"
+            let status = state.manifest.release?.google?.status ?? "completed"
+            return "Google Play · version \(version)\n\(track) track, \(Self.googleRelease(status))."
+        }
+    }
+
+    private func hint(_ store: Store, released: Bool, blockers: [ConsoleRow],
+                      other: String) -> String {
+        if released {
+            return store == .apple
+                ? "You can cancel this submission only before the review starts."
+                : "You can halt a staged rollout only. A completed rollout cannot be halted."
+        }
+        if !state.applied {
+            return "Blocked: no draft exists yet. Run an apply on the Submit tab first."
+        }
+        if let first = blockers.first {
+            return "Blocked: \(first.title.lowercased()) is not done. Finish it in the console, then press Re-check."
+        }
+        return "This sends \(store == .apple ? "the App Store" : "Google Play") and nothing else. \(other) stays a draft."
+    }
+
+    static func appleRelease(_ value: String) -> String {
+        switch value {
+        case "AFTER_APPROVAL": "Release after approval"
+        case "SCHEDULED": "Release on a date"
+        default: "Release manually"
+        }
+    }
+
+    static func googleRelease(_ value: String) -> String {
+        switch value {
+        case "inProgress": "staged rollout"
+        case "draft": "draft"
+        case "halted": "halted"
+        default: "completed rollout"
         }
     }
 }
 
 private struct ChecklistRow: View {
     @Environment(AppState.self) private var state
-    let row: DemoCheckRow
-    let state_: CheckState
+    let row: ConsoleRow
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        let shown = state.markedState(row)
+        return HStack(alignment: .top, spacing: 10) {
             // Only an Unknown row takes a hand-made mark. No API can read it,
             // so the developer is the only source.
             Group {
                 if row.state == .unknown {
-                    let marked = state.checked.contains(row.id)
+                    let marked = state.consoleMarks.contains(row.id)
                     Button {
-                        if marked { state.checked.remove(row.id) }
-                        else { state.checked.insert(row.id) }
+                        state.toggleConsoleMark(row.id)
                     } label: {
                         RoundedRectangle(cornerRadius: 3)
                             .fill(marked ? Theme.accent : .clear)
@@ -185,36 +253,52 @@ private struct ChecklistRow: View {
                     .foregroundStyle(Theme.text2)
                     .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
-                if state_ != .done {
-                    Text("Open ↗").font(.system(size: 10.5)).foregroundStyle(Theme.accent)
+                if shown != .done {
+                    Button { state.open(row.link) } label: {
+                        Text("Open ↗").font(.system(size: 10.5)).foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open \(row.title)")
                 }
             }
             Spacer(minLength: 6)
-            StatePill(text: state_.label, foreground: state_.color, background: state_.background)
+            StatePill(text: shown.label, foreground: ReleaseTab.color(shown),
+                      background: ReleaseTab.background(shown))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
 }
 
-private struct StatusCard: View {
-    let store: String
-    let detail: String
-    let released: Bool
-    let applied: Bool
-
-    private var label: String {
-        if released { "Waiting for review" }
-        else if applied { "Draft, ready to release" }
-        else { "No draft yet" }
+extension ReleaseTab {
+    static func color(_ state: ConsoleState) -> Color {
+        switch state {
+        case .done: Theme.green
+        case .needed: Theme.yellow
+        case .unknown: Theme.text2
+        case .notApplicable: Theme.text3
+        }
     }
+
+    static func background(_ state: ConsoleState) -> Color {
+        switch state {
+        case .done: Theme.greenBg
+        case .needed: Theme.yellowBg
+        case .unknown: Theme.sep2
+        case .notApplicable: .clear
+        }
+    }
+}
+
+private struct StatusCard: View {
+    let status: StoreStatus
 
     var body: some View {
         HStack(spacing: 11) {
             // A round dot is a draft. A square dot is in a queue. The two
             // read apart with no colour.
             Group {
-                if released {
+                if status.phase.isReleased {
                     RoundedRectangle(cornerRadius: 1).fill(Theme.yellow)
                 } else {
                     Circle().fill(Theme.text3)
@@ -223,13 +307,13 @@ private struct StatusCard: View {
             .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(store).font(.system(size: 12.5, weight: .medium))
+                Text(status.storeName).font(.system(size: 12.5, weight: .medium))
                 Text(detail).font(.system(size: 11)).foregroundStyle(Theme.text2).lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text(label)
+            Text(status.phase.label)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(released ? Theme.yellow : Theme.text)
+                .foregroundStyle(status.phase.isReleased ? Theme.yellow : Theme.text)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 12)
@@ -237,6 +321,11 @@ private struct StatusCard: View {
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    private var detail: String {
+        guard let checked = status.checkedAt else { return status.detail }
+        return "\(status.detail) · checked \(checked.formatted(date: .omitted, time: .shortened))"
     }
 }
 

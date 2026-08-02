@@ -160,6 +160,33 @@ public extension Manifest {
         self.media = media
     }
 
+    /// Moves one file inside its bucket. The list order is the order the
+    /// stores show, so the developer needs it and no other model does.
+    mutating func moveMediaPath(_ path: String, by offset: Int, locale: String,
+                                deviceClass: DeviceClass, previews: Bool = false) {
+        var values = mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+        guard let index = values.firstIndex(of: path) else { return }
+        let target = index + offset
+        guard values.indices.contains(target) else { return }
+        values.swapAt(index, target)
+
+        var media = self.media ?? Media()
+        if previews {
+            var locales = media.previews ?? [:]
+            var groups = locales[locale] ?? [:]
+            groups[deviceClass.rawValue] = values
+            locales[locale] = groups
+            media.previews = locales
+        } else {
+            var locales = media.screenshots ?? [:]
+            var groups = locales[locale] ?? [:]
+            groups[deviceClass.rawValue] = values
+            locales[locale] = groups
+            media.screenshots = locales
+        }
+        self.media = media
+    }
+
     mutating func removeMediaPath(_ path: String, locale: String,
                                   deviceClass: DeviceClass, previews: Bool = false) {
         var media = self.media ?? Media()

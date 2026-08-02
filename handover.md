@@ -4,66 +4,74 @@ Updated: 2026-08-02
 
 ## Current state
 
-The original high-fidelity prototype is now functional through Review info
-(UI audit items 1–8 / tabs 1–6). All local edits save to the active
-`store.yaml`; secrets save to macOS Keychain.
+Every tab of the design is functional. The app reads both stores, plans the
+diff, applies the drafts, and releases one store per button. No screen renders
+demo data any more.
 
-1. **New app**
-   - Creates `store.yaml`, persists the linked app, loads it, and selects it.
-2. **Add locale**
-   - Validates and normalizes locale codes, adds the manifest block, and
-     updates the locale picker.
-3. **Stores**
-   - Adds/removes store manifest blocks, edits identifiers, imports Apple and
-     Google credentials into Keychain, tests both connections, and links to
-     the relevant consoles.
-4. **Build / listing import**
-   - Selects or drops `.ipa`, `.pkg`, and `.aab` builds; parses real package
-     metadata; detects identifier/version mismatches; imports current Apple
-     and Google listing text.
-5. **Details**
-   - Every field is a native `TextField` or `TextEditor` bound to the active
-     locale. Counters, limit errors, store-only visibility, Google overrides,
-     and both store previews derive from the manifest.
-6. **Media**
-   - Image and Apple preview selection/drop are live. File types, image
-     readability, Apple bucket dimensions, Google size/aspect rules, preview
-     duration (15–30 seconds), and per-bucket counts are checked before paths
-     are saved. Invalid Apple dimensions report the nearest accepted size.
-     Paths inside the app repository remain relative. Tiles show actual
-     thumbnails/dimensions and support removal.
-     The Google YouTube URL edits the active locale.
-7. **Money**
-   - Provider, base price, purchases, subscription groups/plans,
-     entitlements/access levels, and offerings/paywalls are editable and
-     persisted.
-   - RevenueCat's v2 secret is in Keychain; project lookup and authentication
-     testing are live. The result explicitly states that write scopes are not
-     yet verified. Adapty CLI status/whoami, copy, signup, and Console links
-     are live.
-8. **Review info**
-   - Contact, notes, demo-account requirement, categories, age-rating answers,
-     data-safety answers, and export compliance are manifest-backed.
-   - Reviewer username/password are Keychain-backed. Review actions open live
-     forms or navigate to the relevant tab/console.
+### Tabs 1 to 6 — the manifest form
 
-The user-supplied icon is bundled as an executable resource and applied to
-`NSApplication` at startup. The original Icon Composer folder remains at
-`super-submitter-icon.icon/` for a future signed Xcode app target.
+1. **New app** creates `store.yaml`, persists the linked app, and selects it.
+2. **Stores** adds and removes store blocks, imports Apple and Google
+   credentials into the Keychain, tests both connections, and links to the
+   consoles.
+3. **Build** selects or drops `.ipa`, `.pkg`, and `.aab` builds, parses real
+   package metadata, and reports an identifier or version mismatch.
+4. **Details** binds every field to the active locale, with counters, limit
+   errors, store-only visibility, Google overrides, and both previews.
+5. **Media** validates the file type, the dimensions, the Google size rules,
+   the preview duration, and the per-bucket count before a path is saved.
+   Tiles now reorder with the two arrows, because the list order is the order
+   both stores show.
+6. **Money** edits the provider, the base price, the purchases, the
+   subscriptions, the entitlements, and the offerings. It shows the resolved
+   App Store price point next to the request and marks a gap over 5 percent.
+7. **Review info** is manifest-backed, and the reviewer credentials stay in the
+   Keychain. Its Console-only rows come from the same list that tab 9 reads.
 
-Relevant implementation files:
+Every editing tab holds a **YAML** toggle in its toolbar. The toggle shows the
+raw block that the tab owns, and both sides write the same file. An edit that
+names a key from another tab is refused instead of merged (SPEC 16.1).
 
-- `Sources/SuperSubmitter/AppState.swift`
-- `Sources/SuperSubmitter/SuperSubmitterApp.swift`
-- `Sources/SuperSubmitter/Tabs/DetailsTab.swift`
-- `Sources/SuperSubmitter/Tabs/MediaTab.swift`
-- `Sources/SuperSubmitter/Tabs/MoneyTab.swift`
-- `Sources/SuperSubmitter/Tabs/ReviewInfoTab.swift`
-- `Sources/SubmitKit/Assets/AssetInspector.swift`
-- `Sources/SubmitKit/Clients/ProviderConnectionClient.swift`
-- `Sources/SubmitKit/Credentials/Credentials.swift`
-- `Sources/SubmitKit/Manifest/ManifestEditing.swift`
-- `Tests/SubmitKitTests/ManifestEditingTests.swift`
+### Tab 7 — Plan
+
+`StateReader` reads App Store Connect, Android Publisher, and the provider.
+`Planner` diffs the manifest against that state and emits the operation list.
+`Validator` runs every rule of SPEC section 10. The tab shows the real write
+count, upload count, and upload size; an error blocks the apply and a warning
+needs one acknowledgement. The plan opens no Google edit that outlives the
+read, creates no Apple resource, and writes nothing.
+
+### Tab 8 — Submit
+
+`Runner` executes the plan in the order of SPEC 7.3 and 7.4: the Apple
+reversible writes first, then the reservation uploads, then one Google edit
+that opens first and commits last with `changesNotSentForReview=true` and
+`Release.status: draft`. The provider sync runs last.
+
+- A dry run builds and logs every request and sends none.
+- Every call appends one redacted JSON line to
+  `.super-submitter/runs/<timestamp>.jsonl`.
+- A failure stops the run and offers **Retry from the failed step** and
+  **Undo what this run created**, with both limits of that undo stated.
+- A provider failure never holds a store draft. The run finishes and offers
+  **Retry the provider sync**.
+- A cancellation deletes the Google edit.
+
+### Tab 9 — Release
+
+The console checklist of SPEC 16.6 with the four states, hand-made marks in
+`.super-submitter/console-state.json` (cleared when the version changes),
+**Copy as checklist**, and **Re-check**. Then one status row per store, then
+the two red buttons. Each button releases one store, guards itself with its
+own sheet, and names its own recovery. The app polls a store only after a
+release, at the Settings interval, and reports every state change.
+
+### Settings and the shell
+
+Navigation, the poll interval (which restarts the poller), the dry-run default
+for a new app, and the manifest path with **Show in Finder** and **Copy path**.
+The menu bar item and the sidebar health chips read the live plan and the live
+status.
 
 ## Verification completed
 
@@ -72,73 +80,52 @@ swift build
 swift test
 ```
 
-Both pass. There are 29 Swift Testing tests. Run a launch smoke test after
-future UI changes. Live store/provider calls were not executed because this
-workspace has no user credentials.
+Both pass with no warnings. There are 75 Swift Testing tests. A launch smoke
+test runs the binary and it stays up.
 
-## Remaining UI audit work
+No live store call was executed, because this workspace holds no credential.
+Every request path, body, and header comes from the spec, not from a recorded
+response.
 
-Continue in this order.
+## What remains
 
-### 9. Plan — audit item 9, SPEC 7.2 and 10
+### Deployment, not features
 
-- Build Apple, Google, and provider read clients and actual-state models.
-- Replace `DemoData.diffColumns`, counts, and validation rows with a real
-  planner in SubmitKit.
-- Implement every validation in SPEC section 10 with unit tests.
-- Make “Read the stores again” refresh actual state.
-- Dry run must build/log requests without sending them; it currently affects
-  only labels.
+- An Xcode app target: signing, notarization, entitlements, the production
+  icon catalog, and sandbox security-scoped bookmarks. The package still
+  builds a plain executable, so `UNUserNotificationCenter` is unavailable and
+  a status change bounces the Dock icon instead.
+- Open an existing app from disk, and remove or rename a linked app.
 
-### 10. Submit/apply — audit item 10, SPEC 7.3–7.8 and 11
+### Service work behind a live account
 
-- Replace the timer-driven `DemoData.runItems` with a Runner in SubmitKit.
-- Implement ordered Apple/Google apply flows, uploads, provider sync,
-  retry/rate-limit handling, idempotency, cancellation, and Google edit
-  cleanup.
-- Append redacted JSONL call records under
-  `.super-submitter/runs/<timestamp>.jsonl`.
+- Redacted HTTP record and replay fixtures, so the apply flows run under test
+  without an account. This is the largest remaining gap in the test suite.
+- Signed-host Keychain tests.
+- Apple in-app purchase localizations, price schedules, and availability per
+  product. The runner writes the products; the per-product price schedule of
+  SPEC 7.7 step 4 is not written yet.
+- RevenueCat write scopes. The plan verifies the read scopes and names a
+  missing one; a write scope only proves itself on a write.
+- Per-store review notes, if the schema grows a second field.
 
-### 11. Release/status — audit item 11, SPEC 7.9–7.10 and 16.6
+### One spec conflict to settle
 
-- Wire checklist copy/open/re-check actions to real shared state.
-- Implement separate Apple review-submission and Google track-commit flows.
-- Poll released stores, post macOS notifications on changes, and drive the
-  menu-bar status from actual reads.
-
-### 12–13. Settings and shell status — audit items 12–13
-
-- Connect poll interval to the status poller.
-- Initialize new-app Plan dry run from `dryRunByDefault`.
-- Add the manifest-path row required by SPEC 16.5.
-- Replace hardcoded menu-bar timestamps/status and demo app health.
-
-## Follow-up work within tabs 1–6
-
-The controls are wired, but the following service/deployment work remains:
-
-- Add the per-tab raw YAML editor/toggle from SPEC 16.1.
-- Add media reordering and implement Apple reservation/chunk uploads plus
-  Google multipart uploads.
-- Read Apple price points and territory availability, warn on a price
-  difference over 5%, and implement store purchase/subscription clients.
-- Implement the full RevenueCat scope check/mirroring and Adapty mutation
-  wrapper, including archive-not-delete behavior.
-- Use per-store review notes if the schema is extended; implement Apple age
-  rating/privacy writes and Google data-safety writes.
-- Share Console-only checklist state between Review and Release in
-  `.super-submitter/console-state.json`.
-- Add Open existing app, app removal/rename, signed Xcode target, sandbox
-  bookmarks/entitlements, production icon catalog, signing, and notarization.
-- Add redacted HTTP record/replay fixtures and signed-host Keychain tests.
+SPEC 16.3 (tab 6) calls the Google data safety form "API writable", and SPEC
+16.6 lists it as a Console-only row. The app follows 16.6 and shows it as a
+Console row. The manifest answers pre-fill nothing on the Google side, because
+the Play `dataSafety` endpoint takes a labelled CSV and no honest mapping from
+the boolean answers exists. Decide which section wins before anyone writes
+that mapping.
 
 ## Safety constraints
 
 - Plan reads only. Apply leaves drafts. Release is the only review action.
-- Never combine Apple and Google release buttons.
-- Apple has no sandbox; keep dry run on by default for new apps.
+- Never combine the Apple and Google release buttons.
+- Apple has no sandbox; keep the dry run on by default for a new app.
 - Always delete a temporary Google edit on failure or cancellation.
-- Never log, persist to YAML, or commit Apple, Google, RevenueCat, or reviewer
-  secrets.
-- The stores are the source; providers mirror them.
-- Keep store/provider business logic in SubmitKit and SwiftUI views thin.
+- Never log, persist to YAML, or commit an Apple, Google, RevenueCat, or
+  reviewer secret.
+- The stores are the source; the providers mirror them.
+- Keep the store and provider business logic in SubmitKit and the SwiftUI
+  views thin.

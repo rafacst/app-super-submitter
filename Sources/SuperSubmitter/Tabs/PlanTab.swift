@@ -1,3 +1,4 @@
+import SubmitKit
 import SwiftUI
 
 /// Tab 7. Every change, before any write. This tab is the safety model of the
@@ -6,10 +7,48 @@ struct PlanTab: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        if state.applied {
-            nothingToChange
-        } else {
-            theDiff
+        Group {
+            if state.planReading {
+                reading
+            } else if let plan = state.plan {
+                if plan.isEmpty && plan.findings.isEmpty {
+                    nothingToChange
+                } else {
+                    theDiff(plan)
+                }
+            } else {
+                notReadYet
+            }
+        }
+        .task(id: state.manifestURL) {
+            // The app never skips the plan. Without it, the app writes to a
+            // live listing on a guess.
+            guard state.plan == nil, !state.stores.isEmpty else { return }
+            await state.readStores()
+        }
+    }
+
+    // MARK: - Before the read
+
+    private var reading: some View {
+        HStack(spacing: 11) {
+            Spinner()
+            Text("Reading both stores. This writes nothing.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.text2)
+        }
+    }
+
+    private var notReadYet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Nothing read yet.").font(.system(size: 15, weight: .semibold))
+            Text("The plan reads every store and compares it to these tabs. It opens no Google edit, it creates no Apple resource, and it writes nothing.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.text2)
+                .lineSpacing(4)
+                .frame(maxWidth: 520, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            QuietButton(title: "Read the stores") { Task { await state.readStores() } }
         }
     }
 
@@ -28,14 +67,14 @@ struct PlanTab: View {
                     .font(.system(size: 17, weight: .semibold))
                     .kerning(-0.17)
             }
-            Text("Both stores match what these tabs hold. The last read ran at 14:02. A second apply would write nothing.")
+            Text("Both stores match what these tabs hold. The last read ran at \(readTime). A second apply would write nothing.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 0) {
-                ForEach(Array(DemoData.matchRows.enumerated()), id: \.offset) { index, row in
+                ForEach(Array(matchRows.enumerated()), id: \.offset) { index, row in
                     if index > 0 { Hairline(color: Theme.sep2) }
                     HStack(spacing: 12) {
                         Text(row.system)
@@ -54,7 +93,9 @@ struct PlanTab: View {
                 .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
 
             HStack(spacing: 9) {
-                QuietButton(title: "Read the stores again")
+                QuietButton(title: "Read the stores again") {
+                    Task { await state.readStores() }
+                }
                 Button { state.selectedTab = .release } label: {
                     Text("Go to Release")
                         .font(.system(size: 12.5, weight: .medium))
@@ -69,24 +110,67 @@ struct PlanTab: View {
         .frame(maxWidth: 620, alignment: .leading)
     }
 
+    private var matchRows: [(system: String, line: String)] {
+        var rows: [(String, String)] = []
+        if state.stores.contains(.apple) {
+            let version = state.actualState.apple?.versionString ?? "no version"
+            rows.append(("App Store",
+                         "Version \(version). Listing, media, and purchases match."))
+        }
+        if state.stores.contains(.google) {
+            let code = state.actualState.google?.highestVersionCode.map(String.init) ?? "none"
+            let track = state.manifest.release?.google?.track ?? "production"
+            rows.append(("Google Play",
+                         "Version code \(code) in \(track). Listing, media, and purchases match."))
+        }
+        if let provider = state.actualState.provider, provider.kind != .none {
+            rows.append((provider.kind == .adapty ? "Adapty" : "RevenueCat",
+                         "\(provider.productIds.count) products, \(provider.entitlementKeys.count) entitlements, \(provider.offeringKeys.count) offerings. All match."))
+        }
+        return rows
+    }
+
+    private var readTime: String {
+        guard let date = state.plan?.readAt else { return "no time" }
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+
     // MARK: - The diff
 
-    private var theDiff: some View {
+    private func theDiff(_ plan: PlanResult) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            counters
-            validations
-            columns
-            applyRow
+            if let planError = state.planError { readFailure(planError) }
+            counters(plan)
+            if !plan.findings.isEmpty { validations(plan) }
+            columns(plan)
+            applyRow(plan)
         }
     }
 
-    private var counters: some View {
+    private func readFailure(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 11) {
+            StatePill(text: "Read", foreground: Theme.red, background: Theme.redBg)
+            Text("A store could not be read, so this plan is incomplete. \(message)")
+                .font(.system(size: 12))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            QuietButton(title: "Read again") { Task { await state.readStores() } }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
+    }
+
+    private func counters(_ plan: PlanResult) -> some View {
         HStack(spacing: 26) {
-            Counter(value: "24", label: "writes")
+            Counter(value: "\(plan.writeCount)", label: "writes")
             Rectangle().fill(Theme.sep2).frame(width: 1, height: 28)
-            Counter(value: "13", label: "uploads")
+            Counter(value: "\(plan.uploadCount)", label: "uploads")
             Rectangle().fill(Theme.sep2).frame(width: 1, height: 28)
-            Counter(value: "142.6 MB", label: "to upload")
+            Counter(value: plan.uploadSizeText, label: "to upload")
             Spacer(minLength: 0)
             Text("This plan writes nothing to a customer. It ends with a draft in each store.")
                 .font(.system(size: 11.5))
@@ -102,12 +186,12 @@ struct PlanTab: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
-    private var validations: some View {
-        let blocked = state.planIsBlocked
+    private func validations(_ plan: PlanResult) -> some View {
+        let blocked = plan.isBlocked
         let accent = blocked ? Theme.red : Theme.yellow
         return VStack(spacing: 0) {
             HStack(spacing: 9) {
-                Text(blocked ? "1 error, 2 warnings" : "2 warnings")
+                Text(headline(plan))
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(accent)
                 Text(blocked
@@ -120,23 +204,9 @@ struct PlanTab: View {
             .padding(.horizontal, 15)
             .padding(.vertical, 10)
 
-            if blocked {
-                ValidationRow(
-                    kind: "Error", color: Theme.red, background: Theme.redBg,
-                    text: "Keywords are 104 characters. The limit is 100.",
-                    where_: "App Store · Details · en-US · Keywords",
-                    button: "Fix on Details", ackKey: nil) { state.selectedTab = .details }
+            ForEach(plan.findings) { finding in
+                ValidationRow(finding: finding)
             }
-            ValidationRow(
-                kind: "Warning", color: Theme.yellow, background: Theme.yellowBg,
-                text: "The version name differs between the two packages.",
-                where_: "Build · 3.2.0 and 3.2.0-rc4",
-                button: "Fix on Build", ackKey: "w1") { state.selectedTab = .build }
-            ValidationRow(
-                kind: "Warning", color: Theme.yellow, background: Theme.yellowBg,
-                text: "pt-BR has screenshots for the App Store and none for Google Play.",
-                where_: "Media · pt-BR · phone",
-                button: "Fix on Media", ackKey: "w2") { state.selectedTab = .media }
         }
         .background(blocked ? Theme.redBg : Theme.yellowBg,
                     in: RoundedRectangle(cornerRadius: 9))
@@ -144,30 +214,40 @@ struct PlanTab: View {
         .clipShape(RoundedRectangle(cornerRadius: 9))
     }
 
+    private func headline(_ plan: PlanResult) -> String {
+        let errors = plan.errors.count
+        let warnings = plan.warnings.count
+        var pieces: [String] = []
+        if errors > 0 { pieces.append("\(errors) \(errors == 1 ? "error" : "errors")") }
+        if warnings > 0 { pieces.append("\(warnings) \(warnings == 1 ? "warning" : "warnings")") }
+        return pieces.joined(separator: ", ")
+    }
+
     /// Apple on the left, Google in the middle, the provider on the right.
     /// The order never changes anywhere in the app.
-    private var columns: some View {
+    private func columns(_ plan: PlanResult) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            ForEach(state.hasProvider ? DemoData.diffColumns : Array(DemoData.diffColumns.prefix(2))) { column in
+            ForEach(plan.systems, id: \.self) { system in
+                let steps = plan.steps(for: system)
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(column.name).font(.system(size: 12.5, weight: .semibold))
+                        Text(name(for: system)).font(.system(size: 12.5, weight: .semibold))
                         Spacer(minLength: 8)
-                        Text(column.summary).font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        Text(summary(steps)).font(.system(size: 11)).foregroundStyle(Theme.text2)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
 
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(column.rows) { row in
+                        ForEach(steps) { step in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(row.sign.rawValue)
+                                Text(step.kind.rawValue)
                                     .font(Theme.mono(11.5, weight: .bold))
-                                    .foregroundStyle(row.sign.color)
+                                    .foregroundStyle(color(step.kind))
                                     .frame(width: 9, alignment: .leading)
-                                Text(row.text)
+                                Text(step.summary)
                                     .font(Theme.mono(11.5))
-                                    .foregroundStyle(row.sign.color)
+                                    .foregroundStyle(color(step.kind))
                                     .lineSpacing(2)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
@@ -186,13 +266,35 @@ struct PlanTab: View {
         }
     }
 
+    private func name(for system: PlanSystem) -> String {
+        switch system {
+        case .apple: "App Store"
+        case .google: "Google Play"
+        case .provider: state.provider == .adapty ? "Adapty" : "RevenueCat"
+        }
+    }
+
+    private func summary(_ steps: [PlanStep]) -> String {
+        let uploads = steps.reduce(0) { $0 + $1.uploadCount }
+        let writes = steps.filter { !$0.isUpload }.count
+        return uploads == 0 ? "\(writes) writes" : "\(writes) writes · \(uploads) uploads"
+    }
+
+    private func color(_ kind: ChangeKind) -> Color {
+        switch kind {
+        case .add: Theme.green
+        case .change: Theme.yellow
+        case .remove: Theme.red
+        }
+    }
+
     /// Prominent, and deliberately not red. It writes a draft, and a draft is
     /// reversible. Red belongs to tab 9 alone.
-    private var applyRow: some View {
-        let blocked = state.planIsBlocked
+    private func applyRow(_ plan: PlanResult) -> some View {
+        let blocked = !state.canApply
         return HStack(alignment: .center, spacing: 16) {
             Button {
-                guard !blocked else { return }
+                guard state.canApply else { return }
                 state.selectedTab = .submit
                 state.startRun()
             } label: {
@@ -207,7 +309,7 @@ struct PlanTab: View {
             .buttonStyle(.plain)
             .disabled(blocked)
 
-            Text(applyNote)
+            Text(applyNote(plan))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
@@ -217,14 +319,19 @@ struct PlanTab: View {
         }
     }
 
-    private var applyNote: String {
+    private func applyNote(_ plan: PlanResult) -> String {
         if state.dryRun {
-            "A dry run logs every request and sends none. Nothing reaches a store."
-        } else if state.planIsBlocked {
-            "1 error blocks the apply. Fix the keywords on Details, then this button writes a draft to each store."
-        } else {
-            "This writes 24 changes and 13 uploads. It ends with a draft in each store. It sends nothing to review."
+            return "A dry run logs every request and sends none. Nothing reaches a store."
         }
+        if plan.isBlocked {
+            let count = plan.errors.count
+            return "\(count) \(count == 1 ? "error blocks" : "errors block") the apply. Fix \(count == 1 ? "it" : "them") above, then this button writes a draft to each store."
+        }
+        if state.unacknowledgedWarnings > 0 {
+            let count = state.unacknowledgedWarnings
+            return "\(count) \(count == 1 ? "warning needs" : "warnings need") one acknowledgement each. Accept \(count == 1 ? "it" : "them") to unlock the apply."
+        }
+        return "This writes \(plan.writeCount) changes and \(plan.uploadCount) uploads. It ends with a draft in each store. It sends nothing to review."
     }
 }
 
@@ -242,29 +349,28 @@ private struct Counter: View {
 
 private struct ValidationRow: View {
     @Environment(AppState.self) private var state
-    let kind: String
-    let color: Color
-    let background: Color
-    let text: String
-    let where_: String
-    let button: String
-    let ackKey: String?
-    let fix: () -> Void
+    let finding: Finding
+
+    private var isError: Bool { finding.severity == .error }
 
     var body: some View {
         HStack(spacing: 11) {
-            StatePill(text: kind, foreground: color, background: background)
+            StatePill(text: isError ? "Error" : "Warning",
+                      foreground: isError ? Theme.red : Theme.yellow,
+                      background: isError ? Theme.redBg : Theme.yellowBg)
                 .frame(width: 58, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
-                Text(text).font(.system(size: 12.5))
-                Text(where_).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(finding.message)
+                    .font(.system(size: 12.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(finding.location).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
-            if let ackKey {
-                let acked = state.acknowledged.contains(ackKey)
+            if !isError {
+                let acked = state.acknowledged.contains(finding.id)
                 Button {
-                    if acked { state.acknowledged.remove(ackKey) }
-                    else { state.acknowledged.insert(ackKey) }
+                    if acked { state.acknowledged.remove(finding.id) }
+                    else { state.acknowledged.insert(finding.id) }
                 } label: {
                     HStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 3)
@@ -281,7 +387,9 @@ private struct ValidationRow: View {
                 .buttonStyle(.plain)
                 .accessibilityValue(acked ? "Accepted" : "Not accepted")
             }
-            QuietButton(title: button, action: fix)
+            QuietButton(title: "Fix on \(state.tab(for: finding.fix).title)") {
+                state.selectedTab = state.tab(for: finding.fix)
+            }
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 10)

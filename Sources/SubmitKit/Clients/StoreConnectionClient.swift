@@ -249,7 +249,9 @@ public enum ConnectionError: Error, LocalizedError {
     }
 }
 
-private enum AppleJWT {
+/// Shared with `StoreAPI`. Both the read clients and the runner sign the same
+/// way, so the signing code exists once.
+enum AppleJWT {
     static func make(credential: AppleCredential, now: Date = Date()) throws -> String {
         let header: [String: Any] = ["alg": "ES256", "kid": credential.keyID, "typ": "JWT"]
         let issued = Int(now.timeIntervalSince1970)
@@ -271,7 +273,7 @@ private enum AppleJWT {
     }
 }
 
-private enum GoogleJWT {
+enum GoogleJWT {
     static func make(credential: GoogleServiceAccount, now: Date = Date()) throws -> String {
         let header: [String: Any] = ["alg": "RS256", "typ": "JWT"]
         let issued = Int(now.timeIntervalSince1970)
@@ -448,7 +450,7 @@ private struct GoogleListingsResponse: Decodable {
     let listings: [Listing]?
 }
 
-private enum APIError {
+enum APIError {
     static func message(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return String(data: data, encoding: .utf8)
@@ -466,7 +468,7 @@ private enum APIError {
     }
 }
 
-private extension Data {
+extension Data {
     var base64URL: String {
         base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")

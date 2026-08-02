@@ -43,10 +43,15 @@ struct MediaTab: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
-                    ForEach(paths, id: \.self) { path in
+                    ForEach(Array(paths.enumerated()), id: \.element) { index, path in
                         MediaTile(path: path, info: state.imageInfo(for: path),
                                   stores: state.imageStores(for: path, deviceClass: device),
-                                  url: state.mediaURL(for: path)) {
+                                  url: state.mediaURL(for: path),
+                                  canMoveEarlier: index > 0,
+                                  canMoveLater: index < paths.count - 1,
+                                  move: { offset in
+                                      state.moveMedia(path, by: offset, deviceClass: device)
+                                  }) {
                             state.removeMedia(path, deviceClass: device)
                         }
                     }
@@ -118,6 +123,9 @@ private struct MediaTile: View {
     let info: ImageAssetInfo?
     let stores: Set<Store>
     let url: URL
+    var canMoveEarlier = false
+    var canMoveLater = false
+    var move: (Int) -> Void = { _ in }
     let remove: () -> Void
 
     var body: some View {
@@ -138,7 +146,19 @@ private struct MediaTile: View {
                 $0 == .apple ? "App Store" : "Google Play"
             }.joined(separator: " · "))
                 .font(.system(size: 10)).foregroundStyle(Theme.text3).lineLimit(1)
-            Button("Remove", action: remove).controlSize(.mini)
+            // The list order is the order that both stores show, so the tile
+            // carries the two moves next to the removal.
+            HStack(spacing: 4) {
+                Button("←") { move(-1) }
+                    .controlSize(.mini)
+                    .disabled(!canMoveEarlier)
+                    .accessibilityLabel("Move earlier")
+                Button("→") { move(1) }
+                    .controlSize(.mini)
+                    .disabled(!canMoveLater)
+                    .accessibilityLabel("Move later")
+                Button("Remove", action: remove).controlSize(.mini)
+            }
         }.frame(width: 112, alignment: .leading)
     }
 }

@@ -83,18 +83,44 @@ private struct ContentHeader: View {
             }
             Spacer(minLength: 8)
 
+            // Every editing tab shows its own block of store.yaml. Spec 16.1.
+            if state.yamlBlock != nil {
+                Button {
+                    state.showYAML.toggle()
+                } label: {
+                    Text("YAML")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(state.showYAML ? Theme.accentText : Theme.text2)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(state.showYAML ? Theme.accent : Theme.field,
+                                    in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show the raw YAML")
+                .accessibilityValue(state.showYAML ? "On" : "Off")
+            }
+
             switch state.selectedTab {
             case .details, .media:
                 LocalePicker()
             case .plan:
                 HStack(spacing: 7) {
+                    if state.planReading { Spinner() }
+                    QuietButton(title: "Read the stores again") {
+                        Task { await state.readStores() }
+                    }
                     Text("Dry run").font(.system(size: 12)).foregroundStyle(Theme.text2)
                     SmallToggle(isOn: $state.dryRun)
                 }
             case .release:
                 HStack(spacing: 7) {
-                    QuietButton(title: "Copy as checklist")
-                    QuietButton(title: "Re-check") { state.rechecked = true }
+                    if state.rechecking { Spinner() }
+                    QuietButton(title: "Copy as checklist") { state.copyChecklist() }
+                    QuietButton(title: "Re-check") { Task { await state.recheck() } }
                 }
             default:
                 EmptyView()

@@ -123,17 +123,47 @@ public enum AssetInspector {
         return compatible
     }
 
-    private struct ScreenshotCatalog: Decodable {
-        let apple: [String: [[Int]]]
+    /// The Apple `screenshotDisplayType` for one file. Spec section 6.3: the
+    /// pixel dimensions pick the bucket, never the folder name.
+    ///
+    /// `// ponytail: a lookup table, not a device database. Add a size to the
+    /// // JSON when Apple ships a new screen.`
+    public static func appleDisplayType(for info: ImageAssetInfo,
+                                        deviceClass: Manifest.DeviceClass) throws -> String? {
+        if deviceClass == .vision { return "APP_APPLE_VISION_PRO" }
+        let (short, long) = normalized(info.width, info.height)
+        return try catalog().appleDisplayTypes["\(short)x\(long)"]
     }
 
-    private static func appleSizes() throws -> [String: [[Int]]] {
+    /// The Google `imageType`. Google sorts by device class, so this needs no
+    /// dimensions. Spec section 6.3.
+    public static func googleImageType(for deviceClass: Manifest.DeviceClass) -> String? {
+        switch deviceClass {
+        case .phone: "phoneScreenshots"
+        case .tablet7: "sevenInchScreenshots"
+        case .tablet10: "tenInchScreenshots"
+        case .tv: "tvScreenshots"
+        case .watch: "wearScreenshots"
+        case .desktop, .vision: nil
+        }
+    }
+
+    private struct ScreenshotCatalog: Decodable {
+        let apple: [String: [[Int]]]
+        let appleDisplayTypes: [String: String]
+    }
+
+    private static func catalog() throws -> ScreenshotCatalog {
         guard let url = Bundle.module.url(forResource: "screenshot-sizes", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let catalog = try? JSONDecoder().decode(ScreenshotCatalog.self, from: data) else {
             throw AssetInspectionError.missingDimensionCatalog
         }
-        return catalog.apple
+        return catalog
+    }
+
+    private static func appleSizes() throws -> [String: [[Int]]] {
+        try catalog().apple
     }
 
     private static func normalized(_ width: Int, _ height: Int) -> (Int, Int) {

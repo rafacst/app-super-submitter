@@ -84,13 +84,43 @@ struct MoneyTab: View {
     private var priceSection: some View {
         @Bindable var state = state
         return Section_("Base price") {
-            HStack {
-                TextField("Amount", text: $state.priceAmount).frame(width: 90)
-                TextField("Currency", text: $state.priceCurrency).frame(width: 80)
-                TextField("Territory", text: $state.priceTerritory).frame(width: 90)
-                Text("Other territories are converted by the stores.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                    TextField("Amount", text: $state.priceAmount).frame(width: 90)
+                    TextField("Currency", text: $state.priceCurrency).frame(width: 80)
+                    TextField("Territory", text: $state.priceTerritory).frame(width: 90)
+                    Text("Other territories are converted by the stores.")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                }
+                resolvedPoint
             }.moneyPanel()
+        }
+    }
+
+    /// Apple sells at a price point, never at the amount you typed. The panel
+    /// shows what Apple resolved and warns over a 5 percent gap. Spec 6.7.
+    @ViewBuilder
+    private var resolvedPoint: some View {
+        if state.stores.contains(.apple) {
+            if let resolved = state.actualState.apple?.priceAmount,
+               let requested = state.manifest.pricing?.base {
+                let gap = state.priceGap ?? 0
+                HStack(spacing: 8) {
+                    Text("App Store price point")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    Text("\(resolved.description) \(requested.currency)")
+                        .font(Theme.mono(11.5))
+                        .foregroundStyle(gap > 0.05 ? Theme.yellow : Theme.text)
+                    if gap > 0.05 {
+                        StatePill(text: "\(Int((gap * 100).rounded()))% off the request",
+                                  foreground: Theme.yellow, background: Theme.yellowBg)
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else {
+                Text("Read the stores on the Plan tab to see the App Store price point.")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+            }
         }
     }
 

@@ -68,9 +68,13 @@ enum Severity {
 @Observable
 @MainActor
 final class AppState {
-    @ObservationIgnored private var runTask: Task<Void, Never>?
-    @ObservationIgnored private var applePrivateKeyPEM = ""
-    @ObservationIgnored private var googleCredential: GoogleServiceAccount?
+    @ObservationIgnored var runTask: Task<Void, Never>?
+    @ObservationIgnored var runner: Runner?
+    @ObservationIgnored var eventTask: Task<Void, Never>?
+    @ObservationIgnored var runContinuation: AsyncStream<RunEvent>.Continuation?
+    @ObservationIgnored var pollTask: Task<Void, Never>?
+    @ObservationIgnored var applePrivateKeyPEM = ""
+    @ObservationIgnored var googleCredential: GoogleServiceAccount?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
 
     // The manifest and the file behind it.
@@ -120,6 +124,12 @@ final class AppState {
     // Tab 3.
     var locale = "en-US"
 
+    // The YAML toggle that every editing tab holds. Spec 16.1.
+    var showYAML = false
+    var yamlText = ""
+    var yamlDirty = false
+    var yamlError: String?
+
     // Tab 5.
     var provider: Manifest.Provider = .revenuecat
     var revenueCatAPIKey = ""
@@ -137,22 +147,35 @@ final class AppState {
     var showAgeRating = false
     var showDataSafety = false
 
-    // Tab 7.
-    var dryRun = false
+    // Tab 7. The plan.
+    var plan: PlanResult?
+    var planReading = false
+    var planError: String?
+    var dryRun = true
     var acknowledged: Set<String> = []
 
-    // Tab 8.
+    // Tab 8. The run.
+    var stepStates: [StepState] = []
+    var stepMeta: [String] = []
     var runIndex = -1
     var runDone = false
     var runProgress = 0.0
+    var runDetail = ""
+    var logLines: [String] = []
     var logOpen = false
     var applied = false
+    var runFailure: RunFailure?
+    var providerFailure: String?
 
-    // Tab 9.
-    var checked: Set<String> = []
-    var rechecked = false
-    var appleReleased = false
-    var googleReleased = false
+    // Tab 9. The checklist, the status, and the two buttons.
+    var actualState = ActualState()
+    var consoleRows: [ConsoleRow] = []
+    var consoleMarks: Set<String> = []
+    var statuses: [Store: StoreStatus] = [:]
+    var releasing: Store?
+    var releaseError: String?
+    var appleSubmissionID: String?
+    var rechecking = false
 
     init() {
         if let data = UserDefaults.standard.data(forKey: linkedAppsDefaultsKey),
@@ -164,18 +187,95 @@ final class AppState {
 
     var appRows: [DemoApp] {
         guard !linkedApps.isEmpty else { return DemoData.apps }
-        return linkedApps.map { record in
+        return linkedApps.enumerated().map { index, record in
             let url = URL(fileURLWithPath: record.manifestPath)
-            let loaded = try? ManifestFile.load(from: url)
+            let loaded = index == selectedAppIndex ? manifest : (try? ManifestFile.load(from: url))
             let version = loaded?.release?.versionName ?? "No version"
-            let storeCount = [loaded?.apps.apple != nil, loaded?.apps.google != nil].filter { $0 }.count
+            let selected = index == selectedAppIndex
             return DemoApp(
                 name: record.name,
                 initials: Self.initials(for: record.name),
-                summary: "\(version) · \(storeCount) \(storeCount == 1 ? "store" : "stores")",
-                apple: loaded?.apps.apple == nil ? .blocked : .changed,
-                google: loaded?.apps.google == nil ? .blocked : .changed)
+                summary: "\(version) · \(summary(for: loaded, selected: selected))",
+                apple: health(.apple, manifest: loaded, selected: selected),
+                google: health(.google, manifest: loaded, selected: selected))
         }
+    }
+
+    private func summary(for loaded: Manifest?, selected: Bool) -> String {
+        if selected, let plan {
+            let count = plan.steps.count
+            if plan.isBlocked {
+                let errors = plan.errors.count
+                return "\(errors) \(errors == 1 ? "error blocks" : "errors block") the plan"
+            }
+            return count == 0 ? "both stores match" : "\(count) changes wait"
+        }
+        let storeCount = [loaded?.apps.apple != nil, loaded?.apps.google != nil]
+            .filter { $0 }.count
+        return "\(storeCount) \(storeCount == 1 ? "store" : "stores")"
+    }
+
+    /// A dot per store. Only the open app can claim a match, because only the
+    /// open app has been read.
+    private func health(_ store: Store, manifest loaded: Manifest?,
+                        selected: Bool) -> StoreHealth {
+        let configured = store == .apple ? loaded?.apps.apple != nil : loaded?.apps.google != nil
+        guard configured else { return .blocked }
+        guard selected, let plan else { return .changed }
+        // An error blocks the whole apply, so it marks every store.
+        guard !plan.isBlocked else { return .blocked }
+        let system: PlanSystem = store == .apple ? .apple : .google
+        return plan.steps(for: system).isEmpty ? .matched : .changed
+    }
+
+    // MARK: - The YAML toggle
+
+    /// The raw block behind the open tab, or nil for a tab that edits nothing.
+    var yamlBlock: ManifestBlock? {
+        switch selectedTab {
+        case .stores: .stores
+        case .build: .build
+        case .details: .details
+        case .media: .media
+        case .money: .money
+        case .reviewInfo: .reviewInfo
+        default: nil
+        }
+    }
+
+    func loadYAML(_ block: ManifestBlock) {
+        do {
+            yamlText = try ManifestFile.encode(manifest, block: block)
+            yamlDirty = false
+            yamlError = nil
+        } catch {
+            yamlError = error.localizedDescription
+        }
+    }
+
+    /// Both sides edit the same file, so a save here goes through the same
+    /// decoder that a load uses. A block that does not parse changes nothing.
+    func saveYAML(_ block: ManifestBlock) {
+        do {
+            manifest = try ManifestFile.apply(yamlText, block: block, to: manifest)
+            try save()
+            syncStoreFieldsFromManifest()
+            syncEditingStateFromManifest()
+            if manifest.listing?.locales[locale] == nil {
+                locale = manifest.listing?.defaultLocale ?? locale
+            }
+            yamlDirty = false
+            yamlError = nil
+            plan = nil
+        } catch {
+            yamlError = error.localizedDescription
+        }
+    }
+
+    /// Spec 16.5. The settings panel names the manifest, and this opens it.
+    func revealManifest() {
+        guard let manifestURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([manifestURL])
     }
 
     var currentApp: DemoApp {
@@ -547,6 +647,13 @@ final class AppState {
         }
     }
 
+    func moveMedia(_ path: String, by offset: Int, deviceClass: Manifest.DeviceClass,
+                   previews: Bool = false) {
+        manifest.moveMediaPath(path, by: offset, locale: locale, deviceClass: deviceClass,
+                               previews: previews)
+        saveManifestReportingErrors()
+    }
+
     func removeMedia(_ path: String, deviceClass: Manifest.DeviceClass,
                      previews: Bool = false) {
         manifest.removeMediaPath(path, locale: locale, deviceClass: deviceClass,
@@ -911,90 +1018,40 @@ final class AppState {
     /// appear on a tab that holds no error.
     func badge(for tab: Tab) -> (count: Int, severity: Severity)? {
         if applied { return nil }
-        switch tab {
-        case .details:
-            return listingErrorCount == 0 ? nil : (listingErrorCount, .error)
-        case .reviewInfo:
-            return (2, .warning)
-        case .plan:
-            return listingErrorCount == 0 ? (2, .warning) : (listingErrorCount + 2, .error)
-        default:
-            return nil
+        // Before the first read the only rule the app can run is the text
+        // limit, because every other rule needs the store side.
+        guard let plan else {
+            let count = listingErrorCount
+            guard count > 0 else { return nil }
+            return tab == .details || tab == .plan ? (count, .error) : nil
         }
+        let target: FixTarget?
+        switch tab {
+        case .stores: target = .stores
+        case .build: target = .build
+        case .details: target = .details
+        case .media: target = .media
+        case .money: target = .money
+        case .reviewInfo: target = .reviewInfo
+        case .plan: target = nil
+        default: return nil
+        }
+        let findings = tab == .plan
+            ? plan.findings
+            : plan.findings.filter { $0.fix == target }
+        guard !findings.isEmpty else { return nil }
+        let severity: Severity = findings.contains { $0.severity == .error } ? .error : .warning
+        return (findings.count, severity)
     }
 
-    var planIsBlocked: Bool { listingErrorCount > 0 }
+    var planIsBlocked: Bool {
+        plan.map(\.isBlocked) ?? (listingErrorCount > 0)
+    }
+
     var hasProvider: Bool { provider != .none }
 
     private var listingErrorCount: Int {
         manifest.listingErrorCount(for: stores)
-    }
-
-    // MARK: - The run
-
-    func startRun() {
-        guard !planIsBlocked, !applied else { return }
-        runTask?.cancel()
-        runIndex = 0
-        runDone = false
-        runProgress = 0
-
-        runTask = Task { [weak self] in
-            guard let self else { return }
-
-            for (index, item) in DemoData.runItems.enumerated() {
-                guard !Task.isCancelled else { return }
-                runIndex = index
-                runProgress = 0
-
-                let tickCount = item.isGroup ? 1 : (item.long ? 22 : 3)
-                for tick in 1...tickCount {
-                    do {
-                        try await Task.sleep(for: .milliseconds(110))
-                    } catch {
-                        return
-                    }
-                    guard !Task.isCancelled else { return }
-                    runProgress = Double(tick) / Double(tickCount)
-                }
-            }
-
-            finishRun()
-
-            do {
-                try await Task.sleep(for: .milliseconds(1_600))
-            } catch {
-                return
-            }
-            guard runDone else { return }
-            selectedTab = .release
-        }
-    }
-
-    func finishRun() {
-        runIndex = DemoData.runItems.count
-        runDone = true
-        runProgress = 1
-        applied = true
-    }
-
-    func resetDemo() {
-        runTask?.cancel()
-        runTask = nil
-        selectedTab = .stores
-        buildRead = false
-        applied = false
-        runIndex = -1
-        runDone = false
-        runProgress = 0
-        checked = []
-        rechecked = false
-        appleReleased = false
-        googleReleased = false
-        acknowledged = []
-        packages = [:]
-        packageErrors = [:]
-        readingPackages = []
     }
 
     // MARK: - The manifest file
@@ -1011,10 +1068,16 @@ final class AppState {
         try ManifestFile.save(manifest, to: manifestURL)
     }
 
-    private var credentialAccount: String {
+    var credentialAccount: String {
         guard !linkedApps.isEmpty,
               linkedApps.indices.contains(selectedAppIndex) else { return "demo" }
         return linkedApps[selectedAppIndex].id.uuidString
+    }
+
+    /// The folder that holds `store.yaml`. The run log, the console state, and
+    /// every relative media path resolve against it.
+    var manifestRoot: URL? {
+        manifestURL?.deletingLastPathComponent()
     }
 
     private func activateLinkedApp(at index: Int) {
@@ -1031,9 +1094,52 @@ final class AppState {
             packageErrors = [:]
             buildRead = false
             loadCredentials()
+            resetRunState()
+            loadConsoleMarks()
+            applyDryRunDefault()
         } catch {
             errorMessage = "Could not open \(url.lastPathComponent). \(error.localizedDescription)"
         }
+    }
+
+    /// Spec 16.5 and 17: the dry run is on by default **for a new app**. An
+    /// app with a run log is not new, so its own toggle stays where it was.
+    private func applyDryRunDefault() {
+        guard let root = manifestRoot else { return }
+        let runs = root.appendingPathComponent(".super-submitter/runs")
+        let hasRun = (try? FileManager.default.contentsOfDirectory(atPath: runs.path))?
+            .isEmpty == false
+        dryRun = hasRun ? false : (UserDefaults.standard.object(forKey: "dryRunByDefault")
+            as? Bool ?? true)
+    }
+
+    func resetRunState() {
+        runTask?.cancel()
+        runTask = nil
+        runContinuation?.finish()
+        runContinuation = nil
+        eventTask?.cancel()
+        eventTask = nil
+        runner = nil
+        pollTask?.cancel()
+        pollTask = nil
+        plan = nil
+        planError = nil
+        planReading = false
+        acknowledged = []
+        stepStates = []
+        stepMeta = []
+        runIndex = -1
+        runDone = false
+        runProgress = 0
+        runDetail = ""
+        logLines = []
+        applied = false
+        runFailure = nil
+        providerFailure = nil
+        statuses = [:]
+        releaseError = nil
+        appleSubmissionID = nil
     }
 
     private func loadCredentials() {
@@ -1161,8 +1267,3 @@ final class AppState {
     }
 }
 
-private extension Collection {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}

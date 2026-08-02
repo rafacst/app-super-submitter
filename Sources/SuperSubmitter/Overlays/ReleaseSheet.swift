@@ -13,11 +13,16 @@ struct ReleaseSheet: View {
 
     private var isApple: Bool { store == .apple }
 
+    private var appName: String {
+        let listing = state.manifest.listing
+        return listing?.locales[listing?.defaultLocale ?? ""]?.name ?? "this app"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(isApple
-                 ? "Send Fast Bill Split to App Store review?"
-                 : "Send Fast Bill Split to Google Play review?")
+                 ? "Send \(appName) to App Store review?"
+                 : "Send \(appName) to Google Play review?")
                 .font(.system(size: 15, weight: .semibold))
                 .kerning(-0.15)
                 .lineSpacing(2)
@@ -44,14 +49,12 @@ struct ReleaseSheet: View {
 
             Text(isApple
                  ? "This sends the App Store version to Apple. It takes a place in the review queue. Google Play stays a draft."
-                 : "This commits the Google Play release to the production track. The App Store is untouched.")
+                 : "This commits the Google Play release to the \(track) track. The App Store is untouched.")
                 .font(.system(size: 12))
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(isApple
-                 ? "You can cancel this submission only before the review starts. Once a reviewer opens it, you cannot."
-                 : "You can halt a staged rollout. This release is a completed rollout, so it cannot be halted.")
+            Text(recovery)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
@@ -73,8 +76,9 @@ struct ReleaseSheet: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button {
-                    if isApple { state.appleReleased = true } else { state.googleReleased = true }
+                    let store = store
                     dismiss()
+                    Task { await state.release(store) }
                 } label: {
                     Text(isApple ? "Send to App Store" : "Send to Google Play")
                         .font(.system(size: 13, weight: .semibold))
@@ -100,15 +104,36 @@ struct ReleaseSheet: View {
         .onExitCommand { dismiss() }
     }
 
+    private var track: String { state.manifest.release?.google?.track ?? "production" }
+    private var version: String { state.manifest.release?.versionName ?? "no version" }
+
+    private var recovery: String {
+        if isApple {
+            return "You can cancel this submission only before the review starts. Once a reviewer opens it, you cannot."
+        }
+        let status = state.manifest.release?.google?.status ?? "completed"
+        return status == "inProgress"
+            ? "You can halt this staged rollout. A halt stops new installs; it does not remove the release."
+            : "You can halt a staged rollout only. This release is a completed rollout, so it cannot be halted."
+    }
+
     private var rows: [(String, String, Bool)] {
-        isApple
-            ? [("Store", "App Store", false),
-               ("Version", "3.2.0", true),
-               ("Build", "412", true),
-               ("Release", "After approval, phased over 7 days", false)]
-            : [("Store", "Google Play", false),
-               ("Version", "3.2.0", true),
-               ("Version code", "412", true),
-               ("Release", "Production track, completed rollout", false)]
+        if isApple {
+            let type = ReleaseTab.appleRelease(
+                state.manifest.release?.apple?.releaseType?.rawValue ?? "MANUAL")
+            let phased = state.manifest.release?.apple?.phasedRelease == true
+                ? ", phased over 7 days" : ""
+            return [("Store", "App Store", false),
+                    ("Version", version, true),
+                    ("Build", state.packages[.ipa]?.buildNumber
+                        ?? state.packages[.pkg]?.buildNumber ?? "the attached build", true),
+                    ("Release", type + phased, false)]
+        }
+        let status = ReleaseTab.googleRelease(state.manifest.release?.google?.status ?? "completed")
+        return [("Store", "Google Play", false),
+                ("Version", version, true),
+                ("Version code", state.packages[.aab]?.buildNumber
+                    ?? "the committed bundle", true),
+                ("Release", "\(track) track, \(status)", false)]
     }
 }

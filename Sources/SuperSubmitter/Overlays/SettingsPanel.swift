@@ -6,6 +6,7 @@ import SwiftUI
 /// the Stores tab, and the RevenueCat key lives on the Money tab, next to the
 /// choice that needs them.
 struct SettingsPanel: View {
+    @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
     @AppStorage("navigationPosition") private var position: NavigationPosition = .sidebar
     @AppStorage("pollIntervalMinutes") private var pollMinutes = 5
@@ -73,7 +74,12 @@ struct SettingsPanel: View {
             SettingRow("Poll interval") {
                 Menu {
                     ForEach([1, 5, 10, 15, 30, 60], id: \.self) { minutes in
-                        Button("\(minutes) minutes") { pollMinutes = minutes }
+                        Button("\(minutes) minutes") {
+                            pollMinutes = minutes
+                            // The poller reads the value on the next tick, so
+                            // a restart makes the new interval take effect now.
+                            state.startPolling()
+                        }
                     }
                 } label: {
                     HStack {
@@ -119,6 +125,26 @@ struct SettingsPanel: View {
                         .lineSpacing(3)
                         .frame(maxWidth: 270, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            SettingRow("Manifest path", alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.manifestURL?.path ?? "No app is open.")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(state.manifestURL == nil ? Theme.text3 : Theme.text)
+                        .textSelection(.enabled)
+                        .lineLimit(3)
+                        .truncationMode(.middle)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 7) {
+                        QuietButton(title: "Show in Finder") { state.revealManifest() }
+                            .disabled(state.manifestURL == nil)
+                        QuietButton(title: "Copy path") {
+                            state.copyToPasteboard(state.manifestURL?.path ?? "")
+                        }
+                        .disabled(state.manifestURL == nil)
+                    }
                 }
             }
 

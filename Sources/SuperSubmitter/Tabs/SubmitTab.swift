@@ -1,4 +1,5 @@
 import Foundation
+import SubmitKit
 import SwiftUI
 
 /// Tab 8. The run. It writes drafts and it releases nothing.
@@ -11,6 +12,8 @@ struct SubmitTab: View {
                 readyToRun
             } else {
                 stepList
+                if let failure = state.runFailure { failurePanel(failure) }
+                if let message = state.providerFailure { providerPanel(message) }
                 if uploading { uploadPanel }
                 logPanel
                 if state.runDone { finished }
@@ -20,21 +23,18 @@ struct SubmitTab: View {
     }
 
     private var uploading: Bool {
-        guard state.runIndex >= 0, state.runIndex < DemoData.runItems.count else { return false }
-        return DemoData.runItems[state.runIndex].long
-    }
-
-    private var uploadClock: String {
-        let elapsedSeconds = Int((state.runProgress * 480).rounded())
-        return String(format: "%d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
+        guard state.runIndex >= 0, state.runIndex < state.runSteps.count,
+              state.runFailure == nil, !state.runDone else { return false }
+        return state.runSteps[state.runIndex].isUpload
     }
 
     // MARK: - Before
 
     private var readyToRun: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Ready to run.").font(.system(size: 15, weight: .semibold))
-            Text("24 writes and 13 uploads, across App Store, Google Play, and RevenueCat. The run ends with a draft in each store. It sends nothing to review.")
+            Text(state.plan == nil ? "No plan yet." : "Ready to run.")
+                .font(.system(size: 15, weight: .semibold))
+            Text(readyLine)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
@@ -44,46 +44,37 @@ struct SubmitTab: View {
         }
     }
 
+    private var readyLine: String {
+        guard let plan = state.plan else {
+            return "Open the Plan tab. It reads both stores and lists every change before this tab writes one."
+        }
+        let systems = plan.systems.map { system -> String in
+            switch system {
+            case .apple: "App Store"
+            case .google: "Google Play"
+            case .provider: state.provider == .adapty ? "Adapty" : "RevenueCat"
+            }
+        }
+        return "\(plan.writeCount) writes and \(plan.uploadCount) uploads, across \(systems.joined(separator: ", ")). The run ends with a draft in each store. It sends nothing to review."
+    }
+
     // MARK: - During
 
     private var stepList: some View {
         VStack(spacing: 0) {
-            ForEach(Array(DemoData.runItems.enumerated()), id: \.element.id) { index, item in
-                if item.isGroup {
-                    HStack {
-                        Text(item.text)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Theme.text2)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 9)
-                    .background(Theme.sunken)
-                } else {
-                    let done = index < state.runIndex
-                    let active = index == state.runIndex
-                    HStack(spacing: 11) {
-                        Group {
-                            if done {
-                                Text("✓").font(.system(size: 12)).foregroundStyle(Theme.green)
-                            } else if active {
-                                Spinner()
-                            } else {
-                                Text("·").font(.system(size: 11)).foregroundStyle(Theme.text3)
-                            }
-                        }
-                        .frame(width: 16)
+            ForEach(Array(grouped.enumerated()), id: \.offset) { _, group in
+                HStack {
+                    Text(group.name)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.text2)
+                    Spacer()
+                }
+                .padding(.horizontal, 15)
+                .padding(.vertical, 9)
+                .background(Theme.sunken)
 
-                        Text(item.text)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(done || active ? Theme.text : Theme.text3)
-                        Spacer(minLength: 8)
-                        Text(done || active ? item.meta : "")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.text2)
-                    }
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 8)
+                ForEach(group.indices, id: \.self) { index in
+                    row(index)
                 }
             }
         }
@@ -94,15 +85,66 @@ struct SubmitTab: View {
         .clipShape(RoundedRectangle(cornerRadius: 9))
     }
 
+    private var grouped: [(name: String, indices: [Int])] {
+        var result: [(String, [Int])] = []
+        for (index, step) in state.runSteps.enumerated() {
+            let name = switch step.system {
+            case PlanSystem.apple: "App Store"
+            case PlanSystem.google: "Google Play"
+            case PlanSystem.provider: state.provider == .adapty ? "Adapty" : "RevenueCat"
+            }
+            if result.last?.0 == name {
+                result[result.count - 1].1.append(index)
+            } else {
+                result.append((name, [index]))
+            }
+        }
+        return result
+    }
+
+    private func row(_ index: Int) -> some View {
+        let step = state.runSteps[index]
+        let stepState = state.stepStates.indices.contains(index)
+            ? state.stepStates[index] : .pending
+        return HStack(spacing: 11) {
+            Group {
+                switch stepState {
+                case .done:
+                    Text("✓").font(.system(size: 12)).foregroundStyle(Theme.green)
+                case .running:
+                    Spinner()
+                case .failed:
+                    Text("✕").font(.system(size: 12)).foregroundStyle(Theme.red)
+                case .skipped:
+                    Text("–").font(.system(size: 12)).foregroundStyle(Theme.yellow)
+                case .pending:
+                    Text("·").font(.system(size: 11)).foregroundStyle(Theme.text3)
+                }
+            }
+            .frame(width: 16)
+
+            Text(step.title)
+                .font(.system(size: 12.5))
+                .foregroundStyle(stepState == .pending ? Theme.text3 : Theme.text)
+            Spacer(minLength: 8)
+            Text(state.stepMeta.indices.contains(index) ? state.stepMeta[index] : "")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.text2)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 8)
+    }
+
     /// The longest wait in the app. It needs a real bar, a clock, and a way
     /// out, because a progress animation with no progress is a lie.
     private var uploadPanel: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        let step = state.runSteps[state.runIndex]
+        return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Uploading FastBillSplit.ipa · 118.4 MB")
+                Text(step.title)
                     .font(.system(size: 12.5, weight: .medium))
                 Spacer(minLength: 8)
-                Text("\(uploadClock) elapsed · about 8 minutes total")
+                Text(state.runDetail)
                     .font(.system(size: 11)).foregroundStyle(Theme.text2)
             }
             GeometryReader { geometry in
@@ -117,7 +159,7 @@ struct SubmitTab: View {
                 Text("Apple processes the build after the upload. This is the longest wait in the app.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 8)
-                QuietButton(title: "Cancel")
+                QuietButton(title: "Cancel") { state.cancelRun() }
             }
         }
         .padding(.horizontal, 15)
@@ -125,6 +167,69 @@ struct SubmitTab: View {
         .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    // MARK: - The failure panels, section 11
+
+    private func failurePanel(_ failure: RunFailure) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("The run stopped at \(state.runSteps[safe: failure.stepIndex]?.title ?? "a step").")
+                .font(.system(size: 13.5, weight: .semibold))
+            Text(failure.message)
+                .font(.system(size: 12))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(failure.canUndoGoogleEdit
+                 ? "The undo deletes the Google edit that this run opened. It removes no App Store screenshot, because Apple keeps them in the version and a second apply reuses them by checksum."
+                 : "The Google edit is already committed, so the undo cannot remove the Play Console draft. The fix is another apply with a corrected manifest. The draft harms nobody in the meantime.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.text2)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 9) {
+                Button { state.retryFromFailure() } label: {
+                    Text("Retry from the failed step")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Theme.accentText)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+                QuietButton(title: "Undo what this run created") { state.undoRun() }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
+    }
+
+    /// Spec 11.2. The app never holds a store draft for a mirror, so the run
+    /// already finished and the first button is the state you are in.
+    private func providerPanel(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("The provider sync failed. The store drafts are untouched.")
+                .font(.system(size: 13.5, weight: .semibold))
+            Text(message)
+                .font(.system(size: 12))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("The run skipped the provider and finished. A row for it sits on the Release tab.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.text2)
+            HStack(spacing: 9) {
+                QuietButton(title: "Retry the provider sync") { state.retryProviderSync() }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.yellow, lineWidth: 1))
     }
 
     private var logPanel: some View {
@@ -136,6 +241,8 @@ struct SubmitTab: View {
                     Text(state.logOpen ? "▼" : "▶").font(.system(size: 8)).foregroundStyle(Theme.text2)
                     Text("Log").font(.system(size: 12))
                     Spacer(minLength: 0)
+                    Text("\(state.logLines.count) calls")
+                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
@@ -146,12 +253,14 @@ struct SubmitTab: View {
 
             if state.logOpen {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    Text(DemoData.logText)
+                    Text(state.logText)
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.text2)
+                        .textSelection(.enabled)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
                 }
+                .frame(maxHeight: 220)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -164,17 +273,21 @@ struct SubmitTab: View {
 
     private var finished: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("The run ended. Every store holds a draft.")
+            Text(state.dryRun
+                 ? "The dry run ended. Nothing was sent."
+                 : "The run ended. Every store holds a draft.")
                 .font(.system(size: 17, weight: .semibold))
                 .kerning(-0.17)
-            Text("Nothing went to review. Nothing reached a customer. Both drafts are visible in the two consoles.")
+            Text(state.dryRun
+                 ? "Every request above was built and logged. No store received one. Turn the dry run off on the Plan tab to write the drafts."
+                 : "Nothing went to review. Nothing reached a customer. Both drafts are visible in the two consoles.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .frame(maxWidth: 560, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Button { state.selectedTab = .release } label: {
-                Text("Go to Release")
+            Button { state.selectedTab = state.dryRun ? .plan : .release } label: {
+                Text(state.dryRun ? "Back to Plan" : "Go to Release")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 15)
@@ -197,5 +310,11 @@ struct Spinner: View {
             .rotationEffect(.degrees(turning ? 360 : 0))
             .animation(.linear(duration: 0.7).repeatForever(autoreverses: false), value: turning)
             .onAppear { turning = true }
+    }
+}
+
+extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

@@ -13,6 +13,7 @@ struct ReviewInfoTab: View {
             reviewNotes
             categories
             declarations
+            consoleSteps
         }
         .frame(maxWidth: 940, alignment: .leading)
         .sheet(isPresented: $state.showAgeRating) { AgeRatingSheet() }
@@ -92,19 +93,12 @@ struct ReviewInfoTab: View {
                     state.showAgeRating = true
                 }
                 Divider()
-                ConsoleLinkRow(title: "Google content rating",
-                               detail: "The IARC questionnaire is Console only",
-                               destination: URL(string: "https://play.google.com/console/")!)
-                Divider()
                 ActionRow(title: "Privacy policy", detail: "Edit the localized URL") {
                     state.selectedTab = .details
                 }
                 Divider()
-                ConsoleLinkRow(title: "App Store privacy labels",
-                               detail: "Nutrition labels are Console only",
-                               destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
-                Divider()
-                ActionRow(title: "Google data safety", detail: "Review declarations stored in the manifest") {
+                ActionRow(title: "Google data safety",
+                          detail: "Review declarations stored in the manifest") {
                     state.showDataSafety = true
                 }
                 Divider()
@@ -113,21 +107,72 @@ struct ReviewInfoTab: View {
             }.reviewPanel(padding: 0)
         }
     }
+
+    /// The Console-only rows that this tab owns, from the **one** list that
+    /// tab 9 also reads. A row is never done in one place and open in the
+    /// other. Spec section 16.6.
+    private var consoleSteps: some View {
+        Section_("Finish in the console") {
+            VStack(spacing: 0) {
+                let rows = state.consoleRows.filter(\.onReviewTab)
+                if rows.isEmpty {
+                    HStack {
+                        Text("Read the stores on the Plan tab to fill this list.")
+                            .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                } else {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { Divider() }
+                        ReviewConsoleRow(row: row)
+                    }
+                }
+            }.reviewPanel(padding: 0)
+        }
+    }
 }
 
-private struct ConsoleLinkRow: View {
-    let title: String
-    let detail: String
-    let destination: URL
+/// The same row shape as tab 9: one title, one reason, one state, one link.
+private struct ReviewConsoleRow: View {
+    @Environment(AppState.self) private var state
+    let row: ConsoleRow
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 12.5, weight: .medium))
-                Text(detail).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+        let shown = state.markedState(row)
+        HStack(spacing: 10) {
+            if row.state == .unknown {
+                let marked = state.consoleMarks.contains(row.id)
+                Button { state.toggleConsoleMark(row.id) } label: {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(marked ? Theme.accent : .clear)
+                        .frame(width: 14, height: 14)
+                        .overlay(RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(Theme.sep, lineWidth: 1))
+                        .overlay(Text(marked ? "✓" : "")
+                            .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(row.title)
+                .accessibilityValue(marked ? "Confirmed" : "Not confirmed")
+            } else {
+                Color.clear.frame(width: 14, height: 14)
             }
-            Spacer()
-            Link("Open ↗", destination: destination)
-        }.padding(.horizontal, 14).padding(.vertical, 10)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title).font(.system(size: 12.5, weight: .medium))
+                Text(row.reason).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            }
+            Spacer(minLength: 8)
+            StatePill(text: shown.label, foreground: ReleaseTab.color(shown),
+                      background: ReleaseTab.background(shown))
+            Button { state.open(row.link) } label: {
+                Text("Open ↗").font(.system(size: 11.5)).foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 }
 
