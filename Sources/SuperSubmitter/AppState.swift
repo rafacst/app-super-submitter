@@ -750,8 +750,7 @@ final class AppState {
 
     func addPurchase() {
         var values = manifest.purchases ?? []
-        values.append(.init(id: "com.example.product", kind: .nonConsumable,
-                            name: "New product", price: Price(amount: 0.99, currency: "USD")))
+        values.append(ManifestDrafts.purchase())
         manifest.purchases = values
         saveManifestReportingErrors()
     }
@@ -812,10 +811,7 @@ final class AppState {
 
     func addSubscriptionGroup() {
         var groups = manifest.subscriptions ?? []
-        groups.append(.init(groupId: "main", groupName: "New subscription group", plans: [
-            .init(id: "com.example.monthly", duration: "P1M", basePlanId: "monthly",
-                  price: Price(amount: 0.99, currency: "USD"))
-        ]))
+        groups.append(ManifestDrafts.subscriptionGroup())
         manifest.subscriptions = groups
         saveManifestReportingErrors()
     }
@@ -841,9 +837,7 @@ final class AppState {
 
     func addPlan(to groupIndex: Int) {
         guard manifest.subscriptions?.indices.contains(groupIndex) == true else { return }
-        manifest.subscriptions?[groupIndex].plans.append(
-            .init(id: "com.example.monthly", duration: "P1M", basePlanId: "monthly",
-                  price: Price(amount: 0.99, currency: "USD")))
+        manifest.subscriptions?[groupIndex].plans.append(ManifestDrafts.subscriptionPlan())
         saveManifestReportingErrors()
     }
 
@@ -942,7 +936,7 @@ final class AppState {
 
     func addEntitlement() {
         var values = manifest.entitlements ?? []
-        values.append(.init(key: "new", name: "New entitlement"))
+        values.append(ManifestDrafts.entitlement())
         manifest.entitlements = values
         saveManifestReportingErrors()
     }
@@ -955,8 +949,7 @@ final class AppState {
 
     func addOffering() {
         var values = manifest.offerings ?? []
-        values.append(.init(key: "default", name: "New offering", isCurrent: values.isEmpty,
-                            products: []))
+        values.append(ManifestDrafts.offering(isFirst: values.isEmpty))
         manifest.offerings = values
         saveManifestReportingErrors()
     }
