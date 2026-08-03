@@ -501,7 +501,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "money.pricePoint", severity: .warning,
                     message: "The App Store resolved \(resolved) \(requested.currency) for a request of \(requested.amount) \(requested.currency).",
-                    location: "Money · Base price", fix: .money))
+                    location: "Monetization · Base price", fix: .money))
             }
         }
 
@@ -510,7 +510,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "money.duration.\(plan.id)", severity: .error,
                     message: "The App Store offers no \(plan.duration) subscription duration.",
-                    location: "Money · \(group.groupId) · \(plan.id)", fix: .money))
+                    location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
             }
         }
 
@@ -524,7 +524,7 @@ public enum Validator {
                     result.append(Finding(
                         id: "money.oneStore.\(id)", severity: .warning,
                         message: "The product \(id) exists in one store and not in the other.",
-                        location: "Money · Purchases", fix: .money))
+                        location: "Monetization · Purchases", fix: .money))
                 }
             }
         }
@@ -549,7 +549,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "purchase.content.\(purchase.id)", severity: .warning,
                     message: "The App Store API no longer uploads hosted content. Upload \(path) for \(purchase.id) in App Store Connect.",
-                    location: "Money · \(purchase.id)", fix: .money))
+                    location: "Monetization · \(purchase.id)", fix: .money))
             }
         }
         for group in manifest.subscriptions ?? [] {
@@ -560,7 +560,7 @@ public enum Validator {
 
         var seen: Set<String> = []
         for (productID, offer) in everyOffer {
-            let location = "Money · \(productID) · \(offer.id)"
+            let location = "Monetization · \(productID) · \(offer.id)"
             if !seen.insert("\(productID)/\(offer.id)").inserted {
                 result.append(Finding(
                     id: "offer.duplicate.\(productID).\(offer.id)", severity: .error,
@@ -610,7 +610,7 @@ public enum Validator {
             result.append(Finding(
                 id: "offer.gracePeriodDisagreement", severity: .warning,
                 message: "The manifest names \(periods.count) different grace periods. The App Store keeps one for the whole app, and the first group wins.",
-                location: "Money · Grace period", fix: .money))
+                location: "Monetization · Grace period", fix: .money))
         }
 
         for group in manifest.subscriptions ?? [] {
@@ -618,7 +618,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "offer.migrate.\(plan.id)", severity: .warning,
                     message: "The plan \(plan.id) migrates the existing subscribers. This changes what a paying customer is charged at the next renewal, and no call undoes it.",
-                    location: "Money · \(group.groupId) · \(plan.id)", fix: .money))
+                    location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
             }
         }
         return result
@@ -730,7 +730,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "provider.entitlement.\(id).\(key)", severity: .error,
                     message: "The product \(id) names the entitlement \(key), which the manifest does not declare.",
-                    location: "Money · Entitlements", fix: .money))
+                    location: "Monetization · Entitlements", fix: .money))
             }
         }
 
@@ -739,7 +739,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "provider.offering.\(offering.key).\(product)", severity: .error,
                     message: "The offering \(offering.key) names \(product), which no purchase and no plan declares.",
-                    location: "Money · Offerings", fix: .money))
+                    location: "Monetization · Offerings", fix: .money))
             }
         }
 
@@ -747,7 +747,7 @@ public enum Validator {
             result.append(Finding(
                 id: "provider.noOffering", severity: .warning,
                 message: "The manifest holds no offering. The app code then has nothing to request.",
-                location: "Money · Offerings", fix: .money))
+                location: "Monetization · Offerings", fix: .money))
         }
 
         for orphan in (actual?.offeringKeys ?? [])
@@ -755,7 +755,7 @@ public enum Validator {
             result.append(Finding(
                 id: "provider.orphan.\(orphan)", severity: .warning,
                 message: "The offering \(orphan) exists in the provider and not in the manifest. The plan archives it.",
-                location: "Money · Offerings", fix: .money))
+                location: "Monetization · Offerings", fix: .money))
         }
 
         switch provider {
@@ -767,13 +767,13 @@ public enum Validator {
                         result.append(Finding(
                             id: "rc.appMissing.apple", severity: .error,
                             message: "The RevenueCat app id \(appleAppId) does not exist in the project.",
-                            location: "Money · RevenueCat", fix: .money))
+                            location: "Monetization · RevenueCat", fix: .money))
                     } else if let bundleID = manifest.apps.apple?.bundleId,
                               !bundleID.isEmpty, identifiers[appleAppId] != bundleID {
                         result.append(Finding(
                             id: "rc.bundleId", severity: .error,
                             message: "The RevenueCat App Store bundle id \(identifiers[appleAppId] ?? "") does not match \(bundleID). A wrong app id writes to another app.",
-                            location: "Money · RevenueCat", fix: .money))
+                            location: "Monetization · RevenueCat", fix: .money))
                     }
                 }
             }
@@ -784,27 +784,27 @@ public enum Validator {
                 result.append(Finding(
                     id: "rc.packageName", severity: .error,
                     message: "The RevenueCat Play Store package name \(identifiers[playAppId] ?? "") does not match \(packageName).",
-                    location: "Money · RevenueCat", fix: .money))
+                    location: "Monetization · RevenueCat", fix: .money))
             }
             if !(manifest.offerings ?? []).isEmpty,
                (manifest.offerings ?? []).allSatisfy({ $0.isCurrent != true }) {
                 result.append(Finding(
                     id: "rc.noCurrent", severity: .warning,
                     message: "No offering is marked current. The app code then reads no default offering.",
-                    location: "Money · Offerings", fix: .money))
+                    location: "Monetization · Offerings", fix: .money))
             }
             for scope in actual?.missingScopes ?? [] {
                 result.append(Finding(
                     id: "rc.scope.\(scope)", severity: .error,
                     message: "The RevenueCat API key lacks the scope \(scope).",
-                    location: "Money · RevenueCat", fix: .money))
+                    location: "Monetization · RevenueCat", fix: .money))
             }
         case .adapty:
             if actual?.loggedInAs == nil {
                 result.append(Finding(
                     id: "adapty.auth", severity: .error,
                     message: "The adapty CLI is not logged in. Run adapty auth login.",
-                    location: "Money · Adapty", fix: .money))
+                    location: "Monetization · Adapty", fix: .money))
             }
             for group in manifest.subscriptions ?? [] {
                 for plan in group.plans {
@@ -812,19 +812,19 @@ public enum Validator {
                         result.append(Finding(
                             id: "adapty.period.\(plan.id)", severity: .error,
                             message: "Adapty has no period for \(plan.duration) on \(plan.id). The supported periods are \(AdaptyPeriods.supported.joined(separator: ", ")).",
-                            location: "Money · \(group.groupId)", fix: .money))
+                            location: "Monetization · \(group.groupId)", fix: .money))
                     }
                     if input.stores.contains(.google), plan.basePlanId?.isEmpty != false {
                         result.append(Finding(
                             id: "adapty.basePlan.\(plan.id)", severity: .error,
                             message: "The Android subscription plan \(plan.id) has no basePlanId.",
-                            location: "Money · \(group.groupId)", fix: .money))
+                            location: "Monetization · \(group.groupId)", fix: .money))
                     }
                     if (plan.entitlements?.count ?? 0) > 1 {
                         result.append(Finding(
                             id: "adapty.manyEntitlements.\(plan.id)", severity: .warning,
                             message: "Adapty takes one access level. \(plan.id) names \(plan.entitlements?.count ?? 0); the app uses \(plan.entitlements?.first ?? "").",
-                            location: "Money · \(group.groupId)", fix: .money))
+                            location: "Monetization · \(group.groupId)", fix: .money))
                     }
                 }
             }
@@ -846,13 +846,13 @@ public enum Validator {
             result.append(Finding(
                 id: "state.appleVersion", severity: .error,
                 message: "The App Store version is \(versionState). Metadata writes need PREPARE_FOR_SUBMISSION.",
-                location: "Plan · App Store", fix: .plan))
+                location: "Summary · App Store", fix: .plan))
         }
         if apple.hasOpenReviewSubmission {
             result.append(Finding(
                 id: "state.openSubmission", severity: .error,
                 message: "An App Store review submission is already open. Cancel it before you apply.",
-                location: "Plan · App Store", fix: .plan))
+                location: "Summary · App Store", fix: .plan))
         }
 
         let track = input.manifest.googlePrimaryTrack
@@ -864,7 +864,7 @@ public enum Validator {
             result.append(Finding(
                 id: "state.googleDraft", severity: .warning,
                 message: "A draft release already exists in \(track) with version code \(existing). This apply replaces it with \(package).",
-                location: "Plan · Google Play", fix: .plan))
+                location: "Summary · Google Play", fix: .plan))
         }
         return result
     }

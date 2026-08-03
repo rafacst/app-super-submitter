@@ -46,7 +46,7 @@ struct SubmitTab: View {
 
     private var readyLine: String {
         guard let plan = state.plan else {
-            return "Open the Plan tab. It reads both stores and lists every change before this tab writes one."
+            return "Open the Summary tab. It reads both stores and lists every change before this tab writes one."
         }
         let systems = plan.systems.map { system -> String in
             switch system {
@@ -285,7 +285,7 @@ struct SubmitTab: View {
                 .font(.system(size: 17, weight: .semibold))
                 .kerning(-0.17)
             Text(state.dryRun
-                 ? "Every request above was built and logged. No store received one. Turn the dry run off on the Plan tab to write the drafts."
+                 ? "Every request above was built and logged. No store received one. Turn the dry run off on the Summary tab to write the drafts."
                  : "Nothing went to review. Nothing reached a customer. Both drafts are visible in the two consoles.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text2)
@@ -293,7 +293,7 @@ struct SubmitTab: View {
                 .frame(maxWidth: 560, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             Button { state.selectedTab = state.dryRun ? .plan : .release } label: {
-                Text(state.dryRun ? "Back to Plan" : "Go to Release")
+                Text(state.dryRun ? "Back to Summary" : "Go to Release")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 15)

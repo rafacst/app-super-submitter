@@ -24,29 +24,103 @@ struct StoreMark: View {
     }
 }
 
-/// The Google Play triangle. Four triangles meet on the centre line: the spine
-/// on the left, the tip on the right.
+/// The Google Play triangle of the 2022 icon. Four wedges meet at the fold, and
+/// the outer corners are rounded. The coordinates below are the published
+/// artwork on its own 28.99 x 31.99 artboard, scaled into whatever frame the
+/// caller gives.
 struct PlayMark: View {
+    static let artboard = CGSize(width: 28.99, height: 31.99)
+
     var body: some View {
         Canvas { context, size in
-            let w = size.width, h = size.height
-            let top = CGPoint(x: w * 0.11, y: h * 0.02)
-            let foot = CGPoint(x: w * 0.11, y: h * 0.98)
-            let waist = CGPoint(x: w * 0.11, y: h * 0.50)
-            let fold = CGPoint(x: w * 0.60, y: h * 0.50)
-            let tip = CGPoint(x: w * 0.98, y: h * 0.50)
-            Self.fill(&context, [top, fold, waist], Theme.playBlue)
-            Self.fill(&context, [waist, fold, foot], Theme.playGreen)
-            Self.fill(&context, [top, tip, fold], Theme.playRed)
-            Self.fill(&context, [fold, tip, foot], Theme.playYellow)
+            let scale = min(size.width / Self.artboard.width,
+                            size.height / Self.artboard.height)
+            context.translateBy(x: (size.width - Self.artboard.width * scale) / 2,
+                                y: (size.height - Self.artboard.height * scale) / 2)
+            context.scaleBy(x: scale, y: scale)
+            for wedge in Self.wedges { context.fill(wedge.path, with: .color(wedge.color)) }
         }
     }
 
-    private static func fill(_ context: inout GraphicsContext, _ points: [CGPoint], _ color: Color) {
-        var path = Path()
-        path.addLines(points)
-        path.closeSubpath()
-        context.fill(path, with: .color(color))
+    struct Wedge {
+        let path: Path
+        let color: Color
+    }
+
+    static let wedges: [Wedge] = [
+        Wedge(path: Pen(13.54, 15.28)
+            .line(0.12, 29.34)
+            .arc(5.45, 31.50, radius: 3.66)
+            .line(20.55, 22.90)
+            .close(), color: Theme.playRed),
+        Wedge(path: Pen(27.11, 12.89)
+            .line(20.58, 9.15)
+            .line(13.23, 15.60)
+            .line(20.61, 22.88)
+            .line(27.09, 19.18)
+            .arc(28.59, 14.39, radius: 3.54)
+            .arc(27.09, 12.89, radius: 3.62)
+            .close(), color: Theme.playYellow),
+        Wedge(path: Pen(0.12, 2.66)
+            .arc(0, 3.58, radius: 3.57)
+            .line(0, 28.42)
+            .arc(0.12, 29.34, radius: 3.57)
+            .line(14, 15.64)
+            .close(), color: Theme.playBlue),
+        Wedge(path: Pen(13.64, 16)
+            .line(20.58, 9.15)
+            .line(5.5, 0.51)
+            .arc(3.63, 0, radius: 3.73)
+            .arc(0.12, 2.65, radius: 3.64)
+            .close(), color: Theme.playGreen),
+    ]
+}
+
+/// A cursor that replays the icon's SVG path commands, so the numbers above
+/// stay in the order the artwork publishes them.
+///
+/// ponytail: every arc in this icon is circular, under a half turn, and turns
+/// anticlockwise, so the endpoint-to-centre conversion only covers that case.
+/// A second icon with other arc flags needs the full SVG rule.
+struct Pen {
+    private var path = Path()
+    private var point: CGPoint
+
+    init(_ x: CGFloat, _ y: CGFloat) {
+        point = CGPoint(x: x, y: y)
+        path.move(to: point)
+    }
+
+    func line(_ x: CGFloat, _ y: CGFloat) -> Pen {
+        var next = self
+        next.point = CGPoint(x: x, y: y)
+        next.path.addLine(to: next.point)
+        return next
+    }
+
+    func arc(_ x: CGFloat, _ y: CGFloat, radius: CGFloat) -> Pen {
+        var next = self
+        let end = CGPoint(x: x, y: y)
+        let half = CGPoint(x: (point.x - end.x) / 2, y: (point.y - end.y) / 2)
+        let span = half.x * half.x + half.y * half.y
+        let reach = max(0, radius * radius - span) / max(span, .leastNonzeroMagnitude)
+        // The centre sits off the chord's midpoint, on the side the sweep asks for.
+        let offset = sqrt(reach)
+        let centre = CGPoint(x: (point.x + end.x) / 2 - offset * half.y,
+                             y: (point.y + end.y) / 2 + offset * half.x)
+        next.path.addArc(
+            center: centre, radius: radius,
+            startAngle: .radians(atan2(point.y - centre.y, point.x - centre.x)),
+            endAngle: .radians(atan2(end.y - centre.y, end.x - centre.x)),
+            clockwise: true)
+        next.point = end
+        return next
+    }
+
+    func close() -> Path {
+        var closed = path
+        closed.closeSubpath()
+        return closed
     }
 }
 

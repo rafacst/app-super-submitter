@@ -33,8 +33,39 @@ public struct ImportedStoreListing: Sendable, Equatable {
     }
 
     public var versionName: String?
+    /// The store's own default language. It becomes the manifest default, so
+    /// the Details tab opens on the locale the store already publishes.
+    public var defaultLocale: String?
+    public var bundleID: String?
     public var locales: [String: Locale] = [:]
     public var assets: [ImportedStoreAsset] = []
+    public var review = ImportedReview()
+    public var purchases: [Manifest.Purchase] = []
+    public var subscriptions: [Manifest.SubscriptionGroup] = []
+    public var googleTracks: [String] = []
+    public var googleReleaseNotes: [String: String] = [:]
+    public var googleContactWebsite: String?
+    public var appleReleaseType: String?
+    public var applePhasedRelease: Bool?
+    /// The optional reads that the store refused. The import keeps everything
+    /// else and names these, rather than failing the whole app.
+    public var failures: [String] = []
+
+    public init() {}
+}
+
+/// The review answers that a store already holds. The demo account user name
+/// and password are never here; they live in the Keychain. Spec section 9.5.
+public struct ImportedReview: Sendable, Equatable {
+    public var contactFirstName: String?
+    public var contactLastName: String?
+    public var contactEmail: String?
+    public var contactPhone: String?
+    public var demoAccountRequired: Bool?
+    public var notes: String?
+    public var applePrimaryCategory: String?
+    public var appleSecondaryCategory: String?
+    public var usesNonExemptEncryption: Bool?
 
     public init() {}
 }
@@ -120,54 +151,8 @@ public struct StoreConnectionClient: Sendable {
 
     public func importApple(appID: String,
                             credential: AppleCredential) async throws -> ImportedStoreListing {
-        let token = try AppleJWT.make(credential: credential)
-        var result = ImportedStoreListing()
-
-        let infosURL = try Self.appleURL("/v1/apps/\(appID)/appInfos?limit=1")
-        let infos = try JSONDecoder().decode(AppleResourceList<EmptyAttributes>.self,
-                                             from: await appleGET(infosURL, token: token))
-        if let infoID = infos.data.first?.id {
-            let url = try Self.appleURL("/v1/appInfos/\(infoID)/appInfoLocalizations?limit=200")
-            let localizations = try JSONDecoder().decode(
-                AppleResourceList<AppleInfoLocaleAttributes>.self,
-                from: await appleGET(url, token: token))
-            for item in localizations.data {
-                var locale = result.locales[item.attributes.locale] ?? .init()
-                locale.name = item.attributes.name
-                locale.subtitle = item.attributes.subtitle
-                locale.privacyPolicyURL = item.attributes.privacyPolicyURL
-                locale.privacyPolicyText = item.attributes.privacyPolicyText
-                locale.privacyChoicesURL = item.attributes.privacyChoicesURL
-                result.locales[item.attributes.locale] = locale
-            }
-        }
-
-        let versionsURL = try Self.appleURL(
-            "/v1/apps/\(appID)/appStoreVersions?filter%5Bplatform%5D=IOS&limit=1")
-        let versions = try JSONDecoder().decode(
-            AppleResourceList<AppleVersionAttributes>.self,
-            from: await appleGET(versionsURL, token: token))
-        if let version = versions.data.first {
-            result.versionName = version.attributes.versionString
-            let url = try Self.appleURL(
-                "/v1/appStoreVersions/\(version.id)/appStoreVersionLocalizations?limit=200")
-            let localizations = try JSONDecoder().decode(
-                AppleResourceList<AppleVersionLocaleAttributes>.self,
-                from: await appleGET(url, token: token))
-            for item in localizations.data {
-                var locale = result.locales[item.attributes.locale] ?? .init()
-                locale.description = item.attributes.description
-                locale.whatsNew = item.attributes.whatsNew
-                locale.keywords = item.attributes.keywords
-                locale.promotionalText = item.attributes.promotionalText
-                locale.supportURL = item.attributes.supportURL
-                locale.marketingURL = item.attributes.marketingURL
-                result.locales[item.attributes.locale] = locale
-                result.assets += try await appleScreenshotAssets(
-                    localizationID: item.id, locale: item.attributes.locale, token: token)
-            }
-        }
-        return result
+        try await StoreImportReader(credentials: StoreCredentials(apple: credential),
+                                    session: session).apple(appID: appID)
     }
 
     /// Android Publisher has no endpoint that lists every app available to a
@@ -194,61 +179,8 @@ public struct StoreConnectionClient: Sendable {
 
     public func importGoogle(credential: GoogleServiceAccount,
                              packageName: String) async throws -> ImportedStoreListing {
-        let token = try await googleAccessToken(credential: credential)
-        let escaped = packageName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-            ?? packageName
-        let editURL = try Self.googleURL("/androidpublisher/v3/applications/\(escaped)/edits")
-        var create = URLRequest(url: editURL)
-        create.httpMethod = "POST"
-        create.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        create.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        create.httpBody = Data("{}".utf8)
-        let (editData, editResponse) = try await session.data(for: create)
-        try Self.requireSuccess(editResponse, data: editData)
-        let editID = try JSONDecoder().decode(GoogleEdit.self, from: editData).id
-        let base = "/androidpublisher/v3/applications/\(escaped)/edits/\(editID)"
-
-        do {
-            let listingsURL = try Self.googleURL("\(base)/listings")
-            var request = URLRequest(url: listingsURL)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            let (data, response) = try await session.data(for: request)
-            try Self.requireSuccess(response, data: data)
-            let payload = try JSONDecoder().decode(GoogleListingsResponse.self, from: data)
-            var result = ImportedStoreListing()
-            for item in payload.listings ?? [] {
-                var locale = ImportedStoreListing.Locale()
-                locale.name = item.title
-                locale.description = item.fullDescription
-                locale.subtitle = item.shortDescription
-                locale.video = item.video
-                result.locales[item.language] = locale
-                for imageType in ["phoneScreenshots", "sevenInchScreenshots",
-                                  "tenInchScreenshots", "tvScreenshots", "wearScreenshots",
-                                  "icon", "featureGraphic"] {
-                    let imageURL = try Self.googleURL(
-                        "\(base)/listings/\(item.language)/\(imageType)")
-                    var imageRequest = URLRequest(url: imageURL)
-                    imageRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                    let (imageData, imageResponse) = try await session.data(for: imageRequest)
-                    try Self.requireSuccess(imageResponse, data: imageData)
-                    let images = try JSONDecoder().decode(GoogleImagesResponse.self,
-                                                           from: imageData)
-                    for (index, image) in (images.images ?? []).enumerated() {
-                        guard let url = URL(string: image.url) else { continue }
-                        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
-                        result.assets.append(ImportedStoreAsset(
-                            locale: item.language, kind: imageType, url: url,
-                            fileName: "\(imageType)-\(index + 1).\(ext)"))
-                    }
-                }
-            }
-            try await deleteGoogleEdit(base: base, token: token)
-            return result
-        } catch {
-            try? await deleteGoogleEdit(base: base, token: token)
-            throw error
-        }
+        try await StoreImportReader(credentials: StoreCredentials(google: credential),
+                                    session: session).google(packageName: packageName)
     }
 
     private func googleAccessToken(
@@ -279,54 +211,6 @@ public struct StoreConnectionClient: Sendable {
         let (data, response) = try await session.data(for: request)
         try Self.requireSuccess(response, data: data)
         return data
-    }
-
-    private func appleScreenshotAssets(localizationID: String, locale: String,
-                                       token: String) async throws -> [ImportedStoreAsset] {
-        let url = try Self.appleURL(
-            "/v1/appStoreVersionLocalizations/\(localizationID)"
-                + "/appScreenshotSets?include=appScreenshots&limit=50")
-        let data = try await appleGET(url, token: token)
-        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return []
-        }
-        let sets = object["data"] as? [[String: Any]] ?? []
-        var types: [String: String] = [:]
-        for set in sets {
-            guard let id = set["id"] as? String,
-                  let attributes = set["attributes"] as? [String: Any],
-                  let type = attributes["screenshotDisplayType"] as? String else { continue }
-            types[id] = type
-        }
-        return (object["included"] as? [[String: Any]] ?? []).compactMap { item in
-            guard item["type"] as? String == "appScreenshots",
-                  let attributes = item["attributes"] as? [String: Any],
-                  let image = attributes["imageAsset"] as? [String: Any],
-                  let template = image["templateUrl"] as? String,
-                  let relationships = item["relationships"] as? [String: Any],
-                  let set = relationships["appScreenshotSet"] as? [String: Any],
-                  let relationData = set["data"] as? [String: Any],
-                  let setID = relationData["id"] as? String,
-                  let kind = types[setID] else { return nil }
-            let width = image["width"] as? Int ?? 1_290
-            let height = image["height"] as? Int ?? 2_796
-            let rendered = template.replacingOccurrences(of: "{w}", with: String(width))
-                .replacingOccurrences(of: "{h}", with: String(height))
-                .replacingOccurrences(of: "{f}", with: "png")
-                .replacingOccurrences(of: "{c}", with: "")
-            guard let url = URL(string: rendered) else { return nil }
-            let fileName = attributes["fileName"] as? String
-                ?? "\(kind)-\(item["id"] as? String ?? UUID().uuidString).png"
-            return ImportedStoreAsset(locale: locale, kind: kind, url: url, fileName: fileName)
-        }
-    }
-
-    private func deleteGoogleEdit(base: String, token: String) async throws {
-        var request = URLRequest(url: try Self.googleURL(base))
-        request.httpMethod = "DELETE"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await session.data(for: request)
-        try Self.requireSuccess(response, data: data)
     }
 
     private static func appleURL(_ path: String) throws -> URL {
@@ -514,70 +398,12 @@ private struct AppleAppsResponse: Decodable {
 
 private struct AppleLinks: Decodable { let next: String? }
 
-private struct AppleResourceList<Attributes: Decodable>: Decodable {
-    struct Item: Decodable {
-        let id: String
-        let attributes: Attributes
-    }
-    let data: [Item]
-}
-
-private struct EmptyAttributes: Decodable {}
-
-private struct AppleInfoLocaleAttributes: Decodable {
-    let locale: String
-    let name: String?
-    let subtitle: String?
-    let privacyPolicyURL: String?
-    let privacyPolicyText: String?
-    let privacyChoicesURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case locale, name, subtitle, privacyPolicyText
-        case privacyPolicyURL = "privacyPolicyUrl"
-        case privacyChoicesURL = "privacyChoicesUrl"
-    }
-}
-
-private struct AppleVersionAttributes: Decodable {
-    let versionString: String?
-}
-
-private struct AppleVersionLocaleAttributes: Decodable {
-    let locale: String
-    let description: String?
-    let whatsNew: String?
-    let keywords: String?
-    let promotionalText: String?
-    let supportURL: String?
-    let marketingURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case locale, description, whatsNew, keywords, promotionalText
-        case supportURL = "supportUrl"
-        case marketingURL = "marketingUrl"
-    }
-}
-
 private struct GoogleTokenResponse: Decodable {
     let accessToken: String
 
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
     }
-}
-
-private struct GoogleEdit: Decodable { let id: String }
-
-private struct GoogleListingsResponse: Decodable {
-    struct Listing: Decodable {
-        let language: String
-        let title: String?
-        let fullDescription: String?
-        let shortDescription: String?
-        let video: String?
-    }
-    let listings: [Listing]?
 }
 
 private struct GoogleAppsResponse: Decodable {
@@ -587,11 +413,6 @@ private struct GoogleAppsResponse: Decodable {
     }
     let apps: [App]?
     let nextPageToken: String?
-}
-
-private struct GoogleImagesResponse: Decodable {
-    struct Image: Decodable { let url: String }
-    let images: [Image]?
 }
 
 enum APIError {

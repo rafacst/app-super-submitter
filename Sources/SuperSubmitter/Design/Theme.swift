@@ -40,10 +40,10 @@ enum Theme {
     /// The store brands. A logo is a fixed colour and never follows the
     /// appearance, except the Apple mark, which is a silhouette.
     static let appleMark = Color(light: 0x000000, dark: 0xFFFFFF)
-    static let playBlue = Color(hex: 0x00A0FF)
-    static let playGreen = Color(hex: 0x00E676)
-    static let playYellow = Color(hex: 0xFFCE00)
-    static let playRed = Color(hex: 0xFF3A44)
+    static let playBlue = Color(hex: 0x4285F4)
+    static let playGreen = Color(hex: 0x34A853)
+    static let playYellow = Color(hex: 0xFBBC04)
+    static let playRed = Color(hex: 0xEA4335)
 
     static let greenBg = Color(light: Color(hex: 0x1C7F3C).opacity(0.10),
                                dark: Color(hex: 0x42C463).opacity(0.14))

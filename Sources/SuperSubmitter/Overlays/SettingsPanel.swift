@@ -3,7 +3,7 @@ import SwiftUI
 /// Settings. A panel over the window, never a second window.
 ///
 /// Four items and no credential. The App Store and Google Play keys live on
-/// the Stores tab, and the RevenueCat key lives on the Money tab, next to the
+/// the Stores tab, and the RevenueCat key lives on the Monetization tab, next to the
 /// choice that needs them.
 struct SettingsPanel: View {
     @Environment(AppState.self) private var state
@@ -168,7 +168,7 @@ struct SettingsPanel: View {
                 }
             }
 
-            Text("Settings holds no credential. The App Store and Google Play keys live on the Stores tab. The RevenueCat key lives on the Money tab.")
+            Text("Settings holds no credential. The App Store and Google Play keys live on the Stores tab. The RevenueCat key lives on the Monetization tab.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)

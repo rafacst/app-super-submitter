@@ -129,11 +129,11 @@ private struct TabRow: View {
             state.selectedTab = tab
         } label: {
             HStack(spacing: 9) {
-                TabIcon(tab: tab, size: 15)
-                    .frame(width: 17)
-                    .opacity(0.9)
+                Image(systemName: tab.symbol(selected: selected))
+                    .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                    .frame(width: 20)
                 Text(tab.title)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
                 Spacer(minLength: 0)
                 if let badge = state.badge(for: tab) {
                     BadgeView(count: badge.count, severity: badge.severity, selected: selected, size: 16)
@@ -160,8 +160,10 @@ private struct SettingsRow: View {
             state.showSettings = true
         } label: {
             HStack(spacing: 9) {
-                GearIcon().frame(width: 17)
-                Text("Settings…").font(.system(size: 13))
+                Image(systemName: state.showSettings ? "gearshape.2.fill" : "gearshape.2")
+                    .font(.system(size: 15))
+                    .frame(width: 20)
+                Text("Settings…").font(.system(size: 13.5))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Theme.text2)
@@ -228,14 +230,3 @@ struct BadgeView: View {
     }
 }
 
-struct GearIcon: View {
-    var size: CGFloat = 15
-
-    var body: some View {
-        ZStack {
-            Circle().strokeBorder(.primary, lineWidth: 1.3).frame(width: size, height: size)
-            Circle().strokeBorder(.primary, lineWidth: 1.3).frame(width: size * 0.36, height: size * 0.36)
-        }
-        .frame(width: size, height: size)
-    }
-}

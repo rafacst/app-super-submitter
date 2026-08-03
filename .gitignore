@@ -3,6 +3,8 @@
 *.xcodeproj
 !SuperSubmitter.xcodeproj/
 !SuperSubmitter.xcodeproj/**
+# Per-user Xcode state. XcodeGen writes the rest of the project from project.yml.
+**/xcuserdata/
 .DS_Store
 .super-submitter/
 
