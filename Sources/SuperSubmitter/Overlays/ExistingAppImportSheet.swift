@@ -131,6 +131,20 @@ struct ExistingAppImportSheet: View {
                 .padding(14).background(Theme.sunken, in: RoundedRectangle(cornerRadius: 10))
             }
 
+            if let note = model.iconNote {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "photo.badge.exclamationmark")
+                        .foregroundStyle(Theme.text3)
+                    Text(note)
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 9))
+            }
+
             if model.candidates.isEmpty {
                 ContentUnavailableView("No apps found", systemImage: "rectangle.stack.badge.questionmark",
                     description: Text("Check the credential permissions or add a Google package name."))
@@ -184,9 +198,12 @@ struct ExistingAppImportSheet: View {
     }
 
     private var completeDetail: String {
-        model.selectedGroupName == nil
-            ? "Each app has its own store.yaml. They share the credentials you entered, so no tab asks for them again. The last imported app is open on the Build tab."
-            : "The app has its own store.yaml and it keeps the credentials you entered, so no tab asks for them again. It is open on the Build tab."
+        let landing = state.mode == .managing ? "Reviews" : "Build"
+        let where_ = state.mode == .managing
+            ? "Super Submitter keeps the workspace, so nothing landed in your folders."
+            : "Each app has its own store.yaml beside it."
+        return "\(where_) They share the credentials you entered, so no tab asks for them again. "
+            + "The last imported app is open on the \(landing) tab."
     }
 
     private var footer: some View {
@@ -203,9 +220,13 @@ struct ExistingAppImportSheet: View {
                 .buttonStyle(.borderedProminent).tint(Theme.teal)
                 .disabled(!model.canDiscover || model.loading)
             } else if model.step == .apps {
-                Button(model.selectedGroupName == nil
-                       ? "Choose the folder for these apps…" : "Choose the app folder…") {
-                    chooseFolder()
+                // Managing needs no folder. There is no repository to sit
+                // beside, so Super Submitter keeps the workspace itself.
+                Button(state.mode == .managing
+                       ? "Bring in \(model.selection.count) apps"
+                       : (model.selectedGroupName == nil
+                          ? "Choose the folder for these apps…" : "Choose the app folder…")) {
+                    if state.mode == .managing { importManaged() } else { chooseFolder() }
                 }
                 .buttonStyle(.borderedProminent).tint(Theme.teal)
                 .disabled(model.selection.count == 0)
@@ -317,6 +338,25 @@ struct ExistingAppImportSheet: View {
 
     /// Five across, and as many rows as the account has apps.
     private static let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
+
+    /// The managing path. Super Submitter owns the folder, so it asks for
+    /// nothing and the import starts on the button.
+    private func importManaged() {
+        model.step = .destination
+        model.error = nil
+        Task {
+            do {
+                model.imported = try await state.importManagedApps(
+                    model.selectedCandidates,
+                    appleCredential: model.appleCredential,
+                    googleCredential: model.googleCredential)
+                model.step = .complete
+            } catch {
+                model.error = error.localizedDescription
+                model.step = .apps
+            }
+        }
+    }
 
     private func importSelected(into url: URL) {
         model.step = .destination
