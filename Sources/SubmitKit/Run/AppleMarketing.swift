@@ -130,7 +130,7 @@ extension Runner {
         guard !experiments.isEmpty else { return }
 
         let existing = JSON(data: try await api.apple(
-            "GET", "/v2/apps/\(appleAppID)/appStoreVersionExperiments?limit=200").data)
+            "GET", "/v1/apps/\(appleAppID)/appStoreVersionExperimentsV2?limit=200").data)
         var byName: [String: String] = [:]
         for item in existing["data"].array {
             guard let name = item["attributes"]["name"].string,
@@ -180,7 +180,7 @@ extension Runner {
                 var treatmentID = known[treatment.key]
                 if treatmentID == nil {
                     let created = JSON(data: try await api.apple(
-                        "POST", "/v2/appStoreVersionExperimentTreatments", body: [
+                        "POST", "/v1/appStoreVersionExperimentTreatments", body: [
                             "data": [
                                 "type": "appStoreVersionExperimentTreatments",
                                 "attributes": ["name": treatment.key,

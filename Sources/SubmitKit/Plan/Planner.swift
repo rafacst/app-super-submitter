@@ -209,12 +209,11 @@ public enum Planner {
                 id: "apple.purchases", system: .apple, kind: .change,
                 summary: "\(purchaseCount) purchases in the catalog",
                 title: "Write \(purchaseCount) purchases",
-                requests: [RequestSketch("GET", "/v2/inAppPurchases"),
+                requests: [RequestSketch("GET", "/v1/apps/{id}/inAppPurchasesV2"),
                            RequestSketch("POST", "/v2/inAppPurchases"),
                            RequestSketch("POST", "/v1/inAppPurchasePriceSchedules"),
                            RequestSketch("POST", "/v2/inAppPurchaseLocalizations"),
                            RequestSketch("POST", "/v1/inAppPurchaseAvailabilities"),
-                           RequestSketch("POST", "/v1/inAppPurchaseContents"),
                            RequestSketch("POST", "/v1/promotedPurchases")],
                 operation: .applePurchases))
         }
@@ -319,7 +318,7 @@ public enum Planner {
                 summary: "\(experiments.count) experiments  ·  \(treatments) treatments (not started)",
                 title: "Write \(experiments.count) product page experiments",
                 requests: [RequestSketch("POST", "/v2/appStoreVersionExperiments"),
-                           RequestSketch("POST", "/v2/appStoreVersionExperimentTreatments")],
+                           RequestSketch("POST", "/v1/appStoreVersionExperimentTreatments")],
                 operation: .appleExperiments))
         }
         if let events = marketing.events, !events.isEmpty {
@@ -531,7 +530,15 @@ public enum Planner {
         let countries = (manifest.release?.google?.countries ?? []).filter { !$0.isEmpty }
         for track in manifest.googleTracks {
             var summary = "track \(track)  release draft"
-            if !countries.isEmpty { summary += "  ·  \(countries.count) countries" }
+            if !countries.isEmpty {
+                summary += "  ·  \(countries.count) countries"
+                // The country availability read says what Google sells today,
+                // so the diff line shows both sides instead of the wanted
+                // side alone.
+                if let live = actual?.tracks[track]?.countries, Set(live) != Set(countries) {
+                    summary += " (now \(live.count))"
+                }
+            }
             body.append(PlanStep(
                 id: "google.track.\(track)", system: .google, kind: .change,
                 summary: summary,
@@ -540,16 +547,42 @@ public enum Planner {
                 operation: .googleTrack(track)))
         }
 
-        let productCount = (manifest.purchases?.count ?? 0)
-            + (manifest.subscriptions?.count ?? 0)
-        if productCount > 0 {
+        // The tester groups of a closed track. Google replaces the whole list,
+        // so a track that already holds the wanted groups needs no write.
+        for (track, wanted) in (manifest.release?.google?.testers ?? [:]).sorted(by: {
+            $0.key < $1.key
+        }) {
+            let groups = wanted.map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            let live = actual?.tracks[track]?.testers ?? []
+            guard actual == nil || Set(live) != Set(groups) else { continue }
+            body.append(PlanStep(
+                id: "google.testers.\(track)", system: .google,
+                kind: groups.isEmpty ? .remove : (live.isEmpty ? .add : .change),
+                summary: "track \(track)  \(groups.count) tester groups",
+                title: "Write the \(track) tester groups",
+                requests: [RequestSketch("PUT", "/edits/{editId}/testers/\(track)")],
+                operation: .googleTesters(track: track),
+                comparison: actual == nil ? .unverified : .verified))
+        }
+
+        // The per-product read carries the titles, the prices, and the base
+        // plans, so the plan names the products that differ instead of always
+        // saying "write every product".
+        // The batch update carries every product, because it is idempotent and
+        // one call costs less than a call per product. The summary names the
+        // ones that differ, and the title says that the write is the whole
+        // catalog.
+        let catalog = googleCatalogDiff(manifest, actual)
+        if !catalog.changes.isEmpty {
             body.append(PlanStep(
                 id: "google.products", system: .google, kind: .change,
-                summary: "\(productCount) products in the catalog",
-                title: "Write \(productCount) products",
-                requests: [RequestSketch("POST", "/monetization/onetimeproducts:batchUpdate"),
+                summary: catalog.summary,
+                title: "Write the catalog, \(catalog.changes.count) products differ",
+                requests: [RequestSketch("POST", "/monetization/oneTimeProducts:batchUpdate"),
                            RequestSketch("POST", "/monetization/subscriptions:batchUpdate")],
-                operation: .googleProducts))
+                operation: .googleProducts,
+                comparison: catalog.verified ? .verified : .unverified))
         }
         body += googleCatalogSteps(input)
 
@@ -589,6 +622,152 @@ public enum Planner {
         return [open] + body + [validate, commit]
     }
 
+    /// The offers of one product whose state differs from the store.
+    ///
+    /// Returns nil when no offer names `active`, and nil when every offer
+    /// already holds the wanted state. Google reports `ACTIVE` for a live
+    /// offer, so anything else counts as stopped.
+    static func googleOfferStateSummary(_ offers: [Manifest.Offer], productId: String,
+                                        actual: ActualState.Google?)
+        -> (summary: String, count: Int, comparison: ComparisonConfidence)? {
+        let wanted = offers.filter { $0.active != nil }
+        guard !wanted.isEmpty else { return nil }
+        let states = actual?.catalog[productId]?.offerStates
+        // No read means no comparison. The switch still runs, and the plan
+        // says that nobody verified it.
+        guard let states else {
+            return ("\(wanted.count) offer switches on \(productId)", wanted.count, .unverified)
+        }
+        let differs = wanted.filter { offer in
+            (states[offer.id] == "ACTIVE") != (offer.active == true)
+        }
+        guard !differs.isEmpty else { return nil }
+        let activate = differs.filter { $0.active == true }.count
+        let stop = differs.count - activate
+        var parts: [String] = []
+        if activate > 0 { parts.append("activate \(activate)") }
+        if stop > 0 { parts.append("stop \(stop)") }
+        return ("offers on \(productId)  \(parts.joined(separator: ", "))",
+                differs.count, .verified)
+    }
+
+    // MARK: - The Google catalog diff
+
+    /// Which products differ from the manifest, and in which fields.
+    ///
+    /// `verified` is false when a wanted product exists in the store and its
+    /// detail could not be read. The plan then says `unverified` rather than
+    /// claim a diff that nobody checked.
+    static func googleCatalogDiff(_ manifest: Manifest, _ actual: ActualState.Google?)
+        -> (changes: [String], summary: String, verified: Bool) {
+        var changes: [String] = []
+        var verified = actual != nil
+        let defaultLocale = manifest.listing?.defaultLocale ?? "en-US"
+
+        func compare(id: String, exists: Bool, wanted: ActualState.Google.CatalogProduct) {
+            guard exists else {
+                changes.append("\(id)  create")
+                return
+            }
+            guard let live = actual?.catalog[id] else {
+                // The store holds the product and the detail read failed.
+                verified = false
+                changes.append("\(id)  unread")
+                return
+            }
+            var fields: [String] = []
+            for (locale, text) in wanted.listings.sorted(by: { $0.key < $1.key }) {
+                let current = live.listings[locale]
+                if let title = text.title, title != current?.title { fields.append("title") }
+                if let detail = text.description, detail != current?.description {
+                    fields.append("description")
+                }
+            }
+            for (region, price) in wanted.prices where live.prices[region] != price {
+                fields.append("price")
+            }
+            if let plan = wanted.basePlanId, plan != live.basePlanId {
+                fields.append("base plan")
+            }
+            if let duration = wanted.basePlanDuration, duration != live.basePlanDuration {
+                fields.append("duration")
+            }
+            let unique = NSOrderedSet(array: fields).compactMap { $0 as? String }
+            guard !unique.isEmpty else { return }
+            changes.append("\(id)  \(unique.joined(separator: ", "))")
+        }
+
+        for purchase in manifest.purchases ?? [] {
+            var wanted = ActualState.Google.CatalogProduct()
+            wanted.productId = purchase.id
+            wanted.listings = googleWantedListings(
+                locales: purchase.locales, fallbackName: purchase.name ?? purchase.id,
+                defaultLocale: defaultLocale)
+            if let price = purchase.price {
+                wanted.prices[price.territory ?? "US"] = googlePriceText(price)
+            }
+            compare(id: purchase.id,
+                    exists: actual?.oneTimeProductIds.contains(purchase.id) ?? false,
+                    wanted: wanted)
+        }
+
+        for group in manifest.subscriptions ?? [] {
+            for plan in group.plans {
+                var wanted = ActualState.Google.CatalogProduct()
+                wanted.productId = plan.id
+                wanted.listings = googleWantedListings(
+                    locales: plan.locales ?? group.locales,
+                    fallbackName: group.groupName ?? group.groupId,
+                    defaultLocale: defaultLocale)
+                if let price = plan.price {
+                    wanted.prices[price.territory ?? "US"] = googlePriceText(price)
+                }
+                wanted.basePlanId = plan.basePlanId ?? "default"
+                wanted.basePlanDuration = plan.duration
+                compare(id: plan.id,
+                        exists: actual?.subscriptionIds.contains(plan.id) ?? false,
+                        wanted: wanted)
+            }
+        }
+
+        let summary = changes.count <= 3
+            ? changes.joined(separator: "  ·  ")
+            : "\(changes.count) products differ  ·  \(changes.prefix(2).joined(separator: "  ·  "))  ·  …"
+        return (changes, summary, verified)
+    }
+
+    /// The titles that the apply writes, in the same shape that
+    /// `googleProducts` sends.
+    static func googleWantedListings(locales: [String: Manifest.ProductLocale]?,
+                                     fallbackName: String, defaultLocale: String)
+        -> [String: ActualState.Google.CatalogProduct.ProductListing] {
+        var result: [String: ActualState.Google.CatalogProduct.ProductListing] = [:]
+        guard let locales, !locales.isEmpty else {
+            var listing = ActualState.Google.CatalogProduct.ProductListing()
+            listing.title = fallbackName
+            result[defaultLocale] = listing
+            return result
+        }
+        for (locale, text) in locales {
+            var listing = ActualState.Google.CatalogProduct.ProductListing()
+            listing.title = text.name ?? fallbackName
+            listing.description = text.description ?? ""
+            result[locale] = listing
+        }
+        return result
+    }
+
+    /// The same text that `GoogleCatalogClient` builds from a Google price.
+    ///
+    /// It runs the amount through the same units and nanos step that the apply
+    /// uses, so a decimal that a literal cannot hold exactly compares equal on
+    /// both sides.
+    static func googlePriceText(_ price: Price) -> String {
+        let money = GoogleCatalogClient.nanoUnits(price.amount)
+        return GoogleCatalogClient.priceText(currency: price.currency,
+                                             units: money.units, nanos: money.nanos)
+    }
+
     // MARK: - The Google catalog states, offers, and archives
 
     /// These calls sit outside the edit, the same as the two batch updates.
@@ -606,7 +785,7 @@ public enum Planner {
                     summary: "purchase option  \(purchase.id)  \(active ? "activate" : "deactivate")",
                     title: "\(active ? "Activate" : "Deactivate") \(purchase.id)",
                     requests: [RequestSketch(
-                        "POST", "/monetization/onetimeproducts/{id}/purchaseOptions:batchUpdateStates")],
+                        "POST", "/monetization/oneTimeProducts/{id}/purchaseOptions:batchUpdateStates")],
                     operation: .googlePurchaseOptionState(productId: purchase.id,
                                                           purchaseOptionId: purchase.id,
                                                           active: active)))
@@ -618,8 +797,20 @@ public enum Planner {
                     title: "Write \(offers.count) offers on \(purchase.id)",
                     requests: [RequestSketch(
                         "POST",
-                        "/monetization/onetimeproducts/{id}/purchaseOptions/{option}/offers:batchUpdate")],
+                        "/monetization/oneTimeProducts/{id}/purchaseOptions/{option}/offers:batchUpdate")],
                     operation: .googleOneTimeOffers(productId: purchase.id)))
+                if let switches = googleOfferStateSummary(offers, productId: purchase.id,
+                                                          actual: input.actual.google) {
+                    steps.append(PlanStep(
+                        id: "google.oneTimeOfferStates.\(purchase.id)", system: .google,
+                        kind: .change, summary: switches.summary,
+                        title: "Switch \(switches.count) offers on \(purchase.id)",
+                        requests: [RequestSketch(
+                            "POST",
+                            "/monetization/oneTimeProducts/{id}/purchaseOptions/{option}/offers:batchUpdateStates")],
+                        operation: .googleOneTimeOfferStates(productId: purchase.id),
+                        comparison: switches.comparison))
+                }
             }
         }
 
@@ -648,6 +839,19 @@ public enum Planner {
                             "/monetization/subscriptions/{id}/basePlans/{plan}/offers:batchUpdate")],
                         operation: .googleSubscriptionOffers(productId: plan.id,
                                                              basePlanId: basePlanId)))
+                    if let switches = googleOfferStateSummary(offers, productId: plan.id,
+                                                              actual: input.actual.google) {
+                        steps.append(PlanStep(
+                            id: "google.subscriptionOfferStates.\(plan.id)", system: .google,
+                            kind: .change, summary: switches.summary,
+                            title: "Switch \(switches.count) offers on \(plan.id)",
+                            requests: [RequestSketch(
+                                "POST",
+                                "/monetization/subscriptions/{id}/basePlans/{plan}/offers:batchUpdateStates")],
+                            operation: .googleSubscriptionOfferStates(productId: plan.id,
+                                                                       basePlanId: basePlanId),
+                            comparison: switches.comparison))
+                    }
                 }
                 if plan.migrateExistingSubscribers == true {
                     steps.append(PlanStep(
@@ -936,16 +1140,22 @@ public enum Planner {
             "apple.subscriptionOffers",
             "apple.gracePeriod", "apple.customProductPages", "apple.experiments",
             "apple.events", "apple.eula", "apple.nomination", "apple.accessibility",
-            "apple.appClip", "google.dataSafety", "google.products",
+            "apple.appClip", "google.dataSafety",
             "google.purchaseOptionState", "google.oneTimeOffers",
             "google.basePlanState", "google.subscriptionOffers",
             "google.migratePrices", "provider.attach", "provider.offering",
         ]
+        // `google.products` left this list. The per-product read carries the
+        // titles, the prices, and the base plans, so that step compares real
+        // fields and marks itself when a read fails.
         var ids: [String] = []
         for index in result.steps.indices
-        where prefixes.contains(where: { result.steps[index].id.hasPrefix($0) }) {
+        where prefixes.contains(where: { result.steps[index].id.hasPrefix($0) })
+            || result.steps[index].comparison == .unverified {
             result.steps[index].comparison = .unverified
-            result.steps[index].summary = "unverified · " + result.steps[index].summary
+            if !result.steps[index].summary.hasPrefix("unverified · ") {
+                result.steps[index].summary = "unverified · " + result.steps[index].summary
+            }
             ids.append(result.steps[index].id)
         }
         if !ids.isEmpty {
@@ -963,7 +1173,10 @@ public enum Planner {
     /// The tracks that every Play app already has. Google creates no other.
     static let standardGoogleTracks: Set<String> = ["internal", "alpha", "beta", "production"]
 
-    static func resolve(_ path: String, root: URL?) -> URL? {
+    /// A manifest path against the manifest's own directory, or nil when the
+    /// file does not exist. The app target resolves the same way, so this is
+    /// public rather than copied into a second definition that drifts.
+    public static func resolve(_ path: String, root: URL?) -> URL? {
         let url = path.hasPrefix("/")
             ? URL(fileURLWithPath: path)
             : root?.appendingPathComponent(path) ?? URL(fileURLWithPath: path)

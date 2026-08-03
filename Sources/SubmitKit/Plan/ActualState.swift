@@ -86,6 +86,10 @@ public struct ActualState: Sendable, Equatable {
         public var imageHashes: [String: Set<String>] = [:]
         public var oneTimeProductIds: Set<String> = []
         public var subscriptionIds: Set<String> = []
+        /// Every catalog product that Google holds, keyed by the product id.
+        /// The one-time products and the subscription plans share this map,
+        /// because a product id is unique across both.
+        public var catalog: [String: CatalogProduct] = [:]
 
         public init() {}
 
@@ -102,7 +106,41 @@ public struct ActualState: Sendable, Equatable {
             public var status: String?
             public var userFraction: Double?
             public var releaseNotes: [String: String] = [:]
+            /// The Google Group addresses that may install this track.
+            public var testers: [String] = []
+            /// The countries that Google sells this track in. Nil means that
+            /// the read failed or that the track is not a country-targeted
+            /// one, and then the plan says so instead of showing a false diff.
+            public var countries: [String]?
+            public var restOfWorld: Bool?
             public init() {}
+        }
+
+        /// One catalog product, in the shape that the plan compares.
+        ///
+        /// `// ponytail: the fields that the manifest writes, and no others. A
+        /// // full mirror of the Google product would need a normalizer for
+        /// // every nested region config, and the plan shows none of that.`
+        public struct CatalogProduct: Sendable, Equatable {
+            public var productId: String = ""
+            /// The language code to the title and the description.
+            public var listings: [String: ProductListing] = [:]
+            /// The region code to the price, as `"USD 4.99"`.
+            public var prices: [String: String] = [:]
+            /// The first base plan of a subscription. Nil for a one-time
+            /// product.
+            public var basePlanId: String?
+            public var basePlanDuration: String?
+            public var basePlanState: String?
+            /// The offer id to its Google state, for example `ACTIVE`.
+            public var offerStates: [String: String] = [:]
+            public init() {}
+
+            public struct ProductListing: Sendable, Equatable {
+                public var title: String?
+                public var description: String?
+                public init() {}
+            }
         }
     }
 

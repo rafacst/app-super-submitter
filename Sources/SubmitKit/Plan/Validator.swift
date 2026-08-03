@@ -432,7 +432,55 @@ public enum Validator {
                 message: "includeRestOfWorld does nothing while the countries list is empty. The release reaches every country.",
                 location: "Build · Android", fix: .build))
         }
+
+        result += googleTesterFindings(input)
         return result
+    }
+
+    /// The tester groups of the closed tracks.
+    ///
+    /// A closed track without a group reaches nobody, and Google reports no
+    /// error for it. The developer sees an empty test and no reason for it, so
+    /// the plan says so first.
+    static func googleTesterFindings(_ input: Planner.Input) -> [Finding] {
+        let manifest = input.manifest
+        var result: [Finding] = []
+        let testers = manifest.release?.google?.testers ?? [:]
+        let tracks = Set(manifest.googleTracks)
+
+        for (track, groups) in testers.sorted(by: { $0.key < $1.key }) {
+            if !tracks.contains(track) {
+                result.append(Finding(
+                    id: "build.testerTrackMissing.\(track)", severity: .error,
+                    message: "The manifest names tester groups for the \(track) track, and no apply writes that track. Add \(track) to the tracks list.",
+                    location: "Build · Android", fix: .build))
+            }
+            for group in groups where !Self.looksLikeEmail(group) {
+                result.append(Finding(
+                    id: "build.testerGroup.\(track).\(group)", severity: .error,
+                    message: "\(group) is not a Google Group address. Google accepts a group email address here and no individual tester.",
+                    location: "Build · Android", fix: .build))
+            }
+        }
+
+        // Google owns the four standard tracks. Any other name is a closed
+        // test, and a closed test needs a group.
+        for track in manifest.googleTracks
+        where !Planner.standardGoogleTracks.contains(track)
+            && (testers[track] ?? []).isEmpty {
+            result.append(Finding(
+                id: "build.closedTrackNoTesters.\(track)", severity: .warning,
+                message: "The closed track \(track) names no tester group, so nobody can install the build. Add release.google.testers.\(track).",
+                location: "Build · Android", fix: .build))
+        }
+        return result
+    }
+
+    static func looksLikeEmail(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        let parts = trimmed.split(separator: "@", omittingEmptySubsequences: false)
+        return parts.count == 2 && !parts[0].isEmpty && parts[1].contains(".")
+            && !parts[1].hasPrefix(".") && !parts[1].hasSuffix(".")
     }
 
     // MARK: - 10.4 Money
@@ -494,6 +542,15 @@ public enum Validator {
         var everyOffer: [(String, Manifest.Offer)] = []
         for purchase in manifest.purchases ?? [] {
             everyOffer += (purchase.offers ?? []).map { (purchase.id, $0) }
+            // Apple removed the hosted content upload. The API publishes a
+            // read for `inAppPurchaseContents` and no create, so the key
+            // cannot reach the store from here.
+            if input.stores.contains(.apple), let path = purchase.content, !path.isEmpty {
+                result.append(Finding(
+                    id: "purchase.content.\(purchase.id)", severity: .warning,
+                    message: "The App Store API no longer uploads hosted content. Upload \(path) for \(purchase.id) in App Store Connect.",
+                    location: "Money · \(purchase.id)", fix: .money))
+            }
         }
         for group in manifest.subscriptions ?? [] {
             for plan in group.plans {
