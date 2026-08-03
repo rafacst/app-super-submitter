@@ -105,6 +105,13 @@ import Testing
     }
 }
 
+@Test func googleAppDiscoveryIsAvailableWithoutKnowingAPackageName() {
+    let client = StoreConnectionClient()
+    let operation: @Sendable (GoogleServiceAccount) async throws -> [RemoteStoreApp]
+        = client.googleApps
+    _ = operation
+}
+
 @Test func aGoogleServiceAccountReadsTheOfficialJSONKeys() throws {
     let data = Data(#"""
     {
