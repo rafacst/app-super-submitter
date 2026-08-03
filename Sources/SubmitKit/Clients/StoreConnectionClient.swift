@@ -91,6 +91,33 @@ public struct StoreConnectionClient: Sendable {
         return result
     }
 
+    /// The Publishing API is package-scoped, but the Play Developer Reporting
+    /// API can enumerate every app visible to the same service account.
+    public func googleApps(credential: GoogleServiceAccount) async throws -> [RemoteStoreApp] {
+        let scope = "https://www.googleapis.com/auth/playdeveloperreporting"
+        let token = try await googleAccessToken(credential: credential, scope: scope)
+        var components = URLComponents(
+            string: "https://playdeveloperreporting.googleapis.com/v1beta1/apps:search")!
+        components.queryItems = [URLQueryItem(name: "pageSize", value: "1000")]
+        var result: [RemoteStoreApp] = []
+        while let url = components.url {
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await session.data(for: request)
+            try Self.requireSuccess(response, data: data)
+            let page = try JSONDecoder().decode(GoogleAppsResponse.self, from: data)
+            result += (page.apps ?? []).map {
+                RemoteStoreApp(id: $0.packageName,
+                               name: $0.displayName ?? $0.packageName,
+                               identifier: $0.packageName)
+            }
+            guard let next = page.nextPageToken, !next.isEmpty else { break }
+            components.queryItems = [URLQueryItem(name: "pageSize", value: "1000"),
+                                     URLQueryItem(name: "pageToken", value: next)]
+        }
+        return result
+    }
+
     public func importApple(appID: String,
                             credential: AppleCredential) async throws -> ImportedStoreListing {
         let token = try AppleJWT.make(credential: credential)
@@ -224,8 +251,11 @@ public struct StoreConnectionClient: Sendable {
         }
     }
 
-    private func googleAccessToken(credential: GoogleServiceAccount) async throws -> String {
-        let assertion = try GoogleJWT.make(credential: credential)
+    private func googleAccessToken(
+        credential: GoogleServiceAccount,
+        scope: String = "https://www.googleapis.com/auth/androidpublisher"
+    ) async throws -> String {
+        let assertion = try GoogleJWT.make(credential: credential, scope: scope)
         guard let url = URL(string: credential.tokenURI) else {
             throw ConnectionError.invalidTokenURL
         }
@@ -369,12 +399,14 @@ enum AppleJWT {
 }
 
 enum GoogleJWT {
-    static func make(credential: GoogleServiceAccount, now: Date = Date()) throws -> String {
+    static func make(credential: GoogleServiceAccount,
+                     scope: String = "https://www.googleapis.com/auth/androidpublisher",
+                     now: Date = Date()) throws -> String {
         let header: [String: Any] = ["alg": "RS256", "typ": "JWT"]
         let issued = Int(now.timeIntervalSince1970)
         let payload: [String: Any] = [
             "iss": credential.clientEmail,
-            "scope": "https://www.googleapis.com/auth/androidpublisher",
+            "scope": scope,
             "aud": credential.tokenURI,
             "iat": issued,
             "exp": issued + 60 * 60,
@@ -546,6 +578,15 @@ private struct GoogleListingsResponse: Decodable {
         let video: String?
     }
     let listings: [Listing]?
+}
+
+private struct GoogleAppsResponse: Decodable {
+    struct App: Decodable {
+        let packageName: String
+        let displayName: String?
+    }
+    let apps: [App]?
+    let nextPageToken: String?
 }
 
 private struct GoogleImagesResponse: Decodable {

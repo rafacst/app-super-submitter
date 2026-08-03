@@ -64,11 +64,20 @@ extension AppState {
     private func availableImportFolder(named name: String, under root: URL,
                                        identifier: String) -> URL {
         let proposed = root.appendingPathComponent(name, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: proposed.path) else { return proposed }
         let manifest = proposed.appendingPathComponent(ManifestFile.defaultName)
-        if !FileManager.default.fileExists(atPath: proposed.path)
-            || FileManager.default.fileExists(atPath: manifest.path) { return proposed }
+        if let existing = try? ManifestFile.load(from: manifest),
+           existing.apps.apple?.bundleId == identifier
+            || existing.apps.google?.packageName == identifier { return proposed }
         let suffix = identifier.split(separator: ".").last.map(String.init) ?? "app"
-        return root.appendingPathComponent("\(name) - \(suffix)", isDirectory: true)
+        var index = 1
+        while true {
+            let counter = index == 1 ? "" : " \(index)"
+            let candidate = root.appendingPathComponent(
+                "\(name) - \(suffix)\(counter)", isDirectory: true)
+            if !FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+            index += 1
+        }
     }
 
     private func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,

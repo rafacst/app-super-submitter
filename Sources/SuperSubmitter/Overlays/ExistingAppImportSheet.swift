@@ -123,7 +123,7 @@ struct ExistingAppImportSheet: View {
             if model.stores.contains(.google) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Google Play package names").font(.system(size: 13, weight: .semibold))
-                    Text("Google provides no API to enumerate a service account's apps. Paste one or more known package names; each is permission-checked before import.")
+                    Text("Apps are listed through the Play Developer Reporting API. You can also paste package names when that API is not enabled; each is permission-checked before import.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                     HStack(alignment: .top) {
                         TextField("company.product, company.otherproduct", text: $model.googlePackages,
@@ -208,7 +208,7 @@ struct ExistingAppImportSheet: View {
     private var limitationNote: some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "info.circle.fill").foregroundStyle(Theme.teal)
-            Text("Apple returns every app visible to the API key. Google Play intentionally has no equivalent list-apps endpoint, so its package names are entered on the next screen.")
+            Text("Apple lists apps through App Store Connect. Google lists them through the Play Developer Reporting API; package-name entry remains available as a fallback.")
                 .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
         }
         .padding(12).background(Theme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
