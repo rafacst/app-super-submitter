@@ -20,11 +20,8 @@ struct ReleaseTab: View {
             if state.stores.contains(.apple) { appleReleaseControls }
             if let error = state.releaseError { failure(error) }
             sendToReview
-            // After the release, not before it: a review to answer and a
-            // recovery to deploy both need a live app.
-            if state.stores.contains(.apple) { AppStoreActionsPanel() }
-            if state.stores.contains(.google) { GooglePlayActionsPanel() }
-            if !state.stores.isEmpty { VitalsPanel() }
+            // A review to answer, a crash rate to read, and a recovery to
+            // deploy all belong to a live app, so they moved to Managing.
         }
         .task(id: state.manifestURL) {
             guard state.consoleRows.isEmpty, !state.stores.isEmpty else { return }
