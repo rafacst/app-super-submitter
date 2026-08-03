@@ -13,6 +13,24 @@ public struct AppleCredential: Codable, Sendable, Equatable {
         self.privateKeyPEM = privateKeyPEM
         self.fileName = fileName
     }
+
+    /// The key id that Apple writes into the file name.
+    ///
+    /// App Store Connect downloads the key as `AuthKey_<key id>.p8`, so a
+    /// developer who has the file rarely needs to type the id. Apple issues
+    /// ten characters, uppercase letters and digits, and anything else here
+    /// returns nil rather than a guess: a wrong id fails the connection with
+    /// an error that names nothing useful.
+    public static func keyID(fromFileName name: String) -> String? {
+        let base = (name as NSString).deletingPathExtension
+        let candidate = base.lowercased().hasPrefix("authkey_")
+            ? String(base.dropFirst("authkey_".count))
+            : base
+        guard candidate.count == 10, candidate.allSatisfy({
+            $0.isASCII && ($0.isNumber || ($0.isLetter && $0.isUppercase))
+        }) else { return nil }
+        return candidate
+    }
 }
 
 public struct GoogleServiceAccount: Codable, Sendable, Equatable {

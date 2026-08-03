@@ -64,6 +64,27 @@ struct MediaTab: View {
                     }
                 }
             }
+            liveScreenshots(device)
+        }
+    }
+
+    /// What each store shows today. It is faded and it takes no input, because
+    /// nothing here is a file the developer owns yet.
+    @ViewBuilder
+    private func liveScreenshots(_ device: Manifest.DeviceClass) -> some View {
+        let live = state.storeSnapshot.screenshots(locale: state.locale, deviceClass: device)
+        if !live.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(live, id: \.store) { entry in
+                    LiveMediaStrip(store: entry.store, urls: entry.urls, isVideo: false)
+                }
+                LiveMediaWarning()
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
         }
     }
 
@@ -102,6 +123,12 @@ struct MediaTab: View {
                         state.addMediaFiles(urls, deviceClass: device, previews: true)
                         return true
                     }
+                    let live = state.storeSnapshot.previews(locale: state.locale,
+                                                            deviceClass: device)
+                    if !live.isEmpty {
+                        LiveMediaStrip(store: .apple, urls: live, isVideo: true)
+                        LiveMediaWarning(noun: "previews")
+                    }
                 }
                 .mediaPanel()
 
@@ -118,6 +145,71 @@ struct MediaTab: View {
                 }
                 .mediaPanel()
             }
+        }
+    }
+}
+
+/// One store's live media, faded so it never reads as a file to edit.
+private struct LiveMediaStrip: View {
+    let store: Store
+    let urls: [URL]
+    let isVideo: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                StoreMark(store: store, size: 11)
+                Text("On \(store.storeName) now")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.text3)
+                    .textCase(.uppercase)
+                    .kerning(0.3)
+                Text("\(urls.count)")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(urls, id: \.self) { url in
+                        Group {
+                            if isVideo {
+                                Hatched()
+                                    .overlay(Image(systemName: "film")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(Theme.text3))
+                            } else {
+                                AsyncImage(url: url) { image in
+                                    image.resizable().scaledToFit()
+                                } placeholder: {
+                                    Hatched()
+                                }
+                            }
+                        }
+                        .frame(width: 84, height: 120)
+                        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 5))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+        }
+        .opacity(0.55)
+        .allowsHitTesting(false)
+        .accessibilityLabel("\(urls.count) \(isVideo ? "previews" : "screenshots") on \(store.storeName) now")
+    }
+}
+
+private struct LiveMediaWarning: View {
+    var noun = "screenshots"
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10.5))
+                .foregroundStyle(Theme.yellow)
+            Text("These are the current \(noun). If you upload new ones they will be replaced.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

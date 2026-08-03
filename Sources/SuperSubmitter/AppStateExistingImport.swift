@@ -24,6 +24,9 @@ extension AppState {
                                                     withIntermediateDirectories: true)
             let manifestURL = folder.appendingPathComponent(ManifestFile.defaultName)
             var importedManifest = (try? ManifestFile.load(from: manifestURL)) ?? Manifest()
+            // What each store holds today. The editing tabs show it beside the
+            // value the developer is about to write, before any store read.
+            var snapshot = StoreSnapshot()
 
             for candidate in group.candidates {
                 switch candidate.store {
@@ -37,6 +40,7 @@ extension AppState {
                         appID: candidate.remoteID,
                         bundleID: listing.bundleID ?? candidate.identifier)
                     importedManifest.mergeAppleImport(listing)
+                    snapshot.merge(listing, store: .apple)
                     skipped += listing.failures
                     try await materializeImportedAssets(
                         listing.assets, store: .apple, root: folder,
@@ -49,6 +53,7 @@ extension AppState {
                     let listing = try await client.importGoogle(
                         credential: googleCredential, packageName: candidate.identifier)
                     importedManifest.mergeGoogleImport(listing)
+                    snapshot.merge(listing, store: .google)
                     skipped += listing.failures
                     try await materializeImportedAssets(
                         listing.assets, store: .google, root: folder,
@@ -57,7 +62,10 @@ extension AppState {
             }
 
             try ManifestFile.save(importedManifest, to: manifestURL)
+            // `link` activates the app, which clears the read state, so the
+            // snapshot of the app that stays open is set after it.
             link(manifestAt: manifestURL)
+            storeSnapshot = snapshot
             if let account = credentialAccount {
                 if group.candidates.contains(where: { $0.store == .apple }), let appleCredential {
                     try KeychainCredentials.save(appleCredential, kind: .apple, account: account)

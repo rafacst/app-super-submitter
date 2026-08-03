@@ -1,3 +1,4 @@
+import Foundation
 import SubmitKit
 import Testing
 @testable import SuperSubmitter
@@ -84,4 +85,23 @@ import Testing
     model.selection.toggle(beta)
     #expect(model.selectedGroupCount == 2)
     #expect(model.selectedGroupName == nil)
+}
+
+/// Dropping the .p8 fills the key id, and never overwrites a typed one.
+@MainActor
+@Test func droppingTheP8FillsTheKeyIDOnlyWhenItIsEmpty() throws {
+    let folder = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("p8-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let key = folder.appendingPathComponent("AuthKey_Z2YFP2FP9D.p8")
+    try "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----".write(
+        to: key, atomically: true, encoding: .utf8)
+
+    let model = ExistingAppImportModel()
+    try model.importAppleKey(key)
+    #expect(model.appleKeyID == "Z2YFP2FP9D")
+
+    model.appleKeyID = "TYPEDBYUSR"
+    try model.importAppleKey(key)
+    #expect(model.appleKeyID == "TYPEDBYUSR")
 }

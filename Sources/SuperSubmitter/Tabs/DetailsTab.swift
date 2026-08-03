@@ -83,6 +83,45 @@ struct DetailsTab: View {
                 Text("\(value.count - (limit ?? 0)) characters over the store limit. The value is not shortened automatically.")
                     .font(.system(size: 11)).foregroundStyle(Theme.red)
             }
+            liveValues(field, current: value)
+        }
+    }
+
+    /// What the stores hold for this field today, when it is not what the
+    /// developer is about to send. A matching value says nothing, so it stays
+    /// out of the way.
+    @ViewBuilder
+    private func liveValues(_ field: ListingTextField, current: String) -> some View {
+        let live = state.storeSnapshot.text(field, locale: state.locale)
+            .filter { $0.value != current }
+        if !live.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(live, id: \.store) { entry in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            StoreMark(store: entry.store, size: 11)
+                            Text("On \(entry.store.storeName) now")
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(Theme.text3)
+                                .textCase(.uppercase)
+                                .kerning(0.3)
+                        }
+                        Text(entry.value)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.text2)
+                            .lineSpacing(2)
+                            .lineLimit(6)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
         }
     }
 

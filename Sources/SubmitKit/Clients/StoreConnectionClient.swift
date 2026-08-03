@@ -84,17 +84,28 @@ public struct ImportedStoreAsset: Sendable, Equatable {
     }
 
     public var deviceClass: Manifest.DeviceClass? {
-        switch kind {
+        Manifest.DeviceClass(storeBucket: kind)
+    }
+}
+
+public extension Manifest.DeviceClass {
+    /// The device class behind a store's own bucket name.
+    ///
+    /// Apple names a screenshot bucket by display type and Google names it by
+    /// image type. Both land here, so the import and the editing tabs group
+    /// live media the same way.
+    init?(storeBucket: String) {
+        switch storeBucket {
         case "phoneScreenshots", "APP_IPHONE_67", "APP_IPHONE_65",
-             "APP_IPHONE_61", "APP_IPHONE_58", "APP_IPHONE_55", "APP_IPHONE_47": .phone
-        case "sevenInchScreenshots": .tablet7
+             "APP_IPHONE_61", "APP_IPHONE_58", "APP_IPHONE_55", "APP_IPHONE_47": self = .phone
+        case "sevenInchScreenshots": self = .tablet7
         case "tenInchScreenshots", "APP_IPAD_PRO_3GEN_129", "APP_IPAD_PRO_129",
-             "APP_IPAD_PRO_3GEN_11": .tablet10
-        case "tvScreenshots", "APP_APPLE_TV": .tv
-        case "wearScreenshots", "APP_APPLE_WATCH_SERIES_10": .watch
-        case "APP_DESKTOP": .desktop
-        case "APP_VISION_PRO": .vision
-        default: nil
+             "APP_IPAD_PRO_3GEN_11": self = .tablet10
+        case "tvScreenshots", "APP_APPLE_TV": self = .tv
+        case "wearScreenshots", "APP_APPLE_WATCH_SERIES_10": self = .watch
+        case "APP_DESKTOP": self = .desktop
+        case "APP_VISION_PRO": self = .vision
+        default: return nil
         }
     }
 }

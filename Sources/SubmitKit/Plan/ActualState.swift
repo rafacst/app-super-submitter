@@ -31,6 +31,11 @@ public struct ActualState: Sendable, Equatable {
         public var screenshotChecksums: [String: Set<String>] = [:]
         public var screenshotChecksumOrder: [String: [String]] = [:]
         public var previewChecksums: [String: Set<String>] = [:]
+        /// "locale/displayType" to the images Apple serves right now, in the
+        /// order it shows them. It comes out of the same payload as the
+        /// checksums, so the editing tabs can show the live media for free.
+        public var screenshotURLs: [String: [URL]] = [:]
+        public var previewURLs: [String: [URL]] = [:]
         public var highestBuildNumber: Int?
         public var attachedBuildId: String?
         public var buildUsesNonExemptEncryption: Bool?
@@ -84,6 +89,9 @@ public struct ActualState: Sendable, Equatable {
         public var highestVersionCode: Int?
         /// "locale/imageType" to the `sha256` values that Google already holds.
         public var imageHashes: [String: Set<String>] = [:]
+        /// "locale/imageType" to the images Google serves right now, from the
+        /// same payload as the hashes.
+        public var imageURLs: [String: [URL]] = [:]
         public var oneTimeProductIds: Set<String> = []
         public var subscriptionIds: Set<String> = []
         /// Every catalog product that Google holds, keyed by the product id.

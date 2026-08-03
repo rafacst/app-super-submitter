@@ -142,11 +142,26 @@ public struct StateReader: Sendable {
                             let checksum = included["attributes"]["sourceFileChecksum"].string
                             let setID = included["relationships"]["appScreenshotSet"]["data"]["id"]
                                 .string ?? ""
-                            guard let checksum, let type = byBucket[setID] else { continue }
+                            guard let type = byBucket[setID] else { continue }
+                            // The image URL rides along in the same payload.
+                            if let url = StoreImportReader.imageURL(
+                                included["attributes"]["imageAsset"]) {
+                                result.screenshotURLs["\(locale)/\(type)", default: []].append(url)
+                            }
+                            guard let checksum else { continue }
                             result.screenshotChecksums["\(locale)/\(type)", default: []]
                                 .insert(checksum)
                             result.screenshotChecksumOrder["\(locale)/\(type)", default: []]
                                 .append(checksum)
+                        }
+
+                        // A missing preview set is not a read failure, and the
+                        // plan carries on without the video diff.
+                        if let previews = try? await api.apple(
+                            "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
+                                + "/appPreviewSets?include=appPreviews&limit=50") {
+                            Self.readPreviews(JSON(data: previews.data), locale: locale,
+                                              into: &result)
                         }
                     }
                 }
@@ -228,6 +243,28 @@ public struct StateReader: Sendable {
         return result
     }
 
+    /// The app previews of one locale, in the shape the screenshots use.
+    static func readPreviews(_ payload: JSON, locale: String,
+                             into result: inout ActualState.Apple) {
+        var byBucket: [String: String] = [:]
+        for entry in payload["data"].array {
+            guard let type = entry["attributes"]["previewType"].string else { continue }
+            byBucket[entry["id"].string ?? ""] = type
+        }
+        for included in payload["included"].array
+        where included["type"].string == "appPreviews" {
+            let setID = included["relationships"]["appPreviewSet"]["data"]["id"].string ?? ""
+            guard let type = byBucket[setID] else { continue }
+            if let checksum = included["attributes"]["sourceFileChecksum"].string {
+                result.previewChecksums["\(locale)/\(type)", default: []].insert(checksum)
+            }
+            let attributes = included["attributes"]
+            let url = attributes["videoUrl"].string.flatMap(URL.init(string:))
+                ?? StoreImportReader.imageURL(attributes["previewFrameImageAsset"])
+            if let url { result.previewURLs["\(locale)/\(type)", default: []].append(url) }
+        }
+    }
+
     // MARK: - Google Play
 
     /// - Parameters:
@@ -266,6 +303,8 @@ public struct StateReader: Sendable {
                     let hashes = images["images"].array.compactMap { $0["sha256"].string }
                     guard !hashes.isEmpty else { continue }
                     result.imageHashes["\(language)/\(imageType)"] = Set(hashes)
+                    result.imageURLs["\(language)/\(imageType)"] = images["images"].array
+                        .compactMap { $0["url"].string.flatMap(URL.init(string:)) }
                 }
             }
 

@@ -183,6 +183,9 @@ final class AppState {
 
     // Tab 9. The checklist, the status, and the two buttons.
     var actualState = ActualState()
+    /// What the stores hold right now. The import fills it, and so does every
+    /// read, and the editing tabs show it beside the value being written.
+    var storeSnapshot = StoreSnapshot()
     var consoleRows: [ConsoleRow] = []
     var consoleMarks: Set<String> = []
     var statuses: [Store: StoreStatus] = [:]
@@ -483,6 +486,12 @@ final class AppState {
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
             applePrivateKeyPEM = try String(contentsOf: url, encoding: .utf8)
             appleCredentialFileName = url.lastPathComponent
+            // Apple names the file after the key, so a typed id is usually
+            // unnecessary. One the user already typed always wins.
+            if appleKeyID.trimmingCharacters(in: .whitespaces).isEmpty,
+               let keyID = AppleCredential.keyID(fromFileName: url.lastPathComponent) {
+                appleKeyID = keyID
+            }
             try persistAppleCredential()
             appleConnection = .notTested
         } catch {
