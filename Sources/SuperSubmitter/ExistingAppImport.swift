@@ -120,6 +120,11 @@ final class ExistingAppImportModel {
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         applePrivateKey = try String(contentsOf: url, encoding: .utf8)
         appleFileName = url.lastPathComponent
+        // Apple names the file after the key. One the user already typed wins.
+        if appleKeyID.trimmingCharacters(in: .whitespaces).isEmpty,
+           let keyID = AppleCredential.keyID(fromFileName: url.lastPathComponent) {
+            appleKeyID = keyID
+        }
     }
 
     func importGoogleKey(_ url: URL) throws {
