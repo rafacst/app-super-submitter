@@ -267,7 +267,3 @@ private struct LocalePicker: View {
         }
     }
 }
-
-extension Store: Identifiable {
-    public var id: String { rawValue }
-}

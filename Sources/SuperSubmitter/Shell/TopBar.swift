@@ -37,7 +37,8 @@ struct TopBar: View {
             Button {
                 state.showSettings = true
             } label: {
-                GearIcon()
+                Image(systemName: state.showSettings ? "gearshape.2.fill" : "gearshape.2")
+                    .font(.system(size: 15))
                     .foregroundStyle(Theme.text2)
                     .frame(width: 28, height: 28)
                     .contentShape(.rect)
@@ -61,10 +62,11 @@ private struct TabSegment: View {
         Button {
             state.selectedTab = tab
         } label: {
-            HStack(spacing: 4) {
-                TabIcon(tab: tab, size: 14).opacity(0.9)
+            HStack(spacing: 5) {
+                Image(systemName: tab.symbol(selected: selected))
+                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
                 Text(tab.title)
-                    .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
+                    .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
                 if let badge = state.badge(for: tab) {
                     BadgeView(count: badge.count, severity: badge.severity, selected: selected, size: 14)
                 }

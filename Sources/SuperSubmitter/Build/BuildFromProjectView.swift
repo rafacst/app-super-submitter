@@ -606,7 +606,7 @@ struct BuildFromProjectView: View {
                         flow.reveal(candidate.artifactPath)
                     }
                 }
-                QuietButton(title: "Continue to Plan") {
+                QuietButton(title: "Continue to Summary") {
                     state.adoptBuiltArtifact()
                     state.selectedTab = .plan
                 }

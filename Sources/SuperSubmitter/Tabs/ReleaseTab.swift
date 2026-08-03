@@ -415,7 +415,7 @@ private struct ReleaseColumn: View {
 
 
 /// The logo for a checklist card. The two providers carry no logo, so they take
-/// the glyph the Money tab already uses for a mirror.
+/// the glyph the Monetization tab already uses for a mirror.
 private struct SystemMark: View {
     let name: String
 

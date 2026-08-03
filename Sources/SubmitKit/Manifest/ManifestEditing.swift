@@ -329,7 +329,17 @@ public extension Manifest {
 
     mutating func mergeAppleImport(_ imported: ImportedStoreListing) {
         if let versionName = imported.versionName { setReleaseVersionName(versionName) }
-        ensureListing(for: imported.locales.keys)
+        mergeImportedReview(imported.review)
+        mergeImportedCatalog(imported)
+        if release?.apple == nil,
+           imported.appleReleaseType != nil || imported.applePhasedRelease != nil {
+            var release = self.release ?? Release()
+            release.apple = Release.AppleRelease(
+                releaseType: imported.appleReleaseType.flatMap(Release.ReleaseType.init(rawValue:)),
+                phasedRelease: imported.applePhasedRelease)
+            self.release = release
+        }
+        ensureListing(for: imported.locales.keys, defaultLocale: imported.defaultLocale)
         guard var listing else { return }
         for (code, source) in imported.locales {
             var target = listing.locales[code] ?? Listing.Locale()
@@ -355,7 +365,18 @@ public extension Manifest {
         if release?.versionName == nil, let versionName = imported.versionName {
             setReleaseVersionName(versionName)
         }
-        ensureListing(for: imported.locales.keys)
+        mergeImportedReview(imported.review)
+        mergeImportedCatalog(imported)
+        if release?.google == nil, !imported.googleTracks.isEmpty {
+            var release = self.release ?? Release()
+            var google = release.google ?? Release.GoogleRelease()
+            google.tracks = imported.googleTracks
+            google.track = imported.googleTracks.contains("production")
+                ? "production" : imported.googleTracks.first
+            release.google = google
+            self.release = release
+        }
+        ensureListing(for: imported.locales.keys, defaultLocale: imported.defaultLocale)
         guard var listing else { return }
         for (code, source) in imported.locales {
             var target = listing.locales[code] ?? Listing.Locale()
@@ -363,10 +384,19 @@ public extension Manifest {
             if !target.description.isManaged {
                 target.description = managed(source.description, keeping: target.description)
             }
+            if !target.whatsNew.isManaged {
+                target.whatsNew = managed(imported.googleReleaseNotes[code],
+                                          keeping: target.whatsNew)
+            }
+            if !target.supportUrl.isManaged {
+                target.supportUrl = managed(imported.googleContactWebsite,
+                                            keeping: target.supportUrl)
+            }
 
             var google = target.google ?? Listing.Locale.GoogleOverride()
             google.shortDescription = managed(source.subtitle, keeping: google.shortDescription)
-            google.whatsNew = managed(source.whatsNew, keeping: google.whatsNew)
+            google.whatsNew = managed(imported.googleReleaseNotes[code] ?? source.whatsNew,
+                                      keeping: google.whatsNew)
             google.video = managed(source.video, keeping: google.video)
             target.google = google
             listing.locales[code] = target
@@ -374,11 +404,41 @@ public extension Manifest {
         self.listing = listing
     }
 
-    private mutating func ensureListing<S: Sequence>(for codes: S) where S.Element == String {
+    /// An import fills an empty catalog and never rewrites one the developer
+    /// already holds. A workspace may be imported twice.
+    private mutating func mergeImportedCatalog(_ imported: ImportedStoreListing) {
+        if purchases?.isEmpty != false, !imported.purchases.isEmpty {
+            purchases = imported.purchases
+        }
+        if subscriptions?.isEmpty != false, !imported.subscriptions.isEmpty {
+            subscriptions = imported.subscriptions
+        }
+    }
+
+    /// A store answer never clears an answer that another store already gave.
+    private mutating func mergeImportedReview(_ imported: ImportedReview) {
+        var review = self.review ?? Review()
+        review.contactFirstName = review.contactFirstName ?? imported.contactFirstName
+        review.contactLastName = review.contactLastName ?? imported.contactLastName
+        review.contactEmail = review.contactEmail ?? imported.contactEmail
+        review.contactPhone = review.contactPhone ?? imported.contactPhone
+        review.demoAccountRequired = review.demoAccountRequired ?? imported.demoAccountRequired
+        review.notes = review.notes ?? imported.notes
+        review.applePrimaryCategory = review.applePrimaryCategory ?? imported.applePrimaryCategory
+        review.appleSecondaryCategory = review.appleSecondaryCategory
+            ?? imported.appleSecondaryCategory
+        review.usesNonExemptEncryption = review.usesNonExemptEncryption
+            ?? imported.usesNonExemptEncryption
+        guard review != Review() else { return }
+        self.review = review
+    }
+
+    private mutating func ensureListing<S: Sequence>(
+        for codes: S, defaultLocale wanted: String? = nil) where S.Element == String {
         let sorted = Array(codes).sorted()
         if listing == nil {
-            let defaultLocale = sorted.first(where: { $0 == "en-US" }) ?? sorted.first ?? "en-US"
-            listing = Listing(defaultLocale: defaultLocale, locales: [:])
+            let fallback = sorted.first(where: { $0 == "en-US" }) ?? sorted.first ?? "en-US"
+            listing = Listing(defaultLocale: wanted ?? fallback, locales: [:])
         }
         for code in sorted { addLocale(code) }
     }

@@ -124,7 +124,7 @@ struct ReviewInfoTab: View {
                 let rows = state.consoleRows.filter(\.onReviewTab)
                 if rows.isEmpty {
                     HStack {
-                        Text("Read the stores on the Plan tab to fill this list.")
+                        Text("Read the stores on the Summary tab to fill this list.")
                             .font(.system(size: 12)).foregroundStyle(Theme.text2)
                         Spacer()
                     }

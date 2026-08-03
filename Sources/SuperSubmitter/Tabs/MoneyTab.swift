@@ -121,7 +121,7 @@ struct MoneyTab: View {
                     Spacer(minLength: 0)
                 }
             } else {
-                Text("Read the stores on the Plan tab to see the App Store price point.")
+                Text("Read the stores on the Summary tab to see the App Store price point.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
             }
         }

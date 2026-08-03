@@ -94,7 +94,7 @@ extension AppState {
         }
         guard let versionCode = actualState.google?.highestVersionCode else {
             throw ConnectionError.http(
-                400, "Read the stores on the Plan tab first, so the draft can name a version code.")
+                400, "Read the stores on the Summary tab first, so the draft can name a version code.")
         }
         return try await googleActions().createRecoveryDraft(packageName: packageName,
                                                              versionCodes: [versionCode])

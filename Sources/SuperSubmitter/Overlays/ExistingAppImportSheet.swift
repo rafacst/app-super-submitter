@@ -29,20 +29,6 @@ struct ExistingAppImportSheet: View {
         }
         .frame(width: 900, height: 720)
         .background(Theme.content)
-        .fileImporter(isPresented: $appleImporterOpen,
-                      allowedContentTypes: [UTType(filenameExtension: "p8") ?? .data]) {
-            handleFile($0, importWith: model.importAppleKey)
-        }
-        .fileImporter(isPresented: $googleImporterOpen, allowedContentTypes: [.json]) {
-            handleFile($0, importWith: model.importGoogleKey)
-        }
-        .fileImporter(isPresented: $destinationImporterOpen, allowedContentTypes: [.folder]) {
-            guard case .success(let url) = $0 else {
-                if case .failure(let error) = $0 { model.error = error.localizedDescription }
-                return
-            }
-            importSelected(into: url)
-        }
     }
 
     private var header: some View {
@@ -85,6 +71,12 @@ struct ExistingAppImportSheet: View {
                                    ? "Choose .p8 key" : model.appleFileName) {
                             appleImporterOpen = true
                         }
+                        // Each importer hangs off its own button. Stacking them
+                        // on one view lets only the last one present.
+                        .fileImporter(isPresented: $appleImporterOpen,
+                                      allowedContentTypes: [UTType(filenameExtension: "p8") ?? .data]) {
+                            handleFile($0, importWith: model.importAppleKey)
+                        }
                     }
                 }
             }
@@ -94,6 +86,10 @@ struct ExistingAppImportSheet: View {
                         chooseFile(title: model.googleFileName.isEmpty
                                    ? "Choose service-account JSON" : model.googleFileName) {
                             googleImporterOpen = true
+                        }
+                        .fileImporter(isPresented: $googleImporterOpen,
+                                      allowedContentTypes: [.json]) {
+                            handleFile($0, importWith: model.importGoogleKey)
                         }
                         if let email = model.googleCredential?.clientEmail {
                             Text(email).font(Theme.mono(11)).foregroundStyle(Theme.text2)
@@ -199,6 +195,14 @@ struct ExistingAppImportSheet: View {
                 Button("Choose destination…") { destinationImporterOpen = true }
                     .buttonStyle(.borderedProminent).tint(Theme.teal)
                     .disabled(model.selection.count == 0)
+                    .fileImporter(isPresented: $destinationImporterOpen,
+                                  allowedContentTypes: [.folder]) {
+                        guard case .success(let url) = $0 else {
+                            if case .failure(let error) = $0 { model.error = error.localizedDescription }
+                            return
+                        }
+                        importSelected(into: url)
+                    }
             }
         }
         .padding(.horizontal, 24).frame(height: 62)
