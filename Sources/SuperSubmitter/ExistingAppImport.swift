@@ -70,6 +70,9 @@ final class ExistingAppImportModel {
     var googleFileName = ""
     var googlePackages = ""
     var candidates: [ExistingAppCandidate] = []
+    /// The app icon of a candidate, keyed by its id. A candidate with no icon
+    /// shows its store mark, so a missing icon costs nothing.
+    var icons: [String: URL] = [:]
     var selection = ExistingAppSelection()
     var loading = false
     var error: String?
@@ -77,6 +80,23 @@ final class ExistingAppImportModel {
 
     var selectedCandidates: [ExistingAppCandidate] {
         candidates.filter(selection.contains)
+    }
+
+    /// The App Store first, then Google Play. The grid draws one block per
+    /// store, in this order.
+    func candidates(for store: Store) -> [ExistingAppCandidate] {
+        candidates.filter { $0.store == store }
+    }
+
+    /// One selected app takes the folder the user picks. Several apps each
+    /// take a folder inside it.
+    var selectedGroupCount: Int {
+        ExistingAppImportPlan.group(selectedCandidates).count
+    }
+
+    var selectedGroupName: String? {
+        let groups = ExistingAppImportPlan.group(selectedCandidates)
+        return groups.count == 1 ? groups[0].folderName : nil
     }
 
     var canDiscover: Bool {
@@ -140,6 +160,17 @@ final class ExistingAppImportModel {
         selection.clear()
         error = failures.isEmpty ? nil : failures.joined(separator: "\n")
         step = .apps
+
+        // The icons are decoration. They arrive after the list, and a failure
+        // here never reaches the user.
+        if let credential = appleCredential {
+            let ids = found.filter { $0.store == .apple }.map(\.remoteID)
+            if let found = try? await client.appleIcons(appIDs: ids, credential: credential) {
+                for (appID, url) in found {
+                    icons["\(Store.apple.rawValue):\(appID)"] = url
+                }
+            }
+        }
     }
 
     func addGooglePackages() {

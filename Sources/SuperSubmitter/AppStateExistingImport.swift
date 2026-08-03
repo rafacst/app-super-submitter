@@ -13,8 +13,13 @@ extension AppState {
         var skipped: [String] = []
 
         for group in groups {
-            let folder = availableImportFolder(named: group.folderName, under: destination,
-                                               identifier: group.identifier)
+            // Super Submitter keeps `store.yaml` beside the app, so one app
+            // takes the folder the user picked. Several apps cannot share one
+            // folder, so each takes its own inside it.
+            let folder = groups.count == 1
+                ? destination
+                : availableImportFolder(named: group.folderName, under: destination,
+                                        identifier: group.identifier)
             try FileManager.default.createDirectory(at: folder,
                                                     withIntermediateDirectories: true)
             let manifestURL = folder.appendingPathComponent(ManifestFile.defaultName)

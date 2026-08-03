@@ -98,6 +98,9 @@ final class AppState {
     var showSettings = false
     var showOnboarding = false
     var showExistingAppImport = false
+    /// The index of the app the user asked to remove. It holds the choice
+    /// while the confirmation is open.
+    var appPendingRemoval: Int?
     var releaseSheet: Store?
     var showAddLocale = false
 
@@ -188,8 +191,13 @@ final class AppState {
     var appleSubmissionID: String?
     var rechecking = false
 
-    init() {
-        if let data = UserDefaults.standard.data(forKey: linkedAppsDefaultsKey),
+    /// The app list and the two settings live here. A test passes its own
+    /// suite, so a test run never rewrites the real app list.
+    @ObservationIgnored let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let data = defaults.data(forKey: linkedAppsDefaultsKey),
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
         }
@@ -312,6 +320,51 @@ final class AppState {
         selectedAppIndex = index
         guard !linkedApps.isEmpty else { return }
         activateLinkedApp(at: index)
+    }
+
+    /// The name in the removal question, so the user reads which app leaves.
+    var removalName: String {
+        guard let index = appPendingRemoval, linkedApps.indices.contains(index) else {
+            return "this app"
+        }
+        return linkedApps[index].name
+    }
+
+    func askToRemoveApp(at index: Int) {
+        guard linkedApps.indices.contains(index) else { return }
+        appPendingRemoval = index
+    }
+
+    func removePendingApp() {
+        guard let index = appPendingRemoval else { return }
+        appPendingRemoval = nil
+        removeLinkedApp(at: index)
+    }
+
+    /// Takes the app out of the list, and out of nothing else.
+    ///
+    /// The `store.yaml` file stays in its folder, the Keychain keeps the store
+    /// keys, and neither store hears about it. The user opens the same file
+    /// again through "Open store.yaml…" whenever they want it back.
+    func removeLinkedApp(at index: Int) {
+        guard linkedApps.indices.contains(index) else { return }
+        linkedApps.remove(at: index)
+        persistLinkedApps()
+        guard !linkedApps.isEmpty else {
+            manifest = Manifest()
+            manifestURL = nil
+            selectedAppIndex = 0
+            selectedTab = .stores
+            locale = ""
+            packages = [:]
+            packageErrors = [:]
+            buildRead = false
+            syncStoreFieldsFromManifest()
+            syncEditingStateFromManifest()
+            resetRunState()
+            return
+        }
+        activateLinkedApp(at: min(index, linkedApps.count - 1))
     }
 
     /// The one way in. The user picks the folder of an app that already exists.
@@ -1273,7 +1326,7 @@ final class AppState {
         let runs = root.appendingPathComponent(".super-submitter/runs")
         let hasRun = (try? FileManager.default.contentsOfDirectory(atPath: runs.path))?
             .isEmpty == false
-        dryRun = hasRun ? false : (UserDefaults.standard.object(forKey: "dryRunByDefault")
+        dryRun = hasRun ? false : (defaults.object(forKey: "dryRunByDefault")
             as? Bool ?? true)
     }
 
@@ -1385,7 +1438,7 @@ final class AppState {
     func persistLinkedApps() {
         do {
             let data = try JSONEncoder().encode(linkedApps)
-            UserDefaults.standard.set(data, forKey: linkedAppsDefaultsKey)
+            defaults.set(data, forKey: linkedAppsDefaultsKey)
         } catch {
             errorMessage = "The app list could not be saved. \(error.localizedDescription)"
         }

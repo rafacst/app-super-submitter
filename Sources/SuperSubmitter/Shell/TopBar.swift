@@ -172,6 +172,16 @@ struct SwitcherPopover: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Update from the stores…") {
+                            state.switcherOpen = false
+                            state.showExistingAppImport = true
+                        }
+                        Button("Remove from Super Submitter…", role: .destructive) {
+                            state.switcherOpen = false
+                            state.askToRemoveApp(at: index)
+                        }
+                    }
                     .accessibilityLabel(app.name)
                     .accessibilityValue("App Store \(app.apple.mark), Google Play \(app.google.mark)")
                     .accessibilityAddTraits(selected ? .isSelected : [])

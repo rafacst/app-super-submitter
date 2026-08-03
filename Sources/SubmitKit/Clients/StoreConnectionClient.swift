@@ -149,6 +149,35 @@ public struct StoreConnectionClient: Sendable {
         return result
     }
 
+    /// The icon of every named app, keyed by its App Store id.
+    ///
+    /// App Store Connect serves no marketing icon, but every build carries the
+    /// icon it shipped with, and one filtered request covers the whole list.
+    /// An app with no build has no icon here, and the picker shows the store
+    /// mark instead.
+    public func appleIcons(appIDs: [String], credential: AppleCredential,
+                           side: Int = 180) async throws -> [String: URL] {
+        guard !appIDs.isEmpty else { return [:] }
+        let api = StoreAPI(credentials: StoreCredentials(apple: credential),
+                           record: { _ in }, session: session)
+        var result: [String: URL] = [:]
+        for start in stride(from: 0, to: appIDs.count, by: 40) {
+            let chunk = appIDs[start..<min(start + 40, appIDs.count)]
+            let payload = JSON(data: try await api.apple(
+                "GET", "/v1/builds?filter%5Bapp%5D=\(chunk.joined(separator: ","))"
+                    + "&limit=200&sort=-uploadedDate"
+                    + "&fields%5Bbuilds%5D=iconAssetToken,app").data)
+            for item in payload["data"].array {
+                guard let appID = item["relationships"]["app"]["data"]["id"].string,
+                      result[appID] == nil,
+                      let url = StoreImportReader.imageURL(item["attributes"]["iconAssetToken"],
+                                                           side: side) else { continue }
+                result[appID] = url
+            }
+        }
+        return result
+    }
+
     public func importApple(appID: String,
                             credential: AppleCredential) async throws -> ImportedStoreListing {
         try await StoreImportReader(credentials: StoreCredentials(apple: credential),

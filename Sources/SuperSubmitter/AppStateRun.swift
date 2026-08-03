@@ -550,7 +550,7 @@ extension AppState {
     // MARK: - The status poll, section 7.10
 
     var pollInterval: TimeInterval {
-        let minutes = UserDefaults.standard.object(forKey: "pollIntervalMinutes") as? Int ?? 5
+        let minutes = defaults.object(forKey: "pollIntervalMinutes") as? Int ?? 5
         return TimeInterval(max(1, minutes) * 60)
     }
 
