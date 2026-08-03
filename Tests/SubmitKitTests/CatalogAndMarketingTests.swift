@@ -40,7 +40,11 @@ private func plan(_ manifest: Manifest, duration: String = "P1M",
 
     #expect(steps.contains { $0.id == "apple.subscriptions" })
     // The old plan said "5 purchases" and wrote two. It now counts one.
-    #expect(purchases?.summary.contains("1 purchases") == true)
+    #expect(purchases?.title.contains("Write 1 purchases") == true)
+    // The summary names the product that differs, and the subscription plan
+    // belongs to the subscription step and not to this one.
+    #expect(purchases?.summary.contains("com.example.tip") == true)
+    #expect(purchases?.summary.contains("pro.monthly") == false)
 }
 
 @Test func aSubscriptionOfferTakesAStepAfterTheSubscriptionStep() {

@@ -41,9 +41,38 @@ public struct ActualState: Sendable, Equatable {
         public var buildUsesNonExemptEncryption: Bool?
         public var reviewDetailId: String?
         public var reviewContactEmail: String?
+        public var reviewContactFirstName: String?
+        public var reviewContactLastName: String?
+        public var reviewContactPhone: String?
+        public var reviewDemoAccountRequired: Bool?
+        public var reviewNotes: String?
         public var ageRatingDeclarationId: String?
         public var purchaseIds: Set<String> = []
         public var subscriptionIds: Set<String> = []
+        /// Every paid product that Apple holds, keyed by the product id. The
+        /// purchases and the subscription plans share the map, because a
+        /// product id is unique across both. It mirrors the Google catalog.
+        public var catalog: [String: CatalogProduct] = [:]
+        /// The subscription groups that Apple holds, by the reference name
+        /// that the manifest group id maps to, and their localizations. The
+        /// subscription write covers the group as well as its plans, so the
+        /// diff has to compare both.
+        public var subscriptionGroupNames: Set<String> = []
+        public var subscriptionGroupLocales:
+            [String: [String: CatalogProduct.ProductLocale]] = [:]
+        /// The subscription grace period, in days, and its switch.
+        public var gracePeriodDays: Int?
+        public var gracePeriodOptIn: Bool?
+        /// The marketing resources, by the key that the manifest gives them.
+        public var customProductPageNames: [String: String] = [:]
+        public var experimentNames: [String: String] = [:]
+        public var appEventNames: [String: String] = [:]
+        public var eulaText: String?
+        public var eulaTerritories: Set<String> = []
+        public var nominationNames: Set<String> = []
+        public var accessibilitySupports: Set<String> = []
+        public var appClipExperienceActions: Set<String> = []
+        public var hasAppClipExperience: Bool?
         /// Spec 10.6. A second submission cannot open while one is open.
         public var hasOpenReviewSubmission = false
         public var priceAmount: Decimal?
@@ -77,6 +106,43 @@ public struct ActualState: Sendable, Equatable {
             public var supportUrl: String?
             public var marketingUrl: String?
             public init() {}
+        }
+
+        /// One paid product that Apple holds, in the shape that the plan
+        /// compares.
+        ///
+        /// `// ponytail: the fields the manifest writes, and no others. The
+        /// // App Store product carries a dozen more, and the plan shows none
+        /// // of them.`
+        public struct CatalogProduct: Sendable, Equatable {
+            public var productId: String = ""
+            /// The Apple resource id, so a later write patches instead of
+            /// creating a duplicate.
+            public var id: String?
+            public var name: String?
+            public var reviewNote: String?
+            /// The locale to the store name and description.
+            public var locales: [String: ProductLocale] = [:]
+            /// The territory to the customer price, as `"USD 4.99"`.
+            public var prices: [String: String] = [:]
+            public var availableTerritories: Set<String> = []
+            public var promoted: Bool?
+            /// The offer ids that Apple holds on this product. An introductory
+            /// offer carries no id of its own, so it never lands here.
+            public var offerIds: Set<String> = []
+            /// How many offers Apple holds, across the three offer
+            /// collections. Nil means that the offer read failed, and the plan
+            /// then says that nobody verified the offers.
+            public var offerCount: Int?
+            /// The subscription duration, as an ISO 8601 period.
+            public var duration: String?
+            public init() {}
+
+            public struct ProductLocale: Sendable, Equatable {
+                public var name: String?
+                public var description: String?
+                public init() {}
+            }
         }
     }
 
@@ -158,6 +224,14 @@ public struct ActualState: Sendable, Equatable {
         public var productIds: [String: String] = [:]
         public var entitlementKeys: Set<String> = []
         public var offeringKeys: Set<String> = []
+        /// The store product ids that each entitlement key already holds. A
+        /// key with no entry means that the attachment read failed.
+        public var entitlementProducts: [String: Set<String>] = [:]
+        /// The store product ids that each offering already carries, in the
+        /// order the provider serves them.
+        public var offeringProducts: [String: [String]] = [:]
+        /// The offering key that the provider marks current.
+        public var currentOfferingKey: String?
         /// The RevenueCat app id to its store identifier, for the mismatch
         /// rules in spec section 10.5.
         public var appIdentifiers: [String: String] = [:]

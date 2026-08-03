@@ -1117,6 +1117,12 @@ its own credentials, and the app never touches them. The app never writes a
 secret to `store.yaml`. The app never writes a secret to a log. The manifest
 holds ids only.
 
+The App Store Connect key and the Play service account are credentials of the
+developer account, not of one app. One of each covers every app in the team, so
+the app asks for the `.p8` file and the service-account JSON once and every
+linked app reads that copy. The RevenueCat key and the reviewer demo account
+describe one app, and each app holds its own.
+
 The **demo account** for the Apple reviewer follows the same rule. The user
 name and the password live in the Keychain. The manifest holds
 `review.demoAccountRequired` only. A manifest sits in a repository, and a

@@ -105,3 +105,67 @@ import Testing
     try model.importAppleKey(key)
     #expect(model.appleKeyID == "TYPEDBYUSR")
 }
+
+/// Writes two workspaces and links both into a state with its own Keychain
+/// account, so a test run never reads or writes the real key.
+@MainActor
+private func stateWithTwoApps(storeAccount: String) throws -> (AppState, [URL]) {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("import-\(UUID().uuidString)")
+    var urls: [URL] = []
+    for name in ["Alpha", "Beta"] {
+        let folder = root.appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var manifest = Manifest()
+        manifest.setAppleApp(appID: "1", bundleID: "com.example.\(name.lowercased())")
+        let url = folder.appendingPathComponent(ManifestFile.defaultName)
+        try ManifestFile.save(manifest, to: url)
+        urls.append(url)
+    }
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: storeAccount)
+    for url in urls { state.link(manifestAt: url) }
+    return (state, urls)
+}
+
+private let sampleKey = AppleCredential(keyID: "Z2YFP2FP9D", issuerID: "issuer",
+                                        privateKeyPEM: "pem",
+                                        fileName: "AuthKey_Z2YFP2FP9D.p8")
+
+/// One App Store Connect key covers the whole team, so a second app reads the
+/// key the first app saved and no tab asks for the .p8 again.
+@MainActor
+@Test func everyLinkedAppReadsTheOneStoreCredential() throws {
+    let account = "test-\(UUID().uuidString)"
+    defer { try? KeychainCredentials.delete(kind: .apple, account: account) }
+    let (state, urls) = try stateWithTwoApps(storeAccount: account)
+    // Nothing is saved yet, which is what the user saw on the tab.
+    #expect(state.appleCredentialFileName.isEmpty)
+
+    try KeychainCredentials.save(sampleKey, kind: .apple, account: account)
+    state.link(manifestAt: urls[0])
+
+    #expect(state.appleKeyID == "Z2YFP2FP9D")
+    #expect(state.appleIssuerID == "issuer")
+    #expect(state.appleCredentialFileName == "AuthKey_Z2YFP2FP9D.p8")
+}
+
+/// A key an earlier version saved under one app is adopted, because Apple
+/// offers the .p8 file once and a lost key cannot be downloaded again.
+@MainActor
+@Test func aKeySavedUnderOneAppIsAdopted() throws {
+    let account = "test-\(UUID().uuidString)"
+    defer { try? KeychainCredentials.delete(kind: .apple, account: account) }
+    let (state, urls) = try stateWithTwoApps(storeAccount: account)
+    let own = try #require(state.credentialAccount)
+    defer { try? KeychainCredentials.delete(kind: .apple, account: own) }
+
+    try KeychainCredentials.save(sampleKey, kind: .apple, account: own)
+    state.link(manifestAt: urls[1])
+    #expect(state.appleKeyID == "Z2YFP2FP9D")
+
+    // It moved to the shared account, so the other app reads it too.
+    let shared = try KeychainCredentials.load(AppleCredential.self, kind: .apple,
+                                              account: account)
+    #expect(shared == sampleKey)
+}
