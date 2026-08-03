@@ -167,26 +167,74 @@ public struct StoreConnectionClient: Sendable {
     /// An app with no build has no icon here, and the picker shows the store
     /// mark instead.
     public func appleIcons(appIDs: [String], credential: AppleCredential,
-                           side: Int = 180) async throws -> [String: URL] {
-        guard !appIDs.isEmpty else { return [:] }
+                           side: Int = 180) async throws -> AppleIcons {
+        guard !appIDs.isEmpty else { return AppleIcons() }
         let api = StoreAPI(credentials: StoreCredentials(apple: credential),
                            record: { _ in }, session: session)
-        var result: [String: URL] = [:]
-        for start in stride(from: 0, to: appIDs.count, by: 40) {
-            let chunk = appIDs[start..<min(start + 40, appIDs.count)]
-            let payload = JSON(data: try await api.apple(
-                "GET", "/v1/builds?filter%5Bapp%5D=\(chunk.joined(separator: ","))"
-                    + "&limit=200&sort=-uploadedDate"
-                    + "&fields%5Bbuilds%5D=iconAssetToken,app").data)
-            for item in payload["data"].array {
-                guard let appID = item["relationships"]["app"]["data"]["id"].string,
-                      result[appID] == nil,
-                      let url = StoreImportReader.imageURL(item["attributes"]["iconAssetToken"],
-                                                           side: side) else { continue }
-                result[appID] = url
+        var result = AppleIcons()
+
+        // One request per app, and the newest build of that app.
+        //
+        // The old shape asked for 200 builds across every app at once, sorted
+        // by date. An account whose newest 200 builds belong to two apps left
+        // every other app without an icon, and nothing said so. A request per
+        // app cannot crowd one app out with another app's history.
+        for appID in appIDs {
+            do {
+                let payload = JSON(data: try await api.apple(
+                    "GET", "/v1/builds?filter%5Bapp%5D=\(appID)"
+                        + "&limit=1&sort=-uploadedDate"
+                        + "&fields%5Bbuilds%5D=iconAssetToken").data)
+                guard let build = payload["data"].array.first else {
+                    // The app record exists and no build sits under it. That
+                    // is a state, and the picker shows the store mark.
+                    result.withoutBuild.insert(appID)
+                    continue
+                }
+                guard let url = StoreImportReader.imageURL(
+                    build["attributes"]["iconAssetToken"], side: side) else {
+                    result.withoutIcon.insert(appID)
+                    continue
+                }
+                result.urls[appID] = url
+            } catch {
+                // One app that fails never costs the other nine their icons.
+                result.failures.append("\(appID): \(error.localizedDescription)")
             }
         }
         return result
+    }
+
+    /// What the icon read found, and what it could not find.
+    ///
+    /// A missing icon used to be silent, so "no icons" and "the request
+    /// failed" looked the same on screen. Each reason is named now.
+    public struct AppleIcons: Sendable {
+        public var urls: [String: URL] = [:]
+        /// The apps whose record carries no build at all.
+        public var withoutBuild: Set<String> = []
+        /// The apps whose newest build carries no icon, which is what a
+        /// processing build looks like.
+        public var withoutIcon: Set<String> = []
+        public var failures: [String] = []
+
+        public init() {}
+
+        /// The one line the picker shows when nothing came back.
+        public var explanation: String? {
+            if let first = failures.first {
+                return failures.count == 1
+                    ? "The icons could not be read. \(first)"
+                    : "\(failures.count) icons could not be read. \(first)"
+            }
+            if !withoutBuild.isEmpty {
+                return "\(withoutBuild.count) apps carry no build yet, and an App Store icon comes from a build."
+            }
+            if !withoutIcon.isEmpty {
+                return "\(withoutIcon.count) builds carry no icon yet. Apple attaches one when it finishes processing the build."
+            }
+            return nil
+        }
     }
 
     public func importApple(appID: String,

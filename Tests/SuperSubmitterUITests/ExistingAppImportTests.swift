@@ -169,3 +169,42 @@ private let sampleKey = AppleCredential(keyID: "Z2YFP2FP9D", issuerID: "issuer",
                                               account: account)
     #expect(shared == sampleKey)
 }
+
+/// Managing has no repository to sit beside, so the import asks for no folder
+/// and Super Submitter keeps the workspace itself.
+@MainActor
+@Test func theManagedWorkspaceLivesInsideTheApp() throws {
+    let storage = BuildStorage(root: URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("managed-\(UUID().uuidString)"))
+
+    let folder = try storage.managedFolder(name: "Stamp Hunt",
+                                           identifier: "com.rafacst.stamphunt")
+
+    #expect(FileManager.default.fileExists(atPath: folder.path))
+    #expect(folder.path.contains("Managed"))
+    // Two apps that share a display name keep their own folders.
+    let other = try storage.managedFolder(name: "Stamp Hunt",
+                                          identifier: "com.rafacst.stamphunt.brasil")
+    #expect(folder != other)
+}
+
+/// A missing icon and a failed icon read used to look the same on screen.
+@Test func theIconReadNamesWhyItFoundNothing() {
+    var withoutBuild = StoreConnectionClient.AppleIcons()
+    withoutBuild.withoutBuild = ["1", "2"]
+    #expect(withoutBuild.explanation?.contains("carry no build") == true)
+
+    var failed = StoreConnectionClient.AppleIcons()
+    failed.failures = ["1: the request failed"]
+    #expect(failed.explanation?.contains("could not be read") == true)
+
+    var processing = StoreConnectionClient.AppleIcons()
+    processing.withoutIcon = ["1"]
+    #expect(processing.explanation?.contains("finishes processing") == true)
+
+    // A read that found icons explains nothing, because there is nothing to
+    // explain.
+    var found = StoreConnectionClient.AppleIcons()
+    found.urls = ["1": URL(string: "https://example.com/icon.png")!]
+    #expect(found.explanation == nil)
+}
