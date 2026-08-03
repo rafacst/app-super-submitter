@@ -48,6 +48,14 @@ struct SuperSubmitterApp: App {
                 }
                 .disabled(state.linkedApps.isEmpty)
             }
+            // Every edit writes `store.yaml` as the user types, so this repeats
+            // a write that already happened. It exists because a Mac user
+            // presses Command-S to be sure, and the shell then stamps the time.
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") { state.saveNow() }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(state.manifestURL == nil)
+            }
             // The app has no Settings scene. Command-comma opens the panel
             // over the window, so the menu and the sidebar row do one thing.
             CommandGroup(replacing: .appSettings) {

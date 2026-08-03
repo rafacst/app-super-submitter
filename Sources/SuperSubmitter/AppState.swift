@@ -82,12 +82,16 @@ final class AppState {
     @ObservationIgnored var applePrivateKeyPEM = ""
     @ObservationIgnored var googleCredential: GoogleServiceAccount?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
+    @ObservationIgnored private let lastOpenAppKey = "lastOpenApp.v1"
 
     // The manifest and the file behind it.
     var manifest = Manifest()
     var manifestURL: URL?
     var linkedApps: [LinkedAppRecord] = []
     var errorMessage: String?
+    /// When the app last wrote `store.yaml`. Every edit writes the file, so
+    /// the shell shows this and the user knows the work is on disk.
+    var lastSavedAt: Date?
 
     // Navigation.
     var selectedTab: Tab = .stores
@@ -198,13 +202,30 @@ final class AppState {
     /// suite, so a test run never rewrites the real app list.
     @ObservationIgnored let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
+    /// The Keychain account of the two store credentials.
+    ///
+    /// An App Store Connect key belongs to the team, and a Play service
+    /// account belongs to the developer account. One of each covers every app,
+    /// so the app asks for the `.p8` and the JSON once and every linked app
+    /// reads the same copy. The RevenueCat key and the reviewer demo account
+    /// describe one app, so they stay under `credentialAccount`.
+    ///
+    /// A test passes its own name. Apple offers a `.p8` once, so a test run
+    /// never writes over the real key.
+    @ObservationIgnored let storeAccount: String
+
+    init(defaults: UserDefaults = .standard, storeAccount: String = "store-credentials") {
         self.defaults = defaults
+        self.storeAccount = storeAccount
         if let data = defaults.data(forKey: linkedAppsDefaultsKey),
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
         }
-        if !linkedApps.isEmpty { activateLinkedApp(at: 0) }
+        // The app the user worked on last, so a relaunch continues that work
+        // and does not open the first app of the list.
+        let last = defaults.string(forKey: lastOpenAppKey)
+        let index = linkedApps.firstIndex { $0.id.uuidString == last } ?? 0
+        if !linkedApps.isEmpty { activateLinkedApp(at: index) }
     }
 
     var appRows: [AppSummary] {
@@ -506,7 +527,7 @@ final class AppState {
             let credential = try GoogleServiceAccount(
                 data: Data(contentsOf: url), fileName: url.lastPathComponent)
             try KeychainCredentials.save(credential, kind: .google,
-                                         account: try requireCredentialAccount())
+                                         account: storeAccount)
             googleCredential = credential
             googleCredentialFileName = url.lastPathComponent
             googleAccountEmail = credential.clientEmail
@@ -535,15 +556,12 @@ final class AppState {
         let credential = AppleCredential(keyID: appleKeyID, issuerID: appleIssuerID,
                                          privateKeyPEM: applePrivateKeyPEM,
                                          fileName: appleCredentialFileName)
-        guard let account = credentialAccount else {
-            appleConnection = .failed("Link or create an app before saving credentials.")
-            return
-        }
         let generation = stateGeneration
         appleConnection = .testing
         Task {
             do {
-                try KeychainCredentials.save(credential, kind: .apple, account: account)
+                try KeychainCredentials.save(credential, kind: .apple,
+                                             account: storeAccount)
                 let apps = try await StoreConnectionClient().appleApps(credential: credential)
                 guard generation == stateGeneration else { return }
                 remoteAppleApps = apps
@@ -1284,6 +1302,15 @@ final class AppState {
     func save() throws {
         guard let manifestURL else { return }
         try ManifestFile.save(manifest, to: manifestURL)
+        lastSavedAt = Date()
+    }
+
+    /// File > Save. Every edit already writes `store.yaml`, so this writes it
+    /// once more and stamps the time. A Mac app answers Command-S.
+    func saveNow() {
+        guard manifestURL != nil else { return }
+        do { try save() }
+        catch { errorMessage = "The manifest could not be saved. \(error.localizedDescription)" }
     }
 
     var credentialAccount: String? {
@@ -1309,6 +1336,7 @@ final class AppState {
     private func activateLinkedApp(at index: Int) {
         guard linkedApps.indices.contains(index) else { return }
         selectedAppIndex = index
+        defaults.set(linkedApps[index].id.uuidString, forKey: lastOpenAppKey)
         let url = URL(fileURLWithPath: linkedApps[index].manifestPath)
         do {
             try load(from: url)
@@ -1372,18 +1400,21 @@ final class AppState {
         appleSubmissionID = nil
     }
 
-    private func loadCredentials() {
+    /// Fills the credential fields of tab 1 from the Keychain of the open app.
+    /// Anything that writes a credential outside these fields calls it again,
+    /// so the panels never ask for a file the app already holds.
+    func loadCredentials() {
         guard let credentialAccount else { return }
         do {
-            let apple = try KeychainCredentials.load(
-                AppleCredential.self, kind: .apple, account: credentialAccount)
+            let apple = try storeCredential(AppleCredential.self, kind: .apple,
+                                            savedUnder: credentialAccount)
             appleKeyID = apple?.keyID ?? ""
             appleIssuerID = apple?.issuerID ?? ""
             applePrivateKeyPEM = apple?.privateKeyPEM ?? ""
             appleCredentialFileName = apple?.fileName ?? ""
 
-            let google = try KeychainCredentials.load(
-                GoogleServiceAccount.self, kind: .google, account: credentialAccount)
+            let google = try storeCredential(GoogleServiceAccount.self, kind: .google,
+                                             savedUnder: credentialAccount)
             googleCredential = google
             googleCredentialFileName = google?.fileName ?? ""
             googleAccountEmail = google?.clientEmail ?? ""
@@ -1402,14 +1433,28 @@ final class AppState {
         }
     }
 
+    /// Reads a store credential, and adopts the copy an earlier version of the
+    /// app saved under one app. The old item stays where it is, because a
+    /// deleted `.p8` is gone: App Store Connect offers the file once.
+    private func storeCredential<T: Codable>(_ type: T.Type, kind: CredentialKind,
+                                             savedUnder app: String) throws -> T? {
+        if let shared = try KeychainCredentials.load(type, kind: kind,
+                                                    account: storeAccount) {
+            return shared
+        }
+        guard let own = try KeychainCredentials.load(type, kind: kind,
+                                                     account: app) else { return nil }
+        try KeychainCredentials.save(own, kind: kind, account: storeAccount)
+        return own
+    }
+
     private func persistAppleCredential() throws {
         let credential = AppleCredential(
             keyID: appleKeyID.trimmingCharacters(in: .whitespacesAndNewlines),
             issuerID: appleIssuerID.trimmingCharacters(in: .whitespacesAndNewlines),
             privateKeyPEM: applePrivateKeyPEM,
             fileName: appleCredentialFileName)
-        try KeychainCredentials.save(credential, kind: .apple,
-                                     account: try requireCredentialAccount())
+        try KeychainCredentials.save(credential, kind: .apple, account: storeAccount)
     }
 
     private func syncStoreFieldsFromManifest() {
