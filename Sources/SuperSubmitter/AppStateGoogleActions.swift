@@ -44,6 +44,34 @@ extension AppState {
                                                 text: text)
     }
 
+    // MARK: - The APKs that Google signs
+
+    /// The APKs Google generated for one version code.
+    ///
+    /// Play re-signs what it serves, so the file a device installs is never
+    /// the App Bundle the developer uploaded. These are the files that match a
+    /// crash report from the store.
+    func googleGeneratedAPKs(versionCode: Int)
+        async throws -> [GoogleActionsClient.GeneratedAPK] {
+        guard let packageName = googleActionPackage else { return [] }
+        return try await googleActions().generatedAPKs(packageName: packageName,
+                                                       versionCode: versionCode)
+    }
+
+    /// Downloads one generated APK beside `store.yaml` and answers the file.
+    func downloadGoogleAPK(_ apk: GoogleActionsClient.GeneratedAPK) async throws -> URL {
+        guard let root = manifestRoot else {
+            throw ConnectionError.http(400, "Open an app before downloading a build.")
+        }
+        return try await googleActions().downloadGeneratedAPK(
+            apk, into: root.appendingPathComponent("Store Downloads"))
+    }
+
+    /// The version code that the store holds, for the generated APK read.
+    var googleLatestVersionCode: Int? {
+        actualState.google?.highestVersionCode
+    }
+
     // MARK: - Internal app sharing
 
     /// The artifact that the manifest names, App Bundle first.

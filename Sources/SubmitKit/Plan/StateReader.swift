@@ -269,6 +269,7 @@ public struct StateReader: Sendable {
         }
 
         await readAppleMarketing(appID: appID, into: &result)
+        await readAppleTestFlight(appID: appID, into: &result)
 
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
@@ -342,6 +343,27 @@ public struct StateReader: Sendable {
                 result.appClipExperienceActions = Set(payload["data"].array
                     .compactMap { $0["attributes"]["action"].string })
             }
+        }
+    }
+
+    /// The TestFlight groups, and the notes on the build that is attached.
+    ///
+    /// A team with no TestFlight group answers with an empty list, which is a
+    /// state and not a failure. The build reads only run when a build is
+    /// attached, because "What to Test" belongs to a build.
+    private func readAppleTestFlight(appID: String,
+                                     into result: inout ActualState.Apple) async {
+        let client = AppleTestFlightClient(api: api)
+        if let groups = try? await client.groups(appID: appID) {
+            result.betaGroups = groups
+        }
+        guard let buildID = result.attachedBuildId else { return }
+        if let notes = try? await client.whatToTest(buildID: buildID) {
+            result.whatToTest = notes
+        }
+        if let state = try? await client.buildBetaState(buildID: buildID) {
+            result.betaReviewSubmitted = state.submitted
+            result.betaAutoNotify = state.autoNotify
         }
     }
 

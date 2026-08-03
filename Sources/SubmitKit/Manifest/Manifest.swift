@@ -156,11 +156,65 @@ extension Manifest {
             public var phasedRelease: Bool?
             /// Controls an existing phased release as well as creating one.
             public var phasedReleaseState: PhasedReleaseState?
+            /// The TestFlight distribution. It is the App Store twin of the
+            /// Google tester groups, and it reaches real testers, so nothing
+            /// here runs before the plan shows it.
+            public var testFlight: TestFlight?
             public init(releaseType: ReleaseType? = nil, phasedRelease: Bool? = nil,
-                        phasedReleaseState: PhasedReleaseState? = nil) {
+                        phasedReleaseState: PhasedReleaseState? = nil,
+                        testFlight: TestFlight? = nil) {
                 self.releaseType = releaseType
                 self.phasedRelease = phasedRelease
                 self.phasedReleaseState = phasedReleaseState
+                self.testFlight = testFlight
+            }
+        }
+
+        /// TestFlight. The groups, who is in them, and what to test.
+        ///
+        /// Apple keeps the internal testers on the team, so the manifest names
+        /// external groups and the addresses that belong to them. An address
+        /// here receives an invitation, which is why the apply asks for the
+        /// plan first.
+        public struct TestFlight: Codable, Sendable, Equatable {
+            public var groups: [Group]?
+            /// The release notes that every tester reads, by locale. Apple
+            /// calls this "What to Test" and keys it to the build.
+            public var whatToTest: [String: String]?
+            /// Apple emails the testers when a build arrives.
+            public var autoNotify: Bool?
+            /// Sends the build to the beta review that an external group
+            /// needs. It is a queue, so this is the one irreversible switch.
+            public var submitForBetaReview: Bool?
+
+            public init(groups: [Group]? = nil, whatToTest: [String: String]? = nil,
+                        autoNotify: Bool? = nil, submitForBetaReview: Bool? = nil) {
+                self.groups = groups
+                self.whatToTest = whatToTest
+                self.autoNotify = autoNotify
+                self.submitForBetaReview = submitForBetaReview
+            }
+
+            public struct Group: Codable, Sendable, Equatable {
+                public var name: String
+                /// The email addresses in the group. Apple invites each one.
+                public var testers: [String]?
+                /// Opens the public TestFlight link, and caps it when the
+                /// number is set.
+                public var publicLink: Bool?
+                public var publicLinkLimit: Int?
+                /// Adds every new build to this group without a second call.
+                public var automaticBuilds: Bool?
+
+                public init(name: String, testers: [String]? = nil,
+                            publicLink: Bool? = nil, publicLinkLimit: Int? = nil,
+                            automaticBuilds: Bool? = nil) {
+                    self.name = name
+                    self.testers = testers
+                    self.publicLink = publicLink
+                    self.publicLinkLimit = publicLinkLimit
+                    self.automaticBuilds = automaticBuilds
+                }
             }
         }
 
@@ -403,13 +457,18 @@ extension Manifest {
         public var territory: String
         public var available: Bool
         public var preOrderEnabled: Bool?
+        /// Ends the preorder and puts the app on sale. Everybody who
+        /// pre-ordered is charged, and no call takes that back.
+        public var endPreOrder: Bool?
         public var releaseDate: String?
 
         public init(territory: String, available: Bool = true,
-                    preOrderEnabled: Bool? = nil, releaseDate: String? = nil) {
+                    preOrderEnabled: Bool? = nil, endPreOrder: Bool? = nil,
+                    releaseDate: String? = nil) {
             self.territory = territory
             self.available = available
             self.preOrderEnabled = preOrderEnabled
+            self.endPreOrder = endPreOrder
             self.releaseDate = releaseDate
         }
     }
@@ -586,6 +645,36 @@ extension Manifest {
     }
 
     /// The tax treatment of one product.
+    /// The App Store export compliance declaration.
+    ///
+    /// `usesNonExemptEncryption` on the build answers the yes or no question.
+    /// An app that answers yes and does not qualify for an exemption also owes
+    /// Apple this declaration, and sometimes a CCATS or ERN document.
+    public struct Encryption: Codable, Sendable, Equatable {
+        /// `available` publishes the app; Apple also accepts `documentation`
+        /// while the paperwork is in progress.
+        public var availableOnFrenchStore: Bool?
+        public var exempt: Bool?
+        public var containsProprietaryCryptography: Bool?
+        public var containsThirdPartyCryptography: Bool?
+        /// The CCATS or ERN file, beside `store.yaml`.
+        public var documentPath: String?
+        /// The regulator code, when Apple has already issued one.
+        public var codeValue: String?
+
+        public init(availableOnFrenchStore: Bool? = nil, exempt: Bool? = nil,
+                    containsProprietaryCryptography: Bool? = nil,
+                    containsThirdPartyCryptography: Bool? = nil,
+                    documentPath: String? = nil, codeValue: String? = nil) {
+            self.availableOnFrenchStore = availableOnFrenchStore
+            self.exempt = exempt
+            self.containsProprietaryCryptography = containsProprietaryCryptography
+            self.containsThirdPartyCryptography = containsThirdPartyCryptography
+            self.documentPath = documentPath
+            self.codeValue = codeValue
+        }
+    }
+
     public struct Tax: Codable, Sendable, Equatable {
         /// The Google tax category, for example `TAX_CATEGORY_UNSPECIFIED`
         /// or `TAX_CATEGORY_EBOOK`.
@@ -855,6 +944,10 @@ extension Manifest {
         /// compact answer map when it is present.
         public var dataSafetyCSV: String?
         public var usesNonExemptEncryption: Bool?
+        /// The export compliance declaration that an app using non-exempt
+        /// encryption needs, on top of the build flag. Apple asks for it once
+        /// per app, and it carries a document for the regulated cases.
+        public var encryption: Encryption?
         public var kidsAgeBand: String?
         public var attachments: [String]?
 

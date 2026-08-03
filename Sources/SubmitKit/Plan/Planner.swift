@@ -175,6 +175,24 @@ public enum Planner {
                 operation: .appleBuildCompliance))
         }
 
+        // 8b. The export compliance declaration. The build flag above answers
+        // Apple's question; an app that uses non-exempt encryption and claims
+        // no exemption owes this on top of it.
+        if manifest.review?.encryption != nil {
+            steps.append(PlanStep(
+                id: "apple.encryption", system: .apple, kind: .add,
+                summary: "export compliance declaration"
+                    + (manifest.review?.encryption?.documentPath == nil
+                        ? "" : "  ·  with a document"),
+                title: "Write the export compliance declaration",
+                requests: [RequestSketch("POST", "/v1/appEncryptionDeclarations"),
+                           RequestSketch("POST", "/v1/appEncryptionDeclarationDocuments")],
+                operation: .appleEncryptionDeclaration,
+                // Apple keeps one declaration per submission and offers no
+                // read that says whether this one matches.
+                comparison: .unverified))
+        }
+
         // 9. The review details. An attachment carries no comparable field, so
         // a manifest that names one always writes.
         if let review = manifest.review,
@@ -262,6 +280,21 @@ public enum Planner {
                     comparison: diff.verified ? .verified : .unverified))
             }
         }
+        // 11c. The offer codes of a one-time purchase. The subscription twin
+        // already rides inside the subscription offer step.
+        for purchase in manifest.purchases ?? [] {
+            let codes = (purchase.offers ?? []).filter { $0.kind == .offerCode }
+            guard !codes.isEmpty else { continue }
+            steps.append(PlanStep(
+                id: "apple.purchaseOfferCodes.\(purchase.id)", system: .apple, kind: .add,
+                summary: "\(codes.count) offer codes on \(purchase.id)  (draft)",
+                title: "Write \(codes.count) offer codes on \(purchase.id)",
+                requests: [RequestSketch("POST", "/v1/inAppPurchaseOfferCodes")],
+                operation: .applePurchaseOfferCodes(productId: purchase.id),
+                // The writer reads the held names and skips the ones Apple has.
+                comparison: .unverified))
+        }
+
         if let days = (manifest.subscriptions ?? []).compactMap(\.gracePeriodDays).first,
            actual?.gracePeriodDays != days || actual?.gracePeriodOptIn != true {
             steps.append(PlanStep(
@@ -274,6 +307,7 @@ public enum Planner {
                 comparison: actual == nil ? .unverified : .verified))
         }
 
+        steps += appleTestFlightSteps(input)
         steps += appleMarketingSteps(input)
 
         // 12 and 13.
@@ -311,6 +345,113 @@ public enum Planner {
                 title: "Write the territory availability",
                 requests: [RequestSketch("POST", "/v2/appAvailabilities")],
                 operation: .appleAvailability))
+        }
+        // The end of a preorder charges everybody who ordered and starts the
+        // download. It is the last Apple row for the same reason the release
+        // button is the last tab.
+        if (manifest.pricing?.territories ?? []).contains(where: { $0.endPreOrder == true }) {
+            steps.append(PlanStep(
+                id: "apple.endPreOrder", system: .apple, kind: .change,
+                summary: "end the preorder  ·  every pre-order is charged",
+                title: "End the preorder and put the app on sale",
+                requests: [RequestSketch("POST", "/v1/endAppAvailabilityPreOrders")],
+                operation: .appleEndPreOrder,
+                comparison: .unverified))
+        }
+        return steps
+    }
+
+    // MARK: - TestFlight
+
+    /// The App Store twin of the Google track testers.
+    ///
+    /// Every row here reaches a person: a new address receives an invitation,
+    /// a build reaches a group, and a beta review takes a place in a queue.
+    /// Each one compares what Apple already holds, so a second apply invites
+    /// nobody twice.
+    private static func appleTestFlightSteps(_ input: Input) -> [PlanStep] {
+        guard let testFlight = input.manifest.release?.apple?.testFlight else { return [] }
+        let actual = input.actual.apple
+        let read = actual != nil
+        var steps: [PlanStep] = []
+
+        for group in testFlight.groups ?? [] {
+            let live = actual?.betaGroups[group.name]
+            if live == nil || group.publicLink.map({ $0 != live?.publicLink }) == true
+                || group.automaticBuilds.map({ $0 != live?.automaticBuilds }) == true {
+                steps.append(PlanStep(
+                    id: "apple.betaGroup.\(group.name)", system: .apple,
+                    kind: live == nil ? .add : .change,
+                    summary: "TestFlight group  \(group.name)"
+                        + (live == nil ? "  create" : "  settings"),
+                    title: "\(live == nil ? "Create" : "Update") the \(group.name) group",
+                    requests: [RequestSketch(live == nil ? "POST" : "PATCH", "/v1/betaGroups")],
+                    operation: .appleBetaGroup(name: group.name),
+                    comparison: read ? .verified : .unverified))
+            }
+
+            // Apple emails every address it does not already hold, so the step
+            // counts the difference and never the whole list.
+            let wanted = (group.testers ?? []).map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            let missing = wanted.filter { live?.testers.contains($0.lowercased()) != true }
+            if !wanted.isEmpty, !read || !missing.isEmpty {
+                steps.append(PlanStep(
+                    id: "apple.betaTesters.\(group.name)", system: .apple, kind: .add,
+                    summary: "TestFlight  \(group.name)  invite "
+                        + (read ? "\(missing.count) of \(wanted.count)" : "\(wanted.count)")
+                        + " testers",
+                    title: "Invite \(missing.count) testers to \(group.name)",
+                    requests: [RequestSketch("POST", "/v1/betaTesters")],
+                    operation: .appleBetaTesters(group: group.name,
+                                                 emails: read ? missing : wanted),
+                    comparison: read ? .verified : .unverified))
+            }
+
+            // The build reaches the group, and through it every tester.
+            if let buildID = actual?.attachedBuildId,
+               live?.buildIds.contains(buildID) != true {
+                steps.append(PlanStep(
+                    id: "apple.betaBuild.\(group.name)", system: .apple, kind: .add,
+                    summary: "TestFlight  \(group.name)  gets the attached build",
+                    title: "Give the build to \(group.name)",
+                    requests: [RequestSketch("POST", "/v1/betaGroups/{id}/relationships/builds")],
+                    operation: .appleBetaBuild(group: group.name),
+                    comparison: read ? .verified : .unverified))
+            }
+        }
+
+        if let notes = testFlight.whatToTest, !notes.isEmpty {
+            let differs = notes.contains { actual?.whatToTest[$0.key] != $0.value }
+            if !read || differs {
+                steps.append(PlanStep(
+                    id: "apple.whatToTest", system: .apple, kind: .change,
+                    summary: "what to test  \(notes.count) locales",
+                    title: "Write the What to Test notes",
+                    requests: [RequestSketch("POST", "/v1/betaBuildLocalizations")],
+                    operation: .appleWhatToTest,
+                    comparison: read ? .verified : .unverified))
+            }
+        }
+        if let notify = testFlight.autoNotify, !read || notify != actual?.betaAutoNotify {
+            steps.append(PlanStep(
+                id: "apple.betaAutoNotify", system: .apple, kind: .change,
+                summary: "TestFlight  \(notify ? "notify" : "do not notify") the testers",
+                title: "Set the tester notification",
+                requests: [RequestSketch("PATCH", "/v1/buildBetaDetails/{id}")],
+                operation: .appleBetaAutoNotify(notify),
+                comparison: read ? .verified : .unverified))
+        }
+        // The queue is the irreversible half of TestFlight, so it is the last
+        // row and it never repeats once Apple holds a submission.
+        if testFlight.submitForBetaReview == true, actual?.betaReviewSubmitted != true {
+            steps.append(PlanStep(
+                id: "apple.betaReview", system: .apple, kind: .add,
+                summary: "TestFlight  send the build to beta review",
+                title: "Send the build to beta review",
+                requests: [RequestSketch("POST", "/v1/betaAppReviewSubmissions")],
+                operation: .appleBetaReview,
+                comparison: read ? .verified : .unverified))
         }
         return steps
     }
