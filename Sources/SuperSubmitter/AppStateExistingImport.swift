@@ -80,12 +80,41 @@ extension AppState {
             loadCredentials()
             importedURLs.append(manifestURL)
         }
-        selectedTab = .build
+        // A publisher lands on the build they are about to send. A manager has
+        // nothing to build, so they land on the reviews of the live app.
+        selectedTab = mode == .managing ? .reviews : .build
         if !skipped.isEmpty {
             errorMessage = "The apps were imported. These parts stayed empty:\n"
                 + skipped.map { "· \($0)" }.joined(separator: "\n")
         }
         return importedURLs
+    }
+
+    /// The managing import. It asks the user for no folder.
+    ///
+    /// A publishing import writes `store.yaml` beside the source, because the
+    /// developer keeps it in their repository. A manager has no repository in
+    /// play: the app is built and it is out there. Super Submitter keeps the
+    /// workspace in its own Application Support directory instead, one folder
+    /// per app, and the rest of the import is the same.
+    func importManagedApps(_ candidates: [ExistingAppCandidate],
+                           appleCredential: AppleCredential?,
+                           googleCredential: GoogleServiceAccount?) async throws -> [URL] {
+        let groups = ExistingAppImportPlan.group(candidates)
+        guard !groups.isEmpty else { return [] }
+        let storage = BuildStorage()
+        var imported: [URL] = []
+
+        // One app at a time, so one folder is one app and the shared import
+        // never has to split a parent folder.
+        for group in groups {
+            let folder = try storage.managedFolder(name: group.folderName,
+                                                   identifier: group.identifier)
+            imported += try await importExistingApps(
+                group.candidates, destination: folder,
+                appleCredential: appleCredential, googleCredential: googleCredential)
+        }
+        return imported
     }
 
     private func availableImportFolder(named name: String, under root: URL,

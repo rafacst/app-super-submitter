@@ -73,6 +73,8 @@ final class ExistingAppImportModel {
     /// The app icon of a candidate, keyed by its id. A candidate with no icon
     /// shows its store mark, so a missing icon costs nothing.
     var icons: [String: URL] = [:]
+    /// Why the grid shows store marks instead of icons, when it does.
+    var iconNote: String?
     var selection = ExistingAppSelection()
     var loading = false
     var error: String?
@@ -166,14 +168,18 @@ final class ExistingAppImportModel {
         error = failures.isEmpty ? nil : failures.joined(separator: "\n")
         step = .apps
 
-        // The icons are decoration. They arrive after the list, and a failure
-        // here never reaches the user.
+        // The icons are decoration, so they arrive after the list and they
+        // never block it. A silent failure looked exactly like an account with
+        // no icons, so the reason reaches the panel now.
         if let credential = appleCredential {
             let ids = found.filter { $0.store == .apple }.map(\.remoteID)
-            if let found = try? await client.appleIcons(appIDs: ids, credential: credential) {
-                for (appID, url) in found {
-                    icons["\(Store.apple.rawValue):\(appID)"] = url
+            if let icons = try? await client.appleIcons(appIDs: ids, credential: credential) {
+                for (appID, url) in icons.urls {
+                    self.icons["\(Store.apple.rawValue):\(appID)"] = url
                 }
+                iconNote = icons.urls.isEmpty ? icons.explanation : nil
+            } else {
+                iconNote = "The app icons could not be read. The apps below are still correct."
             }
         }
     }
