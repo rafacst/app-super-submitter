@@ -95,24 +95,12 @@ struct InternalSharingPanel: View {
 /// Both sit behind a button rather than on tab load, the same rule that
 /// `StoreDiagnosticsPanel` follows: neither call is free, and neither answers
 /// a question the tab asks by itself.
-struct GooglePlayActionsPanel: View {
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GoogleReviewsPanel()
-            GoogleRecoveryPanel()
-            GeneratedAPKPanel()
-        }
-    }
-}
-
 /// The APKs Google signs and serves.
 ///
 /// Play re-signs what it delivers, so the file on a device is never the App
 /// Bundle that went up. A developer reading a crash report from the store
 /// needs these files, and no other part of the app could fetch them.
-private struct GeneratedAPKPanel: View {
+struct GeneratedAPKPanel: View {
     @Environment(AppState.self) private var state
     @State private var busy = false
     @State private var loaded = false
@@ -198,7 +186,7 @@ private struct GeneratedAPKPanel: View {
     }
 }
 
-private struct GoogleReviewsPanel: View {
+struct GoogleReviewsPanel: View {
     @Environment(AppState.self) private var state
     @State private var busy = false
     @State private var loaded = false
@@ -332,7 +320,7 @@ private struct GoogleReviewsPanel: View {
     }
 }
 
-private struct GoogleRecoveryPanel: View {
+struct GoogleRecoveryPanel: View {
     @Environment(AppState.self) private var state
     @State private var busy = false
     @State private var loaded = false

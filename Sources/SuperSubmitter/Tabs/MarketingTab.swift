@@ -7,10 +7,12 @@ import SwiftUI
 /// says it once instead of every section repeating it. Spec section 7.3.1.
 struct MarketingTab: View {
     @Environment(AppState.self) private var state
+    @State private var confirming = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             header
+            applyBar
             customProductPages
             experiments
             events
@@ -18,6 +20,62 @@ struct MarketingTab: View {
             smallResources
         }
         .frame(maxWidth: 940, alignment: .leading)
+        .confirmationDialog("Write these to the App Store?",
+                            isPresented: $confirming) {
+            Button("Write them") { state.applyMarketing() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(confirmationLine)
+        }
+    }
+
+    /// The one button that Managing mode uses.
+    ///
+    /// Publishing writes this tab through the Summary and the Submit tabs,
+    /// with the whole diff in front of it. A manager editing one page wants
+    /// one button, so this is that button. Every resource below lands in a
+    /// draft or an unstarted state, and none reaches a customer until somebody
+    /// publishes it in App Store Connect.
+    private var applyBar: some View {
+        let changes = state.marketingChanges
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(changes.isEmpty
+                     ? "The App Store already holds everything on this tab."
+                     : "\(changes.count) resources to write")
+                    .font(.system(size: 12.5, weight: .medium))
+                Text(state.marketingApplyMessage.isEmpty
+                     ? (changes.first ?? "Nothing here reaches a customer until you publish it in App Store Connect.")
+                     : state.marketingApplyMessage)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(state.marketingApplyState == .failed
+                                     ? Theme.red : Theme.text2)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            if state.marketingApplyRunning { Spinner() }
+            Button(state.marketingApplyRunning ? "Writing…" : "Write to the App Store") {
+                confirming = true
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .disabled(changes.isEmpty || state.marketingApplyRunning
+                      || !state.stores.contains(.apple))
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    private var confirmationLine: String {
+        let changes = state.marketingChanges
+        let named = changes.prefix(4).joined(separator: "\n")
+        return "Super Submitter writes \(changes.count) resources now:\n\(named)"
+            + (changes.count > 4 ? "\n…" : "")
+            + "\n\nEach one lands as a draft or stays unstarted. None of them reaches a customer until you publish it in App Store Connect."
     }
 
     private var header: some View {

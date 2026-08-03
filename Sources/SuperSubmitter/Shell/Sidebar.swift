@@ -57,8 +57,10 @@ struct Sidebar: View {
 
             Hairline().padding(.horizontal, 12).padding(.bottom, 8)
 
+            ModeSwitch().padding(.horizontal, 8).padding(.bottom, 10)
+
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(Tab.allCases) { tab in
+                ForEach(Tab.tabs(in: state.mode)) { tab in
                     // A rule before tab 7 and before tab 9. It marks where
                     // the app stops editing a file and starts touching a
                     // store.
@@ -188,6 +190,50 @@ private struct SettingsRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Settings")
+    }
+}
+
+/// The two jobs, as one control.
+///
+/// It sits above the tabs, because it decides which tabs exist. A publisher
+/// sends a version; a manager runs the app that is already out there.
+struct ModeSwitch: View {
+    @Environment(AppState.self) private var state
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Mode.allCases) { mode in
+                let selected = state.mode == mode
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) { state.mode = mode }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: mode.symbol)
+                            .font(.system(size: compact ? 10 : 10.5))
+                        Text(mode.title)
+                            .font(.system(size: compact ? 11.5 : 12,
+                                          weight: selected ? .semibold : .regular))
+                    }
+                    .foregroundStyle(selected ? Theme.text : Theme.text2)
+                    .padding(.horizontal, compact ? 9 : 8)
+                    .padding(.vertical, 5)
+                    .frame(maxWidth: compact ? nil : .infinity)
+                    .background(selected ? Theme.field : .clear,
+                                in: RoundedRectangle(cornerRadius: 6))
+                    .shadow(color: selected ? .black.opacity(0.14) : .clear, radius: 1, y: 1)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(mode.title)
+                .accessibilityHint(mode.line)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }
 

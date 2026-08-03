@@ -17,13 +17,39 @@ private func source(_ relativePath: String) throws -> String {
 
 @Test func theGoogleActionPanelsAreOnATabAndNotOnlyInTheKit() throws {
     let build = try source("Sources/SuperSubmitter/Tabs/BuildTab.swift")
-    let release = try source("Sources/SuperSubmitter/Tabs/ReleaseTab.swift")
+    let managing = try source("Sources/SuperSubmitter/Tabs/ManagingTabs.swift")
 
-    // An unreachable client is the same as no client. Both panels sit behind
-    // a Google store check, so an Apple-only manifest never draws them.
+    // An unreachable client is the same as no client. Internal sharing belongs
+    // to a build, so it stays on the Build tab; the reviews, the recovery, and
+    // the signed APKs belong to a live app, so they moved to Managing.
     #expect(build.contains("InternalSharingPanel()"))
     #expect(build.contains("state.stores.contains(.google)"))
-    #expect(release.contains("GooglePlayActionsPanel()"))
+    #expect(managing.contains("GoogleReviewsPanel()"))
+    #expect(managing.contains("GoogleRecoveryPanel()"))
+    #expect(managing.contains("GeneratedAPKPanel()"))
+    // Every one sits behind a store check, so an Apple-only manifest draws
+    // none of them.
+    #expect(managing.contains("state.stores.contains(.google)"))
+}
+
+/// The App Store twins reach a tab too.
+@Test func theAppleActionPanelsReachTheSameTabs() throws {
+    let managing = try source("Sources/SuperSubmitter/Tabs/ManagingTabs.swift")
+    let build = try source("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+
+    #expect(managing.contains("AppStoreActionsPanel()"))
+    #expect(managing.contains("VitalsPanel()"))
+    #expect(build.contains("XcodeCloudPanel()"))
+}
+
+/// Managing writes the marketing resources on one button, so that button asks
+/// first. It is the only write in Managing that a publish flow would have
+/// shown a diff for.
+@Test func theMarketingApplyAsksBeforeItWrites() throws {
+    let marketing = try source("Sources/SuperSubmitter/Tabs/MarketingTab.swift")
+
+    #expect(marketing.contains("confirmationDialog(\"Write these to the App Store?\""))
+    #expect(marketing.contains("state.applyMarketing()"))
 }
 
 @Test func theTwoOutwardFacingActionsAskBeforeTheyRun() throws {

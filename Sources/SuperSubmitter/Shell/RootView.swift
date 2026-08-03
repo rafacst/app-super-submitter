@@ -100,10 +100,14 @@ private struct EmptyAppView: View {
             }
             .padding(.bottom, 26)
 
-            Text("Point Super Submitter at your app")
+            Text(state.mode == .publishing
+                 ? "Point Super Submitter at your app"
+                 : "Bring in the app you want to manage")
                 .font(.system(size: 25, weight: .semibold))
                 .kerning(-0.4)
-            Text("Pick the folder your app is built in. We read the build and keep one small file beside it.")
+            Text(state.mode == .publishing
+                 ? "Pick the folder your app is built in. We read the build and keep one small file beside it."
+                 : "Managing works on a live app. Connect your store accounts and import the one you want to look after.")
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
@@ -111,18 +115,26 @@ private struct EmptyAppView: View {
                 .frame(maxWidth: 520)
                 .padding(.top, 9)
 
+            // Both doors import an app; the mode decides what the app then
+            // shows. A manager needs the live one, so that door comes first
+            // and the new-app door does not appear at all.
             HStack(spacing: 18) {
-                EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
-                              detail: "Choose its project folder and prepare a fresh store submission.",
-                              tint: Theme.accent, action: state.chooseAppFolder)
+                if state.mode == .publishing {
+                    EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
+                                  detail: "Choose its project folder and prepare a fresh store submission.",
+                                  tint: Theme.accent, action: state.chooseAppFolder)
+                }
                 EntryModeCard(symbol: "arrow.triangle.2.circlepath",
-                              title: "Update existing apps",
-                              detail: "Connect your store accounts, select one or many apps, and import their current data.",
+                              title: state.mode == .publishing
+                                  ? "Update existing apps" : "Bring in a live app",
+                              detail: state.mode == .publishing
+                                  ? "Connect your store accounts, select one or many apps, and import their current data."
+                                  : "Connect your store accounts and pick the apps you look after. The reviews, the numbers, and the pages all follow.",
                               tint: Theme.teal) {
                     state.showExistingAppImport = true
                 }
             }
-            .frame(maxWidth: 760)
+            .frame(maxWidth: state.mode == .publishing ? 760 : 380)
             .padding(.top, 32)
 
             Button { state.chooseExistingManifest() } label: {
@@ -200,7 +212,9 @@ private struct ContentHeader: View {
                     .font(.system(size: 14, weight: .semibold))
                     .kerning(-0.14)
                 Text(state.manifestURL == nil
-                     ? "Which app do you want to send to the stores?"
+                     ? (state.mode == .publishing
+                        ? "Which app do you want to send to the stores?"
+                        : "Which app do you want to look after?")
                      : state.selectedTab.question)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.text2)
