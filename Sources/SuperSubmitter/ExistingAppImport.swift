@@ -115,20 +115,31 @@ final class ExistingAppImportModel {
         loading = true
         error = nil
         defer { loading = false }
-        do {
-            var found: [ExistingAppCandidate] = []
-            if let credential = appleCredential {
-                found = try await StoreConnectionClient().appleApps(credential: credential).map {
+        let client = StoreConnectionClient()
+        var found: [ExistingAppCandidate] = []
+        var failures: [String] = []
+        if let credential = appleCredential {
+            do {
+                found += try await client.appleApps(credential: credential).map {
                     ExistingAppCandidate(store: .apple, remoteID: $0.id,
                                          name: $0.name, identifier: $0.identifier)
                 }
-            }
-            candidates = found
-            selection.clear()
-            step = .apps
-        } catch {
-            self.error = error.localizedDescription
+            } catch { failures.append("App Store: \(error.localizedDescription)") }
         }
+        if stores.contains(.google), let credential = googleCredential {
+            do {
+                found += try await client.googleApps(credential: credential).map {
+                    ExistingAppCandidate(store: .google, remoteID: $0.id,
+                                         name: $0.name, identifier: $0.identifier)
+                }
+            } catch {
+                failures.append("Google app listing is unavailable. Enable the Play Developer Reporting API or enter package names below. \(error.localizedDescription)")
+            }
+        }
+        candidates = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        selection.clear()
+        error = failures.isEmpty ? nil : failures.joined(separator: "\n")
+        step = .apps
     }
 
     func addGooglePackages() {
