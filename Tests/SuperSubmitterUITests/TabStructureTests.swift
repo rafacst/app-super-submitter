@@ -16,13 +16,60 @@ import Testing
 }
 
 @Test func workflowTabsKeepTheirSafetyOrder() {
-    #expect(Tab.allCases.map(\.title) == [
-        "Stores", "Build", "Details", "Media", "Monetization", "Marketing",
+    #expect(Tab.tabs(in: .publishing).map(\.title) == [
+        "Stores", "Build", "Details", "Media", "Monetization",
         "Review info", "Summary", "Submit", "Release",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.submit.zone == .writes)
     #expect(Tab.release.zone == .releases)
+}
+
+/// The two modes describe two jobs. A publisher never wants a crash rate on
+/// the way to a submission, and a manager never wants a build step.
+@Test func theTwoModesShareOnlyTheStoresTab() {
+    let publishing = Set(Tab.tabs(in: .publishing))
+    let managing = Set(Tab.tabs(in: .managing))
+
+    #expect(publishing.intersection(managing) == [.stores])
+    #expect(publishing.union(managing) == Set(Tab.allCases))
+    #expect(Tab.tabs(in: .managing).map(\.title)
+        == ["Stores", "Marketing", "Reviews", "Analytics", "App health"])
+    // Every tab belongs somewhere, or the sidebar would hide it for good.
+    #expect(Tab.allCases.allSatisfy { !$0.modes.isEmpty })
+}
+
+/// Choosing a tab of the other mode switches the shell, so the content and the
+/// sidebar never disagree.
+@MainActor
+@Test func aTabOfTheOtherModeSwitchesTheMode() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    #expect(state.mode == .publishing)
+
+    state.selectedTab = .reviews
+    #expect(state.mode == .managing)
+
+    state.selectedTab = .build
+    #expect(state.mode == .publishing)
+
+    // Switching the mode moves off a tab the new mode does not hold.
+    state.mode = .managing
+    #expect(Tab.tabs(in: .managing).contains(state.selectedTab))
+}
+
+/// The mode outlives a launch, the same way the open app does.
+@MainActor
+@Test func theModeSurvivesARelaunch() {
+    let defaults = UserDefaults(suiteName: UUID().uuidString)!
+    let account = "test-\(UUID().uuidString)"
+    let first = AppState(defaults: defaults, storeAccount: account)
+    first.mode = .managing
+
+    let relaunched = AppState(defaults: defaults, storeAccount: account)
+
+    #expect(relaunched.mode == .managing)
+    #expect(Tab.tabs(in: .managing).contains(relaunched.selectedTab))
 }
 
 @MainActor

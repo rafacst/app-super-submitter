@@ -14,8 +14,12 @@ struct TopBar: View {
 
             VHairline().frame(height: 26)
 
+            ModeSwitch(compact: true)
+
+            VHairline().frame(height: 26)
+
             HStack(spacing: 1) {
-                ForEach(Tab.allCases) { tab in
+                ForEach(Tab.tabs(in: state.mode)) { tab in
                     if tab.startsZone {
                         Rectangle().fill(Theme.sep)
                             .frame(width: 1)
