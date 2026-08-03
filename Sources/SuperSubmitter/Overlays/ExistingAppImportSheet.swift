@@ -126,7 +126,7 @@ struct ExistingAppImportSheet: View {
                     Text("Google provides no API to enumerate a service account's apps. Paste one or more known package names; each is permission-checked before import.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                     HStack(alignment: .top) {
-                        TextField("com.example.app, com.example.other", text: $model.googlePackages,
+                        TextField("company.product, company.otherproduct", text: $model.googlePackages,
                                   axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(2...4)

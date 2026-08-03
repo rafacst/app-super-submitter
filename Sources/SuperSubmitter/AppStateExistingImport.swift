@@ -28,6 +28,9 @@ extension AppState {
                     let listing = try await client.importApple(
                         appID: candidate.remoteID, credential: appleCredential)
                     importedManifest.mergeAppleImport(listing)
+                    try await materializeImportedAssets(
+                        listing.assets, store: .apple, root: folder,
+                        manifest: &importedManifest)
                 case .google:
                     guard let googleCredential else { continue }
                     _ = try await client.testGoogle(credential: googleCredential,
@@ -36,6 +39,9 @@ extension AppState {
                     let listing = try await client.importGoogle(
                         credential: googleCredential, packageName: candidate.identifier)
                     importedManifest.mergeGoogleImport(listing)
+                    try await materializeImportedAssets(
+                        listing.assets, store: .google, root: folder,
+                        manifest: &importedManifest)
                 }
             }
 
@@ -63,5 +69,39 @@ extension AppState {
             || FileManager.default.fileExists(atPath: manifest.path) { return proposed }
         let suffix = identifier.split(separator: ".").last.map(String.init) ?? "app"
         return root.appendingPathComponent("\(name) - \(suffix)", isDirectory: true)
+    }
+
+    private func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,
+                                           root: URL, manifest: inout Manifest) async throws {
+        for asset in assets {
+            let safeName = asset.fileName
+                .components(separatedBy: CharacterSet(charactersIn: "/:"))
+                .joined(separator: "-")
+            let relative = "Store Import/\(store.rawValue)/\(asset.locale)/\(asset.kind)/\(safeName)"
+            let destination = root.appendingPathComponent(relative)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                let (data, response) = try await URLSession.shared.data(from: asset.url)
+                if let http = response as? HTTPURLResponse,
+                   !(200..<300).contains(http.statusCode) {
+                    throw ConnectionError.http(http.statusCode,
+                        "Could not download \(asset.fileName) from \(store.storeName).")
+                }
+                try data.write(to: destination, options: .atomic)
+            }
+            if let deviceClass = asset.deviceClass {
+                manifest.addMediaPaths([relative], locale: asset.locale,
+                                       deviceClass: deviceClass)
+            } else if asset.kind == "icon" {
+                var media = manifest.media ?? Manifest.Media()
+                media.icon = relative
+                manifest.media = media
+            } else if asset.kind == "featureGraphic" {
+                var media = manifest.media ?? Manifest.Media()
+                media.featureGraphic = relative
+                manifest.media = media
+            }
+        }
     }
 }

@@ -342,6 +342,10 @@ public extension Manifest {
             target.supportUrl = managed(source.supportURL, keeping: target.supportUrl)
             target.marketingUrl = managed(source.marketingURL, keeping: target.marketingUrl)
             target.privacyPolicyUrl = managed(source.privacyPolicyURL, keeping: target.privacyPolicyUrl)
+            target.privacyPolicyText = managed(source.privacyPolicyText,
+                                               keeping: target.privacyPolicyText)
+            target.privacyChoicesUrl = managed(source.privacyChoicesURL,
+                                               keeping: target.privacyChoicesUrl)
             listing.locales[code] = target
         }
         self.listing = listing

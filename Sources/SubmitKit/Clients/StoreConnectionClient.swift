@@ -25,6 +25,8 @@ public struct ImportedStoreListing: Sendable, Equatable {
         public var supportURL: String?
         public var marketingURL: String?
         public var privacyPolicyURL: String?
+        public var privacyPolicyText: String?
+        public var privacyChoicesURL: String?
         public var video: String?
 
         public init() {}
@@ -32,8 +34,38 @@ public struct ImportedStoreListing: Sendable, Equatable {
 
     public var versionName: String?
     public var locales: [String: Locale] = [:]
+    public var assets: [ImportedStoreAsset] = []
 
     public init() {}
+}
+
+public struct ImportedStoreAsset: Sendable, Equatable {
+    public let locale: String
+    public let kind: String
+    public let url: URL
+    public let fileName: String
+
+    public init(locale: String, kind: String, url: URL, fileName: String) {
+        self.locale = locale
+        self.kind = kind
+        self.url = url
+        self.fileName = fileName
+    }
+
+    public var deviceClass: Manifest.DeviceClass? {
+        switch kind {
+        case "phoneScreenshots", "APP_IPHONE_67", "APP_IPHONE_65",
+             "APP_IPHONE_61", "APP_IPHONE_58", "APP_IPHONE_55", "APP_IPHONE_47": .phone
+        case "sevenInchScreenshots": .tablet7
+        case "tenInchScreenshots", "APP_IPAD_PRO_3GEN_129", "APP_IPAD_PRO_129",
+             "APP_IPAD_PRO_3GEN_11": .tablet10
+        case "tvScreenshots", "APP_APPLE_TV": .tv
+        case "wearScreenshots", "APP_APPLE_WATCH_SERIES_10": .watch
+        case "APP_DESKTOP": .desktop
+        case "APP_VISION_PRO": .vision
+        default: nil
+        }
+    }
 }
 
 public struct StoreConnectionClient: Sendable {
@@ -77,6 +109,8 @@ public struct StoreConnectionClient: Sendable {
                 locale.name = item.attributes.name
                 locale.subtitle = item.attributes.subtitle
                 locale.privacyPolicyURL = item.attributes.privacyPolicyURL
+                locale.privacyPolicyText = item.attributes.privacyPolicyText
+                locale.privacyChoicesURL = item.attributes.privacyChoicesURL
                 result.locales[item.attributes.locale] = locale
             }
         }
@@ -102,6 +136,8 @@ public struct StoreConnectionClient: Sendable {
                 locale.supportURL = item.attributes.supportURL
                 locale.marketingURL = item.attributes.marketingURL
                 result.locales[item.attributes.locale] = locale
+                result.assets += try await appleScreenshotAssets(
+                    localizationID: item.id, locale: item.attributes.locale, token: token)
             }
         }
         return result
@@ -160,6 +196,25 @@ public struct StoreConnectionClient: Sendable {
                 locale.subtitle = item.shortDescription
                 locale.video = item.video
                 result.locales[item.language] = locale
+                for imageType in ["phoneScreenshots", "sevenInchScreenshots",
+                                  "tenInchScreenshots", "tvScreenshots", "wearScreenshots",
+                                  "icon", "featureGraphic"] {
+                    let imageURL = try Self.googleURL(
+                        "\(base)/listings/\(item.language)/\(imageType)")
+                    var imageRequest = URLRequest(url: imageURL)
+                    imageRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    let (imageData, imageResponse) = try await session.data(for: imageRequest)
+                    try Self.requireSuccess(imageResponse, data: imageData)
+                    let images = try JSONDecoder().decode(GoogleImagesResponse.self,
+                                                           from: imageData)
+                    for (index, image) in (images.images ?? []).enumerated() {
+                        guard let url = URL(string: image.url) else { continue }
+                        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
+                        result.assets.append(ImportedStoreAsset(
+                            locale: item.language, kind: imageType, url: url,
+                            fileName: "\(imageType)-\(index + 1).\(ext)"))
+                    }
+                }
             }
             try await deleteGoogleEdit(base: base, token: token)
             return result
@@ -194,6 +249,46 @@ public struct StoreConnectionClient: Sendable {
         let (data, response) = try await session.data(for: request)
         try Self.requireSuccess(response, data: data)
         return data
+    }
+
+    private func appleScreenshotAssets(localizationID: String, locale: String,
+                                       token: String) async throws -> [ImportedStoreAsset] {
+        let url = try Self.appleURL(
+            "/v1/appStoreVersionLocalizations/\(localizationID)"
+                + "/appScreenshotSets?include=appScreenshots&limit=50")
+        let data = try await appleGET(url, token: token)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
+        }
+        let sets = object["data"] as? [[String: Any]] ?? []
+        var types: [String: String] = [:]
+        for set in sets {
+            guard let id = set["id"] as? String,
+                  let attributes = set["attributes"] as? [String: Any],
+                  let type = attributes["screenshotDisplayType"] as? String else { continue }
+            types[id] = type
+        }
+        return (object["included"] as? [[String: Any]] ?? []).compactMap { item in
+            guard item["type"] as? String == "appScreenshots",
+                  let attributes = item["attributes"] as? [String: Any],
+                  let image = attributes["imageAsset"] as? [String: Any],
+                  let template = image["templateUrl"] as? String,
+                  let relationships = item["relationships"] as? [String: Any],
+                  let set = relationships["appScreenshotSet"] as? [String: Any],
+                  let relationData = set["data"] as? [String: Any],
+                  let setID = relationData["id"] as? String,
+                  let kind = types[setID] else { return nil }
+            let width = image["width"] as? Int ?? 1_290
+            let height = image["height"] as? Int ?? 2_796
+            let rendered = template.replacingOccurrences(of: "{w}", with: String(width))
+                .replacingOccurrences(of: "{h}", with: String(height))
+                .replacingOccurrences(of: "{f}", with: "png")
+                .replacingOccurrences(of: "{c}", with: "")
+            guard let url = URL(string: rendered) else { return nil }
+            let fileName = attributes["fileName"] as? String
+                ?? "\(kind)-\(item["id"] as? String ?? UUID().uuidString).png"
+            return ImportedStoreAsset(locale: locale, kind: kind, url: url, fileName: fileName)
+        }
     }
 
     private func deleteGoogleEdit(base: String, token: String) async throws {
@@ -402,10 +497,13 @@ private struct AppleInfoLocaleAttributes: Decodable {
     let name: String?
     let subtitle: String?
     let privacyPolicyURL: String?
+    let privacyPolicyText: String?
+    let privacyChoicesURL: String?
 
     enum CodingKeys: String, CodingKey {
-        case locale, name, subtitle
+        case locale, name, subtitle, privacyPolicyText
         case privacyPolicyURL = "privacyPolicyUrl"
+        case privacyChoicesURL = "privacyChoicesUrl"
     }
 }
 
@@ -448,6 +546,11 @@ private struct GoogleListingsResponse: Decodable {
         let video: String?
     }
     let listings: [Listing]?
+}
+
+private struct GoogleImagesResponse: Decodable {
+    struct Image: Decodable { let url: String }
+    let images: [Image]?
 }
 
 enum APIError {
