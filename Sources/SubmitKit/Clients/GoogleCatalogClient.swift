@@ -143,6 +143,27 @@ public struct GoogleCatalogClient: Sendable {
         return result
     }
 
+    // MARK: - The one-time product offers
+
+    /// Every offer of one purchase option. The app writes one option per
+    /// product, so the option id is the product id.
+    public func oneTimeOffers(packageName: String, productId: String,
+                              purchaseOptionId: String) async throws -> [Offer] {
+        var result: [Offer] = []
+        var token: String?
+        for _ in 0..<100 {
+            var query = [URLQueryItem(name: "pageSize", value: "100")]
+            if let token { query.append(URLQueryItem(name: "pageToken", value: token)) }
+            let payload = JSON(data: try await api.google(
+                "GET", Self.oneTimeOfferBase(packageName, productId, purchaseOptionId),
+                query: query).data)
+            result += payload["oneTimeProductOffers"].array.compactMap(Self.parseOffer)
+            token = payload["nextPageToken"].string
+            if token?.isEmpty != false { break }
+        }
+        return result
+    }
+
     // MARK: - One offer switch
 
     /// Activates or stops one subscription offer. Google keeps the offer and
@@ -209,7 +230,11 @@ public struct GoogleCatalogClient: Sendable {
 
     static func parseOffer(_ item: JSON) -> Offer? {
         guard let id = item["offerId"].string else { return nil }
-        return Offer(id: id, basePlanId: item["basePlanId"].string ?? "",
+        // A one-time product offer names the purchase option where a
+        // subscription offer names the base plan. Both land in the same field.
+        return Offer(id: id,
+                     basePlanId: item["basePlanId"].string
+                        ?? item["purchaseOptionId"].string ?? "",
                      state: item["state"].string)
     }
 
