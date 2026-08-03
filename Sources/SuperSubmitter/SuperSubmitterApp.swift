@@ -31,6 +31,23 @@ struct SuperSubmitterApp: App {
         // shows one surface and not a bar above a bar.
         .windowStyle(.hiddenTitleBar)
         .commands {
+            // The two doors of the entry screen, plus the way out. The entry
+            // screen hides itself once one app is linked, so without these the
+            // second app has nowhere to come from.
+            CommandGroup(replacing: .newItem) {
+                Button("Submit a New App…") { state.chooseAppFolder() }
+                    .keyboardShortcut("n", modifiers: .command)
+                Button("Update Existing Apps…") { state.showExistingAppImport = true }
+                    .keyboardShortcut("u", modifiers: [.command, .shift])
+                Divider()
+                Button("Open store.yaml…") { state.chooseExistingManifest() }
+                    .keyboardShortcut("o", modifiers: .command)
+                Divider()
+                Button("Remove App from Super Submitter…") {
+                    state.askToRemoveApp(at: state.selectedAppIndex)
+                }
+                .disabled(state.linkedApps.isEmpty)
+            }
             // The app has no Settings scene. Command-comma opens the panel
             // over the window, so the menu and the sidebar row do one thing.
             CommandGroup(replacing: .appSettings) {
@@ -57,15 +74,15 @@ struct SuperSubmitterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        // Only the plain executable needs this. The app bundle carries the
+        // asset catalog icon, and overriding it here would replace a whole
+        // icon set with one 1024 point image.
         #if SWIFT_PACKAGE
-        let iconBundle = Bundle.module
-        #else
-        let iconBundle = Bundle.main
-        #endif
-        if let iconURL = iconBundle.url(forResource: "AppIcon", withExtension: "png"),
+        if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
            let icon = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = icon
         }
+        #endif
         NSApp.activate()
     }
 

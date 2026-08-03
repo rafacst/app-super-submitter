@@ -36,6 +36,14 @@ struct Sidebar: View {
                         AppRow(app: app, selected: index == state.selectedAppIndex)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Update from the stores…") {
+                            state.showExistingAppImport = true
+                        }
+                        Button("Remove from Super Submitter…", role: .destructive) {
+                            state.askToRemoveApp(at: index)
+                        }
+                    }
                     .accessibilityLabel(app.name)
                     .accessibilityValue("App Store \(app.apple.mark), Google Play \(app.google.mark)")
                     .accessibilityAddTraits(index == state.selectedAppIndex ? .isSelected : [])

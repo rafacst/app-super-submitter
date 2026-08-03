@@ -38,6 +38,16 @@ struct RootView: View {
         .sheet(isPresented: $state.showExistingAppImport) { ExistingAppImportSheet() }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
+        .confirmationDialog("Remove \(state.removalName) from Super Submitter?",
+                            isPresented: Binding(
+                                get: { state.appPendingRemoval != nil },
+                                set: { if !$0 { state.appPendingRemoval = nil } }),
+                            titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { state.removePendingApp() }
+            Button("Cancel", role: .cancel) { state.appPendingRemoval = nil }
+        } message: {
+            Text("Super Submitter forgets this app. The store.yaml file, the store keys in your Keychain, and both store listings stay as they are.")
+        }
         .alert("Super Submitter", isPresented: Binding(
             get: { state.errorMessage != nil },
             set: { if !$0 { state.errorMessage = nil } }
@@ -78,24 +88,30 @@ private struct EmptyAppView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 16) {
-                StoreMark(store: .apple, size: 34)
-                Circle().fill(Theme.sep).frame(width: 5, height: 5)
-                StoreMark(store: .google, size: 34)
+            // The two Spacers hold the block in the middle of the pane. Without
+            // them the cards take every spare point of height and grow into two
+            // empty columns.
+            Spacer(minLength: 40)
+
+            HStack(spacing: 18) {
+                storeTile(.apple)
+                Circle().fill(Theme.sep).frame(width: 6, height: 6)
+                storeTile(.google)
             }
-            .padding(.bottom, 20)
+            .padding(.bottom, 26)
 
             Text("Point Super Submitter at your app")
-                .font(.system(size: 19, weight: .semibold))
-                .kerning(-0.3)
+                .font(.system(size: 25, weight: .semibold))
+                .kerning(-0.4)
             Text("Pick the folder your app is built in. We read the build and keep one small file beside it.")
-                .font(.system(size: 13))
+                .font(.system(size: 15))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 460)
-                .padding(.top, 7)
+                .lineSpacing(3)
+                .frame(maxWidth: 520)
+                .padding(.top, 9)
 
-            HStack(spacing: 16) {
+            HStack(spacing: 18) {
                 EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
                               detail: "Choose its project folder and prepare a fresh store submission.",
                               tint: Theme.accent, action: state.chooseAppFolder)
@@ -106,17 +122,30 @@ private struct EmptyAppView: View {
                     state.showExistingAppImport = true
                 }
             }
-            .frame(maxWidth: 720)
-            .padding(.top, 28)
+            .frame(maxWidth: 760)
+            .padding(.top, 32)
 
-            Button("Open an existing store.yaml") { state.chooseExistingManifest() }
-                .buttonStyle(.plain)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Theme.text2)
-                .padding(.top, 15)
+            Button { state.chooseExistingManifest() } label: {
+                Label("Open an existing store.yaml", systemImage: "doc.text")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.text2)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 20)
+
+            Spacer(minLength: 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
+    }
+
+    private func storeTile(_ store: Store) -> some View {
+        StoreMark(store: store, size: 38)
+            .frame(width: 62, height: 62)
+            .background(store.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(store.tint.opacity(0.28), lineWidth: 1))
     }
 }
 
@@ -129,21 +158,24 @@ private struct EntryModeCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                IconChip(symbol: symbol, tint: tint, size: 42)
-                Text(title).font(.system(size: 16, weight: .semibold))
+            VStack(alignment: .leading, spacing: 11) {
+                IconChip(symbol: symbol, tint: tint, size: 52)
+                Text(title).font(.system(size: 18, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 12.5))
+                    .font(.system(size: 14))
                     .foregroundStyle(Theme.text2)
-                    .lineSpacing(2)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
+                Spacer(minLength: 6)
                 Label("Continue", systemImage: "arrow.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(tint)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, minHeight: 190, alignment: .leading)
+            .padding(20)
+            // A fixed height, so the pane cannot stretch the card and the two
+            // cards stay level whatever their text length.
+            .frame(maxWidth: .infinity, minHeight: 236, maxHeight: 236,
+                   alignment: .topLeading)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(tint.opacity(0.42), lineWidth: 1))
@@ -158,6 +190,7 @@ private struct EntryModeCard: View {
 /// question, and the controls that belong to the tab on the right.
 private struct ContentHeader: View {
     @Environment(AppState.self) private var state
+    @AppStorage("showYAMLToggle") private var yamlToggleVisible = false
 
     var body: some View {
         @Bindable var state = state
@@ -175,7 +208,8 @@ private struct ContentHeader: View {
             Spacer(minLength: 8)
 
             // Every editing tab shows its own block of store.yaml. Spec 16.1.
-            if state.manifestURL != nil, state.yamlBlock != nil {
+            // Settings hides the toggle, because most work never needs it.
+            if yamlToggleVisible, state.manifestURL != nil, state.yamlBlock != nil {
                 Button {
                     state.showYAML.toggle()
                 } label: {
