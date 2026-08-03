@@ -29,7 +29,10 @@ public struct StateReader: Sendable {
             do {
                 state.google = try await readGoogle(
                     packageName: google.packageName,
-                    track: manifest.googlePrimaryTrack)
+                    track: manifest.googlePrimaryTrack,
+                    oneTimeProductIds: (manifest.purchases ?? []).map(\.id),
+                    subscriptionProductIds: (manifest.subscriptions ?? [])
+                        .flatMap { $0.plans.map(\.id) })
             } catch {
                 state.failures.append("Google Play: \(error.localizedDescription)")
             }
@@ -182,7 +185,7 @@ public struct StateReader: Sendable {
             let territory = basePrice.territory ?? "USA"
             let points = JSON(data: try await api.apple(
                 "GET",
-                "/v3/appPricePoints?filter%5Bapp%5D=\(appID)&filter%5Bterritory%5D=\(territory)&limit=200").data)
+                "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)&limit=200").data)
             let amounts = points["data"].array
                 .compactMap { $0["attributes"]["customerPrice"].string }
                 .compactMap { Decimal(string: $0) }
@@ -202,7 +205,7 @@ public struct StateReader: Sendable {
         }
 
         let availabilities = JSON(data: try await api.apple(
-            "GET", "/v2/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities").data)
+            "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities").data)
         result.appAvailabilityId = availabilities["data"]["id"].string
         result.availableInNewTerritories = availabilities["data"]["attributes"]["availableInNewTerritories"].bool
         let territories = availabilities["data"]["relationships"]["territoryAvailabilities"]
@@ -227,7 +230,16 @@ public struct StateReader: Sendable {
 
     // MARK: - Google Play
 
-    public func readGoogle(packageName: String, track: String) async throws -> ActualState.Google {
+    /// - Parameters:
+    ///   - oneTimeProductIds: the products that the manifest names. The reader
+    ///     asks Google for each one, because the list endpoint carries no
+    ///     title, no price, and no offer state, and the plan compares all
+    ///     three.
+    ///   - subscriptionProductIds: the same, for the subscription plans.
+    public func readGoogle(packageName: String, track: String,
+                           oneTimeProductIds: [String] = [],
+                           subscriptionProductIds: [String] = [])
+        async throws -> ActualState.Google {
         let base = "/androidpublisher/v3/applications/\(Self.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
         guard let editID = edit["id"].string else { throw ConnectionError.invalidResponse }
@@ -274,19 +286,42 @@ public struct StateReader: Sendable {
                     guard let language = note["language"].string else { continue }
                     value.releaseNotes[language] = note["text"].string
                 }
+
+                // Google answers 404 for a track that carries no tester group
+                // and for a track that targets every country. Neither is a
+                // read failure, so neither ends the whole read.
+                let escapedTrack = Self.escape(name)
+                if let testers = try? await api.google(
+                    "GET", "\(editBase)/testers/\(escapedTrack)") {
+                    value.testers = JSON(data: testers.data)["googleGroups"].array
+                        .compactMap(\.string).sorted()
+                }
+                if let availability = try? await api.google(
+                    "GET", "\(editBase)/countryAvailability/\(escapedTrack)") {
+                    let payload = JSON(data: availability.data)
+                    value.countries = payload["countries"].array
+                        .compactMap { $0["countryCode"].string }.sorted()
+                    value.restOfWorld = payload["restOfWorld"].bool
+                }
                 result.tracks[name] = value
             }
             result.highestVersionCode = result.tracks[track]?.versionCodes.max()
                 ?? result.tracks.values.flatMap(\.versionCodes).max()
 
             let oneTime = JSON(data: try await api.google(
-                "GET", "\(base)/onetimeproducts?pageSize=100").data)
+                "GET", "\(base)/oneTimeProducts?pageSize=100").data)
             result.oneTimeProductIds = Set(oneTime["oneTimeProducts"].array
                 .compactMap { $0["productId"].string })
             let subscriptions = JSON(data: try await api.google(
                 "GET", "\(base)/subscriptions?pageSize=100").data)
             result.subscriptionIds = Set(subscriptions["subscriptions"].array
                 .compactMap { $0["productId"].string })
+
+            result.catalog = await readGoogleCatalog(
+                packageName: packageName,
+                oneTimeProductIds: oneTimeProductIds.filter(result.oneTimeProductIds.contains),
+                subscriptionProductIds: subscriptionProductIds
+                    .filter(result.subscriptionIds.contains))
 
             _ = try? await api.google("DELETE", editBase)
             return result
@@ -295,6 +330,42 @@ public struct StateReader: Sendable {
             _ = try? await api.google("DELETE", editBase)
             throw error
         }
+    }
+
+    /// The per-product detail that the plan diffs against the manifest.
+    ///
+    /// A failure here never fails the whole read. The plan then holds no
+    /// detail for that product, and it marks the catalog step `unverified`
+    /// instead of showing a diff that nobody verified.
+    func readGoogleCatalog(packageName: String, oneTimeProductIds: [String],
+                           subscriptionProductIds: [String]) async
+        -> [String: ActualState.Google.CatalogProduct] {
+        let client = GoogleCatalogClient(api: api)
+        var result: [String: ActualState.Google.CatalogProduct] = [:]
+
+        if !oneTimeProductIds.isEmpty,
+           let products = try? await client.oneTimeProducts(packageName: packageName,
+                                                            productIds: oneTimeProductIds) {
+            result.merge(products) { _, new in new }
+        }
+        if !subscriptionProductIds.isEmpty,
+           let products = try? await client.subscriptions(packageName: packageName,
+                                                          productIds: subscriptionProductIds) {
+            result.merge(products) { _, new in new }
+        }
+
+        // The offer state lives beside the offer, never on the product, so it
+        // takes one read per subscription that actually has a base plan.
+        for productId in subscriptionProductIds {
+            guard let basePlanId = result[productId]?.basePlanId, !basePlanId.isEmpty,
+                  let offers = try? await client.subscriptionOffers(
+                    packageName: packageName, productId: productId,
+                    basePlanId: basePlanId) else { continue }
+            for offer in offers where offer.state != nil {
+                result[productId]?.offerStates[offer.id] = offer.state
+            }
+        }
+        return result
     }
 
     // MARK: - The provider

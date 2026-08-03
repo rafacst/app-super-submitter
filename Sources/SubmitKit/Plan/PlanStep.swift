@@ -94,6 +94,9 @@ public enum PlanOperation: Sendable, Equatable {
     case googleExpansionFile(kind: String, path: String, bytes: Int64)
     case googleCreateTrack(String)
     case googleTrack(String)
+    /// The Google Groups that may install one track. A closed track without a
+    /// group reaches nobody.
+    case googleTesters(track: String)
     case googleProducts
     case googleDeviceTierConfig(path: String)
     /// The base plan and purchase option switches. Google keeps the product
@@ -102,6 +105,10 @@ public enum PlanOperation: Sendable, Equatable {
     case googlePurchaseOptionState(productId: String, purchaseOptionId: String, active: Bool)
     case googleSubscriptionOffers(productId: String, basePlanId: String)
     case googleOneTimeOffers(productId: String)
+    /// The offer switches. Google creates every offer in a draft state, so an
+    /// offer that nobody activates sells nothing.
+    case googleSubscriptionOfferStates(productId: String, basePlanId: String)
+    case googleOneTimeOfferStates(productId: String)
     case googleMigratePrices(productId: String, basePlanId: String)
     /// Spec section 8, rule 6. The app archives; it never deletes.
     case googleArchiveSubscription(productId: String)

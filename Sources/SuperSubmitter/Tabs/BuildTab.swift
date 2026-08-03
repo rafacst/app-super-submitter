@@ -15,6 +15,7 @@ struct BuildTab: View {
                 importSection
             }
             StoreDiagnosticsPanel()
+            if state.stores.contains(.google) { InternalSharingPanel() }
         }
         .frame(maxWidth: 980, alignment: .leading)
     }

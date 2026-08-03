@@ -208,6 +208,7 @@ public actor Runner {
             try await googleExpansionFile(kind: kind, path: path, index: index)
         case .googleCreateTrack(let track): try await googleCreateTrack(track)
         case .googleTrack(let track): try await googleTrack(track)
+        case .googleTesters(let track): try await googleTesters(track)
         case .googleProducts: try await googleProducts()
         case .googleDeviceTierConfig(let path): try await googleDeviceTierConfig(path: path)
         case .googleBasePlanState(let productId, let basePlanId, let active):
@@ -221,6 +222,11 @@ public actor Runner {
             try await googleSubscriptionOffers(productId: productId, basePlanId: basePlanId)
         case .googleOneTimeOffers(let productId):
             try await googleOneTimeOffers(productId: productId)
+        case .googleSubscriptionOfferStates(let productId, let basePlanId):
+            try await googleSubscriptionOfferStates(productId: productId,
+                                                    basePlanId: basePlanId)
+        case .googleOneTimeOfferStates(let productId):
+            try await googleOneTimeOfferStates(productId: productId)
         case .googleMigratePrices(let productId, let basePlanId):
             try await googleMigratePrices(productId: productId, basePlanId: basePlanId)
         case .googleArchiveSubscription(let productId):
