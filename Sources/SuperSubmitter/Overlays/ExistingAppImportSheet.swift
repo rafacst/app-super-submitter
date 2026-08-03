@@ -55,7 +55,7 @@ struct ExistingAppImportSheet: View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("Connect the stores first").font(.system(size: 22, weight: .semibold))
-                Text("Credentials are held in memory while you choose apps. They are saved to the Keychain separately for every imported app.")
+                Text("You enter these once. The key covers every app in your developer account, and it goes to the macOS Keychain when the import starts.")
                     .font(.system(size: 13)).foregroundStyle(Theme.text2)
             }
             StoreSelectionGrid(selected: model.stores, toggle: model.toggleStore)
@@ -150,7 +150,7 @@ struct ExistingAppImportSheet: View {
         VStack(spacing: 18) {
             ProgressView().controlSize(.large)
             Text("Importing current store data…").font(.system(size: 18, weight: .semibold))
-            Text("Super Submitter is creating local workspaces, downloading available listing metadata, and saving credentials in the Keychain.")
+            Text("Super Submitter is creating local workspaces, downloading available listing metadata, and saving the credentials in the Keychain.")
                 .font(.system(size: 13)).foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center).frame(maxWidth: 520)
             errorView
@@ -185,8 +185,8 @@ struct ExistingAppImportSheet: View {
 
     private var completeDetail: String {
         model.selectedGroupName == nil
-            ? "Each app has its own store.yaml and Keychain credential. The last imported app is open on the Build tab."
-            : "The app has its own store.yaml and Keychain credential. It is open on the Build tab."
+            ? "Each app has its own store.yaml. They share the credentials you entered, so no tab asks for them again. The last imported app is open on the Build tab."
+            : "The app has its own store.yaml and it keeps the credentials you entered, so no tab asks for them again. It is open on the Build tab."
     }
 
     private var footer: some View {
