@@ -283,14 +283,42 @@ public actor StoreAPI {
         return token
     }
 
-    private func googleBearer() async throws -> String {
+    /// The Play Developer Reporting API. A different host and a different
+    /// scope from the Publishing API, so it takes its own token.
+    ///
+    /// Everything here is a read. The vitals answer "how is the shipped app
+    /// doing", and no call in this file changes anything in the store.
+    @discardableResult
+    public func googleReporting(_ method: String, _ path: String,
+                                body: Any? = nil) async throws -> Result {
+        var request = URLRequest(url: try Self.url(
+            "https://playdeveloperreporting.googleapis.com" + path))
+        request.httpMethod = method
+        request.setValue("Bearer \(try await googleBearer(scope: Self.reportingScope))",
+                         forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        return try await perform(request, system: .google, path: path)
+    }
+
+    static let reportingScope = "https://www.googleapis.com/auth/playdeveloperreporting"
+
+    private func googleBearer(
+        scope: String = "https://www.googleapis.com/auth/androidpublisher"
+    ) async throws -> String {
         guard let credential = credentials.google else {
             throw ConnectionError.missingCredential(.google)
         }
-        if let googleToken, googleToken.expires > Date().addingTimeInterval(60) {
+        // The two scopes cannot share a token, so the cache holds the
+        // publishing one and the reporting one asks every time. A vitals read
+        // happens on a button, not in a loop.
+        if scope != Self.reportingScope, let googleToken,
+           googleToken.expires > Date().addingTimeInterval(60) {
             return googleToken.value
         }
-        let assertion = try GoogleJWT.make(credential: credential)
+        let assertion = try GoogleJWT.make(credential: credential, scope: scope)
         guard let url = URL(string: credential.tokenURI) else {
             throw ConnectionError.invalidTokenURL
         }
@@ -306,8 +334,10 @@ public actor StoreAPI {
         let result = try await perform(request, system: .google, path: "/token",
                                        retryOverride: true)
         let payload = try JSONDecoder().decode(GoogleToken.self, from: result.data)
-        googleToken = (payload.accessToken,
-                       Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3_600)))
+        if scope != Self.reportingScope {
+            googleToken = (payload.accessToken,
+                           Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3_600)))
+        }
         return payload.accessToken
     }
 

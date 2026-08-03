@@ -56,6 +56,9 @@ public actor Runner {
     /// The offers attach to it, so the offer step reads this and never
     /// searches the store a second time.
     var appleSubscriptionIDsByProduct: [String: String] = [:]
+    /// The TestFlight group id of each group name that this run created or
+    /// found. The tester step and the build step both need it.
+    var appleBetaGroupIDs: [String: String] = [:]
     var createdProviderObjects: [(kind: String, id: String)] = []
     let reviewerCredential: ReviewerCredential?
 
@@ -188,6 +191,17 @@ public actor Runner {
         case .appleNomination: try await appleNomination()
         case .appleAccessibility: try await appleAccessibility()
         case .appleAppClip: try await appleAppClip()
+        case .appleBetaGroup(let name): try await appleBetaGroup(name: name)
+        case .appleBetaTesters(let group, let emails):
+            try await appleBetaTesters(group: group, emails: emails)
+        case .appleBetaBuild(let group): try await appleBetaBuild(group: group)
+        case .appleWhatToTest: try await appleWhatToTest()
+        case .appleBetaAutoNotify(let on): try await appleBetaAutoNotify(on)
+        case .appleBetaReview: try await appleBetaReview()
+        case .appleEncryptionDeclaration: try await appleEncryptionDeclaration()
+        case .applePurchaseOfferCodes(let productId):
+            try await applePurchaseOfferCodes(productId: productId)
+        case .appleEndPreOrder: try await appleEndPreOrder()
 
         case .googleOpenEdit: try await googleOpenEdit()
         case .googleListing(let locale): try await googleListing(locale)

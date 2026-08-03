@@ -22,7 +22,9 @@ struct ReleaseTab: View {
             sendToReview
             // After the release, not before it: a review to answer and a
             // recovery to deploy both need a live app.
+            if state.stores.contains(.apple) { AppStoreActionsPanel() }
             if state.stores.contains(.google) { GooglePlayActionsPanel() }
+            if !state.stores.isEmpty { VitalsPanel() }
         }
         .task(id: state.manifestURL) {
             guard state.consoleRows.isEmpty, !state.stores.isEmpty else { return }

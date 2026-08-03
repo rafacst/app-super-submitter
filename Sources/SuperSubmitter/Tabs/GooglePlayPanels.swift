@@ -102,6 +102,98 @@ struct GooglePlayActionsPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             GoogleReviewsPanel()
             GoogleRecoveryPanel()
+            GeneratedAPKPanel()
+        }
+    }
+}
+
+/// The APKs Google signs and serves.
+///
+/// Play re-signs what it delivers, so the file on a device is never the App
+/// Bundle that went up. A developer reading a crash report from the store
+/// needs these files, and no other part of the app could fetch them.
+private struct GeneratedAPKPanel: View {
+    @Environment(AppState.self) private var state
+    @State private var busy = false
+    @State private var loaded = false
+    @State private var error: String?
+    @State private var apks: [GoogleActionsClient.GeneratedAPK] = []
+    @State private var saved: [String: URL] = [:]
+
+    var body: some View {
+        Section_("The APKs Google signs", icon: "square.and.arrow.down", tint: Theme.playBlue) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Play re-signs every build it serves. These are the files that match a crash report from the store. Reading and downloading change nothing.")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 12)
+                    QuietButton(title: busy ? "Reading…" : "Read the APKs") { load() }
+                        .disabled(busy || state.googleLatestVersionCode == nil)
+                }
+
+                if state.googleLatestVersionCode == nil {
+                    Text("Read the stores on the Plan tab first, so this knows which version code to ask for.")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                }
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if loaded, apks.isEmpty {
+                    Text("Google generated no APK for this version code.")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                }
+                ForEach(apks) { apk in
+                    HStack(spacing: 9) {
+                        Image(systemName: "shippingbox")
+                            .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        Text(apk.kind).font(Theme.mono(11))
+                        Text("version code \(apk.versionCode)")
+                            .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        Spacer(minLength: 8)
+                        if let file = saved[apk.id] {
+                            Button("Show") {
+                                NSWorkspace.shared.activateFileViewerSelecting([file])
+                            }
+                            .controlSize(.small)
+                        } else {
+                            Button("Download") { download(apk) }
+                                .controlSize(.small).disabled(busy)
+                        }
+                    }
+                    .padding(.vertical, 3)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        }
+    }
+
+    private func load() {
+        guard let code = state.googleLatestVersionCode else { return }
+        busy = true
+        error = nil
+        Task {
+            do {
+                apks = try await state.googleGeneratedAPKs(versionCode: code)
+                loaded = true
+            } catch { self.error = error.localizedDescription }
+            busy = false
+        }
+    }
+
+    private func download(_ apk: GoogleActionsClient.GeneratedAPK) {
+        busy = true
+        error = nil
+        Task {
+            do { saved[apk.id] = try await state.downloadGoogleAPK(apk) }
+            catch { self.error = error.localizedDescription }
+            busy = false
         }
     }
 }
