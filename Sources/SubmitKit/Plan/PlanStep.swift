@@ -59,6 +59,14 @@ public enum PlanOperation: Sendable, Equatable {
     case appleBuildUpload(path: String, bytes: Int64)
     case appleAttachBuild
     case appleBuildCompliance
+    /// The export compliance declaration that a non-exempt app owes on top of
+    /// the build flag.
+    case appleEncryptionDeclaration
+    /// Offer codes for a one-time purchase. The subscription twin already
+    /// rides inside `appleSubscriptionOffers`.
+    case applePurchaseOfferCodes(productId: String)
+    /// Ends a preorder, which puts the app on sale. It is irreversible.
+    case appleEndPreOrder
     case appleReviewDetails
     case appleAgeRating
     case applePurchases
@@ -78,6 +86,15 @@ public enum PlanOperation: Sendable, Equatable {
     case appleNomination
     case appleAccessibility
     case appleAppClip
+    /// TestFlight. The group, then the testers it invites, then the build it
+    /// receives. The App Store twin of `googleTesters`.
+    case appleBetaGroup(name: String)
+    case appleBetaTesters(group: String, emails: [String])
+    case appleBetaBuild(group: String)
+    case appleWhatToTest
+    case appleBetaAutoNotify(Bool)
+    /// Takes a place in the beta review queue. No call takes it back.
+    case appleBetaReview
 
     case googleOpenEdit
     case googleListing(String)

@@ -377,6 +377,145 @@ extension Runner {
         ])
     }
 
+    /// The export compliance declaration.
+    ///
+    /// The build flag answers Apple's yes or no question. An app that uses
+    /// non-exempt encryption and claims no exemption also owes this
+    /// declaration, and Apple attaches it to the build that ships.
+    func appleEncryptionDeclaration() async throws {
+        guard let encryption = manifest.review?.encryption else { return }
+        var attributes: [String: Any] = [
+            "appEncryptionDeclarationState": "IN_REVIEW",
+            "usesEncryption": manifest.review?.usesNonExemptEncryption ?? true,
+        ]
+        put(&attributes, "exempt", encryption.exempt)
+        put(&attributes, "availableOnFrenchStore", encryption.availableOnFrenchStore)
+        put(&attributes, "containsProprietaryCryptography",
+            encryption.containsProprietaryCryptography)
+        put(&attributes, "containsThirdPartyCryptography",
+            encryption.containsThirdPartyCryptography)
+        put(&attributes, "codeValue", encryption.codeValue)
+
+        let created = JSON(data: try await api.apple(
+            "POST", "/v1/appEncryptionDeclarations", body: [
+                "data": [
+                    "type": "appEncryptionDeclarations",
+                    "attributes": attributes,
+                    "relationships": ["app": ["data": ["type": "apps", "id": appleAppID]]],
+                ],
+            ]).data)
+        guard let declarationID = created["data"]["id"].string else { return }
+
+        // The CCATS or ERN document, when the manifest names one. Apple takes
+        // it through the same reserve and upload that a screenshot uses.
+        if let path = encryption.documentPath, let url = resolve(path) {
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
+            let reservation = JSON(data: try await api.apple(
+                "POST", "/v1/appEncryptionDeclarationDocuments", body: [
+                    "data": [
+                        "type": "appEncryptionDeclarationDocuments",
+                        "attributes": [
+                            "fileName": url.lastPathComponent,
+                            "fileSize": data.count,
+                        ],
+                        "relationships": [
+                            "appEncryptionDeclaration": [
+                                "data": ["type": "appEncryptionDeclarations",
+                                         "id": declarationID],
+                            ],
+                        ],
+                    ],
+                ]).data)
+            try await executeUploadOperations(
+                reservation["data"]["attributes"]["uploadOperations"], data: data)
+            if let documentID = reservation["data"]["id"].string {
+                try await api.apple(
+                    "PATCH", "/v1/appEncryptionDeclarationDocuments/\(documentID)", body: [
+                        "data": ["type": "appEncryptionDeclarationDocuments",
+                                 "id": documentID,
+                                 "attributes": ["uploaded": true]],
+                    ])
+            }
+        }
+
+        // The declaration only means something once a build carries it.
+        if let buildID = appleBuildID ?? actual.apple?.attachedBuildId {
+            try await api.apple(
+                "POST", "/v1/appEncryptionDeclarations/\(declarationID)/relationships/builds",
+                body: ["data": [["type": "builds", "id": buildID]]])
+        }
+    }
+
+    /// The offer codes of one purchase.
+    ///
+    /// A subscription offer code already rides inside the subscription offer
+    /// step. Apple keeps the one-time purchase codes on their own collection,
+    /// so they take their own step and name their product.
+    ///
+    /// Apple creates the code in a draft state, so nobody can redeem one until
+    /// the developer activates it in App Store Connect.
+    func applePurchaseOfferCodes(productId: String) async throws {
+        guard let purchase = (manifest.purchases ?? []).first(where: { $0.id == productId }),
+              let offers = purchase.offers, !offers.isEmpty else { return }
+        let existing = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appleAppID)/inAppPurchasesV2?limit=200").data)
+        guard let purchaseID = existing["data"].array.first(where: {
+            $0["attributes"]["productId"].string == productId
+        })?["id"].string else { return }
+
+        let known = JSON(data: try await api.apple(
+            "GET", "/v2/inAppPurchases/\(purchaseID)/offerCodes?limit=200").data)
+        let heldNames = Set(known["data"].array
+            .compactMap { $0["attributes"]["name"].string })
+
+        for offer in offers where offer.kind == .offerCode {
+            guard !heldNames.contains(offer.id) else { continue }
+            var attributes: [String: Any] = ["name": offer.id, "customerEligibilities": ["NEW"]]
+            if let eligibility = offer.eligibility {
+                attributes["customerEligibilities"] = [Self.appleEligibility(eligibility)]
+            }
+            if let duration = offer.duration,
+               let period = AppleDurations.offerDuration(for: duration) {
+                attributes["duration"] = period
+            }
+            attributes["offerMode"] = offer.price == nil ? "FREE" : "PAY_UP_FRONT"
+            attributes["numberOfPeriods"] = offer.periods ?? 1
+            try await api.apple("POST", "/v1/inAppPurchaseOfferCodes", body: [
+                "data": [
+                    "type": "inAppPurchaseOfferCodes",
+                    "attributes": attributes,
+                    "relationships": [
+                        "inAppPurchaseV2": ["data": ["type": "inAppPurchases",
+                                                     "id": purchaseID]],
+                    ],
+                ],
+            ])
+        }
+    }
+
+    static func appleEligibility(_ value: Manifest.Offer.Eligibility) -> String {
+        switch value {
+        case .new: "NEW"
+        case .existing: "EXISTING"
+        case .winBack: "EXPIRED"
+        }
+    }
+
+    /// Ends the preorder, which puts the app on sale in every territory that
+    /// holds one.
+    ///
+    /// **This reaches customers.** Everybody who pre-ordered is charged and
+    /// the download starts. No call takes it back, so this only runs from a
+    /// plan step that the developer read and acknowledged.
+    func appleEndPreOrder() async throws {
+        try await api.apple("POST", "/v1/endAppAvailabilityPreOrders", body: [
+            "data": [
+                "type": "endAppAvailabilityPreOrders",
+                "relationships": ["app": ["data": ["type": "apps", "id": appleAppID]]],
+            ],
+        ])
+    }
+
     /// Runs the `uploadOperations` from a reservation response. Each one names
     /// its own slice of the file.
     func executeUploadOperations(_ operations: JSON, data: Data, index: Int? = nil,
@@ -797,6 +936,18 @@ extension Runner {
     /// "not managed", so the store keeps what it holds.
     func put(_ attributes: inout [String: Any], _ key: String, _ value: String) {
         guard !value.isEmpty else { return }
+        attributes[key] = value
+    }
+
+    /// The same, for the optional flags and codes that a declaration carries.
+    /// A nil answer is not an answer, so it never reaches the store.
+    func put(_ attributes: inout [String: Any], _ key: String, _ value: Bool?) {
+        guard let value else { return }
+        attributes[key] = value
+    }
+
+    func put(_ attributes: inout [String: Any], _ key: String, _ value: String?) {
+        guard let value, !value.isEmpty else { return }
         attributes[key] = value
     }
 }
