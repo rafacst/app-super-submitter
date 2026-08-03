@@ -83,6 +83,7 @@ final class AppState {
     @ObservationIgnored var googleCredential: GoogleServiceAccount?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
     @ObservationIgnored private let lastOpenAppKey = "lastOpenApp.v1"
+    @ObservationIgnored private let modeDefaultsKey = "mode.v1"
 
     // The manifest and the file behind it.
     var manifest = Manifest()
@@ -94,7 +95,29 @@ final class AppState {
     var lastSavedAt: Date?
 
     // Navigation.
-    var selectedTab: Tab = .stores
+    /// Publishing or Managing. It is one choice for the app, not one per app,
+    /// because it describes the job the user came to do.
+    var mode: Mode = .publishing {
+        didSet {
+            guard mode != oldValue else { return }
+            defaults.set(mode.rawValue, forKey: modeDefaultsKey)
+            // The tab of the other mode has no place here. Stores shows in
+            // both, so it is always a safe landing.
+            if !selectedTab.modes.contains(mode) {
+                selectedTab = Tab.tabs(in: mode).first ?? .stores
+            }
+        }
+    }
+    var selectedTab: Tab = .stores {
+        didSet {
+            // A tab names its own mode. Anything that jumps to one, such as
+            // the import landing on Build, switches the shell rather than
+            // showing a tab the sidebar hides.
+            guard !selectedTab.modes.contains(mode),
+                  let owner = selectedTab.modes.first else { return }
+            mode = owner
+        }
+    }
     var selectedAppIndex = 0
     var switcherOpen = false
 
@@ -135,6 +158,11 @@ final class AppState {
 
     // Tabs 3 and 4.
     var mediaError: String?
+
+    // Managing. The Marketing tab writes on its own button, so it carries its
+    // own small state instead of the run state that tab 8 uses.
+    var marketingApplyState: MarketingApplyState = .idle
+    var marketingApplyMessage = ""
 
     // Tab 3.
     var locale = ""
@@ -220,6 +248,11 @@ final class AppState {
         if let data = defaults.data(forKey: linkedAppsDefaultsKey),
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
+        }
+        if let saved = defaults.string(forKey: modeDefaultsKey),
+           let restored = Mode(rawValue: saved) {
+            mode = restored
+            selectedTab = Tab.tabs(in: restored).first ?? .stores
         }
         // The app the user worked on last, so a relaunch continues that work
         // and does not open the first app of the list.
