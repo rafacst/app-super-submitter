@@ -60,6 +60,13 @@ public struct ActualState: Sendable, Equatable {
         public var subscriptionGroupNames: Set<String> = []
         public var subscriptionGroupLocales:
             [String: [String: CatalogProduct.ProductLocale]] = [:]
+        /// The TestFlight groups that Apple holds, by name, with the testers
+        /// and the builds each one carries.
+        public var betaGroups: [String: AppleTestFlightClient.BetaGroup] = [:]
+        /// The "What to Test" note of the attached build, by locale.
+        public var whatToTest: [String: String] = [:]
+        public var betaReviewSubmitted: Bool?
+        public var betaAutoNotify: Bool?
         /// The subscription grace period, in days, and its switch.
         public var gracePeriodDays: Int?
         public var gracePeriodOptIn: Bool?

@@ -255,6 +255,86 @@ public struct GoogleActionsClient: Sendable {
         return action
     }
 
+    // MARK: - The artifacts Google signs
+
+    /// One APK that Google generated from an App Bundle.
+    ///
+    /// Play signs the APKs it serves, so the file a device installs is never
+    /// the one the developer uploaded. These are the ones a developer needs to
+    /// reproduce a crash from the store.
+    public struct GeneratedAPK: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var versionCode: Int
+        /// `split` names the slice, for example `base` or `config.arm64_v8a`.
+        public var kind: String
+        public var downloadPath: String
+
+        public init(id: String, versionCode: Int, kind: String, downloadPath: String) {
+            self.id = id
+            self.versionCode = versionCode
+            self.kind = kind
+            self.downloadPath = downloadPath
+        }
+    }
+
+    /// Every APK that Google generated for one version code.
+    ///
+    /// Google answers 404 for a version code it never generated APKs for,
+    /// which is a state and not a failure.
+    public func generatedAPKs(packageName: String, versionCode: Int) async throws
+        -> [GeneratedAPK] {
+        let base = "\(Self.base(packageName))/generatedApks/\(versionCode)"
+        let payload: JSON
+        do {
+            payload = JSON(data: try await api.google("GET", base).data)
+        } catch ConnectionError.http(let status, _) where status == 404 {
+            return []
+        }
+        return Self.parseGeneratedAPKs(payload, packageName: packageName,
+                                       versionCode: versionCode)
+    }
+
+    static func parseGeneratedAPKs(_ payload: JSON, packageName: String,
+                                   versionCode: Int) -> [GeneratedAPK] {
+        let base = "\(Self.base(packageName))/generatedApks/\(versionCode)"
+        func path(_ id: String) -> String {
+            "\(base)/downloads/\(StateReader.escape(id)):download"
+        }
+        var result: [GeneratedAPK] = []
+        for item in payload["generatedApks"].array {
+            for split in item["generatedSplitApks"].array {
+                guard let id = split["downloadId"].string else { continue }
+                let module = split["moduleName"].string ?? "base"
+                let variant = split["splitId"].string
+                result.append(GeneratedAPK(
+                    id: id, versionCode: versionCode,
+                    kind: variant.map { "\(module).\($0)" } ?? module,
+                    downloadPath: path(id)))
+            }
+            if let id = item["generatedUniversalApk"]["downloadId"].string {
+                result.append(GeneratedAPK(id: id, versionCode: versionCode,
+                                           kind: "universal", downloadPath: path(id)))
+            }
+        }
+        return result
+    }
+
+    /// Downloads one generated APK to `destination` and returns the file.
+    ///
+    /// The download is a plain read. It writes to the folder the caller names
+    /// and it touches nothing in the store.
+    @discardableResult
+    public func downloadGeneratedAPK(_ apk: GeneratedAPK,
+                                     into destination: URL) async throws -> URL {
+        let data = try await api.google("GET", apk.downloadPath).data
+        try FileManager.default.createDirectory(at: destination,
+                                                withIntermediateDirectories: true)
+        let file = destination.appendingPathComponent(
+            "\(apk.versionCode)-\(apk.kind).apk")
+        try data.write(to: file, options: .atomic)
+        return file
+    }
+
     static func base(_ packageName: String) -> String {
         "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
     }
