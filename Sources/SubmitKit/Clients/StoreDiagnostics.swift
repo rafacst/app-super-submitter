@@ -122,11 +122,14 @@ public struct StoreDiagnostics: Sendable {
 
     /// What is inside one processed build: the app bundle, every extension,
     /// the download size, and the icons that Apple extracted.
+    ///
+    /// Apple publishes no `builds/{id}/buildBundles` sub-path. The bundles
+    /// arrive in the `included` array of the build itself.
     public func buildBundles(buildID: String) async throws -> [BuildBundle] {
-        let bundles = JSON(data: try await api.apple(
-            "GET", "/v1/builds/\(buildID)/buildBundles?limit=200").data)
+        let build = JSON(data: try await api.apple(
+            "GET", "/v1/builds/\(buildID)?include=buildBundles").data)
         var result: [BuildBundle] = []
-        for item in bundles["data"].array {
+        for item in build["included"].array where item["type"].string == "buildBundles" {
             guard let id = item["id"].string else { continue }
             let attributes = item["attributes"]
             let icons = JSON(data: try await api.apple(

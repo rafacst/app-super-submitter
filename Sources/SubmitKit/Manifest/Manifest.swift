@@ -202,13 +202,21 @@ extension Manifest {
             /// id, so the app creates a new configuration when the file
             /// content changes and never before.
             public var deviceTierConfig: String?
+            /// The Google Groups that may install a closed track, keyed by the
+            /// track name. A closed track without a group reaches nobody.
+            ///
+            /// Google accepts group email addresses here and nothing else. It
+            /// keeps the single tester list in the Play Console, so the
+            /// manifest names no individual address.
+            public var testers: [String: [String]]?
 
             public init(track: String? = nil, tracks: [String]? = nil, status: String? = nil,
                         userFraction: Double? = nil, inAppUpdatePriority: Int? = nil,
                         countries: [String]? = nil, includeRestOfWorld: Bool? = nil,
                         mappingFile: String? = nil, nativeDebugSymbols: String? = nil,
                         expansionFileMain: String? = nil, expansionFilePatch: String? = nil,
-                        externalApk: ExternalApk? = nil, deviceTierConfig: String? = nil) {
+                        externalApk: ExternalApk? = nil, deviceTierConfig: String? = nil,
+                        testers: [String: [String]]? = nil) {
                 self.track = track
                 self.tracks = tracks
                 self.status = status
@@ -222,6 +230,7 @@ extension Manifest {
                 self.expansionFilePatch = expansionFilePatch
                 self.externalApk = externalApk
                 self.deviceTierConfig = deviceTierConfig
+                self.testers = testers
             }
         }
 
@@ -538,10 +547,17 @@ extension Manifest {
         /// The regions or territories. An empty list means every region.
         public var regions: [String]?
         public var eligibility: Eligibility?
+        /// Google sells an offer only while it is active. A created offer
+        /// starts in the draft state, so an offer without this key reaches no
+        /// customer. Nil leaves the Play Console state untouched.
+        ///
+        /// The App Store has no equivalent switch. It sells an offer as soon
+        /// as the subscription itself is live.
+        public var active: Bool?
 
         public init(id: String, kind: Kind, duration: String? = nil, price: Price? = nil,
                     periods: Int? = nil, regions: [String]? = nil,
-                    eligibility: Eligibility? = nil) {
+                    eligibility: Eligibility? = nil, active: Bool? = nil) {
             self.id = id
             self.kind = kind
             self.duration = duration
@@ -549,6 +565,7 @@ extension Manifest {
             self.periods = periods
             self.regions = regions
             self.eligibility = eligibility
+            self.active = active
         }
 
         public enum Kind: String, Codable, Sendable, CaseIterable {

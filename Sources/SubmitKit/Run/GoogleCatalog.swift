@@ -143,6 +143,56 @@ extension Runner {
             body: ["requests": requests])
     }
 
+    // MARK: - The offer states
+
+    /// Activates or stops every offer of one base plan that names `active`.
+    ///
+    /// Google creates an offer in the draft state, so an offer that nobody
+    /// activates sells nothing. The batch carries one base plan, and the plan
+    /// makes one step per base plan.
+    func googleSubscriptionOfferStates(productId: String, basePlanId: String) async throws {
+        let requests = manifest.googleOffers(productId: productId)
+            .compactMap { offer -> [String: Any]? in
+                guard let active = offer.active else { return nil }
+                let payload: [String: Any] = [
+                    "packageName": manifest.apps.google?.packageName ?? "",
+                    "productId": productId, "basePlanId": basePlanId, "offerId": offer.id,
+                ]
+                return active
+                    ? ["activateSubscriptionOfferRequest": payload]
+                    : ["deactivateSubscriptionOfferRequest": payload]
+            }
+        guard !requests.isEmpty else { return }
+        try await api.google(
+            "POST",
+            "\(monetizationBase)/subscriptions/\(StateReader.escape(productId))"
+                + "/basePlans/\(StateReader.escape(basePlanId))/offers:batchUpdateStates",
+            body: ["requests": requests])
+    }
+
+    /// The same switch for the offers of a one-time product. The app uses the
+    /// product id as the purchase option id, the same as `googleProducts`.
+    func googleOneTimeOfferStates(productId: String) async throws {
+        let requests = manifest.googleOffers(productId: productId)
+            .compactMap { offer -> [String: Any]? in
+                guard let active = offer.active else { return nil }
+                let payload: [String: Any] = [
+                    "packageName": manifest.apps.google?.packageName ?? "",
+                    "productId": productId, "purchaseOptionId": productId,
+                    "offerId": offer.id,
+                ]
+                return active
+                    ? ["activateOneTimeProductOfferRequest": payload]
+                    : ["deactivateOneTimeProductOfferRequest": payload]
+            }
+        guard !requests.isEmpty else { return }
+        try await api.google(
+            "POST",
+            "\(monetizationBase)/oneTimeProducts/\(StateReader.escape(productId))"
+                + "/purchaseOptions/\(StateReader.escape(productId))/offers:batchUpdateStates",
+            body: ["requests": requests])
+    }
+
     // MARK: - The price migration
 
     /// This changes what an existing subscriber pays at the next renewal.

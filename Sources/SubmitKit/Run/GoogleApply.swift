@@ -228,6 +228,19 @@ extension Runner {
                              body: ["track": track, "releases": [release]])
     }
 
+    /// The Google Groups that may install one track.
+    ///
+    /// Google replaces the whole list, so the manifest names every group that
+    /// the track keeps. An empty list in the manifest clears the track, and
+    /// the planner only writes a track that the manifest actually names.
+    func googleTesters(_ track: String) async throws {
+        let groups = (manifest.release?.google?.testers?[track] ?? [])
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        try await api.google("PUT", try editPath("/testers/\(StateReader.escape(track))"),
+                             body: ["googleGroups": groups])
+    }
+
     private func releaseNotes() -> [[String: Any]] {
         (manifest.listing?.locales.keys ?? [:].keys).sorted().compactMap { locale in
             let override = manifest.listingText(locale: locale, field: .googleWhatsNew)
@@ -396,11 +409,11 @@ extension Runner {
     static func money(_ price: Price) -> [String: Any] {
         // Google takes units and nanos, never a float. A float would round a
         // real price on a real store.
-        let total = NSDecimalNumber(decimal: price.amount * 1_000_000_000).int64Value
+        let value = GoogleCatalogClient.nanoUnits(price.amount)
         return [
             "currencyCode": price.currency,
-            "units": String(total / 1_000_000_000),
-            "nanos": Int(total % 1_000_000_000),
+            "units": String(value.units),
+            "nanos": value.nanos,
         ]
     }
 }

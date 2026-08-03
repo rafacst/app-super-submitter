@@ -559,7 +559,7 @@ extension Runner {
     private func applePurchaseDetails(_ purchase: Manifest.Purchase,
                                       purchaseID: String) async throws {
         let versions = JSON(data: try await api.apple(
-            "GET", "/v2/inAppPurchases/\(purchaseID)/inAppPurchaseVersions?limit=50").data)
+            "GET", "/v2/inAppPurchases/\(purchaseID)/versions?limit=50").data)
         var purchaseVersionID = versions["data"].array.first?["id"].string
         if purchaseVersionID == nil, purchase.locales?.isEmpty == false {
             let created = JSON(data: try await api.apple(
@@ -682,28 +682,10 @@ extension Runner {
                     ])
             }
         }
-        if let path = purchase.content, let url = resolve(path) {
-            let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            let reservation = JSON(data: try await api.apple(
-                "POST", "/v1/inAppPurchaseContents", body: [
-                    "data": [
-                        "type": "inAppPurchaseContents",
-                        "attributes": ["fileName": url.lastPathComponent,
-                                       "fileSize": data.count],
-                        "relationships": ["inAppPurchaseV2": [
-                            "data": ["type": "inAppPurchases", "id": purchaseID]]],
-                    ],
-                ]).data)
-            if let id = reservation["data"]["id"].string {
-                try await executeUploadOperations(
-                    reservation["data"]["attributes"]["uploadOperations"], data: data)
-                try await api.apple("PATCH", "/v1/inAppPurchaseContents/\(id)", body: [
-                    "data": ["type": "inAppPurchaseContents", "id": id,
-                             "attributes": ["uploaded": true,
-                                            "sourceFileChecksum": Checksums.md5(data)]],
-                ])
-            }
-        }
+        // `purchase.content` writes nothing. Apple publishes a read for
+        // `inAppPurchaseContents` and no create, so the hosted content upload
+        // left the API. The validator names the key, so a silent skip here
+        // never looks like a successful upload.
     }
 
     static func appleProductType(_ kind: Manifest.Purchase.Kind) -> String {
@@ -780,8 +762,8 @@ extension Runner {
         guard let price = manifest.pricing?.base else { return }
         let territory = price.territory ?? "USA"
         let points = JSON(data: try await api.apple(
-            "GET", "/v3/appPricePoints?filter%5Bapp%5D=\(appleAppID)"
-                + "&filter%5Bterritory%5D=\(territory)&limit=200").data)
+            "GET", "/v1/apps/\(appleAppID)/appPricePoints"
+                + "?filter%5Bterritory%5D=\(territory)&limit=200").data)
         guard let point = Self.nearestPricePoint(points, to: price.amount) else { return }
         let appPriceID = "price-\(UUID().uuidString)"
         try await api.apple("POST", "/v1/appPriceSchedules", body: [
