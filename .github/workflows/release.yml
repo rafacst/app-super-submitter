@@ -27,7 +27,7 @@ jobs:
     environment: release
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The build number counts commits, and the release notes read the
           # previous tag. Both need the whole history.
