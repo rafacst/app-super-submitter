@@ -66,14 +66,18 @@ extension AppState {
             // snapshot of the app that stays open is set after it.
             link(manifestAt: manifestURL)
             storeSnapshot = snapshot
-            if let account = credentialAccount {
-                if group.candidates.contains(where: { $0.store == .apple }), let appleCredential {
-                    try KeychainCredentials.save(appleCredential, kind: .apple, account: account)
-                }
-                if group.candidates.contains(where: { $0.store == .google }), let googleCredential {
-                    try KeychainCredentials.save(googleCredential, kind: .google, account: account)
-                }
+            if let appleCredential {
+                try KeychainCredentials.save(appleCredential, kind: .apple,
+                                             account: storeAccount)
             }
+            if let googleCredential {
+                try KeychainCredentials.save(googleCredential, kind: .google,
+                                             account: storeAccount)
+            }
+            // `link` read the Keychain before these lines wrote it, so tab 1
+            // held empty fields and asked for the .p8 and the JSON a second
+            // time. Read it again now it is there.
+            loadCredentials()
             importedURLs.append(manifestURL)
         }
         selectedTab = .build

@@ -39,7 +39,7 @@ private struct AppleCredentialPanel: View {
         CredentialCard(
             store: .apple,
             status: state.appleConnection,
-            keychainNote: "The key is stored in the macOS Keychain. The original file is not copied.",
+            keychainNote: "The key is stored in the macOS Keychain, once for every app you open here. The original file is not copied.",
             guideOpen: state.appleGuideOpen,
             toggleGuide: { state.appleGuideOpen.toggle() },
             guide: guide,
@@ -113,7 +113,7 @@ private struct GoogleCredentialPanel: View {
         CredentialCard(
             store: .google,
             status: state.googleConnection,
-            keychainNote: "The JSON is stored in the macOS Keychain. The original file is not copied.",
+            keychainNote: "The JSON is stored in the macOS Keychain, once for every app you open here. The original file is not copied.",
             guideOpen: state.googleGuideOpen,
             toggleGuide: { state.googleGuideOpen.toggle() },
             guide: guide,
