@@ -777,6 +777,16 @@ public enum Validator {
                     }
                 }
             }
+            // A Mac App Store build is a separate RevenueCat app. Without the
+            // id, the plan writes the iOS products only and the Mac purchases
+            // reach no provider at all.
+            if manifest.apps.apple?.platforms.contains(.macOS) == true,
+               (appIds?.macAppStore ?? "").isEmpty {
+                result.append(Finding(
+                    id: "rc.macAppStore", severity: .warning,
+                    message: "This app ships to the Mac App Store and monetization.revenuecat.appIds.mac_app_store is empty. No Mac product reaches RevenueCat.",
+                    location: "Monetization · RevenueCat", fix: .money))
+            }
             if let playAppId = appIds?.playStore, !playAppId.isEmpty,
                let identifiers = actual?.appIdentifiers, !identifiers.isEmpty,
                let packageName = manifest.apps.google?.packageName, !packageName.isEmpty,

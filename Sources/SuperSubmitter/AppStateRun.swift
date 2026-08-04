@@ -548,6 +548,59 @@ extension AppState {
         releasing = nil
     }
 
+    /// True while the store still accepts a take-back.
+    ///
+    /// Apple takes the cancel until a reviewer opens the submission. Google
+    /// halts a staged rollout and never a completed one. Neither one restores
+    /// what already reached a customer, so both stay behind a confirmation.
+    func canUndoRelease(_ store: Store) -> Bool {
+        switch store {
+        case .apple:
+            return statuses[.apple]?.phase == .inQueue
+        case .google:
+            guard googleReleased else { return false }
+            return (manifest.release?.google?.status ?? "completed") == "inProgress"
+        }
+    }
+
+    /// The other half of `release`. One store, one button, one failure.
+    func undoRelease(_ store: Store) async {
+        guard releasing == nil else { return }
+        releasing = store
+        releaseError = nil
+        let client = ReleaseClient(api: readOnlyAPI())
+        do {
+            switch store {
+            case .apple:
+                guard let appID = manifest.apps.apple?.appId, !appID.isEmpty else {
+                    throw ReleaseInputError.noAppleVersion
+                }
+                // The session id is the fast path. The read is the one that
+                // still works after a restart.
+                let id = try await client.cancellableAppleSubmission(appID: appID)
+                    ?? appleSubmissionID
+                guard let id else { throw ReleaseInputError.noOpenAppleSubmission }
+                try await client.cancelAppleSubmission(id: id)
+                appleSubmissionID = nil
+                statuses[.apple] = StoreStatus(store: .apple, phase: .draft,
+                                               detail: detail(for: .apple), checkedAt: Date())
+            case .google:
+                guard let packageName = manifest.apps.google?.packageName, !packageName.isEmpty
+                else { throw ReleaseInputError.noGooglePackage }
+                try await client.haltGoogleRollout(packageName: packageName,
+                                                   track: manifest.googlePrimaryTrack)
+                statuses[.google] = StoreStatus(store: .google, phase: .draft,
+                                                detail: detail(for: .google), checkedAt: Date())
+            }
+            PostHogSDK.shared.capture("release_undone", properties: [
+                "store": store == .apple ? "apple" : "google"
+            ])
+        } catch {
+            releaseError = "\(store == .apple ? "App Store" : "Google Play"): \(error.localizedDescription)"
+        }
+        releasing = nil
+    }
+
     // MARK: - The status poll, section 7.10
 
     var pollInterval: TimeInterval {
@@ -634,6 +687,7 @@ extension AppState {
 enum ReleaseInputError: LocalizedError {
     case noAppleVersion
     case noGooglePackage
+    case noOpenAppleSubmission
 
     var errorDescription: String? {
         switch self {
@@ -641,6 +695,8 @@ enum ReleaseInputError: LocalizedError {
             "No App Store version is prepared. Run an apply first."
         case .noGooglePackage:
             "Enter the Google Play package name on the Stores tab first."
+        case .noOpenAppleSubmission:
+            "Apple holds no submission that a cancel can still reach. A reviewer already opened it."
         }
     }
 }

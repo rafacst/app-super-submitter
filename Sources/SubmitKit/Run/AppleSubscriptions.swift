@@ -48,6 +48,9 @@ extension Runner {
                 appleSubscriptionIDsByProduct[plan.id] = subscriptionID
                 try await appleSubscriptionLocalizations(plan, subscriptionID: subscriptionID)
                 try await appleSubscriptionPrice(plan, subscriptionID: subscriptionID)
+                try await appleSubscriptionAvailability(plan, subscriptionID: subscriptionID)
+                try await appleSubscriptionReviewScreenshot(plan,
+                                                            subscriptionID: subscriptionID)
             }
         }
     }
@@ -124,6 +127,8 @@ extension Runner {
                   let id = item["id"].string else { continue }
             byLocale[locale] = id
         }
+        try await appleDropLocalizations(existing, keeping: Set(locales.keys),
+                                         path: "/v1/subscriptionGroupLocalizations")
 
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             let name = text.name ?? group.groupName ?? group.groupId
@@ -157,6 +162,8 @@ extension Runner {
                   let id = item["id"].string else { continue }
             byLocale[locale] = id
         }
+        try await appleDropLocalizations(existing, keeping: Set(locales.keys),
+                                         path: "/v1/subscriptionLocalizations")
 
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             var attributes: [String: Any] = ["name": text.name ?? plan.id]
@@ -192,6 +199,21 @@ extension Runner {
             "/v1/subscriptions/\(subscriptionID)/pricePoints"
                 + "?filter%5Bterritory%5D=\(territory)&limit=200").data)
         guard let point = Self.nearestPricePoint(points, to: price.amount) else { return }
+
+        // A subscription price is a schedule, so a second apply used to stack
+        // a second row on top of the first. Apple keeps the manual price it
+        // holds until something removes it, so the stale rows go first.
+        if let held = try? await api.apple(
+            "GET", "/v1/subscriptions/\(subscriptionID)/prices"
+                + "?include=subscriptionPricePoint&limit=200") {
+            for item in JSON(data: held.data)["data"].array {
+                guard let id = item["id"].string else { continue }
+                let heldPoint = item["relationships"]["subscriptionPricePoint"]["data"]["id"].string
+                guard heldPoint != point else { return }
+                try await api.apple("DELETE", "/v1/subscriptionPrices/\(id)")
+            }
+        }
+
         try await api.apple("POST", "/v1/subscriptionPrices", body: [
             "data": [
                 "type": "subscriptionPrices",
@@ -203,6 +225,56 @@ extension Runner {
                 ],
             ],
         ])
+    }
+
+    /// The territories that sell this subscription.
+    ///
+    /// A one-time purchase already had this through
+    /// `inAppPurchaseAvailabilities`. Apple gives a subscription its own
+    /// resource with the same shape, so the two halves now match.
+    private func appleSubscriptionAvailability(_ plan: Manifest.SubscriptionGroup.Plan,
+                                               subscriptionID: String) async throws {
+        guard let territories = plan.availableTerritories, !territories.isEmpty else { return }
+        try await api.apple("POST", "/v1/subscriptionAvailabilities", body: [
+            "data": [
+                "type": "subscriptionAvailabilities",
+                "attributes": ["availableInNewTerritories": false],
+                "relationships": [
+                    "subscription": ["data": ["type": "subscriptions", "id": subscriptionID]],
+                    "availableTerritories": ["data": territories.map {
+                        ["type": "territories", "id": $0]
+                    }],
+                ],
+            ],
+        ])
+    }
+
+    /// The screenshot the reviewer sees beside the subscription.
+    ///
+    /// The three calls are the reservation, the bytes, and the commit, exactly
+    /// as the one-time purchase screenshot does it in `AppleApply`.
+    private func appleSubscriptionReviewScreenshot(
+        _ plan: Manifest.SubscriptionGroup.Plan, subscriptionID: String) async throws {
+        guard let path = plan.reviewScreenshot, let url = resolve(path) else { return }
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        let reservation = JSON(data: try await api.apple(
+            "POST", "/v1/subscriptionAppStoreReviewScreenshots", body: [
+                "data": [
+                    "type": "subscriptionAppStoreReviewScreenshots",
+                    "attributes": ["fileName": url.lastPathComponent,
+                                   "fileSize": data.count],
+                    "relationships": ["subscription": [
+                        "data": ["type": "subscriptions", "id": subscriptionID]]],
+                ],
+            ]).data)
+        guard let id = reservation["data"]["id"].string else { return }
+        try await executeUploadOperations(
+            reservation["data"]["attributes"]["uploadOperations"], data: data)
+        try await api.apple("PATCH",
+            "/v1/subscriptionAppStoreReviewScreenshots/\(id)", body: [
+                "data": ["type": "subscriptionAppStoreReviewScreenshots", "id": id,
+                         "attributes": ["uploaded": true]],
+            ])
     }
 
     static func nearestPricePoint(_ response: JSON, to amount: Decimal) -> String? {
@@ -224,13 +296,17 @@ extension Runner {
     func appleSubscriptionOffers() async throws {
         for group in manifest.subscriptions ?? [] {
             for plan in group.plans {
-                guard let offers = plan.offers, !offers.isEmpty,
-                      let subscriptionID = appleSubscriptionIDsByProduct[plan.id] else { continue }
+                guard let subscriptionID = appleSubscriptionIDsByProduct[plan.id] else { continue }
+                let offers = plan.offers ?? []
+                // The removal runs even for a plan that names no offer, which
+                // is exactly the case where a developer dropped the last one.
+                let held = try await appleDropOffers(plan, subscriptionID: subscriptionID)
+                guard !offers.isEmpty else { continue }
                 let territory = plan.price?.territory ?? "USA"
                 let point = try await appleFirstPricePoint(subscriptionID: subscriptionID,
                                                            territory: territory)
 
-                for offer in offers {
+                for offer in offers where !held.contains(offer.id) {
                     try Task.checkCancellation()
                     switch offer.kind {
                     case .freeTrial, .introPrice:
@@ -247,6 +323,61 @@ extension Runner {
                 }
             }
         }
+    }
+
+    /// Removes the offers the manifest dropped, and reports the ones it keeps.
+    ///
+    /// Two problems, one pass. Without the removal, a dropped offer sells
+    /// forever. Without the report, every apply creates the same offer again,
+    /// because the three create calls take no natural key and Apple never
+    /// refuses a duplicate.
+    ///
+    /// An introductory offer carries no name, so Apple holds one per territory
+    /// and the manifest owns it entirely. It goes when the plan names no free
+    /// trial and no introductory price, and it stays otherwise.
+    private func appleDropOffers(_ plan: Manifest.SubscriptionGroup.Plan,
+                                 subscriptionID: String) async throws -> Set<String> {
+        let offers = plan.offers ?? []
+        var kept: Set<String> = []
+
+        let named: [(collection: String, path: String, key: String)] = [
+            ("promotionalOffers", "/v1/subscriptionPromotionalOffers", "name"),
+            ("winBackOffers", "/v1/winBackOffers", "referenceName"),
+        ]
+        for entry in named {
+            let wanted = Set(offers.filter {
+                entry.collection == "winBackOffers" ? $0.kind == .winBack : $0.kind == .promotional
+            }.map(\.id))
+            guard let response = try? await api.apple(
+                "GET", "/v1/subscriptions/\(subscriptionID)/\(entry.collection)?limit=200")
+            else { continue }
+            for item in JSON(data: response.data)["data"].array {
+                guard let id = item["id"].string else { continue }
+                let name = item["attributes"][entry.key].string ?? ""
+                if wanted.contains(name) {
+                    kept.insert(name)
+                } else {
+                    try await api.apple("DELETE", "\(entry.path)/\(id)")
+                }
+            }
+        }
+
+        let wantsIntro = offers.contains { $0.kind == .freeTrial || $0.kind == .introPrice }
+        if let response = try? await api.apple(
+            "GET", "/v1/subscriptions/\(subscriptionID)/introductoryOffers?limit=200") {
+            for item in JSON(data: response.data)["data"].array {
+                guard let id = item["id"].string else { continue }
+                if wantsIntro {
+                    // Apple takes one per territory, so the held one is the
+                    // manifest's own. Keep it and skip the create.
+                    offers.filter { $0.kind == .freeTrial || $0.kind == .introPrice }
+                        .forEach { kept.insert($0.id) }
+                } else {
+                    try await api.apple("DELETE", "/v1/subscriptionIntroductoryOffers/\(id)")
+                }
+            }
+        }
+        return kept
     }
 
     private func appleFirstPricePoint(subscriptionID: String,
