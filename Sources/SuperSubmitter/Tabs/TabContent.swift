@@ -31,6 +31,9 @@ struct TabContent: View {
         case .plan: PlanTab()
         case .submit: SubmitTab()
         case .release: ReleaseTab()
+        case .reviews: ReviewsTab()
+        case .analytics: AnalyticsTab()
+        case .health: HealthTab()
         }
     }
 }

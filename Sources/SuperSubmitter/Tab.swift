@@ -1,6 +1,40 @@
 import SwiftUI
 
-/// The ten tabs, in the order of the work. Spec section 16.3.
+/// The two jobs the app does.
+///
+/// Publishing gets a version out of the door. Managing runs the app that is
+/// already out there. The two share the Stores tab, because both need the
+/// credentials, and they share nothing else: a publisher never wants a crash
+/// rate on the way to a submission, and a manager never wants a build step.
+enum Mode: String, CaseIterable, Identifiable, Codable {
+    case publishing
+    case managing
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .publishing: "Publishing"
+        case .managing: "Managing"
+        }
+    }
+
+    var line: String {
+        switch self {
+        case .publishing: "Send a new app or an update to the stores."
+        case .managing: "Run the app that is already live."
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .publishing: "paperplane.fill"
+        case .managing: "dial.medium.fill"
+        }
+    }
+}
+
+/// The tabs, in the order of the work. Spec section 16.3.
 enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case stores = 1
     case build
@@ -12,6 +46,10 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case plan
     case submit
     case release
+    // Managing. These read a live app and act on it one button at a time.
+    case reviews
+    case analytics
+    case health
 
     var id: Int { rawValue }
 
@@ -27,7 +65,27 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .plan: "Summary"
         case .submit: "Submit"
         case .release: "Release"
+        case .reviews: "Reviews"
+        case .analytics: "Analytics"
+        case .health: "App health"
         }
+    }
+
+    /// Which mode shows the tab. Stores shows in both.
+    var modes: Set<Mode> {
+        switch self {
+        case .stores: [.publishing, .managing]
+        case .build, .details, .media, .money, .reviewInfo, .plan, .submit, .release:
+            [.publishing]
+        // Marketing edits a live listing, so it belongs to the manager. The
+        // publishing plan still writes it when the manifest holds it, so an
+        // import loses nothing.
+        case .marketing, .reviews, .analytics, .health: [.managing]
+        }
+    }
+
+    static func tabs(in mode: Mode) -> [Tab] {
+        allCases.filter { $0.modes.contains(mode) }
     }
 
     /// The outline reads as "not here", the filled one as "here". Release is
@@ -44,6 +102,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .plan: selected ? "text.bubble.fill" : "text.bubble"
         case .submit: selected ? "square.and.arrow.up.fill" : "square.and.arrow.up"
         case .release: selected ? "airplane.path.dotted" : "airplane"
+        case .reviews: selected ? "star.bubble.fill" : "star.bubble"
+        case .analytics: selected ? "chart.xyaxis.line" : "chart.line.uptrend.xyaxis"
+        case .health: selected ? "cross.case.fill" : "cross.case"
         }
     }
 
@@ -60,6 +121,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .plan: "What changes, exactly?"
         case .submit: "Do it."
         case .release: "Is it ready, and shall I send it?"
+        case .reviews: "What do the customers say, and what do I answer?"
+        case .analytics: "How is the shipped app doing?"
+        case .health: "Something is wrong with the live app. What can I do?"
         }
     }
 
@@ -83,7 +147,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .stores, .build, .details, .media, .money, .marketing, .reviewInfo: .edits
         case .plan: .reads
         case .submit: .writes
-        case .release: .releases
+        case .release, .reviews, .analytics, .health: .releases
         }
     }
 
@@ -96,5 +160,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// The first marks where the app stops editing a file and starts reading
     /// the stores. The second marks the only tab that can send a version to
     /// review. Two hairlines carry the whole mental model.
-    var startsZone: Bool { self == .plan || self == .release }
+    ///
+    /// Managing has one rule, before the tabs that touch a live app, and the
+    /// Stores tab sits above it.
+    var startsZone: Bool { self == .plan || self == .release || self == .reviews }
 }

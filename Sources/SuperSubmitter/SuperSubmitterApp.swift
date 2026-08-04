@@ -58,6 +58,18 @@ struct SuperSubmitterApp: App {
             }
             // The app has no Settings scene. Command-comma opens the panel
             // over the window, so the menu and the sidebar row do one thing.
+            // The mode decides which tabs exist, so it belongs in the menu as
+            // well as in the shell.
+            CommandGroup(after: .toolbar) {
+                Picker("Mode", selection: Binding(get: { state.mode },
+                                                  set: { state.mode = $0 })) {
+                    ForEach(Mode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.inline)
+                Divider()
+            }
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { state.showSettings = true }
                     .keyboardShortcut(",", modifiers: .command)
