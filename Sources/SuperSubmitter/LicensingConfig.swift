@@ -13,9 +13,17 @@ import SubmitKit
 struct LicensingConfig {
     let baseURL: URL
     let verifier: EntitlementVerifier
-    let auth: SupabaseAuthConfiguration
 
     static let current: LicensingConfig? = load()
+
+    /// The account half, read on its own.
+    ///
+    /// Signing in needs Supabase and nothing else. While this was one value
+    /// with the licensing half, a build that carried the Supabase pair and an
+    /// empty `LICENSING_BASE_URL` built no auth controller, and the sign-in
+    /// button then did nothing at all. That build is the normal state until
+    /// the licensing service opens, so the two halves load apart.
+    static let auth: SupabaseAuthConfiguration? = loadAuth()
 
     private static func load() -> LicensingConfig? {
         guard let text = value("SSLicensingBaseURL", "LICENSING_BASE_URL"),
@@ -32,14 +40,17 @@ struct LicensingConfig {
             missing("SSEntitlementPublicKeys is not a list of base64 Ed25519 keys")
             return nil
         }
-        guard let authURLText = value("SSSupabaseURL", "SUPABASE_URL"),
-              let authURL = URL(string: authURLText), authURL.scheme == "https",
+        return LicensingConfig(baseURL: url, verifier: verifier)
+    }
+
+    private static func loadAuth() -> SupabaseAuthConfiguration? {
+        guard let text = value("SSSupabaseURL", "SUPABASE_URL"),
+              let url = URL(string: text), url.scheme == "https",
               let publishableKey = value("SSSupabasePublishableKey", "SUPABASE_PUBLISHABLE_KEY") else {
             missing("SSSupabaseURL / SSSupabasePublishableKey")
             return nil
         }
-        return LicensingConfig(baseURL: url, verifier: verifier,
-                               auth: .init(baseURL: authURL, publishableKey: publishableKey))
+        return .init(baseURL: url, publishableKey: publishableKey)
     }
 
     /// `entitlement-2026-01=BASE64,entitlement-2026-07=BASE64`. A rotation
