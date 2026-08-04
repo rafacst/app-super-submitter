@@ -1,10 +1,11 @@
+import SubmitKit
 import SwiftUI
 
 /// Settings. A panel over the window, never a second window.
 ///
-/// Two sections and no credential. The App Store and Google Play keys live on
-/// the Stores tab, and the RevenueCat key lives on the Monetization tab, next
-/// to the choice that needs them.
+/// The provider choice sits here rather than on the Monetization tab. A
+/// developer picks RevenueCat or Adapty once per machine, and then edits the
+/// catalog on every app. The two jobs belong on two screens.
 ///
 /// Every control here is the AppKit one. A hand-drawn checkbox and a
 /// hand-drawn segmented control land on different baselines and different
@@ -130,9 +131,31 @@ struct SettingsPanel: View {
               }
             }
 
+            Section_("Monetization provider") {
+              VStack(alignment: .leading, spacing: 13) {
+                SettingRow("Provider", alignment: .top) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("Provider", selection: Binding(
+                            get: { state.provider },
+                            set: { value in state.setProvider(value) })) {
+                            Text("None").tag(Manifest.Provider.none)
+                            Text("RevenueCat").tag(Manifest.Provider.revenuecat)
+                            Text("Adapty").tag(Manifest.Provider.adapty)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: Self.controlWidth)
+                        Note("The provider mirrors the same purchases into one more catalog. The plan and the apply cover it beside the two stores.")
+                        if state.provider == .revenuecat { revenueCat }
+                        if state.provider == .adapty { adapty }
+                    }
+                }
+              }
+            }
+
             Hairline()
 
-            Text("Settings holds no credential. The App Store and Google Play keys live on the Stores tab. The RevenueCat key lives on the Monetization tab.")
+            Text("The App Store and Google Play keys live on the Stores tab, next to the connection that needs them.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
@@ -143,6 +166,53 @@ struct SettingsPanel: View {
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.content)
+        .onChange(of: state.revenueCatAPIKey) { _, _ in state.revenueCatKeyChanged() }
+        .onChange(of: state.revenueCatProjectID) { _, _ in state.updateRevenueCatProject() }
+    }
+
+    private var revenueCat: some View {
+        @Bindable var state = state
+        return VStack(alignment: .leading, spacing: 8) {
+            SecureField("Secret v2 API key", text: $state.revenueCatAPIKey)
+            TextField("Project ID", text: $state.revenueCatProjectID)
+            HStack(spacing: 7) {
+                QuietButton(title: "Test connection") { state.testRevenueCatConnection() }
+                    .disabled(state.revenueCatAPIKey.isEmpty || state.revenueCatProjectID.isEmpty)
+                connectionRow(state.revenueCatConnection)
+            }
+            Note("The key is stored only in the macOS Keychain. It never reaches store.yaml.")
+            Link("Create a RevenueCat account ↗",
+                 destination: URL(string: "https://app.revenuecat.com/signup")!)
+                .font(.system(size: 11.5))
+        }
+        .frame(width: Self.controlWidth, alignment: .leading)
+    }
+
+    private var adapty: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Note("Adapty authenticates through its own CLI. This app reads the status and never runs the login.")
+            connectionRow(state.adaptyConnection)
+            HStack(spacing: 7) {
+                QuietButton(title: "Check CLI login") { state.checkAdapty() }
+                QuietButton(title: "Copy login command") {
+                    state.copyToPasteboard("adapty auth login")
+                }
+            }
+            Link("Create an Adapty account ↗",
+                 destination: URL(string: "https://app.adapty.io/registration")!)
+                .font(.system(size: 11.5))
+        }
+        .frame(width: Self.controlWidth, alignment: .leading)
+    }
+
+    private func connectionRow(_ status: ConnectionStatus) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(status.isConnected ? Theme.green : Theme.text3)
+                .frame(width: 7, height: 7)
+            Text(status.label)
+        }
+        .font(.system(size: 11.5))
+        .foregroundStyle(status.isConnected ? Theme.green : Theme.text2)
     }
 
     /// One width for every control, so the second column has one left edge and

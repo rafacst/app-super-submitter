@@ -67,6 +67,11 @@ public struct ActualState: Sendable, Equatable {
         public var whatToTest: [String: String] = [:]
         public var betaReviewSubmitted: Bool?
         public var betaAutoNotify: Bool?
+        /// The TestFlight page of the app, by locale. Empty means the read
+        /// failed or the app has no page yet, and the planner tells the two
+        /// apart with `betaAppLocalizationsRead`.
+        public var betaAppLocalizations: [String: Manifest.Release.TestFlight.Localization] = [:]
+        public var betaAppLocalizationsRead = false
         /// The subscription grace period, in days, and its switch.
         public var gracePeriodDays: Int?
         public var gracePeriodOptIn: Bool?
