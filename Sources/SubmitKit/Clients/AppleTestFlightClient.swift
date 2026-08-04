@@ -218,6 +218,101 @@ public struct AppleTestFlightClient: Sendable {
         ])
     }
 
+    // MARK: - The app-level TestFlight page
+
+    /// The TestFlight page of the app, by locale.
+    ///
+    /// This is not `whatToTest`. That one belongs to a build and it changes
+    /// every release. These four fields belong to the app, and a tester reads
+    /// them on the TestFlight invitation.
+    public func appLocalizations(appID: String) async throws
+        -> [String: Manifest.Release.TestFlight.Localization] {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/betaAppLocalizations?limit=200").data)
+        var result: [String: Manifest.Release.TestFlight.Localization] = [:]
+        for item in payload["data"].array {
+            let attributes = item["attributes"]
+            guard let locale = attributes["locale"].string else { continue }
+            result[locale] = Manifest.Release.TestFlight.Localization(
+                description: attributes["description"].string,
+                feedbackEmail: attributes["feedbackEmail"].string,
+                marketingUrl: attributes["marketingUrl"].string,
+                privacyPolicyUrl: attributes["privacyPolicyUrl"].string)
+        }
+        return result
+    }
+
+    /// Writes the TestFlight page. Apple takes a PATCH for a locale it holds
+    /// and a POST for one it does not, the same rule as every other
+    /// localization in this app.
+    public func setAppLocalizations(
+        appID: String,
+        _ wanted: [String: Manifest.Release.TestFlight.Localization]) async throws {
+        let held = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/betaAppLocalizations?limit=200").data)
+        var ids: [String: String] = [:]
+        for item in held["data"].array {
+            guard let locale = item["attributes"]["locale"].string,
+                  let id = item["id"].string else { continue }
+            ids[locale] = id
+        }
+
+        for (locale, text) in wanted.sorted(by: { $0.key < $1.key }) {
+            var attributes: [String: Any] = [:]
+            if let value = text.description { attributes["description"] = value }
+            if let value = text.feedbackEmail { attributes["feedbackEmail"] = value }
+            if let value = text.marketingUrl { attributes["marketingUrl"] = value }
+            if let value = text.privacyPolicyUrl { attributes["privacyPolicyUrl"] = value }
+            guard !attributes.isEmpty else { continue }
+
+            if let id = ids[locale] {
+                try await api.apple("PATCH", "/v1/betaAppLocalizations/\(id)", body: [
+                    "data": ["type": "betaAppLocalizations", "id": id,
+                             "attributes": attributes],
+                ])
+            } else {
+                attributes["locale"] = locale
+                try await api.apple("POST", "/v1/betaAppLocalizations", body: [
+                    "data": [
+                        "type": "betaAppLocalizations",
+                        "attributes": attributes,
+                        "relationships": ["app": ["data": ["type": "apps", "id": appID]]],
+                    ],
+                ])
+            }
+        }
+    }
+
+    /// The contact that Apple reaches about a beta review, and the demo
+    /// account that a reviewer signs in with.
+    ///
+    /// Apple creates one detail per app with the build, so this only ever
+    /// patches. The values come from `manifest.review` and the Keychain, the
+    /// same two sources the App Store review detail already reads.
+    public func setBetaReviewDetail(appID: String, review: Manifest.Review?,
+                                    reviewer: ReviewerCredential?) async throws {
+        guard let detail = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/betaAppReviewDetail"),
+              let id = JSON(data: detail.data)["data"]["id"].string else { return }
+
+        var attributes: [String: Any] = [:]
+        if let value = review?.contactFirstName { attributes["contactFirstName"] = value }
+        if let value = review?.contactLastName { attributes["contactLastName"] = value }
+        if let value = review?.contactEmail { attributes["contactEmail"] = value }
+        if let value = review?.contactPhone { attributes["contactPhone"] = value }
+        if let value = review?.notes { attributes["notes"] = value }
+        attributes["demoAccountRequired"] = review?.demoAccountRequired ?? false
+        if review?.demoAccountRequired == true, let reviewer {
+            attributes["demoAccountName"] = reviewer.username
+            attributes["demoAccountPassword"] = reviewer.password
+        }
+        guard !attributes.isEmpty else { return }
+
+        try await api.apple("PATCH", "/v1/betaAppReviewDetails/\(id)", body: [
+            "data": ["type": "betaAppReviewDetails", "id": id, "attributes": attributes],
+        ])
+    }
+
     // MARK: - The parser
 
     static func parseGroup(_ item: JSON) -> BetaGroup? {
