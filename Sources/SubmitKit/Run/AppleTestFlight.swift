@@ -49,6 +49,23 @@ extension Runner {
         try await AppleTestFlightClient(api: api).setAutoNotify(buildID: buildID, enabled)
     }
 
+    /// The TestFlight page of the app. It needs no build, so it runs whether
+    /// or not an artifact reached Apple.
+    func appleBetaAppLocalizations() async throws {
+        guard let wanted = manifest.release?.apple?.testFlight?.localizations,
+              !wanted.isEmpty else { return }
+        try await AppleTestFlightClient(api: api).setAppLocalizations(
+            appID: appleAppID, wanted)
+    }
+
+    /// The contact that Apple reaches about a beta review. The demo account
+    /// comes from the Keychain and never from `store.yaml`, the same rule the
+    /// App Store review detail follows.
+    func appleBetaReviewDetail() async throws {
+        try await AppleTestFlightClient(api: api).setBetaReviewDetail(
+            appID: appleAppID, review: manifest.review, reviewer: reviewerCredential)
+    }
+
     func appleBetaReview() async throws {
         guard let buildID = attachedBuildID else {
             throw RunError.uploadFailed("No build is attached, so none can go to beta review.")

@@ -433,6 +433,37 @@ public enum Planner {
                     comparison: read ? .verified : .unverified))
             }
         }
+        // The TestFlight page of the app. It carries no build, so it appears
+        // even before an artifact reaches Apple.
+        if let wanted = testFlight.localizations, !wanted.isEmpty {
+            let verified = actual?.betaAppLocalizationsRead == true
+            let differs = wanted.contains { locale, text in
+                actual?.betaAppLocalizations[locale] != text
+            }
+            if !verified || differs {
+                steps.append(PlanStep(
+                    id: "apple.betaAppLocalizations", system: .apple, kind: .change,
+                    summary: "TestFlight page  \(wanted.count) locales",
+                    title: "Write the TestFlight page",
+                    requests: [RequestSketch("POST", "/v1/betaAppLocalizations")],
+                    operation: .appleBetaAppLocalizations,
+                    comparison: verified ? .verified : .unverified))
+            }
+        }
+
+        // The beta review contact. Apple keeps one per app, and the values come
+        // from `review`, so the step appears whenever TestFlight does and the
+        // review block holds something to write.
+        if input.manifest.review != nil {
+            steps.append(PlanStep(
+                id: "apple.betaReviewDetail", system: .apple, kind: .change,
+                summary: "TestFlight  the beta review contact",
+                title: "Write the beta review contact",
+                requests: [RequestSketch("PATCH", "/v1/betaAppReviewDetails/{id}")],
+                operation: .appleBetaReviewDetail,
+                comparison: .unverified))
+        }
+
         if let notify = testFlight.autoNotify, !read || notify != actual?.betaAutoNotify {
             steps.append(PlanStep(
                 id: "apple.betaAutoNotify", system: .apple, kind: .change,
@@ -1049,9 +1080,19 @@ public enum Planner {
                         wanted.prices[applePriceTerritory(price)] = applePriceText(price)
                     }
                     wanted.duration = plan.duration
+                    wanted.availableTerritories = Set(plan.availableTerritories ?? [])
                     compare(id: plan.id,
                             exists: actual?.subscriptionIds.contains(plan.id) ?? false,
                             wanted: wanted)
+                    // The screenshot is an upload with no readable counterpart,
+                    // so a plan that names one keeps the step and the write
+                    // repeats. The purchase branch follows the same rule.
+                    if plan.reviewScreenshot?.isEmpty == false {
+                        unreadableFields = true
+                        if !changes.contains(where: { $0.hasPrefix(plan.id) }) {
+                            changes.append("\(plan.id)  review screenshot")
+                        }
+                    }
                 }
             }
         }
@@ -1381,6 +1422,23 @@ public enum Planner {
                 requests: [RequestSketch("POST", "/monetization/subscriptions/{id}:archive")],
                 operation: .googleArchiveSubscription(productId: orphan)))
         }
+
+        // The same rule for a one-time product. Google offers no archive here,
+        // and a delete would break an installed app that still asks for the
+        // product, so the purchase option goes inactive instead. That stops
+        // every new sale and it keeps what a customer already owns.
+        let wantedPurchases = Set((manifest.purchases ?? []).map(\.id))
+        for orphan in (input.actual.google?.oneTimeProductIds ?? [])
+            .subtracting(wantedPurchases).sorted() {
+            steps.append(PlanStep(
+                id: "google.deactivate.\(orphan)", system: .google, kind: .remove,
+                summary: "purchase  \(orphan)  stop the sale",
+                title: "Stop the sale of \(orphan)",
+                requests: [RequestSketch(
+                    "POST", "/monetization/oneTimeProducts/{id}/purchaseOptions:batchUpdateStates")],
+                operation: .googlePurchaseOptionState(productId: orphan,
+                                                      purchaseOptionId: orphan, active: false)))
+        }
         return steps
     }
 
@@ -1395,9 +1453,14 @@ public enum Planner {
 
         // One RevenueCat product per store app. Adapty holds both ids on one
         // product. Spec section 8.1 explains the difference.
+        // The Mac App Store is a third RevenueCat app, not a variant of the
+        // App Store one. A manifest that names it gets its own product, and a
+        // manifest that leaves it empty drops the row.
+        let appIds = manifest.monetization?.revenuecat?.appIds
         let storeApps: [(key: String, label: String)] = provider == .revenuecat
-            ? [(manifest.monetization?.revenuecat?.appIds.appStore ?? "", "app_store"),
-               (manifest.monetization?.revenuecat?.appIds.playStore ?? "", "play_store")]
+            ? [(appIds?.appStore ?? "", "app_store"),
+               (appIds?.macAppStore ?? "", "mac_app_store"),
+               (appIds?.playStore ?? "", "play_store")]
                 .filter { !$0.0.isEmpty }
             : [("", "both stores")]
 

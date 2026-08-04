@@ -13,18 +13,6 @@ struct MoneyTab: View {
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 7))
             }
-            Section_("Subscription provider", icon: "arrow.triangle.2.circlepath", tint: Theme.orange) {
-                Picker("Provider", selection: Binding(
-                    get: { state.provider },
-                    set: { value in state.setProvider(value) })) {
-                    Text("None").tag(Manifest.Provider.none)
-                    Text("RevenueCat").tag(Manifest.Provider.revenuecat)
-                    Text("Adapty").tag(Manifest.Provider.adapty)
-                }
-                .pickerStyle(.segmented).frame(maxWidth: 460)
-                if state.provider == .revenuecat { revenueCatPanel }
-                if state.provider == .adapty { adaptyPanel }
-            }
             priceSection
             availabilitySection
             purchasesSection
@@ -32,53 +20,9 @@ struct MoneyTab: View {
             if state.provider != .none { providerCatalog }
         }
         .frame(maxWidth: 940, alignment: .leading)
-        .onChange(of: state.revenueCatAPIKey) { _, _ in state.revenueCatKeyChanged() }
-        .onChange(of: state.revenueCatProjectID) { _, _ in state.updateRevenueCatProject() }
         .onChange(of: state.priceAmount) { _, _ in state.updateBasePrice() }
         .onChange(of: state.priceCurrency) { _, _ in state.updateBasePrice() }
         .onChange(of: state.priceTerritory) { _, _ in state.updateBasePrice() }
-    }
-
-    private var revenueCatPanel: some View {
-        @Bindable var state = state
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .bottom) {
-                LabeledContent("Secret v2 API key") {
-                    SecureField("Secret API key", text: $state.revenueCatAPIKey).frame(width: 250)
-                }
-                LabeledContent("Project ID") {
-                    TextField("RevenueCat project ID", text: $state.revenueCatProjectID).frame(width: 220)
-                }
-                Button("Test connection", action: state.testRevenueCatConnection)
-                    .disabled(state.revenueCatAPIKey.isEmpty || state.revenueCatProjectID.isEmpty)
-            }
-            connectionRow(state.revenueCatConnection)
-            HStack {
-                Link("Create a RevenueCat account ↗", destination: URL(string: "https://app.revenuecat.com/signup")!)
-                Text("The API key is stored only in macOS Keychain.")
-                    .foregroundStyle(Theme.text2)
-            }.font(.system(size: 11.5))
-        }.moneyPanel()
-    }
-
-    private var adaptyPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Adapty authentication belongs to its CLI; this app reads its status but never runs login.")
-                .font(.system(size: 12)).foregroundStyle(Theme.text2)
-            connectionRow(state.adaptyConnection)
-            HStack {
-                Button("Check CLI login", action: state.checkAdapty)
-                Button("Copy login command") { state.copyToPasteboard("adapty auth login") }
-                Link("Create an Adapty account ↗", destination: URL(string: "https://app.adapty.io/registration")!)
-            }
-        }.moneyPanel()
-    }
-
-    private func connectionRow(_ status: ConnectionStatus) -> some View {
-        HStack(spacing: 6) {
-            Circle().fill(status.isConnected ? Theme.green : Theme.text3).frame(width: 7, height: 7)
-            Text(status.label)
-        }.font(.system(size: 11.5)).foregroundStyle(status.isConnected ? Theme.green : Theme.text2)
     }
 
     private var priceSection: some View {

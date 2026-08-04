@@ -43,7 +43,7 @@ The app does not do these things in v1. Each line gives the reason.
 
 | Not in v1 | Reason |
 |---|---|
-| Sales reports, analytics, customer reviews | A different product. All three APIs offer them. They add no value to a submission tool. Section 3.1 holds the Google endpoints for a later version. |
+| Sales reports and finance reports | A different product. Both stores offer them, and neither one helps a submission. |
 | Customers, purchases, refunds, and charts, in either provider | Run-time data. This app manages the catalog only. Section 3.1 holds the Google endpoints for a later version. |
 | Paywall design and A/B tests, in either provider | A design task, not a submission task. The app creates a paywall that holds the right products. The developer styles it in the dashboard. |
 | Adapty segments and audience targeting | The Adapty CLI reads segments and cannot write them. The app manages the default audience only. |
@@ -53,7 +53,12 @@ The app does not do these things in v1. Each line gives the reason.
 | A web dashboard, a server, or user accounts | The app runs on the developer machine. The stores hold the state. |
 | A local database | The manifest is the desired state. The APIs are the actual state. Git is the history. |
 | App Store Connect certificates, profiles, and devices | Xcode does this. Do not duplicate Xcode. |
-| Beta distribution (TestFlight, Play internal test) | A separate flow. A later milestone if users ask. Section 3.1 holds the Google endpoints. |
+
+The Managing mode covers four areas that an earlier draft of this section
+excluded. The app now ships each one, so none of them is a non-goal:
+the customer reviews of both stores, TestFlight and the Play internal test
+distribution, the Play Developer Reporting vitals, and the Play app recovery.
+Section 3.1 records the same correction row by row.
 
 ### 3.1 The deferred Google Play surface
 
@@ -70,20 +75,21 @@ and no chain.
 
 | # | Area | Endpoints | What it adds | Auth | Order |
 |---|---|---|---|---|---|
-| 1 | Customer reviews | `reviews.list`, `reviews.get`, `reviews.reply` | Read the reviews of the app. Answer one review. The reply limit is 350 characters. | The existing `androidpublisher` scope. Section 9.2 needs no change. | 1 |
-| 2 | Internal test distribution | `edits.testers.get`, `.patch`, `.update`; `edits.tracks` for `internal`, `alpha`, and `beta`; `internalappsharingartifacts.uploadbundle`, `.uploadapk` | Ship a build to the testers with no review. | The existing `androidpublisher` scope. | 1 |
+| — | ~~Customer reviews~~ | ~~`reviews.list`, `reviews.get`, `reviews.reply`~~ | **Implemented.** `GoogleActionsClient`, on the Reviews tab of Managing. | — | done |
+| — | ~~Internal test distribution~~ | ~~`edits.testers`, `edits.tracks`, `internalappsharingartifacts`~~ | **Implemented.** `GoogleApply.googleTesters` and `GoogleActionsClient.shareInternally`. | — | done |
 | 3 | The permission admin | `users.list`, `.create`, `.patch`, `.delete`; `grants.create`, `.patch`, `.delete` | Invite the service account and grant the app permission. This removes one console step from section 13. | The existing `androidpublisher` scope. The caller needs the account owner role. | 2 |
 | 4 | Run-time purchase state | `purchases.products.get`, `.acknowledge`, `.consume`; `purchases.subscriptionsv2.get`, `.revoke`; `purchases.voidedpurchases.list` | Verify one purchase token. Read the refund list. | The existing `androidpublisher` scope. | 2 |
 | 5 | Orders and refunds | `orders.get`, `orders.batchGet`, `orders.refund` | Read one order. Refund one order. A refund is irreversible, so section 7.9 applies to it. | The existing `androidpublisher` scope. | 3 |
 | 6 | External transactions | `externaltransactions.createexternaltransaction`, `.patchexternaltransaction`, `.getexternaltransaction` | Report a transaction of an alternative billing program. | The existing `androidpublisher` scope. | 3 |
 | 7 | Custom app publishing | `accounts.customApps.create` | Publish a private app to a managed Google Play organization. | A separate API. Verify the host and the scope first. | 3 |
-| 8 | Play Developer Reporting | `vitals.crashrate`, `vitals.anrrate`, `vitals.errors.reports`, `anomalies.list` | Read the crash rate, the ANR rate, and the release health. | A separate host `playdeveloperreporting.googleapis.com` and the scope `playdeveloperreporting`. Section 9.2 gains a second scope. | 3 |
+| 8 | Play Developer Reporting | `vitals.errors.reports`, `vitals.errors.issues`, `anomalies.list`, and the six metric sets beyond the crash rate and the ANR rate | Read the release health beyond the two rates. | The second scope is already in place. See row 8a. | 3 |
+| — | ~~The crash rate and the ANR rate~~ | ~~`vitals.crashrate`, `vitals.anrrate`~~ | **Implemented.** `StoreVitalsClient.googleVitals`, on the Analytics tab of Managing. It holds the `playdeveloperreporting` scope. | — | done |
 | 9 | Play Games Services | The publishing endpoints for `achievements`, `leaderboards`, and `events` | Manage the game configuration. It applies to a game only. | A separate API. Verify the scope first. | 3 |
 | 10 | Play Integrity | `decodeIntegrityToken` | Verify a run-time integrity verdict. This is not a submission step. | A separate host and the scope `playintegrity`. | 3 |
 | 11 | System APKs | `systemapks.variants.create`, `.get`, `.list`, `.download` | Build a system image variant. | **Blocked.** Google grants this to an Android system image partner only. A normal service account answers 403. | — |
 | — | ~~Generated APKs~~ | ~~`generatedapks.list`, `.download`~~ | **Implemented.** See section 7.11. | — | done |
 | — | ~~Device tier configurations~~ | ~~`deviceTierConfigs.create`, `.list`~~ | **Implemented.** See section 7.4 and section 7.11. | — | done |
-| 12 | App recovery | `apprecovery.create`, `.deploy`, `.cancel`, `.addTargeting`, `.list` | Roll a recovery action out to the installed base. | **Blocked by design.** A deploy reaches live users and no call undoes it. Section 7.9 allows one irreversible button per store, and the release button already owns it. | — |
+| — | ~~App recovery~~ | ~~`apprecovery.create`, `.deploy`, `.cancel`, `.addTargeting`, `.list`~~ | **Implemented.** `GoogleActionsClient`, on the App health tab of Managing. The create call writes a draft, and the deploy call is a separate button that confirms first. Section 7.9 holds, because the draft and the deploy never run in one chain. | — | done |
 
 A blocked row ships no code. The app makes no call that a normal account
 cannot run, and it shows no button that always fails.
@@ -110,9 +116,34 @@ app ships no call that a normal account cannot run.
 | Webhooks | `webhooks`, `webhookDeliveries`, `webhookPings` | Apple delivers an event to a public HTTPS URL. This app runs on the developer machine and it owns no server, so it can register a subscription that it can never receive. Section 3 excludes a server. The status poll of section 7.10 covers the same need. |
 | Alternative distribution | `alternativeDistributionPackages`, `alternativeDistributionKeys`, `marketplaceDomains`, `marketplaceSearchDetails` | Apple grants the entitlement to a registered EU marketplace operator only. A normal account answers 403 on every call. |
 
-Two Apple areas stay open for a later milestone instead, because a normal
-account can run them: `nominations`, the featuring request, and
-`accessibilityDeclarations`.
+`nominations`, the featuring request, and `accessibilityDeclarations` were open
+in an earlier draft. The app ships both now. See `AppleMarketing` and
+`AppleApply`.
+
+### 3.3 The open App Store Connect surface
+
+A normal account can run every row below, and no code calls it yet. This list
+replaces the generated coverage file that the repository used to hold.
+
+| Area | Endpoints | What it adds |
+|---|---|---|
+| Offer code values | `subscriptionOfferCodeCustomCodes`, `subscriptionOfferCodeOneTimeUseCodes`, and the two `inAppPurchaseOfferCode` twins | The app creates an offer code and no redeemable code. |
+| Offer code edits | `PATCH /v1/subscriptionOfferCodes/{id}`, `PATCH /v1/inAppPurchaseOfferCodes/{id}` | Deactivate an offer code. |
+| Promotional images | `subscriptionImages`, `inAppPurchaseImages`, both v1 and v2 | A promotional image on a purchase or a subscription. |
+| App event video | `appEventVideoClips` | The app writes an event screenshot and no video clip. |
+| App Clip media | `appClipHeaderImages`, `appClipAppStoreReviewDetails`, `appClipAdvancedExperienceImages` | The header image and the App Clip review detail. |
+| Media order | `PATCH /v1/appScreenshotSets/{id}/relationships/appScreenshots`, and the preview twin | Set the order of the screenshots. |
+| Search keywords | The `searchKeywords` relationships of `appStoreVersionLocalizations` and `appCustomProductPageLocalizations` | A newer Apple field. The manifest holds no key for it. |
+| Experiment stop | `DELETE /v2/appStoreVersionExperiments/{id}` | Stop a running experiment. |
+| Featuring | `appStoreVersionPromotions` | A second featuring resource beside `nominations`. |
+| TestFlight notices | `betaTesterInvitations`, `buildBetaNotifications` | Invite a tester again. Notify a group about a new build. |
+| Tester removal | `DELETE /v1/betaTesters/{id}` and its four relationship deletes | The app adds a tester and removes none. |
+| Game Center | The `gameCenter*` family | A game configuration, not a submission. |
+| App tags | `appTags` | A newer Apple field for the listing. |
+
+The v2 drift is a separate item. The app writes `subscriptionLocalizations` and
+`subscriptionGroupLocalizations` on v1, and Apple publishes a v2 of both. The
+purchase twin already moved to v2. Align the two when Apple names a sunset date.
 
 ---
 
@@ -922,13 +953,37 @@ chains the two calls. No other tab holds a release button.
 1. `POST /v1/reviewSubmissions` with the app id and the platform.
 2. `POST /v1/reviewSubmissionItems` with the `reviewSubmission` id and the
    `appStoreVersion` id.
-3. `POST /v1/reviewSubmissionItems` again for each `inAppPurchaseVersion`,
-   `subscriptionVersion`, and `subscriptionGroupVersion` that changed.
-4. `PATCH /v1/reviewSubmissions/{id}` with `submitted: true`.
+3. `POST /v1/reviewSubmissionItems` again for each `inAppPurchaseVersion`, each
+   `appEvent` in `READY_FOR_REVIEW`, each `appCustomProductPageVersion` in
+   `PREPARE_FOR_SUBMISSION`, and each `appStoreVersionExperimentV2` in
+   `PREPARE_FOR_SUBMISSION`.
+4. `POST /v1/subscriptionGroupSubmissions` per group, and
+   `POST /v1/subscriptionSubmissions` per subscription in `READY_TO_SUBMIT`.
+   Apple keeps the subscriptions off `reviewSubmissionItems`, so each one takes
+   its own submission resource and reaches the same queue.
+5. `PATCH /v1/reviewSubmissions/{id}` with `submitted: true`.
 
-Step 4 is the point of no return for Apple. Steps 1 to 3 are reversible. The
-app can add the in-app purchases to the **same** review submission as the app
-version, so one Apple review covers the version and the purchases together.
+Step 5 is the point of no return for Apple. Steps 1 to 4 are reversible. The
+app adds the purchases and the marketing items to the **same** review
+submission as the app version, so one Apple review covers them together.
+
+An item that Apple refuses never abandons the version submission. Step 5 still
+holds the whole decision, and a refused item leaves the version untouched.
+
+**The take-back.** Each store keeps one, and each one has its own button under
+the release button of that store.
+
+- **Apple.** `GET /v1/reviewSubmissions?filter[app]=…` finds the submission in
+  `READY_FOR_REVIEW` or `WAITING_FOR_REVIEW`, then
+  `PATCH /v1/reviewSubmissions/{id}` with `canceled: true`. Apple refuses this
+  once a reviewer opens the submission, so the button appears only while the
+  status poll reports `inQueue`.
+- **Google.** `PATCH .../edits/{editId}/tracks/{track}` with `status: halted`
+  and every version code the track holds, then a commit. A halt stops new
+  installs and it removes nothing that already landed, so the button appears
+  only for a staged rollout.
+
+Neither call restores what already reached a customer, so both confirm first.
 
 **Google.**
 
@@ -1637,17 +1692,13 @@ row is a URL field, never a drop target.
 
 #### Tab 5 — Money
 
-The tab opens on the provider choice, because that choice changes the rest.
+The tab opens on the base price. The provider choice moved to Settings, and
+the reason is the frequency: a developer picks RevenueCat or Adapty once per
+machine, and then edits the catalog on every app. Two jobs, two screens.
 
-**The provider row.** Three options: **None**, **RevenueCat**, **Adapty**.
-Each option holds one line that says what it does. A choice of RevenueCat or
-of Adapty opens the credential panel below the row, in the same shape as tab
-1.
-
-| Provider | The panel asks for | Help |
-|---|---|---|
-| RevenueCat | A secret v2 API key, and the project | Section 9.3, with the scope list |
-| Adapty | Nothing. It shows the CLI state. | Section 9.4 |
+The tab still holds the whole catalog: the price, the availability, the
+purchases, the subscriptions, and the entitlements and offerings of the
+provider. Those belong to the manifest and they change per app.
 
 The Adapty panel shows the three states from section 9.4: **The CLI is
 missing**, with the install command; **Not logged in**, with
@@ -1773,16 +1824,25 @@ Three controls open it, and all three do the same thing: the last row of the
 sidebar, the button beside the top bar, and the standard macOS shortcut. The
 panel closes with **Done** and with the Escape key.
 
-It holds four things and no more.
+It holds five things and no more.
 
 1. **Navigation.** Sidebar or Top bar. Section 16.1.
 2. **The poll interval.** The default is 5 minutes. Section 7.10.
 3. **The dry run.** The default state for a new app. Section 17.
 4. **The manifest path.** The location of `store.yaml`.
+5. **The monetization provider.** None, RevenueCat, or Adapty, with the
+   credential panel of the choice.
 
-Settings holds **no** credential. The credentials live on tab 1 and on tab 5,
-next to the choice that needs them. A developer who connects a store never
-hunts for a settings panel.
+| Provider | The panel asks for | Help |
+|---|---|---|
+| RevenueCat | A secret v2 API key, and the project | Section 9.3, with the scope list |
+| Adapty | Nothing. It shows the CLI state. | Section 9.4 |
+
+The two **store** credentials stay on tab 1, next to the connection that needs
+them. A developer who connects a store never hunts for a settings panel. The
+provider key sits here instead, because the provider itself is a per-machine
+choice. Every key of both kinds lives in the Keychain and never in
+`store.yaml`.
 
 `// ponytail: a panel over the window, not a second window. One window to
 // manage, one place the shortcut can lead, and no state to keep in sync
