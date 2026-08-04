@@ -46,3 +46,42 @@ import Testing
     #expect(ExistingAppImportPlan.group([]).isEmpty)
     #expect(ExistingAppImportPlan.group([app, duplicate]).first?.candidates.count == 1)
 }
+
+/// The picker draws one block per store, the App Store first, so a mixed
+/// account never interleaves the two.
+@MainActor
+@Test func theAppleAppsListBeforeTheGoogleApps() {
+    let model = ExistingAppImportModel()
+    model.candidates = [
+        ExistingAppCandidate(store: .google, remoteID: "com.example.b", name: "Beta",
+                             identifier: "com.example.b"),
+        ExistingAppCandidate(store: .apple, remoteID: "1", name: "Alpha",
+                             identifier: "com.example.a"),
+    ]
+
+    #expect(model.candidates(for: .apple).map(\.name) == ["Alpha"])
+    #expect(model.candidates(for: .google).map(\.name) == ["Beta"])
+}
+
+/// One selected app writes into the folder the user picks. Two need a parent.
+@MainActor
+@Test func oneSelectedAppNamesTheFolderAndTwoDoNot() {
+    let model = ExistingAppImportModel()
+    let alpha = ExistingAppCandidate(store: .apple, remoteID: "1", name: "Alpha",
+                                     identifier: "com.example.a")
+    let alphaGoogle = ExistingAppCandidate(store: .google, remoteID: "com.example.a",
+                                           name: "Alpha", identifier: "com.example.a")
+    let beta = ExistingAppCandidate(store: .apple, remoteID: "2", name: "Beta",
+                                    identifier: "com.example.b")
+    model.candidates = [alpha, alphaGoogle, beta]
+
+    model.selection.toggle(alpha)
+    model.selection.toggle(alphaGoogle)
+    // Both stores of one app are still one app, and one folder.
+    #expect(model.selectedGroupCount == 1)
+    #expect(model.selectedGroupName == "Alpha")
+
+    model.selection.toggle(beta)
+    #expect(model.selectedGroupCount == 2)
+    #expect(model.selectedGroupName == nil)
+}

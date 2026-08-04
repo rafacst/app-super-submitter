@@ -289,25 +289,27 @@ public struct StoreImportReader: Sendable {
                   let setID = item["relationships"][setKey]["data"]["id"].string,
                   let kind = kinds[setID] else { return nil }
             let attributes = item["attributes"]
-            let text: String?
-            if let video = attributes["videoUrl"].string {
-                text = video
-            } else if let template = attributes["imageAsset"]["templateUrl"].string {
-                let width = attributes["imageAsset"]["width"].int ?? 1_290
-                let height = attributes["imageAsset"]["height"].int ?? 2_796
-                text = template.replacingOccurrences(of: "{w}", with: String(width))
-                    .replacingOccurrences(of: "{h}", with: String(height))
-                    .replacingOccurrences(of: "{f}", with: "png")
-                    .replacingOccurrences(of: "{c}", with: "")
-            } else {
-                text = nil
-            }
-            guard let text, let url = URL(string: text) else { return nil }
+            let url = attributes["videoUrl"].string.flatMap(URL.init(string:))
+                ?? Self.imageURL(attributes["imageAsset"])
+            guard let url else { return nil }
             let fallback = "\(kind)-\(item["id"].string ?? UUID().uuidString)"
             let name = attributes["fileName"].string
                 ?? "\(fallback).\(url.pathExtension.isEmpty ? "png" : url.pathExtension)"
             return ImportedStoreAsset(locale: locale, kind: kind, url: url, fileName: name)
         }
+    }
+
+    /// Apple serves an image as a template with `{w}`, `{h}`, `{f}`, and `{c}`
+    /// placeholders. Every image attribute in the API uses this one shape.
+    static func imageURL(_ asset: JSON, side: Int? = nil) -> URL? {
+        guard let template = asset["templateUrl"].string else { return nil }
+        let width = side ?? asset["width"].int ?? 1_290
+        let height = side ?? asset["height"].int ?? 2_796
+        return URL(string: template
+            .replacingOccurrences(of: "{w}", with: String(width))
+            .replacingOccurrences(of: "{h}", with: String(height))
+            .replacingOccurrences(of: "{f}", with: "png")
+            .replacingOccurrences(of: "{c}", with: ""))
     }
 
     // MARK: - The catalog shapes
