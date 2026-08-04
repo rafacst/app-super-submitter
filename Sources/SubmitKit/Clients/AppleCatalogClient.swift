@@ -135,6 +135,14 @@ public struct AppleCatalogClient: Sendable {
                 + "?include=subscriptionPricePoint,territory&limit=200") {
             product.prices = Self.subscriptionPrices(JSON(data: response.data))
         }
+        // The territory list of a subscription, on the twin of the purchase
+        // availability read above. Apple answers 404 for a subscription that
+        // sells everywhere, which is a state and not a failure.
+        if let response = try? await api.apple(
+            "GET", "/v1/subscriptions/\(id)/subscriptionAvailability"
+                + "?include=availableTerritories&limit=200") {
+            product.availableTerritories = Self.territories(JSON(data: response.data))
+        }
         // The three offer kinds live on three collections. The count only
         // means something when all three answered, so one failure leaves it
         // nil and the plan says that nobody verified the offers.

@@ -87,6 +87,7 @@ extension Runner {
 
     func appleVersionLocale(_ locale: String) async throws {
         guard let versionID = appleVersionID else { throw RunError.missingVersion }
+        try await appleDropEmptyMediaSets(locale)
         var attributes: [String: Any] = [:]
         put(&attributes, "description", manifest.listingText(locale: locale, field: .description))
         put(&attributes, "whatsNew", manifest.listingText(locale: locale, field: .whatsNew))
@@ -132,7 +133,16 @@ extension Runner {
         // Replacing the relationship is the only reliable way to make both
         // deletion and ordering match the manifest. Checksums in the planner
         // keep this path off a no-op apply.
-        for bucket in Set(files.map(\.bucket)) {
+        let wantedBuckets = Set(files.map(\.bucket))
+        // A device class the manifest dropped leaves a whole set behind, and
+        // the loop below never visits it. Apple keeps showing those
+        // screenshots, so the set goes before anything else runs.
+        try await appleDropMediaSets(
+            localizationID: localizationID, collection: "appScreenshotSets",
+            typeKey: "screenshotDisplayType", path: "/v1/appScreenshotSets",
+            keeping: wantedBuckets)
+
+        for bucket in wantedBuckets {
             let setID = try await appleScreenshotSet(displayType: bucket,
                                                      localizationID: localizationID)
             setsByBucket[bucket] = setID
@@ -720,6 +730,9 @@ extension Runner {
                 if let locale = item["attributes"]["locale"].string,
                    let id = item["id"].string { localizationIDs[locale] = id }
             }
+            try await appleDropLocalizations(
+                existing, keeping: Set((purchase.locales ?? [:]).keys),
+                path: "/v2/inAppPurchaseLocalizations")
         }
         for (locale, text) in (purchase.locales ?? [:]).sorted(by: { $0.key < $1.key }) {
             let attributes = ["locale": locale, "name": text.name ?? purchase.id,
@@ -790,16 +803,8 @@ extension Runner {
                          "attributes": ["contentHosting": hosting]],
             ])
         }
-        if purchase.promotedPurchase == true {
-            try await api.apple("POST", "/v1/promotedPurchases", body: [
-                "data": ["type": "promotedPurchases",
-                         "attributes": ["visibleForAllUsers": true],
-                         "relationships": [
-                            "app": ["data": ["type": "apps", "id": appleAppID]],
-                            "inAppPurchaseV2": ["data": ["type": "inAppPurchases",
-                                                           "id": purchaseID]],
-                         ]],
-            ])
+        if let promoted = purchase.promotedPurchase {
+            try await applePromotedPurchase(promoted, purchaseID: purchaseID)
         }
         if let path = purchase.reviewScreenshot, let url = resolve(path) {
             let data = try Data(contentsOf: url, options: .mappedIfSafe)
@@ -825,6 +830,37 @@ extension Runner {
         // `inAppPurchaseContents` and no create, so the hosted content upload
         // left the API. The validator names the key, so a silent skip here
         // never looks like a successful upload.
+    }
+
+    /// The promotion of one purchase, in both directions.
+    ///
+    /// `true` creates the promotion and `false` removes it. A missing key in
+    /// the manifest never reaches this call, so an unmanaged promotion stays
+    /// exactly as the developer left it in App Store Connect.
+    ///
+    /// Apple answers 404 for a purchase it never promoted, which is a state and
+    /// not a failure.
+    func applePromotedPurchase(_ wanted: Bool, purchaseID: String) async throws {
+        let existing = try? await api.apple(
+            "GET", "/v2/inAppPurchases/\(purchaseID)/promotedPurchase")
+        let currentID = existing.flatMap { JSON(data: $0.data)["data"]["id"].string }
+
+        switch (wanted, currentID) {
+        case (true, .none):
+            try await api.apple("POST", "/v1/promotedPurchases", body: [
+                "data": ["type": "promotedPurchases",
+                         "attributes": ["visibleForAllUsers": true],
+                         "relationships": [
+                            "app": ["data": ["type": "apps", "id": appleAppID]],
+                            "inAppPurchaseV2": ["data": ["type": "inAppPurchases",
+                                                           "id": purchaseID]],
+                         ]],
+            ])
+        case (false, .some(let id)):
+            try await api.apple("DELETE", "/v1/promotedPurchases/\(id)")
+        case (true, .some), (false, .none):
+            break
+        }
     }
 
     static func appleProductType(_ kind: Manifest.Purchase.Kind) -> String {
@@ -949,5 +985,79 @@ extension Runner {
     func put(_ attributes: inout [String: Any], _ key: String, _ value: String?) {
         guard let value, !value.isEmpty else { return }
         attributes[key] = value
+    }
+
+    /// Removes the media sets of a locale that the manifest no longer fills.
+    ///
+    /// The planner emits no upload step for a device class that went to zero,
+    /// so nothing else ever visits those sets. This runs from the locale
+    /// writer, which every managed locale reaches on every apply.
+    ///
+    /// A preview type comes from the device class alone, so the manifest names
+    /// the whole wanted set. A screenshot display type comes from the pixel
+    /// size of the file, so this only clears the screenshots of a locale that
+    /// names none at all. `appleScreenshots` clears the rest, where the
+    /// resolved buckets are in hand.
+    func appleDropEmptyMediaSets(_ locale: String) async throws {
+        guard let localizationID = appleVersionLocalizationIDs[locale] else { return }
+
+        var previewTypes: Set<String> = []
+        var screenshotCount = 0
+        for deviceClass in Manifest.DeviceClass.allCases {
+            if !manifest.mediaPaths(locale: locale, deviceClass: deviceClass,
+                                    previews: true).isEmpty,
+               let type = AssetInspector.applePreviewType(for: deviceClass) {
+                previewTypes.insert(type)
+            }
+            screenshotCount += manifest.mediaPaths(locale: locale,
+                                                   deviceClass: deviceClass).count
+        }
+
+        try await appleDropMediaSets(
+            localizationID: localizationID, collection: "appPreviewSets",
+            typeKey: "previewType", path: "/v1/appPreviewSets", keeping: previewTypes)
+
+        if screenshotCount == 0 {
+            try await appleDropMediaSets(
+                localizationID: localizationID, collection: "appScreenshotSets",
+                typeKey: "screenshotDisplayType", path: "/v1/appScreenshotSets",
+                keeping: [])
+        }
+    }
+
+    /// One removal, both set kinds. Apple deletes the screenshots or the
+    /// previews with the set, so this needs no second pass over the children.
+    func appleDropMediaSets(localizationID: String, collection: String, typeKey: String,
+                            path: String, keeping wanted: Set<String>) async throws {
+        guard let response = try? await api.apple(
+            "GET", "/v1/appStoreVersionLocalizations/\(localizationID)/\(collection)?limit=50")
+        else { return }
+        for item in JSON(data: response.data)["data"].array {
+            guard let id = item["id"].string,
+                  let type = item["attributes"][typeKey].string,
+                  !wanted.contains(type) else { continue }
+            try await api.apple("DELETE", "\(path)/\(id)")
+        }
+    }
+
+    /// Removes every localization whose locale the manifest dropped.
+    ///
+    /// Rule 3 of section 5.1 says a missing value means "do not manage this
+    /// field". A locale is not a field. A developer who removes a locale from
+    /// the manifest means it, and without this the store keeps selling the old
+    /// text forever.
+    ///
+    /// The caller passes the payload it already read, so this costs no request
+    /// when nothing is stale.
+    ///
+    /// `// ponytail: one reconciler, three resources. The App Store spells the
+    /// // path differently for each one and the rule is identical.`
+    func appleDropLocalizations(_ held: JSON, keeping wanted: Set<String>,
+                                path: String) async throws {
+        for item in held["data"].array {
+            guard let locale = item["attributes"]["locale"].string,
+                  let id = item["id"].string, !wanted.contains(locale) else { continue }
+            try await api.apple("DELETE", "\(path)/\(id)")
+        }
     }
 }

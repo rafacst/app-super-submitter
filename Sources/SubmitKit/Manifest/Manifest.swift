@@ -186,13 +186,36 @@ extension Manifest {
             /// Sends the build to the beta review that an external group
             /// needs. It is a queue, so this is the one irreversible switch.
             public var submitForBetaReview: Bool?
+            /// The TestFlight page of the app, by locale. `whatToTest` above
+            /// belongs to one build; this belongs to the app and it survives
+            /// every build.
+            public var localizations: [String: Localization]?
 
             public init(groups: [Group]? = nil, whatToTest: [String: String]? = nil,
-                        autoNotify: Bool? = nil, submitForBetaReview: Bool? = nil) {
+                        autoNotify: Bool? = nil, submitForBetaReview: Bool? = nil,
+                        localizations: [String: Localization]? = nil) {
                 self.groups = groups
                 self.whatToTest = whatToTest
                 self.autoNotify = autoNotify
                 self.submitForBetaReview = submitForBetaReview
+                self.localizations = localizations
+            }
+
+            /// One locale of the TestFlight page. Apple calls the resource
+            /// `betaAppLocalizations`.
+            public struct Localization: Codable, Sendable, Equatable {
+                public var description: String?
+                public var feedbackEmail: String?
+                public var marketingUrl: String?
+                public var privacyPolicyUrl: String?
+
+                public init(description: String? = nil, feedbackEmail: String? = nil,
+                            marketingUrl: String? = nil, privacyPolicyUrl: String? = nil) {
+                    self.description = description
+                    self.feedbackEmail = feedbackEmail
+                    self.marketingUrl = marketingUrl
+                    self.privacyPolicyUrl = privacyPolicyUrl
+                }
             }
 
             public struct Group: Codable, Sendable, Equatable {
@@ -567,13 +590,20 @@ extension Manifest {
             /// changes what a real customer pays, so the validator warns and
             /// the default is false.
             public var migrateExistingSubscribers: Bool?
+            /// The two Apple review controls that a one-time purchase already
+            /// had. Apple asks for the same screenshot and the same territory
+            /// list on a subscription, on its own pair of resources.
+            public var reviewScreenshot: String?
+            public var availableTerritories: [String]?
 
             public init(id: String, duration: String, basePlanId: String? = nil,
                         price: Price? = nil, entitlements: [String]? = nil,
                         packageKey: String? = nil,
                         locales: [String: ProductLocale]? = nil, active: Bool? = nil,
                         tax: Tax? = nil, offers: [Offer]? = nil,
-                        migrateExistingSubscribers: Bool? = nil) {
+                        migrateExistingSubscribers: Bool? = nil,
+                        reviewScreenshot: String? = nil,
+                        availableTerritories: [String]? = nil) {
                 self.id = id
                 self.duration = duration
                 self.basePlanId = basePlanId
@@ -585,6 +615,8 @@ extension Manifest {
                 self.tax = tax
                 self.offers = offers
                 self.migrateExistingSubscribers = migrateExistingSubscribers
+                self.reviewScreenshot = reviewScreenshot
+                self.availableTerritories = availableTerritories
             }
         }
     }

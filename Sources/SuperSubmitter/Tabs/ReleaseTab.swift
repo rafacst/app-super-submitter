@@ -7,6 +7,7 @@ import SwiftUI
 /// between the draft and the review, and that placement is the point.
 struct ReleaseTab: View {
     @Environment(AppState.self) private var state
+    @State private var undoing: Store?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -27,6 +28,25 @@ struct ReleaseTab: View {
             guard state.consoleRows.isEmpty, !state.stores.isEmpty else { return }
             state.loadConsoleMarks()
         }
+        .confirmationDialog(undoQuestion, isPresented: undoBinding, presenting: undoing) { store in
+            Button(store == .apple ? "Cancel the submission" : "Halt the rollout",
+                   role: .destructive) {
+                Task { await state.undoRelease(store) }
+            }
+            Button("Keep it", role: .cancel) {}
+        } message: { store in
+            Text(store == .apple
+                ? "The App Store loses its place in the review queue. A new submission starts at the back of it."
+                : "Google stops new installs of this rollout. Every device that already has the build keeps it.")
+        }
+    }
+
+    private var undoQuestion: String {
+        undoing == .apple ? "Cancel the App Store submission?" : "Halt the Google Play rollout?"
+    }
+
+    private var undoBinding: Binding<Bool> {
+        Binding(get: { undoing != nil }, set: { if !$0 { undoing = nil } })
     }
 
     private var appleReleaseControls: some View {
@@ -191,7 +211,11 @@ struct ReleaseTab: View {
             done: released,
             blocked: blocked,
             hint: hint(store, released: released, blockers: blockers, other: other),
-            hintColor: blocked && !released ? Theme.yellow : Theme.text2
+            hintColor: blocked && !released ? Theme.yellow : Theme.text2,
+            undoTitle: state.canUndoRelease(store)
+                ? (store == .apple ? "Cancel the submission" : "Halt the rollout")
+                : nil,
+            undo: { undoing = store }
         ) { state.releaseSheet = store }
     }
 
@@ -374,6 +398,10 @@ private struct ReleaseColumn: View {
     let blocked: Bool
     let hint: String
     let hintColor: Color
+    /// The take-back. It appears only while the store still accepts one, so a
+    /// missing title is the normal case and not an error.
+    var undoTitle: String?
+    var undo: () -> Void = {}
     let action: () -> Void
 
     private var inactive: Bool { done || blocked }
@@ -407,6 +435,10 @@ private struct ReleaseColumn: View {
                 .foregroundStyle(hintColor)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let undoTitle {
+                QuietButton(title: undoTitle, action: undo)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

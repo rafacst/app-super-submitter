@@ -357,6 +357,11 @@ public struct StateReader: Sendable {
         if let groups = try? await client.groups(appID: appID) {
             result.betaGroups = groups
         }
+        // The app-level page needs no build, so it is read before the guard.
+        if let localizations = try? await client.appLocalizations(appID: appID) {
+            result.betaAppLocalizations = localizations
+            result.betaAppLocalizationsRead = true
+        }
         guard let buildID = result.attachedBuildId else { return }
         if let notes = try? await client.whatToTest(buildID: buildID) {
             result.whatToTest = notes
