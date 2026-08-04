@@ -303,9 +303,13 @@ struct PlanTab: View {
     /// Prominent, and deliberately not red. It writes a draft, and a draft is
     /// reversible. Red belongs to tab 9 alone.
     private func applyRow(_ plan: PlanResult) -> some View {
-        let blocked = !state.canApply
+        // A locked apply stays pressable and opens the pricing sheet. A dry
+        // run is free and never locks.
+        let locked = !state.dryRun && !state.can(.storeWrite)
+        let blocked = !locked && !state.canApply
         return HStack(alignment: .center, spacing: 16) {
             Button {
+                guard state.dryRun || state.requirePaid(.storeWrite, .apply) else { return }
                 guard state.canApply else { return }
                 state.selectedTab = .submit
                 state.startRun()
@@ -334,6 +338,9 @@ struct PlanTab: View {
     private func applyNote(_ plan: PlanResult) -> String {
         if state.dryRun {
             return "A dry run logs every request and sends none. Nothing reaches a store."
+        }
+        if !state.can(.storeWrite) {
+            return "Store writes need paid access. Your plan is kept, and reading the stores and running a dry run stay free."
         }
         if plan.isBlocked {
             let count = plan.errors.count

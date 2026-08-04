@@ -197,7 +197,10 @@ struct ReleaseTab: View {
     private func column(_ store: Store) -> some View {
         let released = store == .apple ? state.appleReleased : state.googleReleased
         let blockers = state.releaseBlockers(for: store)
-        let blocked = !released && (!state.applied || !blockers.isEmpty)
+        // A locked button stays pressable and opens the pricing sheet. A
+        // disabled button with no explanation is the worst of both.
+        let locked = !released && !state.can(.storeRelease)
+        let blocked = !locked && !released && (!state.applied || !blockers.isEmpty)
         let name = store == .apple ? "App Store" : "Google Play"
         let approvedApple = store == .apple
             && state.actualState.apple?.versionState == "PENDING_DEVELOPER_RELEASE"
@@ -216,7 +219,13 @@ struct ReleaseTab: View {
                 ? (store == .apple ? "Cancel the submission" : "Halt the rollout")
                 : nil,
             undo: { undoing = store }
-        ) { state.releaseSheet = store }
+        ) {
+            // The confirmation names an irreversible action. Opening it for
+            // somebody who cannot perform it wastes the one screen that has to
+            // be read carefully.
+            guard state.requirePaid(.storeRelease, .release) else { return }
+            state.releaseSheet = store
+        }
     }
 
     private func lines(_ store: Store) -> String {
@@ -236,6 +245,9 @@ struct ReleaseTab: View {
 
     private func hint(_ store: Store, released: Bool, blockers: [ConsoleRow],
                       other: String) -> String {
+        if !released, !state.can(.storeRelease) {
+            return "Releasing to review needs paid access. Your draft stays as it is."
+        }
         if released {
             return store == .apple
                 ? "You can cancel this submission only before the review starts."

@@ -210,11 +210,17 @@ public struct UploadService: Sendable {
 
     /// upload-spec 9.14. One edit is the transaction. Before a confirmed
     /// commit the edit is disposable, and the cleanup path always runs.
+    ///
+    /// - Parameter access: the paywall boundary, asked here rather than in the
+    ///   view, so the edit is never opened for an account that cannot finish
+    ///   the upload.
     public func uploadGoogleBundle(packageName: String, track: String, bundle: URL,
                                    expectedVersionCode: Int, versionName: String?,
+                                   access: any AccessGate,
                                    onEditCreated: @Sendable (String) async -> Void = { _ in },
                                    onProgress: @Sendable (Double) -> Void) async throws
         -> GoogleUploadResult {
+        try await access.authorize(.storeUpload)
         let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
         guard let editID = edit["id"].string else { throw RunError.missingEdit }

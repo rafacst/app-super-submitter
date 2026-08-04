@@ -9,7 +9,10 @@ struct SuperSubmitterApp: App {
     init() {
         PostHogClient.setup()
     }
-    @State private var state = AppState()
+    // The real defaults and the real Keychain account, except while
+    // `tools/screenshots.sh` runs. See ScreenshotMode.
+    @State private var state = AppState(defaults: ScreenshotMode.defaults,
+                                        storeAccount: ScreenshotMode.storeAccount)
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     var body: some Scene {
@@ -18,6 +21,12 @@ struct SuperSubmitterApp: App {
                 .environment(state)
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
+                    guard !ScreenshotMode.isActive else {
+                        ScreenshotMode.apply(to: state)
+                        ScreenshotMode.placeWindow()
+                        return
+                    }
+                    state.configureAccess()
                     // The onboarding states the one promise of the product
                     // before the first credential.
                     // RootView writes the flag when the panel closes. A flag
@@ -99,6 +108,8 @@ struct SuperSubmitterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        // Before any window draws, so both themes come off one system setting.
+        ScreenshotMode.applyAppearance()
         Updater.start()
         // Only the plain executable needs this. The app bundle carries the
         // asset catalog icon, and overriding it here would replace a whole
