@@ -147,6 +147,7 @@ extension AppState {
         runner = nil
         plan = result
         actualState = actual
+        storeSnapshot.merge(actual)
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actual, stores: stores)
         planError = result.readFailures.isEmpty ? nil : result.readFailures.joined(separator: "\n")
         stepStates = Array(repeating: .pending, count: result.steps.count)

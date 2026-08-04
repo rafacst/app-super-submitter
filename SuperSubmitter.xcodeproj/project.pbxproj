@@ -28,6 +28,7 @@
 		2DE34F786B0F293D3A365470 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41BC3684D9EAD02C78DA986 /* SettingsPanel.swift */; };
 		2EBA77B2C836B214F242EE28 /* MediaTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D91EA1D4DAB192A7E79D52C /* MediaTab.swift */; };
 		30691A3DA2AEAA507A299B09 /* PlanTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516E6CD3FCB821FB333310F /* PlanTab.swift */; };
+		316D131EA0C23D5E1610E128 /* StoreSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */; };
 		3196AF55A7448A7FAD213FE7 /* UploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7DF63306FED48988313FED2 /* UploadService.swift */; };
 		321F8A0AB936919FA72CF1CD /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233A3F24548DC6B4BC41FFA1 /* CommandRunner.swift */; };
 		3513A5966C61DD01429D9091 /* ConsoleChecklist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4041BBC96E546A5C3B189D36 /* ConsoleChecklist.swift */; };
@@ -35,6 +36,7 @@
 		3A17277203EF28D42CD7EBED /* MenuBarPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B843901D2B0B6BADB67B316 /* MenuBarPopover.swift */; };
 		3A237C2C616EAE1D774FE358 /* DetailsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1BACCC636778CEAA23A8EA /* DetailsTab.swift */; };
 		3D5340111B57CD2CADDE092B /* StoreAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE48EB35019BAEE0BE9A646 /* StoreAPI.swift */; };
+		400A6F5920629C95F4A34A1B /* AppleKeyIDTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E21F4F8E9681197F6ACE94 /* AppleKeyIDTests.swift */; };
 		41CB1EE794CDAB45A3C8EE36 /* StoreDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391257D4800C5167DF63F1FB /* StoreDiagnostics.swift */; };
 		4699675BB672899962203F06 /* StoreImportReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CC445E1B00EA868C8788A8 /* StoreImportReaderTests.swift */; };
 		4A8EE31346BF79191030021B /* ConsoleChecklistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18027E4A08DB8F660315C028 /* ConsoleChecklistTests.swift */; };
@@ -74,6 +76,7 @@
 		85182B476C60DAF6322F18A1 /* AppStateCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41DF84B54D31B54FACFEA4F /* AppStateCatalog.swift */; };
 		85ECEB14517B8A2A9F13B748 /* ReleaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0C17A03108A0D101068749 /* ReleaseClient.swift */; };
 		88706A2206A6D167031D5C00 /* AppStateArtifacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75812E72D8517689DBB03F82 /* AppStateArtifacts.swift */; };
+		8E42713758764C12892142D6 /* StoreSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1078FF3E049104204DA90EFF /* StoreSnapshotTests.swift */; };
 		8E6F8C103D3355F696E3C3CB /* ManifestEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE68BE6466E075A815F827DF /* ManifestEditing.swift */; };
 		9036758C8FB9C8BF09B765FF /* BindingLimitsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A67B6ECB1980E83D80C7245 /* BindingLimitsTests.swift */; };
 		920195C212422C9A6B85D01A /* ManifestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8DF457A1D20CFB570F21A9 /* ManifestTests.swift */; };
@@ -193,6 +196,7 @@
 		065E15DF6AFE7DCA28B9E994 /* BuildFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildFlow.swift; sourceTree = "<group>"; };
 		06D91072D75E576ECF31AACC /* ProviderApply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderApply.swift; sourceTree = "<group>"; };
 		0F0A38C40B86738E2ABCE03A /* SubmitKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SubmitKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1078FF3E049104204DA90EFF /* StoreSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreSnapshotTests.swift; sourceTree = "<group>"; };
 		11F487A6A33C04D956210C7B /* ManifestFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestFile.swift; sourceTree = "<group>"; };
 		125542C9DF2F69ED1E405146 /* Manifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manifest.swift; sourceTree = "<group>"; };
 		149E97C967CC8966ED2C29DB /* ExistingAppImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExistingAppImport.swift; sourceTree = "<group>"; };
@@ -207,6 +211,7 @@
 		220A6E0FD20FA397139568C1 /* PlanStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanStep.swift; sourceTree = "<group>"; };
 		230C5A844A3509EB5DF115C0 /* PackageReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageReaderTests.swift; sourceTree = "<group>"; };
 		233A3F24548DC6B4BC41FFA1 /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
+		234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreSnapshot.swift; sourceTree = "<group>"; };
 		281FA294F1C5C5D34164D838 /* GoogleActionsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleActionsClient.swift; sourceTree = "<group>"; };
 		28B68E05258D44AEC25A6A00 /* YAMLEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YAMLEditor.swift; sourceTree = "<group>"; };
 		29104E1FA3BB399C3F6D6180 /* StatusReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusReader.swift; sourceTree = "<group>"; };
@@ -266,6 +271,7 @@
 		893F107A5B151BA164F2AA83 /* StoreAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreAPITests.swift; sourceTree = "<group>"; };
 		8D0C17A03108A0D101068749 /* ReleaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseClient.swift; sourceTree = "<group>"; };
 		8D79C5DE3F2E7E5B601B24DD /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
+		91E21F4F8E9681197F6ACE94 /* AppleKeyIDTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleKeyIDTests.swift; sourceTree = "<group>"; };
 		92CC10AAB4F6572C96CD9F98 /* OfferEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferEditor.swift; sourceTree = "<group>"; };
 		93181C8DC0781E6FBE6E8267 /* GooglePlayGapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlayGapTests.swift; sourceTree = "<group>"; };
 		94ABF7EDA91568EFB6310536 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -410,6 +416,7 @@
 				C555136432A192B5111694D2 /* GoogleActionsPanelTests.swift */,
 				EA20D03CFA77AF800B818FB1 /* PlayMarkTests.swift */,
 				379E2A61EE4C2961128B9042 /* RemoveLinkedAppTests.swift */,
+				1078FF3E049104204DA90EFF /* StoreSnapshotTests.swift */,
 				48B7D7160F37672B80B343B9 /* TabStructureTests.swift */,
 			);
 			path = SuperSubmitterUITests;
@@ -450,6 +457,7 @@
 		51FCFFFC822F8943AB24B2CE /* SubmitKitTests */ = {
 			isa = PBXGroup;
 			children = (
+				91E21F4F8E9681197F6ACE94 /* AppleKeyIDTests.swift */,
 				5A67B6ECB1980E83D80C7245 /* BindingLimitsTests.swift */,
 				333E602808CC7A34C587B454 /* BuildDiscoveryTests.swift */,
 				66B0D9F08A0D8947E42BFF7F /* CatalogAndMarketingTests.swift */,
@@ -593,6 +601,7 @@
 				C7E3BB00DDBA70D1521D8CC0 /* DemoData.swift */,
 				149E97C967CC8966ED2C29DB /* ExistingAppImport.swift */,
 				D7E65258B651A45C64DE1F83 /* PostHogClient.swift */,
+				234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */,
 				CC15B00B50A626A5F4200EF8 /* SuperSubmitterApp.swift */,
 				7FE78CA68577267148B61B1E /* Tab.swift */,
 				B74D951D644E0304AA9FF7C1 /* Build */,
@@ -853,6 +862,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				400A6F5920629C95F4A34A1B /* AppleKeyIDTests.swift in Sources */,
 				9036758C8FB9C8BF09B765FF /* BindingLimitsTests.swift in Sources */,
 				6854F943A12AB2FDA9E6CCC8 /* BuildDiscoveryTests.swift in Sources */,
 				4E0B74C2CB8334E6973E8DE7 /* CatalogAndMarketingTests.swift in Sources */,
@@ -971,6 +981,7 @@
 				04232A1F8E5CBB7994D3E498 /* StoreDiagnosticsPanel.swift in Sources */,
 				E51772E36D69CABFEC47E053 /* StoreMark.swift in Sources */,
 				06930BD80F48E1A064372E14 /* StoreSelection.swift in Sources */,
+				316D131EA0C23D5E1610E128 /* StoreSnapshot.swift in Sources */,
 				DFABFB6B38129BD98E3C6C45 /* StoresTab.swift in Sources */,
 				A17155D72A9F7E0EA624EE63 /* SubmitTab.swift in Sources */,
 				530A43C6C1763DE8F8E08836 /* SuperSubmitterApp.swift in Sources */,
@@ -991,6 +1002,7 @@
 				2B920DF6A3FBD642BAA29343 /* GoogleActionsPanelTests.swift in Sources */,
 				A869655F8A2E446669E2C5D7 /* PlayMarkTests.swift in Sources */,
 				BE96E12BD8444E627DCA4C3A /* RemoveLinkedAppTests.swift in Sources */,
+				8E42713758764C12892142D6 /* StoreSnapshotTests.swift in Sources */,
 				1CAA1EE5153F2DB7276E8451 /* TabStructureTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
