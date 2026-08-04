@@ -31,6 +31,11 @@ struct SuperSubmitterApp: App {
         // shows one surface and not a bar above a bar.
         .windowStyle(.hiddenTitleBar)
         .commands {
+            // Where a Mac user looks for it: the app menu, under About.
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Updater.check() }
+                Divider()
+            }
             // The two doors of the entry screen, plus the way out. The entry
             // screen hides itself once one app is linked, so without these the
             // second app has nowhere to come from.
@@ -86,14 +91,15 @@ struct SuperSubmitterApp: App {
     }
 }
 
-/// The package builds a plain executable, not an app bundle yet. Without
-/// these two lines the window opens behind every other app.
+/// The package builds a plain executable, not an app bundle. Without these
+/// two lines the window opens behind every other app.
 ///
-/// ponytail: switch to an Xcode project (xcodegen is on this machine) when
-/// the app needs entitlements, an icon, or notarization. Not before.
+/// The shipping build is the Xcode project, because notarization and the
+/// updater both need a real bundle. The package build stays for `swift test`.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        Updater.start()
         // Only the plain executable needs this. The app bundle carries the
         // asset catalog icon, and overriding it here would replace a whole
         // icon set with one 1024 point image.
