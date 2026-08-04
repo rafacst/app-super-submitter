@@ -90,7 +90,8 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            OTHER_CODE_SIGN_FLAGS="--timestamp"
+            OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 
       # Xcode signs the outer Sparkle.framework and stops there. The four
       # helpers inside keep the ad-hoc signature Sparkle ships, and Apple
@@ -111,9 +112,17 @@ jobs:
             "$V/Autoupdate" \
             "$V/Updater.app"
           codesign --force --options runtime --timestamp --sign "$ID" "$FW"
+          # The app takes the entitlements file, not whatever the build left
+          # behind. `xcodebuild build` injects get-task-allow, and Apple
+          # refuses any binary that asks for it.
           codesign --force --options runtime --timestamp \
-            --preserve-metadata=entitlements --sign "$ID" "$APP"
+            --entitlements SuperSubmitter.entitlements --sign "$ID" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
+          if codesign -d --entitlements - --xml "$APP" 2>/dev/null \
+            | grep -q get-task-allow; then
+            echo "::error::The app still requests get-task-allow."
+            exit 1
+          fi
           # Nothing inside may still say "adhoc" or the notary refuses the app.
           if codesign -dvv "$V/Updater.app" 2>&1 | grep -q adhoc; then
             echo "::error::Sparkle helpers are still ad-hoc signed."
@@ -130,11 +139,32 @@ jobs:
           # Notarization takes a zip. The one users download is built again
           # after the staple, so the ticket travels inside it.
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+          # notarytool says little when it refuses. Capture the result, then
+          # print the notary log, which names the binary Apple rejected.
+          set +e
+          OUT=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$TEAM_ID" \
-            --wait
+            --wait --output-format json 2>&1)
+          set -e
+          echo "$OUT"
+          ID=$(printf '%s' "$OUT" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))' 2>/dev/null || true)
+          STATUS=$(printf '%s' "$OUT" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))' 2>/dev/null || true)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization did not succeed. Status: ${STATUS:-none}"
+            if [ -n "$ID" ]; then
+              echo "--- notary log for $ID ---"
+              xcrun notarytool log "$ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$TEAM_ID" || true
+            else
+              echo "No submission id came back, so Apple refused before the upload."
+              echo "That points at the Apple ID, the app-specific password, or the team."
+            fi
+            exit 1
+          fi
           xcrun stapler staple "$APP"
           mkdir -p dist
           ditto -c -k --keepParent "$APP" \
