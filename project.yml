@@ -11,6 +11,9 @@ packages:
   PostHog:
     url: https://github.com/PostHog/posthog-ios.git
     from: 3.59.3
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle.git
+    from: 2.9.0
 targets:
   SubmitKit:
     type: framework
@@ -44,8 +47,31 @@ targets:
       - target: SubmitKit
       - package: PostHog
         product: PostHog
+      - package: Sparkle
+        product: Sparkle
     entitlements:
       path: SuperSubmitter.entitlements
+    # Sparkle reads SUFeedURL and SUPublicEDKey out of the bundle, and the
+    # INFOPLIST_KEY_ build settings only carry the keys Apple knows. So the
+    # app writes a real Info.plist. XcodeGen generates it from this block, and
+    # Xcode expands the $() at build time, so CI can still override the build
+    # number on the command line.
+    info:
+      path: Supporting/Info.plist
+      properties:
+        CFBundleDisplayName: Super Submitter
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: Copyright © 2026 Rafa CST
+        NSPrincipalClass: NSApplication
+        # The feed the app polls. GitHub keeps /releases/latest/download/<name>
+        # pointing at the newest release, so this URL never changes.
+        SUFeedURL: https://github.com/rafacst/super-submitter-app/releases/latest/download/appcast.xml
+        # The public half of the EdDSA pair. RELEASING.md says how to make it.
+        # The release workflow refuses to build while this is the placeholder.
+        SUPublicEDKey: Tz2ycxl8EBhbHB1DwRx24yiGi0wIZvbOMeyrWncwOGI=
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rafacst.supersubmitter
@@ -57,11 +83,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Super Submitter
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
-        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Rafa CST
-        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        GENERATE_INFOPLIST_FILE: NO
   SubmitKitTests:
     type: bundle.unit-test
     platform: macOS
