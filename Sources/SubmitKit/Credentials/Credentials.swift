@@ -77,6 +77,12 @@ public enum CredentialKind: String, Sendable {
     case google
     case revenueCat
     case reviewAccount
+    /// The Supabase access and refresh tokens for the Super Submitter account.
+    case account
+    /// The signed entitlement document. It is not a credential for a store,
+    /// but it is a signed secret-adjacent blob, and the Keychain is where the
+    /// spec puts it rather than `UserDefaults`.
+    case license
 }
 
 public enum KeychainCredentials {

@@ -403,11 +403,17 @@ public struct AppleBuildService: Sendable {
 
     /// `destination = upload` makes this second `xcodebuild` process perform
     /// the App Store Connect upload.
+    ///
+    /// - Parameter access: the paywall boundary. It is asked immediately
+    ///   before the process starts, because a build and its confirmation can
+    ///   take long enough for a grant to end in between.
     public func exportAndUpload(archive: URL, exportPath: URL, optionsPlist: URL,
                                 authentication: AppleAuthenticationFiles?,
                                 allowProvisioningUpdates: Bool,
+                                access: any AccessGate,
                                 onLine: @escaping @Sendable (ToolStream, String) -> Void)
         async throws {
+        try await access.authorize(.storeUpload)
         var arguments = ["xcodebuild", "-exportArchive",
                          "-archivePath", archive.path,
                          "-exportPath", exportPath.path,

@@ -101,17 +101,45 @@ public struct StateReader: Sendable {
             "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
         let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
                                   "REJECTED", "METADATA_REJECTED"])
+        func versionState(_ version: JSON) -> String {
+            version["attributes"]["appVersionState"].string
+                ?? version["attributes"]["appStoreState"].string ?? ""
+        }
         let editableVersion = versions["data"].array.first {
-            let state = $0["attributes"]["appVersionState"].string
-                ?? $0["attributes"]["appStoreState"].string ?? ""
-            return editableStates.contains(state)
+            editableStates.contains(versionState($0))
         }
         let namedVersion = versionName.flatMap { wanted in
             versions["data"].array.first {
                 $0["attributes"]["versionString"].string == wanted
             }
         }
-        if let version = namedVersion ?? editableVersion ?? versions["data"].array.first {
+        // The version that reached the store. It decides two things: the
+        // number the manifest has to beat, and whether this app is an update
+        // at all. Nil means the app has never shipped, and the update rules
+        // stay quiet for a first submission.
+        //
+        // A version removed from sale still counts. The app was on the store,
+        // so the next version is an update and Apple still wants the number to
+        // climb past it.
+        let releasedStates = Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION",
+                                  "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE",
+                                  "PENDING_DEVELOPER_RELEASE"])
+        // The highest, not the first. App Store Connect fixes no order here,
+        // and comparing against an older release would let a lower version
+        // through.
+        result.liveVersionString = versions["data"].array
+            .filter { releasedStates.contains(versionState($0)) }
+            .compactMap { $0["attributes"]["versionString"].string }
+            .max { Validator.isVersion($1, above: $0) }
+
+        // No fallback to "whatever App Store Connect returned first". A live
+        // version is not writable, and handing its id to the runner would
+        // point every metadata write at the listing the customers are reading.
+        // Nil means "no version yet", and the planner then creates one.
+        //
+        // A named version that is live still lands here, because the developer
+        // named a number that is already used and the validator must say so.
+        if let version = namedVersion ?? editableVersion {
             let versionID = version["id"].string
             result.versionId = versionID
             result.versionString = version["attributes"]["versionString"].string

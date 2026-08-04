@@ -21,6 +21,7 @@ struct SettingsPanel: View {
     private static let intervals = [1, 5, 10, 15, 30, 60]
 
     var body: some View {
+        @Bindable var state = state
         VStack(spacing: 0) {
             header
             settings
@@ -29,6 +30,7 @@ struct SettingsPanel: View {
         .background(Theme.bg)
         .foregroundStyle(Theme.text)
         .onExitCommand { dismiss() }
+        .sheet(isPresented: $state.showAccount) { AccountSheet() }
     }
 
     private var header: some View {
@@ -88,6 +90,14 @@ struct SettingsPanel: View {
                     Check("On by default for a new app", isOn: $dryRun,
                           note: "A dry run logs every request and sends none.")
                 }
+
+                SettingRow("Updates", alignment: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        QuietButton(title: "Check for updates") { Updater.check() }
+                        Note("Checks the latest signed deployment published in the GitHub repository.")
+                    }
+                    .frame(width: Self.controlWidth, alignment: .leading)
+                }
               }
             }
 
@@ -126,6 +136,47 @@ struct SettingsPanel: View {
                                 state.pruneBuildStorage()
                             }
                         }
+                    }
+                }
+              }
+            }
+
+            Section_("Plan and billing") {
+              VStack(alignment: .leading, spacing: 13) {
+                SettingRow("Account", alignment: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(state.accountEmail ?? state.entitlement.email ?? "Not signed in")
+                            .font(.system(size: 12.5))
+                            .frame(width: Self.controlWidth, alignment: .leading)
+                        Text("\(state.planLabel) · \(state.entitlementLabel)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.text2)
+                            .lineSpacing(3)
+                            .frame(width: Self.controlWidth, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 7) {
+                            if state.accountEmail == nil {
+                                QuietButton(title: "Sign in or create account") { state.openAccount() }
+                            } else if state.isPaid {
+                                QuietButton(title: "Manage billing") {
+                                    Task { await state.openBillingPortal() }
+                                }
+                            } else {
+                                QuietButton(title: "See plans") { state.openPaywall(.settings) }
+                            }
+                            if state.accountEmail != nil {
+                                QuietButton(title: "Restore access") {
+                                    Task { await state.restoreAccess() }
+                                }
+                            }
+                            if state.accountEmail != nil {
+                                QuietButton(title: "Sign out") { state.signOutOfBilling() }
+                            }
+                        }
+                        if let message = state.billingMessage {
+                            Note(message)
+                        }
+                        Note("Signing out returns Super Submitter to free access. It deletes no app, no store.yaml, no build, and no store key.")
                     }
                 }
               }

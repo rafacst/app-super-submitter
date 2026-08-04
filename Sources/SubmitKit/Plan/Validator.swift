@@ -18,6 +18,7 @@ public enum Validator {
         result += marketing(input)
         result += monetization(input)
         result += state(input)
+        result += update(input)
         // The errors first: tab 7 shows them at the top.
         return result.sorted { lhs, rhs in
             lhs.severity == rhs.severity ? lhs.id < rhs.id : lhs.severity == .error
@@ -851,12 +852,25 @@ public enum Validator {
         guard let apple = input.actual.apple else { return result }
 
         let writesMetadata = input.stores.contains(.apple)
+        // A nil state means the app found no version to write to. That is the
+        // normal shape of a live app between releases, and the plan creates
+        // the version, so it is not a block.
         if writesMetadata, let versionState = apple.versionState,
            versionState != "PREPARE_FOR_SUBMISSION" {
             result.append(Finding(
                 id: "state.appleVersion", severity: .error,
                 message: "The App Store version is \(versionState). Metadata writes need PREPARE_FOR_SUBMISSION.",
                 location: "Summary · App Store", fix: .plan))
+        }
+        // Apple refuses a version that does not climb. Catching it here names
+        // the live number and the fix; Apple's own error names neither.
+        let wanted = input.manifest.release?.versionName ?? ""
+        if writesMetadata, !wanted.isEmpty, let live = apple.liveVersionString,
+           !isVersion(wanted, above: live) {
+            result.append(Finding(
+                id: "state.appleVersionBump", severity: .error,
+                message: "Version \(wanted) is not above \(live), which is live on the App Store.",
+                location: "Build · Version", fix: .build))
         }
         if apple.hasOpenReviewSubmission {
             result.append(Finding(
@@ -877,6 +891,59 @@ public enum Validator {
                 location: "Summary · Google Play", fix: .plan))
         }
         return result
+    }
+
+    // MARK: - The update
+
+    /// What Apple demands of a version that follows a released one.
+    ///
+    /// These rules run only when the app is already on the App Store. A first
+    /// submission fills the same fields, but it fills them over several
+    /// sittings, and an error on a half-built manifest teaches the developer
+    /// to ignore the Summary tab.
+    ///
+    /// Only one field lands here. The rest of Apple's update requirements are
+    /// carried by a build or inherited from the released version, so they gate
+    /// the release button in `ConsoleChecklist` and not the apply. An apply
+    /// leaves a draft, and a draft is allowed to be unfinished.
+    static func update(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple),
+              input.actual.apple?.liveVersionString != nil,
+              let listing = input.manifest.listing else { return [] }
+        var result: [Finding] = []
+
+        for code in listing.locales.keys.sorted() {
+            // The store side matters: a draft that already carries the note
+            // needs nothing from the manifest, and demanding it there would
+            // break the rule that an absent key means "do not manage".
+            let stored = input.actual.apple?.versionLocales[code]?.whatsNew ?? ""
+            guard input.manifest.listingText(locale: code, field: .whatsNew).isEmpty,
+                  stored.isEmpty else { continue }
+            result.append(Finding(
+                id: "update.whatsNew.\(code)", severity: .error,
+                message: "An update needs What's New. The App Store asks for it on every version after the first.",
+                location: "Details · \(code) · What's new", fix: .details))
+        }
+        return result
+    }
+
+    /// Compares two dotted version strings component by component.
+    ///
+    /// A text compare puts "3.10" below "3.9", and Apple counts the numbers.
+    /// A missing component reads as zero, so "3.2" sits above "3.1.9".
+    ///
+    /// `// ponytail: integer components, not a semver library. Store version
+    /// // strings are numbers and dots; add a parser when one carries a
+    /// // pre-release tag.`
+    public static func isVersion(_ candidate: String, above other: String) -> Bool {
+        let left = candidate.split(separator: ".").map { Int($0) ?? 0 }
+        let right = other.split(separator: ".").map { Int($0) ?? 0 }
+        for index in 0..<max(left.count, right.count) {
+            let lhs = index < left.count ? left[index] : 0
+            let rhs = index < right.count ? right[index] : 0
+            if lhs != rhs { return lhs > rhs }
+        }
+        return false
     }
 
     /// The locales that the App Store lists. Used only to warn, never to block.

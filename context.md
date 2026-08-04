@@ -121,6 +121,11 @@ then `TabContent.swift`, then the view in `Tabs/`.
   (`Build/BuildStorage.swift`).
 - **Red means irreversible** and nothing else in the app may use it
   (`Design/Theme.swift`).
+- **Every store mutation passes an `AccessGate`.** A non-dry `Runner`, both
+  upload calls, and all five `ReleaseClient` mutations take one and ask it
+  first. It has no default parameter, so a new write cannot inherit an open
+  gate. Everything else, including editing, validation, local builds, store
+  reads, the plan, and the dry run, is free.
 - **No em dashes in any user-visible string.**
 
 ## 8. The two modes and the tabs
@@ -151,6 +156,9 @@ Sources/SubmitKit/
   Console/      the "finish in the console" checklist
   Mapping/      BindingLimits, PriceDraft
   Assets/       image dimension reader and checksums
+  Access/       the paywall: capabilities, signed entitlement, Ed25519 verifier,
+                AccessController, LicensingClient. `licensing-api.md` is the
+                contract.
   Credentials/  Keychain
   Resources/    store.schema.json, screenshot-sizes.json
 
@@ -182,7 +190,8 @@ exact argument array. Use that seam instead of hitting the network.
 |---|---|
 | `SPEC.md` | The product. Sections 5 to 17 are the authority for the manifest, the mapping, the workflows, the validation, and the UI. |
 | `upload-spec.md` | The local build and upload flow (Xcode, Gradle, states, recovery). |
-| `stripe-spec.md` | The licensing draft. **Not implemented yet.** Free users would lose raw YAML and every store write. |
+| `stripe-spec.md` | The licensing product rules, the Stripe setup, and the server. The client half is implemented; raw YAML is **not** gated. |
+| `licensing-api.md` | The wire contract the shipped client speaks. Read it before you build the service. |
 | `RELEASING.md` | Signing, notarization, Sparkle, GitHub secrets. |
 | `.design-notes/`, `design/` | The HTML mockup the SwiftUI screens follow. |
 
@@ -198,7 +207,11 @@ commit from a `feat/`, `fix/`, or `chore/` branch.
 
 - Saving `store.yaml` loses comments and block scalars. Yams re-encodes the
   whole file. Values survive and a test proves it. See SPEC open question 8.
-- Licensing (`stripe-spec.md`) ships no code.
+- Licensing: the client and Supabase sign-in are in `Sources/SubmitKit/Access/`
+  and every gate is live. Debug points at the test Worker. Release stays closed
+  until `LICENSING_BASE_URL` reaches the build. The deployed test and live
+  Workers still report zero configured Stripe Prices, so do not set that
+  Release value yet.
 - SPEC section 3.1 rows 3 to 10 and section 3.3 name the store endpoints that
   no code calls yet. Read them before you add a call, so you do not
   re-discover the surface.

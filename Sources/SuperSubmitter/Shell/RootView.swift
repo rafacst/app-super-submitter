@@ -12,6 +12,9 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var state = state
+        // A screenshot run pins the sidebar, so the chrome in the pictures
+        // does not follow the preference of whoever took them.
+        let position = ScreenshotMode.navigationPosition ?? position
         ZStack(alignment: .topLeading) {
             switch position {
             case .sidebar:
@@ -37,6 +40,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $state.showExistingAppImport) { ExistingAppImportSheet() }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
+        .sheet(item: $state.paywall) { trigger in PaywallSheet(trigger: trigger) }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
         .confirmationDialog("Remove \(state.removalName) from Super Submitter?",
                             isPresented: Binding(
@@ -55,6 +59,13 @@ struct RootView: View {
             Button("OK") { state.errorMessage = nil }
         } message: {
             Text(state.errorMessage ?? "")
+        }
+        // Coming back from the browser lands here, and so does waking from
+        // sleep. The refresh is what unlocks the app after a checkout; the
+        // browser return itself proves nothing.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await state.refreshEntitlement() }
         }
     }
 }
@@ -248,7 +259,14 @@ private struct ContentHeader: View {
                         Task { await state.readStores() }
                     }
                     Text("Dry run").font(.system(size: 12)).foregroundStyle(Theme.text2)
-                    SmallToggle(isOn: $state.dryRun)
+                    // Turning the dry run off is the moment an apply becomes a
+                    // store write, so that is where the paywall belongs.
+                    SmallToggle(isOn: Binding(
+                        get: { state.dryRun },
+                        set: { value in
+                            guard value || state.requirePaid(.storeWrite, .apply) else { return }
+                            state.dryRun = value
+                        }))
                 }
             case .release:
                 HStack(spacing: 7) {

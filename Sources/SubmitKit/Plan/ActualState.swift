@@ -17,11 +17,17 @@ public struct ActualState: Sendable, Equatable {
 
     public struct Apple: Sendable, Equatable {
         public var appInfoId: String?
+        /// The version the app may write to. It is nil when the app is live
+        /// and nobody has started the next one, and the plan then creates it.
         public var versionId: String?
         public var versionString: String?
         /// `PREPARE_FOR_SUBMISSION`, `WAITING_FOR_REVIEW`, and the rest.
         /// Spec section 10.6 blocks a metadata write outside the first one.
         public var versionState: String?
+        /// The version the customers see. It never equals `versionString`,
+        /// because a live version is not a version the app may write to. The
+        /// validator needs it to demand a higher number in the manifest.
+        public var liveVersionString: String?
         public var primaryCategory: String?
         public var secondaryCategory: String?
         public var infoLocales: [String: InfoLocale] = [:]

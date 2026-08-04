@@ -72,8 +72,20 @@ targets:
         # The public half of the EdDSA pair. RELEASING.md says how to make it.
         # The release workflow refuses to build while this is the placeholder.
         SUPublicEDKey: Tz2ycxl8EBhbHB1DwRx24yiGi0wIZvbOMeyrWncwOGI=
+        # The licensing service and the key that verifies its entitlement
+        # documents. The release workflow passes both to xcodebuild. A build
+        # without them refuses every store write, which is the safe answer.
+        # No Stripe secret key or webhook secret belongs in this bundle.
+        SSLicensingBaseURL: $(LICENSING_BASE_URL)
+        SSEntitlementPublicKeys: $(ENTITLEMENT_PUBLIC_KEYS)
+        SSSupabaseURL: $(SUPABASE_URL)
+        SSSupabasePublishableKey: $(SUPABASE_PUBLISHABLE_KEY)
     settings:
       base:
+        LICENSING_BASE_URL: ""
+        ENTITLEMENT_PUBLIC_KEYS: "entitlement-2026-01=8dO3jS7trDDIf3o/k1raACoLvxAVSVzKSxXijjTlKNQ="
+        SUPABASE_URL: https://cvrvyxcjddtpsyfxieuf.supabase.co
+        SUPABASE_PUBLISHABLE_KEY: sb_publishable_sI-T324LV-ymezJ0j9uecA_XZ2Dyep3
         PRODUCT_BUNDLE_IDENTIFIER: com.rafacst.supersubmitter
         PRODUCT_NAME: SuperSubmitter
         MARKETING_VERSION: 1.0.0
@@ -84,6 +96,9 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
+      configs:
+        Debug:
+          LICENSING_BASE_URL: https://super-submitter-test.rafacst.me
   SubmitKitTests:
     type: bundle.unit-test
     platform: macOS

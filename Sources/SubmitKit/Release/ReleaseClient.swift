@@ -7,14 +7,20 @@ import Foundation
 /// irreversible calls leaves one store in review and one store not.
 public struct ReleaseClient: Sendable {
     private let api: StoreAPI
+    /// The paywall boundary. Every method below that changes a store asks it
+    /// first, immediately before the call it guards, so a screen that was
+    /// opened while entitled cannot fire after the grant ends.
+    private let access: any AccessGate
 
-    public init(api: StoreAPI) {
+    public init(api: StoreAPI, access: any AccessGate) {
         self.api = api
+        self.access = access
     }
 
     /// Step 4 is the point of no return. Steps 1 to 3 are reversible.
     public func releaseApple(appID: String, platform: String,
                              versionID: String) async throws -> String {
+        try await access.authorize(.storeRelease)
         let submission = JSON(data: try await api.apple("POST", "/v1/reviewSubmissions", body: [
             "data": [
                 "type": "reviewSubmissions",
@@ -192,6 +198,7 @@ public struct ReleaseClient: Sendable {
 
     /// The recovery, and its limit: this works only before the review starts.
     public func cancelAppleSubmission(id: String) async throws {
+        try await access.authorize(.storeRelease)
         try await api.apple("PATCH", "/v1/reviewSubmissions/\(id)", body: [
             "data": ["type": "reviewSubmissions", "id": id, "attributes": ["canceled": true]],
         ])
@@ -201,6 +208,7 @@ public struct ReleaseClient: Sendable {
     /// developer. App Store Connect accepts this only in
     /// `PENDING_DEVELOPER_RELEASE`, and the request cannot be undone.
     public func releaseApprovedAppleVersion(versionID: String) async throws -> String {
+        try await access.authorize(.storeRelease)
         let response = JSON(data: try await api.apple(
             "POST", "/v1/appStoreVersionReleaseRequests", body: [
                 "data": [
@@ -219,6 +227,7 @@ public struct ReleaseClient: Sendable {
     /// track first and carries the full list back.
     public func releaseGoogle(packageName: String, track: String, status: String,
                               userFraction: Double?, versionName: String?) async throws -> String {
+        try await access.authorize(.storeRelease)
         let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
         guard let editID = edit["id"].string else { throw ConnectionError.invalidResponse }
@@ -261,6 +270,7 @@ public struct ReleaseClient: Sendable {
 
     /// The Google recovery, and its limit: a staged rollout only.
     public func haltGoogleRollout(packageName: String, track: String) async throws {
+        try await access.authorize(.storeRelease)
         let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
         guard let editID = edit["id"].string else { throw ConnectionError.invalidResponse }

@@ -87,6 +87,8 @@ jobs:
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/dd" \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build }} \
+            LICENSING_BASE_URL="${{ secrets.LICENSING_BASE_URL }}" \
+            ENTITLEMENT_PUBLIC_KEYS="${{ secrets.ENTITLEMENT_PUBLIC_KEYS }}" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM="$TEAM_ID" \

@@ -55,6 +55,69 @@ public enum ConsoleChecklist {
     /// // deep link if two clicks per row becomes a real complaint.`
     static let playConsole = "https://play.google.com/console"
 
+    /// The three things Apple asks of an update that the manifest alone
+    /// cannot answer.
+    ///
+    /// Each row reads the manifest first, then the store. A field the store
+    /// already holds needs nothing from the manifest, because an absent key
+    /// means "do not manage this field" and not "clear it".
+    private static func appleUpdateRows(manifest: Manifest, actual apple: ActualState.Apple?,
+                                        base: String) -> [ConsoleRow] {
+        var result: [ConsoleRow] = []
+
+        // A new version needs a new binary. Nothing inherits a build.
+        let namedBuild = manifest.release?.build?.ios ?? manifest.release?.build?.macos ?? ""
+        let hasBuild = !namedBuild.isEmpty || apple?.attachedBuildId != nil
+        result.append(ConsoleRow(
+            id: "apple.updateBuild", system: "App Store", title: "A build for this version",
+            reason: hasBuild
+                ? (apple?.attachedBuildId != nil
+                    ? "Confirmed: a build is attached."
+                    : "The manifest names \(namedBuild).")
+                : "An update needs a build. Name one on the Build tab, or attach one in App Store Connect.",
+            link: "\(base)/ios/version/inflight",
+            state: hasBuild ? .done : .needed))
+
+        // Apple asks the export compliance question once per build, and it
+        // refuses the submission until the build carries an answer.
+        let answered = manifest.review?.usesNonExemptEncryption != nil
+            || apple?.buildUsesNonExemptEncryption != nil
+        result.append(ConsoleRow(
+            id: "apple.updateEncryption", system: "App Store", title: "Export compliance",
+            reason: answered
+                ? "Confirmed: the encryption question has an answer."
+                : "Answer the encryption question on the Review info tab, or set ITSAppUsesNonExemptEncryption in the build.",
+            link: "\(base)/ios/version/inflight",
+            state: answered ? .done : .needed))
+
+        // Apple carries the contact over from the released version, so the
+        // app can only judge this once the next version exists. Before that
+        // the honest answer is "not read yet", and `.unknown` holds no button.
+        let review = manifest.review
+        let missing = [
+            ("first name", review?.contactFirstName, apple?.reviewContactFirstName),
+            ("last name", review?.contactLastName, apple?.reviewContactLastName),
+            ("email", review?.contactEmail, apple?.reviewContactEmail),
+            ("phone", review?.contactPhone, apple?.reviewContactPhone),
+        ].filter { _, wanted, stored in
+            (wanted ?? "").isEmpty && (stored ?? "").isEmpty
+        }.map(\.0)
+
+        result.append(ConsoleRow(
+            id: "apple.updateReviewContact", system: "App Store",
+            title: "App review contact",
+            reason: apple?.versionId == nil
+                ? "The next version does not exist yet, so the app cannot read what it inherits."
+                : (missing.isEmpty
+                    ? "Confirmed: the contact is complete."
+                    : "App review needs the \(missing.joined(separator: ", "))."),
+            link: "\(base)/ios/version/inflight",
+            state: apple?.versionId == nil ? .unknown : (missing.isEmpty ? .done : .needed),
+            onReviewTab: true))
+
+        return result
+    }
+
     public static func rows(manifest: Manifest, actual: ActualState,
                             stores: Set<Store>) -> [ConsoleRow] {
         var result: [ConsoleRow] = []
@@ -83,9 +146,16 @@ public enum ConsoleChecklist {
                     } ?? "The manifest names no base price.",
                     link: "\(base)/pricing",
                     state: manifest.pricing == nil ? .needed : .done),
+                // `versionString` names the version the app may write to, and
+                // a live version is not one. Reading any version here would
+                // report the released number as confirmed while the apply was
+                // still waiting to create the next one.
                 ConsoleRow(
                     id: "apple.version", system: "App Store", title: "The submitted version",
                     reason: apple?.versionString.map { "Confirmed: \($0)." }
+                        ?? apple?.liveVersionString.map {
+                            "\($0) is live. The apply creates the next version."
+                        }
                         ?? "No version is prepared.",
                     link: "\(base)/ios/version/inflight",
                     state: apple?.versionString == nil ? .needed : .done),
@@ -95,6 +165,15 @@ public enum ConsoleChecklist {
                     reason: "No API reads this. Open Business.",
                     link: "https://appstoreconnect.apple.com/business", state: .unknown),
             ]
+            // What Apple requires of an update, beyond the manifest.
+            //
+            // These sit here and not in the validator on purpose. An apply
+            // leaves a draft, and a draft may wait for its build. A release
+            // may not: `releaseBlockers` holds the button while a row is
+            // needed, which is the moment these actually have to be true.
+            if apple?.liveVersionString != nil {
+                result += appleUpdateRows(manifest: manifest, actual: apple, base: base)
+            }
         }
 
         if stores.contains(.google) {
