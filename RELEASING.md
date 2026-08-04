@@ -123,6 +123,12 @@ Sparkle compares build numbers, so the commit count is what decides that an
 update exists. To change the version users see, edit `MARKETING_VERSION` in
 `project.yml` and push.
 
+A local build counts the commits too, in the "Stamp the build number from git"
+script phase. Both sides use `git rev-list --count HEAD`, so a build you make
+on your own Mac carries the same number the release would, and "Check for
+updates" answers "up to date" instead of offering you the version you already
+have. A checkout with no git history keeps `CURRENT_PROJECT_VERSION` instead.
+
 ## Things that break, and why
 
 **"SUPublicEDKey is still the placeholder."** Step 2 is not done.
