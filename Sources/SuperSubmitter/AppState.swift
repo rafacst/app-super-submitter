@@ -49,20 +49,6 @@ enum MediaInputError: LocalizedError {
     }
 }
 
-/// Where the tabs live. Spec section 16.1.
-enum NavigationPosition: String, CaseIterable, Identifiable {
-    case sidebar, topBar
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .sidebar: "Sidebar"
-        case .topBar: "Top bar"
-        }
-    }
-}
-
 enum Severity {
     case error, warning
 
@@ -119,7 +105,6 @@ final class AppState {
         }
     }
     var selectedAppIndex = 0
-    var switcherOpen = false
 
     /// Settings opens as a panel over the window, not as a second window.
     var showSettings = false
