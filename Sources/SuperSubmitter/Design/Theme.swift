@@ -7,7 +7,6 @@ import SwiftUI
 enum Theme {
     // Surfaces, from the back of the window to the front.
     static let bg = Color(light: 0xECECEC, dark: 0x1B1B1D)
-    static let sidebar = Color(light: 0xE8E7E4, dark: 0x232326)
     static let content = Color(light: 0xFFFFFF, dark: 0x1E1E21)
     static let raised = Color(light: 0xFBFBFA, dark: 0x27272B)
     static let sunken = Color(light: 0xF5F4F2, dark: 0x1A1A1C)
@@ -61,8 +60,13 @@ enum Theme {
     static let windowRadius: CGFloat = 11
     static let sidebarWidth: CGFloat = 240
     static let headerHeight: CGFloat = 52
-    static let topBarHeight: CGFloat = 56
     static let hairline: CGFloat = 0.5
+
+    /// The content is the window surface, and the sidebar is a panel floating
+    /// on it. The gap is the separator, so no rule runs between the two.
+    static let panelGap: CGFloat = 8
+    static let panelRadius: CGFloat = 10
+    static let panelEdge = Color(light: .black.opacity(0.16), dark: .white.opacity(0.20))
 }
 
 // MARK: - The colour helper
@@ -92,19 +96,27 @@ extension Color {
 
 // MARK: - The shared pieces
 
+extension View {
+    /// Turns a working area into a panel that floats on the window surface: a
+    /// rounded fill, a hairline edge, and a shadow that lifts it off the back.
+    func panelSurface() -> some View {
+        self
+            .background(Theme.raised)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
+            // A full point, not a hairline. The panel sits on a surface close
+            // to its own tone, and half a point disappears into it.
+            .overlay(RoundedRectangle(cornerRadius: Theme.panelRadius)
+                .strokeBorder(Theme.panelEdge, lineWidth: 1))
+            .shadow(color: .black.opacity(0.20), radius: 6, y: 1)
+    }
+}
+
 /// A hairline rule. AppKit draws a 1 pixel line, and the mockup asks for half
 /// a point, so this uses a filled shape and not `Divider`.
 struct Hairline: View {
     var color: Color = Theme.sep
     var body: some View {
         Rectangle().fill(color).frame(height: Theme.hairline)
-    }
-}
-
-struct VHairline: View {
-    var color: Color = Theme.sep
-    var body: some View {
-        Rectangle().fill(color).frame(width: 1)
     }
 }
 

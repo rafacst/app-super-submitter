@@ -7,9 +7,9 @@ struct Sidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The traffic lights sit in the title bar. This row reserves the
-            // space so the Apps header is not under them.
-            Color.clear.frame(height: Theme.headerHeight)
+            // The traffic lights are drawn over the top of this panel. This
+            // row is the space they need, so the Apps header clears them.
+            Color.clear.frame(height: 30)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Apps")
@@ -88,7 +88,8 @@ struct Sidebar: View {
         }
         .frame(width: Theme.sidebarWidth)
         .frame(maxHeight: .infinity)
-        .background(Theme.sidebar)
+        // No fill of its own. The sidebar is the window surface, and the
+        // content panel is the thing that floats on it.
     }
 }
 
@@ -199,7 +200,6 @@ private struct SettingsRow: View {
 /// sends a version; a manager runs the app that is already out there.
 struct ModeSwitch: View {
     @Environment(AppState.self) private var state
-    var compact = false
 
     var body: some View {
         HStack(spacing: 2) {
@@ -210,15 +210,15 @@ struct ModeSwitch: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: mode.symbol)
-                            .font(.system(size: compact ? 10 : 10.5))
+                            .font(.system(size: 10.5))
                         Text(mode.title)
-                            .font(.system(size: compact ? 11.5 : 12,
+                            .font(.system(size: 12,
                                           weight: selected ? .semibold : .regular))
                     }
                     .foregroundStyle(selected ? Theme.text : Theme.text2)
-                    .padding(.horizontal, compact ? 9 : 8)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .frame(maxWidth: compact ? nil : .infinity)
+                    .frame(maxWidth: .infinity)
                     .background(selected ? Theme.field : .clear,
                                 in: RoundedRectangle(cornerRadius: 6))
                     .shadow(color: selected ? .black.opacity(0.14) : .clear, radius: 1, y: 1)
@@ -246,7 +246,6 @@ struct ModeSwitch: View {
 /// a form that keeps nothing.
 struct SavedChip: View {
     @Environment(AppState.self) private var state
-    var compact = false
 
     private var line: String {
         guard let date = state.lastSavedAt else { return "Saved to store.yaml" }
@@ -263,12 +262,8 @@ struct SavedChip: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.text2)
                     .lineLimit(1)
-                if !compact { Spacer(minLength: 0) }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, compact ? 8 : 0)
-            .padding(.vertical, compact ? 4 : 0)
-            .background(compact ? AnyShapeStyle(Theme.field) : AnyShapeStyle(Color.clear),
-                        in: RoundedRectangle(cornerRadius: 6))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
