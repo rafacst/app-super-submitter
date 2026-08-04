@@ -14,6 +14,24 @@ public struct BuildStorage: Sendable {
     }
 
     public var projects: URL { root.appendingPathComponent("Projects", isDirectory: true) }
+    /// Where a managed app keeps its `store.yaml`.
+    ///
+    /// Publishing puts the file beside the source, because the developer keeps
+    /// it in their repository. Managing has no repository to sit beside: the
+    /// app is already built and already out there, so the workspace belongs to
+    /// Super Submitter and the user is never asked for a folder.
+    public var managed: URL { root.appendingPathComponent("Managed", isDirectory: true) }
+
+    /// `Managed/<name>-<identifier>/`, made if it is not there yet.
+    ///
+    /// The identifier keeps two apps with the same display name apart, which a
+    /// name alone cannot do.
+    public func managedFolder(name: String, identifier: String) throws -> URL {
+        let folder = managed.appendingPathComponent(
+            "\(Self.safe(name))-\(Self.safe(identifier))", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
     public var archives: URL { root.appendingPathComponent("Archives", isDirectory: true) }
     public var artifacts: URL { root.appendingPathComponent("Artifacts", isDirectory: true) }
     public var runs: URL { root.appendingPathComponent("Runs", isDirectory: true) }

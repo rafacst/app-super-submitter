@@ -137,14 +137,9 @@ private struct EmptyAppView: View {
             .frame(maxWidth: state.mode == .publishing ? 760 : 380)
             .padding(.top, 32)
 
-            Button { state.chooseExistingManifest() } label: {
-                Label("Open an existing store.yaml", systemImage: "doc.text")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.text2)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 20)
+            // The entry screen offers the doors that start work. Opening a
+            // store.yaml continues work that already exists, so it lives in
+            // the File menu with the rest of the file commands.
 
             Spacer(minLength: 40)
         }
