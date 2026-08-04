@@ -19,9 +19,15 @@ public struct StateReader: Sendable {
 
         if stores.contains(.apple), let apple = manifest.apps.apple, !apple.appId.isEmpty {
             do {
-                state.apple = try await readApple(appID: apple.appId,
-                                                  basePrice: manifest.pricing?.base,
-                                                  versionName: manifest.release?.versionName)
+                state.apple = try await readApple(
+                    appID: apple.appId,
+                    basePrice: manifest.pricing?.base,
+                    versionName: manifest.release?.versionName,
+                    purchaseIds: (manifest.purchases ?? []).map(\.id),
+                    subscriptionIds: (manifest.subscriptions ?? [])
+                        .flatMap { $0.plans.map(\.id) },
+                    groupNames: (manifest.subscriptions ?? [])
+                        .map { $0.groupName ?? $0.groupId })
             } catch { state.failures.append("App Store: \(error.localizedDescription)") }
         }
         if stores.contains(.google), let google = manifest.apps.google,
@@ -46,9 +52,18 @@ public struct StateReader: Sendable {
 
     // MARK: - The App Store
 
+    /// - Parameters:
+    ///   - purchaseIds: the purchases that the manifest names. The reader asks
+    ///     Apple for each one, because the list endpoint carries no
+    ///     localization, no price, and no territory, and the plan compares all
+    ///     three.
+    ///   - subscriptionIds: the same, for the subscription plans.
     public func readApple(appID: String,
                           basePrice: Price? = nil,
-                          versionName: String? = nil) async throws -> ActualState.Apple {
+                          versionName: String? = nil,
+                          purchaseIds: [String] = [],
+                          subscriptionIds: [String] = [],
+                          groupNames: [String] = []) async throws -> ActualState.Apple {
         var result = ActualState.Apple()
 
         let infos = JSON(data: try await api.apple(
@@ -169,7 +184,13 @@ public struct StateReader: Sendable {
                 let reviewDetail = JSON(data: try await api.apple(
                     "GET", "/v1/appStoreVersions/\(versionID)/appStoreReviewDetail").data)
                 result.reviewDetailId = reviewDetail["data"]["id"].string
-                result.reviewContactEmail = reviewDetail["data"]["attributes"]["contactEmail"].string
+                let review = reviewDetail["data"]["attributes"]
+                result.reviewContactEmail = review["contactEmail"].string
+                result.reviewContactFirstName = review["contactFirstName"].string
+                result.reviewContactLastName = review["contactLastName"].string
+                result.reviewContactPhone = review["contactPhone"].string
+                result.reviewDemoAccountRequired = review["demoAccountRequired"].bool
+                result.reviewNotes = review["notes"].string
             }
         }
 
@@ -183,15 +204,29 @@ public struct StateReader: Sendable {
             result.buildUsesNonExemptEncryption = build["attributes"]["usesNonExemptEncryption"].bool
         }
 
-        let purchases = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/inAppPurchasesV2?limit=200").data)
-        result.purchaseIds = Set(purchases["data"].array
-            .compactMap { $0["attributes"]["productId"].string })
+        // The catalog. The ids come off the two list reads, and the detail
+        // comes off one read per named product, the same shape as Google.
+        let catalog = AppleCatalogClient(api: api)
+        let purchases = try await catalog.purchases(appID: appID, productIds: purchaseIds)
+        result.purchaseIds = Set(purchases.keys)
+        result.catalog = purchases
 
-        let subscriptionGroups = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/subscriptionGroups?include=subscriptions&limit=200").data)
-        result.subscriptionIds = Set(subscriptionGroups["included"].array
-            .compactMap { $0["attributes"]["productId"].string })
+        let subscriptions = try await catalog.subscriptions(appID: appID,
+                                                            productIds: subscriptionIds,
+                                                            groupNames: groupNames)
+        result.subscriptionIds = Set(subscriptions.products.keys)
+        result.catalog.merge(subscriptions.products) { _, new in new }
+        result.subscriptionGroupNames = subscriptions.groups.names
+        result.subscriptionGroupLocales = subscriptions.groups.locales
+
+        // The grace period is one resource on the app. Apple answers 404 when
+        // the app has none, which is a state and not a failure.
+        if let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/subscriptionGracePeriod") {
+            let attributes = JSON(data: response.data)["data"]["attributes"]
+            result.gracePeriodOptIn = attributes["optIn"].bool
+            result.gracePeriodDays = Self.gracePeriodDays(attributes["duration"].string)
+        }
 
         // Apple sells at a price point, never at the amount you asked for.
         // The plan shows the resolved amount, and the validator warns over a
@@ -233,6 +268,8 @@ public struct StateReader: Sendable {
             result.territoryAvailability[code] = item["attributes"]["available"].bool ?? false
         }
 
+        await readAppleMarketing(appID: appID, into: &result)
+
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
         result.hasOpenReviewSubmission = submissions["data"].array.contains { item in
@@ -241,6 +278,71 @@ public struct StateReader: Sendable {
                     "UNRESOLVED_ISSUES"].contains(state)
         }
         return result
+    }
+
+    /// The seven App Store marketing resources.
+    ///
+    /// Each one is optional on a real app, and Apple answers 404 for the ones
+    /// the app never created. A 404 is a state, not a failure, so none of
+    /// these ends the read. A resource that answers fills its field and the
+    /// plan then compares it; a resource that fails leaves the field empty and
+    /// the plan marks that one row unverified.
+    private func readAppleMarketing(appID: String,
+                                    into result: inout ActualState.Apple) async {
+        if let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/appCustomProductPages?limit=200") {
+            for item in JSON(data: response.data)["data"].array {
+                guard let name = item["attributes"]["name"].string else { continue }
+                result.customProductPageNames[name] = item["id"].string ?? ""
+            }
+        }
+        if let versionID = result.versionId, let response = try? await api.apple(
+            "GET", "/v1/appStoreVersions/\(versionID)/appStoreVersionExperimentsV2?limit=200") {
+            for item in JSON(data: response.data)["data"].array {
+                guard let name = item["attributes"]["name"].string else { continue }
+                result.experimentNames[name] = item["attributes"]["state"].string ?? ""
+            }
+        }
+        if let response = try? await api.apple("GET", "/v1/apps/\(appID)/appEvents?limit=200") {
+            for item in JSON(data: response.data)["data"].array {
+                guard let name = item["attributes"]["referenceName"].string else { continue }
+                result.appEventNames[name] = item["attributes"]["eventState"].string ?? ""
+            }
+        }
+        if let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/endUserLicenseAgreement?include=territories") {
+            let payload = JSON(data: response.data)
+            result.eulaText = payload["data"]["attributes"]["agreementText"].string
+            result.eulaTerritories = Set(payload["included"].array
+                .filter { $0["type"].string == "territories" }
+                .compactMap { $0["id"].string })
+        }
+        if let response = try? await api.apple(
+            "GET", "/v1/nominations?filter%5Bstate%5D=DRAFT,SUBMITTED&limit=200") {
+            result.nominationNames = Set(JSON(data: response.data)["data"].array
+                .compactMap { $0["attributes"]["name"].string })
+        }
+        if let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/accessibilityDeclarations?limit=200"),
+           let first = JSON(data: response.data)["data"].array.first {
+            // Apple names one boolean per supported feature, and the manifest
+            // lists the names it turns on.
+            let attributes = first["attributes"]
+            for key in attributes.keys where attributes[key].bool == true {
+                result.accessibilitySupports.insert(key)
+            }
+        }
+        if let response = try? await api.apple("GET", "/v1/apps/\(appID)/appClips?limit=200"),
+           let clipID = JSON(data: response.data)["data"].array.first?["id"].string {
+            result.hasAppClipExperience = false
+            if let experiences = try? await api.apple(
+                "GET", "/v1/appClips/\(clipID)/appClipDefaultExperiences?limit=200") {
+                let payload = JSON(data: experiences.data)
+                result.hasAppClipExperience = !payload["data"].array.isEmpty
+                result.appClipExperienceActions = Set(payload["data"].array
+                    .compactMap { $0["attributes"]["action"].string })
+            }
+        }
     }
 
     /// The app previews of one locale, in the shape the screenshots use.
@@ -404,6 +506,17 @@ public struct StateReader: Sendable {
                 result[productId]?.offerStates[offer.id] = offer.state
             }
         }
+        // The same read for the one-time products. The app writes one purchase
+        // option per product, so the option id is the product id.
+        for productId in oneTimeProductIds {
+            guard result[productId] != nil,
+                  let offers = try? await client.oneTimeOffers(
+                    packageName: packageName, productId: productId,
+                    purchaseOptionId: productId) else { continue }
+            for offer in offers where offer.state != nil {
+                result[productId]?.offerStates[offer.id] = offer.state
+            }
+        }
         return result
     }
 
@@ -475,9 +588,34 @@ public struct StateReader: Sendable {
         result.entitlementKeys = Set(entitlements["items"].array
             .compactMap { $0["lookup_key"].string })
 
+        // What each entitlement already holds, so the attach step compares the
+        // products instead of attaching the same list on every run. A read
+        // that fails leaves the key out, and the plan then says unverified.
+        for item in entitlements["items"].array {
+            guard let key = item["lookup_key"].string, let id = item["id"].string,
+                  let response = try? await api.revenueCat(
+                    "GET", "\(base)/entitlements/\(id)/products?limit=200") else { continue }
+            result.entitlementProducts[key] = Set(JSON(data: response.data)["items"].array
+                .compactMap { $0["store_identifier"].string })
+        }
+
         let offerings = JSON(data: try await api.revenueCat("GET", "\(base)/offerings").data)
         result.offeringKeys = Set(offerings["items"].array
             .compactMap { $0["lookup_key"].string ?? $0["id"].string })
+        for item in offerings["items"].array {
+            guard let key = item["lookup_key"].string ?? item["id"].string else { continue }
+            if item["is_current"].bool == true { result.currentOfferingKey = key }
+            guard let id = item["id"].string, let response = try? await api.revenueCat(
+                "GET", "\(base)/offerings/\(id)/packages?limit=200&expand=items.products")
+            else { continue }
+            // A package carries its products, and the plan compares the store
+            // ids in the order the offering serves them.
+            result.offeringProducts[key] = JSON(data: response.data)["items"].array
+                .flatMap { package in
+                    package["products"]["items"].array
+                        .compactMap { $0["store_identifier"].string }
+                }
+        }
         return result
     }
 
@@ -496,6 +634,17 @@ public struct StateReader: Sendable {
         result.offeringKeys = catalog.placements
         result.appIdentifiers = catalog.appIdentifiers.compactMapValues { $0 }
         return result
+    }
+
+    /// The three grace periods Apple names, back to the number of days that
+    /// the manifest holds. `AppleDurations.gracePeriod` writes the same three.
+    static func gracePeriodDays(_ duration: String?) -> Int? {
+        switch duration {
+        case "THREE_DAYS": 3
+        case "SIXTEEN_DAYS": 16
+        case "TWENTY_EIGHT_DAYS": 28
+        default: nil
+        }
     }
 
     static func escape(_ value: String) -> String {

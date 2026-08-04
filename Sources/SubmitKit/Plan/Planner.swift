@@ -175,18 +175,23 @@ public enum Planner {
                 operation: .appleBuildCompliance))
         }
 
-        // 9. The review details.
+        // 9. The review details. An attachment carries no comparable field, so
+        // a manifest that names one always writes.
         if let review = manifest.review,
            review.contactEmail?.isEmpty == false || review.notes?.isEmpty == false
             || review.attachments?.isEmpty == false {
-            steps.append(PlanStep(
-                id: "apple.reviewDetails", system: .apple,
-                kind: actual?.reviewDetailId == nil ? .add : .change,
-                summary: "review details  \(review.contactEmail ?? "")",
-                title: "Write the review details",
-                requests: [RequestSketch(actual?.reviewDetailId == nil ? "POST" : "PATCH",
-                                         "/v1/appStoreReviewDetails")],
-                operation: .appleReviewDetails))
+            let differs = appleReviewDetailChanges(review, actual)
+            if !differs.isEmpty {
+                steps.append(PlanStep(
+                    id: "apple.reviewDetails", system: .apple,
+                    kind: actual?.reviewDetailId == nil ? .add : .change,
+                    summary: "review details  \(differs.joined(separator: ", "))",
+                    title: "Write the review details",
+                    requests: [RequestSketch(actual?.reviewDetailId == nil ? "POST" : "PATCH",
+                                             "/v1/appStoreReviewDetails")],
+                    operation: .appleReviewDetails,
+                    comparison: actual == nil ? .unverified : .verified))
+            }
         }
 
         // 10. The age rating.
@@ -201,56 +206,72 @@ public enum Planner {
                 operation: .appleAgeRating))
         }
 
-        // 11. The purchases. The step counts the purchases alone, because the
-        // subscriptions take their own step and their own resources.
+        // 11. The purchases. The per-product read carries the names, the
+        // localizations, the prices, and the territories, so the plan names
+        // the products that differ instead of always saying "write them all".
         let purchaseCount = manifest.purchases?.count ?? 0
         if purchaseCount > 0 {
-            steps.append(PlanStep(
-                id: "apple.purchases", system: .apple, kind: .change,
-                summary: "\(purchaseCount) purchases in the catalog",
-                title: "Write \(purchaseCount) purchases",
-                requests: [RequestSketch("GET", "/v1/apps/{id}/inAppPurchasesV2"),
-                           RequestSketch("POST", "/v2/inAppPurchases"),
-                           RequestSketch("POST", "/v1/inAppPurchasePriceSchedules"),
-                           RequestSketch("POST", "/v2/inAppPurchaseLocalizations"),
-                           RequestSketch("POST", "/v1/inAppPurchaseAvailabilities"),
-                           RequestSketch("POST", "/v1/promotedPurchases")],
-                operation: .applePurchases))
+            let diff = appleCatalogDiff(manifest, actual, kind: .purchases)
+            if !diff.changes.isEmpty {
+                steps.append(PlanStep(
+                    id: "apple.purchases", system: .apple, kind: .change,
+                    summary: diff.summary,
+                    title: "Write \(purchaseCount) purchases",
+                    requests: [RequestSketch("GET", "/v1/apps/{id}/inAppPurchasesV2"),
+                               RequestSketch("POST", "/v2/inAppPurchases"),
+                               RequestSketch("POST", "/v1/inAppPurchasePriceSchedules"),
+                               RequestSketch("POST", "/v2/inAppPurchaseLocalizations"),
+                               RequestSketch("POST", "/v1/inAppPurchaseAvailabilities"),
+                               RequestSketch("POST", "/v1/promotedPurchases")],
+                    operation: .applePurchases,
+                    comparison: diff.verified ? .verified : .unverified))
+            }
         }
 
         // 11b. The subscription catalog, then the offers on top of it.
         let planCount = manifest.subscriptions?.reduce(0) { $0 + $1.plans.count } ?? 0
         if planCount > 0 {
-            steps.append(PlanStep(
-                id: "apple.subscriptions", system: .apple, kind: .change,
-                summary: "\(planCount) subscription plans in \(manifest.subscriptions?.count ?? 0) groups",
-                title: "Write \(planCount) subscriptions",
-                requests: [RequestSketch("POST", "/v1/subscriptionGroups"),
-                           RequestSketch("POST", "/v1/subscriptions"),
-                           RequestSketch("POST", "/v1/subscriptionLocalizations"),
-                           RequestSketch("POST", "/v1/subscriptionPrices")],
-                operation: .appleSubscriptions))
+            let diff = appleCatalogDiff(manifest, actual, kind: .subscriptions)
+            if !diff.changes.isEmpty {
+                steps.append(PlanStep(
+                    id: "apple.subscriptions", system: .apple, kind: .change,
+                    summary: diff.summary,
+                    title: "Write \(planCount) subscriptions",
+                    requests: [RequestSketch("POST", "/v1/subscriptionGroups"),
+                               RequestSketch("POST", "/v1/subscriptions"),
+                               RequestSketch("POST", "/v1/subscriptionLocalizations"),
+                               RequestSketch("POST", "/v1/subscriptionPrices")],
+                    operation: .appleSubscriptions,
+                    comparison: diff.verified ? .verified : .unverified))
+            }
         }
         let offerCount = manifest.subscriptions?
             .reduce(0) { $0 + $1.plans.reduce(0) { $0 + ($1.offers?.count ?? 0) } } ?? 0
         if offerCount > 0 {
-            steps.append(PlanStep(
-                id: "apple.subscriptionOffers", system: .apple, kind: .change,
-                summary: "\(offerCount) subscription offers",
-                title: "Write \(offerCount) subscription offers",
-                requests: [RequestSketch("POST", "/v1/subscriptionIntroductoryOffers"),
-                           RequestSketch("POST", "/v1/subscriptionOfferCodes"),
-                           RequestSketch("POST", "/v1/subscriptionPromotionalOffers"),
-                           RequestSketch("POST", "/v1/winBackOffers")],
-                operation: .appleSubscriptionOffers))
+            let diff = appleOfferDiff(manifest, actual)
+            if !diff.changes.isEmpty {
+                steps.append(PlanStep(
+                    id: "apple.subscriptionOffers", system: .apple, kind: .change,
+                    summary: diff.summary,
+                    title: "Write \(offerCount) subscription offers",
+                    requests: [RequestSketch("POST", "/v1/subscriptionIntroductoryOffers"),
+                               RequestSketch("POST", "/v1/subscriptionOfferCodes"),
+                               RequestSketch("POST", "/v1/subscriptionPromotionalOffers"),
+                               RequestSketch("POST", "/v1/winBackOffers")],
+                    operation: .appleSubscriptionOffers,
+                    comparison: diff.verified ? .verified : .unverified))
+            }
         }
-        if let days = (manifest.subscriptions ?? []).compactMap(\.gracePeriodDays).first {
+        if let days = (manifest.subscriptions ?? []).compactMap(\.gracePeriodDays).first,
+           actual?.gracePeriodDays != days || actual?.gracePeriodOptIn != true {
             steps.append(PlanStep(
                 id: "apple.gracePeriod", system: .apple, kind: .change,
-                summary: "billing grace period \(AppleDurations.gracePeriod(days: days))",
+                summary: "billing grace period \(AppleDurations.gracePeriod(days: days))"
+                    + (actual?.gracePeriodDays.map { " (now \($0) days)" } ?? ""),
                 title: "Write the billing grace period",
                 requests: [RequestSketch("PATCH", "/v1/subscriptionGracePeriods/{id}")],
-                operation: .appleGracePeriod))
+                operation: .appleGracePeriod,
+                comparison: actual == nil ? .unverified : .verified))
         }
 
         steps += appleMarketingSteps(input)
@@ -300,43 +321,75 @@ public enum Planner {
     /// Google twin, so none of them appears on the Google side.
     private static func appleMarketingSteps(_ input: Input) -> [PlanStep] {
         guard let marketing = input.manifest.marketing else { return [] }
+        let actual = input.actual.apple
+        let read = actual != nil
         var steps: [PlanStep] = []
 
+        // Each block compares the names that Apple holds. A name that Apple
+        // already carries is skipped, because these writers create by name and
+        // a second create would make a duplicate.
+        //
+        // The localized text under a page, an experiment, or an event has no
+        // read of its own. A resource that carries some keeps its step, and
+        // that step says that nobody compared the text.
         if let pages = marketing.customProductPages, !pages.isEmpty {
-            steps.append(PlanStep(
-                id: "apple.customProductPages", system: .apple, kind: .change,
-                summary: "\(pages.count) custom product pages",
-                title: "Write \(pages.count) custom product pages",
-                requests: [RequestSketch("POST", "/v1/appCustomProductPages"),
-                           RequestSketch("POST", "/v1/appCustomProductPageLocalizations")],
-                operation: .appleCustomProductPages))
+            let missing = pages.filter { actual?.customProductPageNames[$0.name] == nil }
+            let localized = pages.contains { $0.locales?.isEmpty == false }
+            if !read || !missing.isEmpty || localized {
+                steps.append(PlanStep(
+                    id: "apple.customProductPages", system: .apple, kind: .change,
+                    summary: appleNameSummary("custom product pages", missing.map(\.name),
+                                              total: pages.count, read: read),
+                    title: "Write \(pages.count) custom product pages",
+                    requests: [RequestSketch("POST", "/v1/appCustomProductPages"),
+                               RequestSketch("POST", "/v1/appCustomProductPageLocalizations")],
+                    operation: .appleCustomProductPages,
+                    comparison: read && !localized ? .verified : .unverified))
+            }
         }
         if let experiments = marketing.experiments, !experiments.isEmpty {
             let treatments = experiments.reduce(0) { $0 + $1.treatments.count }
-            steps.append(PlanStep(
-                id: "apple.experiments", system: .apple, kind: .change,
-                summary: "\(experiments.count) experiments  ·  \(treatments) treatments (not started)",
-                title: "Write \(experiments.count) product page experiments",
-                requests: [RequestSketch("POST", "/v2/appStoreVersionExperiments"),
-                           RequestSketch("POST", "/v1/appStoreVersionExperimentTreatments")],
-                operation: .appleExperiments))
+            let missing = experiments.filter { actual?.experimentNames[$0.name] == nil }
+            // Every experiment carries treatments, and no read returns them.
+            if !read || !missing.isEmpty || treatments > 0 {
+                steps.append(PlanStep(
+                    id: "apple.experiments", system: .apple, kind: .change,
+                    summary: appleNameSummary("experiments", missing.map(\.name),
+                                              total: experiments.count, read: read)
+                        + "  ·  \(treatments) treatments (not started)",
+                    title: "Write \(experiments.count) product page experiments",
+                    requests: [RequestSketch("POST", "/v2/appStoreVersionExperiments"),
+                               RequestSketch("POST", "/v1/appStoreVersionExperimentTreatments")],
+                    operation: .appleExperiments,
+                    comparison: read && treatments == 0 ? .verified : .unverified))
+            }
         }
         if let events = marketing.events, !events.isEmpty {
-            steps.append(PlanStep(
-                id: "apple.events", system: .apple, kind: .change,
-                summary: "\(events.count) in-app events",
-                title: "Write \(events.count) in-app events",
-                requests: [RequestSketch("POST", "/v1/appEvents"),
-                           RequestSketch("POST", "/v1/appEventLocalizations")],
-                operation: .appleAppEvents))
+            let missing = events.filter { actual?.appEventNames[$0.key] == nil }
+            let localized = events.contains { $0.locales?.isEmpty == false }
+            if !read || !missing.isEmpty || localized {
+                steps.append(PlanStep(
+                    id: "apple.events", system: .apple, kind: .change,
+                    summary: appleNameSummary("in-app events", missing.map(\.key),
+                                              total: events.count, read: read),
+                    title: "Write \(events.count) in-app events",
+                    requests: [RequestSketch("POST", "/v1/appEvents"),
+                               RequestSketch("POST", "/v1/appEventLocalizations")],
+                    operation: .appleAppEvents,
+                    comparison: read && !localized ? .verified : .unverified))
+            }
         }
-        if let eula = marketing.eula, !eula.text.isEmpty {
+        if let eula = marketing.eula, !eula.text.isEmpty,
+           !read || eula.text != actual?.eulaText
+            || (eula.territories.map { Set($0) != actual?.eulaTerritories } ?? false) {
             steps.append(PlanStep(
                 id: "apple.eula", system: .apple, kind: .change,
-                summary: "licence agreement  \(eula.text.count) characters",
+                summary: "licence agreement  \(eula.text.count) characters"
+                    + (actual?.eulaText == nil ? "" : " (replaces the current one)"),
                 title: "Write the licence agreement",
                 requests: [RequestSketch("POST", "/v1/endUserLicenseAgreements")],
-                operation: .appleEULA))
+                operation: .appleEULA,
+                comparison: read ? .verified : .unverified))
         }
         if let path = marketing.routingCoverage, let file = resolve(path, root: input.root) {
             let bytes = fileSize(file)
@@ -348,32 +401,57 @@ public enum Planner {
                 operation: .appleRoutingCoverage(path: path, bytes: bytes),
                 uploadCount: 1, uploadBytes: bytes))
         }
-        if let nomination = marketing.nomination {
+        if let nomination = marketing.nomination,
+           !read || !actual!.nominationNames.contains(nomination.name) {
             steps.append(PlanStep(
                 id: "apple.nomination", system: .apple, kind: .change,
                 summary: "nomination  \(nomination.name)",
                 title: "Write the featuring nomination",
                 requests: [RequestSketch("POST", "/v1/nominations")],
-                operation: .appleNomination))
+                operation: .appleNomination,
+                comparison: read ? .verified : .unverified))
         }
-        if let accessibility = marketing.accessibility, !accessibility.supports.isEmpty {
+        if let accessibility = marketing.accessibility, !accessibility.supports.isEmpty,
+           !read || Set(accessibility.supports) != actual!.accessibilitySupports {
+            let missing = Set(accessibility.supports)
+                .subtracting(actual?.accessibilitySupports ?? [])
             steps.append(PlanStep(
                 id: "apple.accessibility", system: .apple, kind: .change,
-                summary: "accessibility  \(accessibility.supports.count) features",
+                summary: "accessibility  \(accessibility.supports.count) features"
+                    + (read ? "  ·  \(missing.count) to add" : ""),
                 title: "Write the accessibility declaration",
                 requests: [RequestSketch("POST", "/v1/accessibilityDeclarations")],
-                operation: .appleAccessibility))
+                operation: .appleAccessibility,
+                comparison: read ? .verified : .unverified))
         }
-        if marketing.appClip != nil {
-            steps.append(PlanStep(
-                id: "apple.appClip", system: .apple, kind: .change,
-                summary: "app clip default experience",
-                title: "Write the App Clip default experience",
-                requests: [RequestSketch("POST", "/v1/appClipDefaultExperiences"),
-                           RequestSketch("POST", "/v1/appClipDefaultExperienceLocalizations")],
-                operation: .appleAppClip))
+        if let clip = marketing.appClip {
+            // The experience exists or it does not, and its localized titles
+            // have no read. A clip that names locales keeps its step.
+            let localized = clip.locales?.isEmpty == false
+                || clip.advancedExperiences?.isEmpty == false
+            let held = read && actual?.hasAppClipExperience == true
+                && (clip.action.map { actual!.appClipExperienceActions.contains($0) } ?? true)
+            if !held || localized {
+                steps.append(PlanStep(
+                    id: "apple.appClip", system: .apple, kind: .change,
+                    summary: "app clip default experience",
+                    title: "Write the App Clip default experience",
+                    requests: [RequestSketch("POST", "/v1/appClipDefaultExperiences"),
+                               RequestSketch("POST", "/v1/appClipDefaultExperienceLocalizations")],
+                    operation: .appleAppClip,
+                    comparison: read && !localized ? .verified : .unverified))
+            }
         }
         return steps
+    }
+
+    /// `3 of 5 to write · alpha, beta`, or the plain count before a read.
+    static func appleNameSummary(_ noun: String, _ missing: [String],
+                                 total: Int, read: Bool) -> String {
+        guard read else { return "\(total) \(noun)" }
+        let named = missing.prefix(3).joined(separator: ", ")
+        return "\(missing.count) of \(total) \(noun) to write"
+            + (named.isEmpty ? "" : "  ·  \(named)")
     }
 
     // MARK: - Google, in the order of section 7.4
@@ -651,6 +729,41 @@ public enum Planner {
                 differs.count, .verified)
     }
 
+    /// Whether a base plan or a purchase option still needs its switch.
+    ///
+    /// Google keeps one state per base plan and per purchase option, and the
+    /// catalog read already carries it. A product that already sits in the
+    /// wanted state needs no call.
+    static func googleStateStep(productId: String, active: Bool,
+                                actual: ActualState.Google?)
+        -> (now: String, comparison: ComparisonConfidence)? {
+        guard let live = actual?.catalog[productId]?.basePlanState else {
+            // No read means no comparison. The switch still runs, and the plan
+            // says that nobody verified it.
+            return ("", .unverified)
+        }
+        guard (live == "ACTIVE") != active else { return nil }
+        return ("  ·  now \(live.lowercased())", .verified)
+    }
+
+    /// Which offers Google does not hold yet.
+    ///
+    /// The batch write carries every offer of the product, because one call
+    /// costs less than a call per offer. The summary names the offers that are
+    /// missing, and the step goes when Google holds them all.
+    static func googleOfferWrite(_ offers: [Manifest.Offer], productId: String,
+                                 actual: ActualState.Google?)
+        -> (summary: String, comparison: ComparisonConfidence)? {
+        guard let live = actual?.catalog[productId] else {
+            return ("\(offers.count) offers on \(productId)", .unverified)
+        }
+        let missing = offers.filter { live.offerStates[$0.id] == nil }
+        guard !missing.isEmpty else { return nil }
+        let named = missing.prefix(3).map(\.id).joined(separator: ", ")
+        return ("\(missing.count) of \(offers.count) offers on \(productId)  ·  \(named)",
+                .verified)
+    }
+
     // MARK: - The Google catalog diff
 
     /// Which products differ from the manifest, and in which fields.
@@ -658,6 +771,224 @@ public enum Planner {
     /// `verified` is false when a wanted product exists in the store and its
     /// detail could not be read. The plan then says `unverified` rather than
     /// claim a diff that nobody checked.
+    /// The review detail fields that differ from what Apple holds.
+    ///
+    /// An attachment has no readable counterpart, so a manifest that names one
+    /// always lists it and the upload repeats.
+    static func appleReviewDetailChanges(_ review: Manifest.Review,
+                                         _ actual: ActualState.Apple?) -> [String] {
+        var changes: [String] = []
+        func compare(_ label: String, _ wanted: String?, _ live: String?) {
+            guard let wanted, !wanted.isEmpty, wanted != live else { return }
+            changes.append(label)
+        }
+        compare("contact email", review.contactEmail, actual?.reviewContactEmail)
+        compare("first name", review.contactFirstName, actual?.reviewContactFirstName)
+        compare("last name", review.contactLastName, actual?.reviewContactLastName)
+        compare("phone", review.contactPhone, actual?.reviewContactPhone)
+        compare("notes", review.notes, actual?.reviewNotes)
+        if let required = review.demoAccountRequired,
+           required != actual?.reviewDemoAccountRequired {
+            changes.append("demo account")
+        }
+        if review.attachments?.isEmpty == false { changes.append("attachments") }
+        return changes
+    }
+
+    // MARK: - The App Store catalog diff
+
+    enum AppleCatalogKind { case purchases, subscriptions }
+
+    /// The App Store twin of `googleCatalogDiff`.
+    ///
+    /// The two stores shape a product differently, so the two diffs stay
+    /// apart. The rule is the same: name the products that differ, and say so
+    /// when a read failed instead of showing a diff that nobody verified.
+    static func appleCatalogDiff(_ manifest: Manifest, _ actual: ActualState.Apple?,
+                                 kind: AppleCatalogKind)
+        -> (changes: [String], summary: String, verified: Bool) {
+        var changes: [String] = []
+        var verified = actual != nil
+        /// A field that the write sends and no read returns. It keeps the step
+        /// and it makes the row honest about what nobody compared.
+        var unreadableFields = false
+
+        func compare(id: String, exists: Bool,
+                     wanted: ActualState.Apple.CatalogProduct) {
+            guard exists else {
+                changes.append("\(id)  create")
+                return
+            }
+            guard let live = actual?.catalog[id] else {
+                // The store holds the product and the detail read failed.
+                verified = false
+                changes.append("\(id)  unread")
+                return
+            }
+            var fields: [String] = []
+            for (locale, text) in wanted.locales.sorted(by: { $0.key < $1.key }) {
+                let current = live.locales[locale]
+                if text.name != current?.name { fields.append("name") }
+                if let detail = text.description, detail != (current?.description ?? "") {
+                    fields.append("description")
+                }
+            }
+            for (territory, price) in wanted.prices
+            where appleNormalizedPrice(live.prices[territory]) != price {
+                fields.append("price")
+            }
+            if !wanted.availableTerritories.isEmpty,
+               wanted.availableTerritories != live.availableTerritories {
+                fields.append("territories")
+            }
+            if let promoted = wanted.promoted, promoted != live.promoted {
+                fields.append("promoted")
+            }
+            if let duration = wanted.duration, duration != live.duration {
+                fields.append("duration")
+            }
+            if let note = wanted.reviewNote, note != live.reviewNote {
+                fields.append("review note")
+            }
+            let unique = NSOrderedSet(array: fields).compactMap { $0 as? String }
+            guard !unique.isEmpty else { return }
+            changes.append("\(id)  \(unique.joined(separator: ", "))")
+        }
+
+        if kind == .purchases {
+            for purchase in manifest.purchases ?? [] {
+                var wanted = ActualState.Apple.CatalogProduct()
+                wanted.productId = purchase.id
+                wanted.locales = appleWantedLocales(purchase.locales, fallbackName: purchase.id)
+                if let price = purchase.price {
+                    wanted.prices[applePriceTerritory(price)] = applePriceText(price)
+                }
+                wanted.availableTerritories = Set(purchase.availableTerritories ?? [])
+                wanted.promoted = purchase.promotedPurchase
+                wanted.reviewNote = purchase.reviewNote
+                compare(id: purchase.id,
+                        exists: actual?.purchaseIds.contains(purchase.id) ?? false,
+                        wanted: wanted)
+                // The screenshot is an upload and the content flag has no
+                // readable counterpart, so a manifest that names either one
+                // keeps the step and the write repeats.
+                if purchase.reviewScreenshot?.isEmpty == false
+                    || purchase.contentHosting != nil {
+                    unreadableFields = true
+                    if !changes.contains(where: { $0.hasPrefix(purchase.id) }) {
+                        changes.append("\(purchase.id)  review screenshot or content")
+                    }
+                }
+            }
+        } else {
+            for group in manifest.subscriptions ?? [] {
+                // The write covers the group as well as its plans, so a group
+                // that Apple does not hold, or whose localizations differ,
+                // keeps the step even when every plan matches.
+                let reference = group.groupName ?? group.groupId
+                if let live = actual {
+                    if !live.subscriptionGroupNames.contains(reference) {
+                        changes.append("\(reference)  group create")
+                    } else if let wanted = group.locales, !wanted.isEmpty {
+                        let held = live.subscriptionGroupLocales[reference]
+                        if held == nil { verified = false }
+                        let differs = wanted.contains { locale, text in
+                            (text.name ?? reference) != held?[locale]?.name
+                        }
+                        if differs { changes.append("\(reference)  group name") }
+                    }
+                }
+                for plan in group.plans {
+                    var wanted = ActualState.Apple.CatalogProduct()
+                    wanted.productId = plan.id
+                    // The writer skips the localizations when the plan names
+                    // none, so the diff skips them too.
+                    wanted.locales = appleWantedLocales(plan.locales, fallbackName: plan.id)
+                    if let price = plan.price {
+                        wanted.prices[applePriceTerritory(price)] = applePriceText(price)
+                    }
+                    wanted.duration = plan.duration
+                    compare(id: plan.id,
+                            exists: actual?.subscriptionIds.contains(plan.id) ?? false,
+                            wanted: wanted)
+                }
+            }
+        }
+
+        let noun = kind == .purchases ? "purchases" : "subscriptions"
+        let summary = changes.count <= 3
+            ? changes.joined(separator: "  ·  ")
+            : "\(changes.count) \(noun) differ  ·  \(changes.prefix(2).joined(separator: "  ·  "))  ·  …"
+        return (changes, summary, verified && !unreadableFields)
+    }
+
+    /// The subscription offers that Apple does not already hold.
+    ///
+    /// Apple names a promotional offer by its code and a win back offer by its
+    /// reference name. It names no introductory offer at all, so an
+    /// introductory offer stays in the diff and the write repeats. The write
+    /// is idempotent, and the summary now says which offer it sends.
+    static func appleOfferDiff(_ manifest: Manifest, _ actual: ActualState.Apple?)
+        -> (changes: [String], summary: String, verified: Bool) {
+        var changes: [String] = []
+        var verified = actual != nil
+
+        for group in manifest.subscriptions ?? [] {
+            for plan in group.plans {
+                for offer in plan.offers ?? [] {
+                    let live = actual?.catalog[plan.id]
+                    if live?.offerCount == nil { verified = false }
+                    guard live?.offerIds.contains(offer.id) != true else { continue }
+                    changes.append("\(plan.id)  \(offer.id)")
+                }
+            }
+        }
+
+        let summary = changes.count <= 3
+            ? changes.joined(separator: "  ·  ")
+            : "\(changes.count) offers differ  ·  \(changes.prefix(2).joined(separator: "  ·  "))  ·  …"
+        return (changes, summary, verified)
+    }
+
+    /// The localizations that the App Store writers send. `name` falls back to
+    /// the product id and `description` to the empty string, so the diff and
+    /// the write agree on what an unset field means.
+    static func appleWantedLocales(_ locales: [String: Manifest.ProductLocale]?,
+                                   fallbackName: String)
+        -> [String: ActualState.Apple.CatalogProduct.ProductLocale] {
+        var result: [String: ActualState.Apple.CatalogProduct.ProductLocale] = [:]
+        for (locale, text) in locales ?? [:] {
+            var value = ActualState.Apple.CatalogProduct.ProductLocale()
+            value.name = text.name ?? fallbackName
+            value.description = text.description ?? ""
+            result[locale] = value
+        }
+        return result
+    }
+
+    /// Apple keys a price by a three letter territory, and `USA` is its
+    /// default the same way `US` is the Google one.
+    static func applePriceTerritory(_ price: Price) -> String {
+        price.territory ?? "USA"
+    }
+
+    /// The customer price, in the form both sides of the diff compare.
+    ///
+    /// A decimal literal cannot hold 4.99 exactly, so an unrounded string
+    /// carries the error and every price reads as a change forever. The Google
+    /// side avoids this through units and nanos; the App Store takes a plain
+    /// decimal string, so both sides round to the same place instead.
+    static func applePriceText(_ price: Price) -> String {
+        appleNormalizedPrice(NSDecimalNumber(decimal: price.amount).stringValue) ?? ""
+    }
+
+    static func appleNormalizedPrice(_ text: String?) -> String? {
+        guard let text, var value = Decimal(string: text) else { return nil }
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 6, .plain)
+        return NSDecimalNumber(decimal: rounded).stringValue
+    }
+
     static func googleCatalogDiff(_ manifest: Manifest, _ actual: ActualState.Google?)
         -> (changes: [String], summary: String, verified: Bool) {
         var changes: [String] = []
@@ -778,27 +1109,38 @@ public enum Planner {
         var steps: [PlanStep] = []
 
         for purchase in manifest.purchases ?? [] {
-            if let active = purchase.active {
+            if let active = purchase.active,
+               let state = googleStateStep(productId: purchase.id, active: active,
+                                           actual: input.actual.google) {
                 steps.append(PlanStep(
                     id: "google.purchaseOptionState.\(purchase.id)", system: .google,
                     kind: .change,
-                    summary: "purchase option  \(purchase.id)  \(active ? "activate" : "deactivate")",
+                    summary: "purchase option  \(purchase.id)  "
+                        + "\(active ? "activate" : "deactivate")\(state.now)",
                     title: "\(active ? "Activate" : "Deactivate") \(purchase.id)",
                     requests: [RequestSketch(
                         "POST", "/monetization/oneTimeProducts/{id}/purchaseOptions:batchUpdateStates")],
                     operation: .googlePurchaseOptionState(productId: purchase.id,
                                                           purchaseOptionId: purchase.id,
-                                                          active: active)))
+                                                          active: active),
+                    comparison: state.comparison))
             }
             if let offers = purchase.offers, !offers.isEmpty {
-                steps.append(PlanStep(
-                    id: "google.oneTimeOffers.\(purchase.id)", system: .google, kind: .change,
-                    summary: "\(offers.count) offers on \(purchase.id)",
-                    title: "Write \(offers.count) offers on \(purchase.id)",
-                    requests: [RequestSketch(
-                        "POST",
-                        "/monetization/oneTimeProducts/{id}/purchaseOptions/{option}/offers:batchUpdate")],
-                    operation: .googleOneTimeOffers(productId: purchase.id)))
+                // The content write and the state switch are two independent
+                // steps. An offer whose content already matches can still need
+                // its switch, so neither one gates the other.
+                if let write = googleOfferWrite(offers, productId: purchase.id,
+                                                actual: input.actual.google) {
+                    steps.append(PlanStep(
+                        id: "google.oneTimeOffers.\(purchase.id)", system: .google, kind: .change,
+                        summary: write.summary,
+                        title: "Write \(offers.count) offers on \(purchase.id)",
+                        requests: [RequestSketch(
+                            "POST",
+                            "/monetization/oneTimeProducts/{id}/purchaseOptions/{option}/offers:batchUpdate")],
+                        operation: .googleOneTimeOffers(productId: purchase.id),
+                        comparison: write.comparison))
+                }
                 if let switches = googleOfferStateSummary(offers, productId: purchase.id,
                                                           actual: input.actual.google) {
                     steps.append(PlanStep(
@@ -817,28 +1159,37 @@ public enum Planner {
         for group in manifest.subscriptions ?? [] {
             for plan in group.plans {
                 let basePlanId = plan.basePlanId ?? "default"
-                if let active = plan.active {
+                if let active = plan.active,
+                   let state = googleStateStep(productId: plan.id, active: active,
+                                               actual: input.actual.google) {
                     steps.append(PlanStep(
                         id: "google.basePlanState.\(plan.id)", system: .google, kind: .change,
-                        summary: "base plan  \(basePlanId)  \(active ? "activate" : "deactivate")",
+                        summary: "base plan  \(basePlanId)  "
+                            + "\(active ? "activate" : "deactivate")\(state.now)",
                         title: "\(active ? "Activate" : "Deactivate") the \(basePlanId) base plan",
                         requests: [RequestSketch(
                             "POST",
                             "/monetization/subscriptions/{id}/basePlans/{plan}:\(active ? "activate" : "deactivate")")],
                         operation: .googleBasePlanState(productId: plan.id,
                                                         basePlanId: basePlanId,
-                                                        active: active)))
+                                                        active: active),
+                        comparison: state.comparison))
                 }
                 if let offers = plan.offers, !offers.isEmpty {
-                    steps.append(PlanStep(
-                        id: "google.subscriptionOffers.\(plan.id)", system: .google, kind: .change,
-                        summary: "\(offers.count) offers on \(plan.id)",
-                        title: "Write \(offers.count) offers on \(plan.id)",
-                        requests: [RequestSketch(
-                            "POST",
-                            "/monetization/subscriptions/{id}/basePlans/{plan}/offers:batchUpdate")],
-                        operation: .googleSubscriptionOffers(productId: plan.id,
-                                                             basePlanId: basePlanId)))
+                    if let write = googleOfferWrite(offers, productId: plan.id,
+                                                    actual: input.actual.google) {
+                        steps.append(PlanStep(
+                            id: "google.subscriptionOffers.\(plan.id)", system: .google,
+                            kind: .change,
+                            summary: write.summary,
+                            title: "Write \(offers.count) offers on \(plan.id)",
+                            requests: [RequestSketch(
+                                "POST",
+                                "/monetization/subscriptions/{id}/basePlans/{plan}/offers:batchUpdate")],
+                            operation: .googleSubscriptionOffers(productId: plan.id,
+                                                                 basePlanId: basePlanId),
+                            comparison: write.comparison))
+                    }
                     if let switches = googleOfferStateSummary(offers, productId: plan.id,
                                                               actual: input.actual.google) {
                         steps.append(PlanStep(
@@ -853,16 +1204,27 @@ public enum Planner {
                             comparison: switches.comparison))
                     }
                 }
+                // A migration moves the existing subscribers onto the current
+                // regional price. When Google already sells at the wanted
+                // price there is nothing left to move, so the step goes.
                 if plan.migrateExistingSubscribers == true {
-                    steps.append(PlanStep(
-                        id: "google.migratePrices.\(plan.id)", system: .google, kind: .change,
-                        summary: "migrate the existing subscribers of \(plan.id)",
-                        title: "Migrate the prices of \(plan.id)",
-                        requests: [RequestSketch(
-                            "POST",
-                            "/monetization/subscriptions/{id}/basePlans:batchMigratePrices")],
-                        operation: .googleMigratePrices(productId: plan.id,
-                                                        basePlanId: basePlanId)))
+                    let live = input.actual.google?.catalog[plan.id]
+                    let region = plan.price?.territory ?? "US"
+                    let wanted = plan.price.map(googlePriceText)
+                    let settled = wanted != nil && live?.prices[region] == wanted
+                    if !settled {
+                        steps.append(PlanStep(
+                            id: "google.migratePrices.\(plan.id)", system: .google, kind: .change,
+                            summary: "migrate the existing subscribers of \(plan.id)"
+                                + (live?.prices[region].map { "  ·  now \($0)" } ?? ""),
+                            title: "Migrate the prices of \(plan.id)",
+                            requests: [RequestSketch(
+                                "POST",
+                                "/monetization/subscriptions/{id}/basePlans:batchMigratePrices")],
+                            operation: .googleMigratePrices(productId: plan.id,
+                                                            basePlanId: basePlanId),
+                            comparison: live == nil ? .unverified : .verified))
+                    }
                 }
             }
         }
@@ -921,26 +1283,46 @@ public enum Planner {
                 operation: .providerEntitlement(key: entitlement.key)))
         }
 
-        for entitlement in manifest.entitlements ?? [] {
-            let products = manifest.products(for: entitlement.key)
-            guard !products.isEmpty else { continue }
-            steps.append(PlanStep(
-                id: "provider.attach.\(entitlement.key)", system: .provider, kind: .change,
-                summary: "entitlement  \(entitlement.key)  attach \(products.count) products",
-                title: "Attach \(products.count) products to \(entitlement.key)",
-                requests: [providerRequest(provider, "attach the products")],
-                operation: .providerAttach(entitlement: entitlement.key, products: products)))
+        // Adapty attaches on the product itself, so `providerAttach` returns
+        // at once and the step would write nothing.
+        if provider == .revenuecat {
+            for entitlement in manifest.entitlements ?? [] {
+                let products = manifest.products(for: entitlement.key)
+                guard !products.isEmpty else { continue }
+                let live = actual?.entitlementProducts[entitlement.key]
+                let missing = Set(products).subtracting(live ?? [])
+                guard live == nil || !missing.isEmpty else { continue }
+                steps.append(PlanStep(
+                    id: "provider.attach.\(entitlement.key)", system: .provider, kind: .change,
+                    summary: live == nil
+                        ? "entitlement  \(entitlement.key)  attach \(products.count) products"
+                        : "entitlement  \(entitlement.key)  attach \(missing.count) of \(products.count) products",
+                    title: "Attach \(products.count) products to \(entitlement.key)",
+                    requests: [providerRequest(provider, "attach the products")],
+                    operation: .providerAttach(entitlement: entitlement.key,
+                                               products: products),
+                    comparison: live == nil ? .unverified : .verified))
+            }
         }
 
         for offering in manifest.offerings ?? [] {
             let known = actual?.offeringKeys.contains(offering.key) == true
+            let live = actual?.offeringProducts[offering.key]
+            let wanted = offering.products ?? []
+            // The package list and the current flag are the two things the
+            // write changes. Both matching means the offering is already there.
+            let currentDiffers = (offering.isCurrent ?? false)
+                && actual?.currentOfferingKey != offering.key
+            guard live == nil || live != wanted || currentDiffers else { continue }
             steps.append(PlanStep(
                 id: "provider.offering.\(offering.key)", system: .provider,
                 kind: known ? .change : .add,
-                summary: "offering  \(offering.key)  \(offering.products?.count ?? 0) packages",
+                summary: "offering  \(offering.key)  \(wanted.count) packages"
+                    + (live.map { "  ·  now \($0.count)" } ?? ""),
                 title: "Write the \(offering.key) offering",
                 requests: [providerRequest(provider, "write the offering")],
-                operation: .providerOffering(key: offering.key)))
+                operation: .providerOffering(key: offering.key),
+                comparison: live == nil ? .unverified : .verified))
         }
 
         // Spec section 8, rule 6. The app archives; it never deletes.
@@ -1134,34 +1516,44 @@ public enum Planner {
         return override.isEmpty ? manifest.listingText(locale: code, field: .subtitle) : override
     }
 
+    /// The steps that no store API can ever confirm.
+    ///
+    /// Google publishes the data safety labels through a write and offers no
+    /// read of them, so this row can never become a diff. It is separate from
+    /// a row that merely failed to read, because no amount of work here would
+    /// close it.
+    static let unreadableStepPrefixes = ["google.dataSafety"]
+
+    /// Marks the rows that no read backs.
+    ///
+    /// Every other step now compares real store state and marks itself, so
+    /// this only forces the rows on `unreadableStepPrefixes` and then collects
+    /// whatever marked itself along the way.
     private static func markUnverifiedComparisons(_ result: inout PlanResult) {
-        let prefixes = [
-            "apple.reviewDetails", "apple.purchases", "apple.subscriptions",
-            "apple.subscriptionOffers",
-            "apple.gracePeriod", "apple.customProductPages", "apple.experiments",
-            "apple.events", "apple.eula", "apple.nomination", "apple.accessibility",
-            "apple.appClip", "google.dataSafety",
-            "google.purchaseOptionState", "google.oneTimeOffers",
-            "google.basePlanState", "google.subscriptionOffers",
-            "google.migratePrices", "provider.attach", "provider.offering",
-        ]
-        // `google.products` left this list. The per-product read carries the
-        // titles, the prices, and the base plans, so that step compares real
-        // fields and marks itself when a read fails.
-        var ids: [String] = []
-        for index in result.steps.indices
-        where prefixes.contains(where: { result.steps[index].id.hasPrefix($0) })
-            || result.steps[index].comparison == .unverified {
+        var unreadable: [String] = []
+        var unverified: [String] = []
+        for index in result.steps.indices {
+            let isUnreadable = unreadableStepPrefixes.contains {
+                result.steps[index].id.hasPrefix($0)
+            }
+            guard isUnreadable || result.steps[index].comparison == .unverified else { continue }
             result.steps[index].comparison = .unverified
             if !result.steps[index].summary.hasPrefix("unverified · ") {
                 result.steps[index].summary = "unverified · " + result.steps[index].summary
             }
-            ids.append(result.steps[index].id)
+            if isUnreadable { unreadable.append(result.steps[index].id) }
+            else { unverified.append(result.steps[index].id) }
         }
-        if !ids.isEmpty {
+        if !unverified.isEmpty {
             result.findings.append(Finding(
                 id: "plan.unverified", severity: .warning,
-                message: "\(ids.count) plan rows cannot be compared with readable store state; they are explicitly marked unverified and may repeat on the next apply.",
+                message: "\(unverified.count) plan rows could not be compared, because the store read failed or the store holds nothing to compare yet. They may repeat on the next apply.",
+                location: "Summary", fix: .plan))
+        }
+        if !unreadable.isEmpty {
+            result.findings.append(Finding(
+                id: "plan.unreadable", severity: .warning,
+                message: "\(unreadable.count) plan rows write to an endpoint that offers no matching read, so no run can confirm them. They repeat on every apply by design.",
                 location: "Summary", fix: .plan))
         }
     }
