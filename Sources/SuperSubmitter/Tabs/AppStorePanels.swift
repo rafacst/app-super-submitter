@@ -1,11 +1,11 @@
 import SubmitKit
 import SwiftUI
 
-/// The App Store twin of `GooglePlayActionsPanel`.
+/// The App Store twin of `GoogleReviewsPanel`.
 ///
 /// Google Play had a reviews panel and the App Store had none, so an Apple
 /// developer had to open App Store Connect for the one job the API supports.
-/// The two panels sit side by side on tab 9 now.
+/// The two sit side by side on the Reviews tab of Managing now.
 struct AppStoreActionsPanel: View {
     var body: some View {
         AppleReviewsPanel()
