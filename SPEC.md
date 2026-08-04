@@ -1117,6 +1117,14 @@ its own credentials, and the app never touches them. The app never writes a
 secret to `store.yaml`. The app never writes a secret to a log. The manifest
 holds ids only.
 
+### 9.4a What the app never sends
+
+The app reads the purchases that Google voided, and it issues no refund. A
+refund moves real money to a customer, and that decision belongs to a person in
+the Play Console. The same rule keeps the app away from orders, from external
+transactions, and from every call that changes who may access a developer
+account.
+
 The App Store Connect key and the Play service account are credentials of the
 developer account, not of one app. One of each covers every app in the team, so
 the app asks for the `.p8` file and the service-account JSON once and every
