@@ -4,20 +4,42 @@ import SwiftUI
 /// The one store picker used by setup and the Stores tab. Keeping its size,
 /// typography, and selection treatment here prevents the two entry paths from
 /// drifting into different controls.
-struct StoreSelectionGrid: View {
-    let selected: Set<Store>
-    let toggle: (Store) -> Void
+///
+/// `detail` puts a column under each card, so a store's own fields open below
+/// its own button instead of in a separate stack further down the screen.
+struct StoreSelectionGrid<Detail: View>: View {
+    private let selected: Set<Store>
+    private let toggle: (Store) -> Void
+    private let detail: (Store) -> Detail
+
+    init(selected: Set<Store>, toggle: @escaping (Store) -> Void,
+         @ViewBuilder detail: @escaping (Store) -> Detail) {
+        self.selected = selected
+        self.toggle = toggle
+        self.detail = detail
+    }
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .top, spacing: 16) {
             ForEach([Store.apple, .google], id: \.self) { store in
-                StoreSelectionCard(store: store, selected: selected.contains(store)) {
-                    toggle(store)
+                VStack(alignment: .leading, spacing: 14) {
+                    StoreSelectionCard(store: store, selected: selected.contains(store)) {
+                        toggle(store)
+                    }
+                    detail(store)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: selected)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Stores")
+    }
+}
+
+extension StoreSelectionGrid where Detail == EmptyView {
+    init(selected: Set<Store>, toggle: @escaping (Store) -> Void) {
+        self.init(selected: selected, toggle: toggle, detail: { _ in EmptyView() })
     }
 }
 

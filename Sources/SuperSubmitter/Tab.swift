@@ -21,27 +21,29 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .build: "Build"
         case .details: "Details"
         case .media: "Media"
-        case .money: "Money"
+        case .money: "Monetization"
         case .marketing: "Marketing"
         case .reviewInfo: "Review info"
-        case .plan: "Plan"
+        case .plan: "Summary"
         case .submit: "Submit"
         case .release: "Release"
         }
     }
 
-    var symbol: String {
+    /// The outline reads as "not here", the filled one as "here". Release is
+    /// the exception: the dotted path says the flight already left.
+    func symbol(selected: Bool) -> String {
         switch self {
-        case .stores: "building.2"
-        case .build: "shippingbox"
-        case .details: "text.alignleft"
-        case .media: "photo.on.rectangle"
-        case .money: "creditcard"
-        case .marketing: "megaphone"
-        case .reviewInfo: "checkmark.shield"
-        case .plan: "arrow.left.arrow.right"
-        case .submit: "arrow.up.circle"
-        case .release: "paperplane"
+        case .stores: selected ? "storefront.fill" : "storefront"
+        case .build: selected ? "shippingbox.fill" : "shippingbox"
+        case .details: selected ? "list.bullet.rectangle.fill" : "list.bullet.rectangle"
+        case .media: selected ? "photo.stack.fill" : "photo.stack"
+        case .money: selected ? "dollarsign.square.fill" : "dollarsign.square"
+        case .marketing: selected ? "megaphone.fill" : "megaphone"
+        case .reviewInfo: selected ? "checkmark.square.fill" : "checkmark.square"
+        case .plan: selected ? "text.bubble.fill" : "text.bubble"
+        case .submit: selected ? "square.and.arrow.up.fill" : "square.and.arrow.up"
+        case .release: selected ? "airplane.path.dotted" : "airplane"
         }
     }
 

@@ -3,124 +3,95 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Tab 1. Store selection writes `apps` in the manifest. Credential files are
-/// copied into the Keychain and never into the repository.
+/// copied into the Keychain and never into the repository. Each credential
+/// panel opens in the column under its own store card.
 struct StoresTab: View {
     @Environment(AppState.self) private var state
-    @State private var appleImporterOpen = false
-    @State private var googleImporterOpen = false
 
     var body: some View {
-        @Bindable var state = state
-        VStack(alignment: .leading, spacing: 22) {
-            StoreSelectionGrid(selected: state.stores) { store in
-                state.setStore(store, enabled: !state.stores.contains(store))
-            }
-
-            if state.stores.contains(.apple) {
-                CredentialCard(
-                    store: .apple,
-                    status: state.appleConnection,
-                    keychainNote: "The key is stored in the macOS Keychain. The original file is not copied.",
-                    guideOpen: state.appleGuideOpen,
-                    toggleGuide: { state.appleGuideOpen.toggle() },
-                    guide: appleGuide,
-                    test: state.testAppleConnection
-                ) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .bottom, spacing: 12) {
-                            EditableField(label: "App id", value: $state.appleAppID,
-                                          prompt: "Numeric App Store ID", width: 170)
-                                .onChange(of: state.appleAppID) { state.updateAppleAppFields() }
-                            EditableField(label: "Bundle id", value: $state.appleBundleID,
-                                          prompt: "Reverse-DNS bundle identifier", width: 240)
-                                .onChange(of: state.appleBundleID) { state.updateAppleAppFields() }
-                            if !state.remoteAppleApps.isEmpty {
-                                Menu("Choose visible app") {
-                                    ForEach(state.remoteAppleApps) { app in
-                                        Button("\(app.name) · \(app.identifier)") {
-                                            state.chooseRemoteAppleApp(app)
-                                        }
-                                    }
-                                }
-                                .menuStyle(.borderlessButton)
-                                .fixedSize()
-                            }
-                        }
-
-                        HStack(alignment: .top, spacing: 12) {
-                            FileWell(
-                                name: state.appleCredentialFileName,
-                                emptyName: "App Store Connect private key",
-                                prompt: "Drop the .p8 file, or",
-                                choose: { appleImporterOpen = true },
-                                accept: { urls in
-                                    guard let url = urls.first,
-                                          url.pathExtension.lowercased() == "p8" else { return false }
-                                    state.importAppleCredential(from: url)
-                                    return true
-                                })
-                            VStack(alignment: .leading, spacing: 8) {
-                                EditableField(label: "Key id", value: $state.appleKeyID,
-                                              prompt: "Key ID")
-                                    .onChange(of: state.appleKeyID) { state.appleCredentialFieldsChanged() }
-                                EditableField(label: "Issuer id", value: $state.appleIssuerID,
-                                              prompt: "Issuer UUID")
-                                    .onChange(of: state.appleIssuerID) { state.appleCredentialFieldsChanged() }
-                            }
-                        }
-                    }
-                }
-                .fileImporter(isPresented: $appleImporterOpen,
-                              allowedContentTypes: [UTType(filenameExtension: "p8") ?? .data]) { result in
-                    if case .success(let url) = result { state.importAppleCredential(from: url) }
-                    if case .failure(let error) = result { state.errorMessage = error.localizedDescription }
-                }
-            }
-
-            if state.stores.contains(.google) {
-                CredentialCard(
-                    store: .google,
-                    status: state.googleConnection,
-                    keychainNote: "The JSON is stored in the macOS Keychain. The original file is not copied.",
-                    guideOpen: state.googleGuideOpen,
-                    toggleGuide: { state.googleGuideOpen.toggle() },
-                    guide: googleGuide,
-                    test: state.testGoogleConnection
-                ) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        EditableField(label: "Package name", value: $state.googlePackageName,
-                                      prompt: "Reverse-DNS package name", width: 300)
-                            .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
-                        FileWell(
-                            name: state.googleCredentialFileName,
-                            emptyName: "Google service-account key",
-                            prompt: "Drop the service account JSON, or",
-                            choose: { googleImporterOpen = true },
-                            accept: { urls in
-                                guard let url = urls.first,
-                                      url.pathExtension.lowercased() == "json" else { return false }
-                                state.importGoogleCredential(from: url)
-                                return true
-                            })
-                            .frame(maxWidth: 520)
-                        if !state.googleAccountEmail.isEmpty {
-                            Text(state.googleAccountEmail)
-                                .font(Theme.mono(11))
-                                .foregroundStyle(Theme.text2)
-                        }
-                    }
-                }
-                .fileImporter(isPresented: $googleImporterOpen,
-                              allowedContentTypes: [.json]) { result in
-                    if case .success(let url) = result { state.importGoogleCredential(from: url) }
-                    if case .failure(let error) = result { state.errorMessage = error.localizedDescription }
-                }
+        StoreSelectionGrid(selected: state.stores) { store in
+            state.setStore(store, enabled: !state.stores.contains(store))
+        } detail: { store in
+            switch store {
+            case .apple:
+                if state.stores.contains(.apple) { AppleCredentialPanel() }
+            case .google:
+                if state.stores.contains(.google) { GoogleCredentialPanel() }
             }
         }
         .frame(maxWidth: 900, alignment: .leading)
     }
+}
 
-    private var appleGuide: GuideContent {
+private extension AnyTransition {
+    /// Grows out of the store card above it, rather than fading in place.
+    static var credentialPanel: AnyTransition {
+        .scale(scale: 0.96, anchor: .top).combined(with: .opacity)
+    }
+}
+
+private struct AppleCredentialPanel: View {
+    @Environment(AppState.self) private var state
+    @State private var importerOpen = false
+
+    var body: some View {
+        @Bindable var state = state
+        CredentialCard(
+            store: .apple,
+            status: state.appleConnection,
+            keychainNote: "The key is stored in the macOS Keychain. The original file is not copied.",
+            guideOpen: state.appleGuideOpen,
+            toggleGuide: { state.appleGuideOpen.toggle() },
+            guide: guide,
+            test: state.testAppleConnection
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                EditableField(label: "App id", value: $state.appleAppID,
+                              prompt: "Numeric App Store ID")
+                    .onChange(of: state.appleAppID) { state.updateAppleAppFields() }
+                EditableField(label: "Bundle id", value: $state.appleBundleID,
+                              prompt: "Reverse-DNS bundle identifier")
+                    .onChange(of: state.appleBundleID) { state.updateAppleAppFields() }
+                if !state.remoteAppleApps.isEmpty {
+                    Menu("Choose visible app") {
+                        ForEach(state.remoteAppleApps) { app in
+                            Button("\(app.name) · \(app.identifier)") {
+                                state.chooseRemoteAppleApp(app)
+                            }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+
+                FileWell(
+                    name: state.appleCredentialFileName,
+                    emptyName: "App Store Connect private key",
+                    prompt: "Drop the .p8 file, or",
+                    choose: { importerOpen = true },
+                    accept: { urls in
+                        guard let url = urls.first,
+                              url.pathExtension.lowercased() == "p8" else { return false }
+                        state.importAppleCredential(from: url)
+                        return true
+                    })
+
+                EditableField(label: "Key id", value: $state.appleKeyID, prompt: "Key ID")
+                    .onChange(of: state.appleKeyID) { state.appleCredentialFieldsChanged() }
+                EditableField(label: "Issuer id", value: $state.appleIssuerID,
+                              prompt: "Issuer UUID")
+                    .onChange(of: state.appleIssuerID) { state.appleCredentialFieldsChanged() }
+            }
+        }
+        .fileImporter(isPresented: $importerOpen,
+                      allowedContentTypes: [UTType(filenameExtension: "p8") ?? .data]) { result in
+            if case .success(let url) = result { state.importAppleCredential(from: url) }
+            if case .failure(let error) = result { state.errorMessage = error.localizedDescription }
+        }
+        .transition(.credentialPanel)
+    }
+
+    private var guide: GuideContent {
         GuideContent(
             steps: [
                 "Open App Store Connect, then Users and Access, then Integrations, then App Store Connect API.",
@@ -131,8 +102,53 @@ struct StoresTab: View {
             buttons: [GuideLink("Open Users and Access ↗",
                                 "https://appstoreconnect.apple.com/access/integrations/api")])
     }
+}
 
-    private var googleGuide: GuideContent {
+private struct GoogleCredentialPanel: View {
+    @Environment(AppState.self) private var state
+    @State private var importerOpen = false
+
+    var body: some View {
+        @Bindable var state = state
+        CredentialCard(
+            store: .google,
+            status: state.googleConnection,
+            keychainNote: "The JSON is stored in the macOS Keychain. The original file is not copied.",
+            guideOpen: state.googleGuideOpen,
+            toggleGuide: { state.googleGuideOpen.toggle() },
+            guide: guide,
+            test: state.testGoogleConnection
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                EditableField(label: "Package name", value: $state.googlePackageName,
+                              prompt: "Reverse-DNS package name")
+                    .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
+                FileWell(
+                    name: state.googleCredentialFileName,
+                    emptyName: "Google service-account key",
+                    prompt: "Drop the service account JSON, or",
+                    choose: { importerOpen = true },
+                    accept: { urls in
+                        guard let url = urls.first,
+                              url.pathExtension.lowercased() == "json" else { return false }
+                        state.importGoogleCredential(from: url)
+                        return true
+                    })
+                if !state.googleAccountEmail.isEmpty {
+                    Text(state.googleAccountEmail)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.text2)
+                }
+            }
+        }
+        .fileImporter(isPresented: $importerOpen, allowedContentTypes: [.json]) { result in
+            if case .success(let url) = result { state.importGoogleCredential(from: url) }
+            if case .failure(let error) = result { state.errorMessage = error.localizedDescription }
+        }
+        .transition(.credentialPanel)
+    }
+
+    private var guide: GuideContent {
         GuideContent(
             steps: [
                 "In the Google Cloud console, create a service account and download its JSON key.",
@@ -176,16 +192,17 @@ private struct CredentialCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 StoreMark(store: store, size: 18)
                 Text("\(store.storeName) credential").font(.system(size: 13, weight: .semibold))
-                Spacer(minLength: 8)
-                HStack(spacing: 6) {
+                Spacer(minLength: 6)
+                HStack(spacing: 5) {
                     Image(systemName: status.isConnected ? "checkmark.circle.fill"
                                     : status == .testing ? "clock.fill" : "circle.dashed")
                         .font(.system(size: 11))
                     Text(status.isConnected ? "Connected" : status == .testing ? "Testing" : "Not connected")
                         .font(.system(size: 11.5))
+                        .fixedSize()
                 }
                 .foregroundStyle(status.isConnected ? Theme.green : status == .testing ? Theme.yellow : Theme.text2)
             }
@@ -208,23 +225,24 @@ private struct CredentialCard<Content: View>: View {
 
                 if guideOpen { GuideBox(guide: guide) }
 
-                HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 7) {
                     QuietButton(title: status == .testing ? "Testing…" : "Test connection", action: test)
                         .disabled(status == .testing)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(keychainNote).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
-                        if case .failed(let message) = status {
-                            Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.red)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else if case .connected(let message) = status {
-                            Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.green)
-                        }
+                    Text(keychainNote).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if case .failed(let message) = status {
+                        Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if case .connected(let message) = status {
+                        Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.green)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
@@ -258,7 +276,7 @@ private struct GuideBox: View {
             .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.yellow, lineWidth: 1))
 
-            HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(guide.buttons) { item in
                     Link(destination: item.url) { QuietButtonLabel(title: item.title) }
                 }
@@ -330,7 +348,6 @@ private struct EditableField: View {
     let label: String
     @Binding var value: String
     let prompt: String
-    var width: CGFloat?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -340,8 +357,7 @@ private struct EditableField: View {
                 .font(Theme.mono(12))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .frame(width: width)
-                .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))

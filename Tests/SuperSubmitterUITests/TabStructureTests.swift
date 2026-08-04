@@ -1,12 +1,24 @@
+import AppKit
 import Foundation
 import SubmitKit
 import Testing
 @testable import SuperSubmitter
 
+/// A misspelled symbol name draws nothing and says nothing. The sidebar would
+/// then show a row with no icon, so every name is resolved here instead.
+@Test func everyTabSymbolResolvesInBothStates() {
+    let names = Tab.allCases.flatMap { [$0.symbol(selected: false), $0.symbol(selected: true)] }
+        + ["gearshape.2", "gearshape.2.fill"]
+    for name in names {
+        #expect(NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil,
+                "The symbol \(name) is not available.")
+    }
+}
+
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.allCases.map(\.title) == [
-        "Stores", "Build", "Details", "Media", "Money", "Marketing",
-        "Review info", "Plan", "Submit", "Release",
+        "Stores", "Build", "Details", "Media", "Monetization", "Marketing",
+        "Review info", "Summary", "Submit", "Release",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.submit.zone == .writes)

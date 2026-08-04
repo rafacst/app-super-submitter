@@ -1,7 +1,9 @@
 import Foundation
 
-public enum Store: String, Sendable, CaseIterable, Hashable {
+public enum Store: String, Sendable, CaseIterable, Hashable, Identifiable {
     case apple, google
+
+    public var id: String { rawValue }
 }
 
 /// One text field of the store listing. Spec section 6.1.

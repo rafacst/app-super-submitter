@@ -1162,7 +1162,7 @@ public enum Planner {
             result.findings.append(Finding(
                 id: "plan.unverified", severity: .warning,
                 message: "\(ids.count) plan rows cannot be compared with readable store state; they are explicitly marked unverified and may repeat on the next apply.",
-                location: "Plan", fix: .plan))
+                location: "Summary", fix: .plan))
         }
     }
 

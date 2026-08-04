@@ -10,6 +10,7 @@ extension AppState {
         guard !groups.isEmpty else { return [] }
         let client = StoreConnectionClient()
         var importedURLs: [URL] = []
+        var skipped: [String] = []
 
         for group in groups {
             let folder = availableImportFolder(named: group.folderName, under: destination,
@@ -27,7 +28,11 @@ extension AppState {
                                                  bundleID: candidate.identifier)
                     let listing = try await client.importApple(
                         appID: candidate.remoteID, credential: appleCredential)
+                    importedManifest.setAppleApp(
+                        appID: candidate.remoteID,
+                        bundleID: listing.bundleID ?? candidate.identifier)
                     importedManifest.mergeAppleImport(listing)
+                    skipped += listing.failures
                     try await materializeImportedAssets(
                         listing.assets, store: .apple, root: folder,
                         manifest: &importedManifest)
@@ -39,6 +44,7 @@ extension AppState {
                     let listing = try await client.importGoogle(
                         credential: googleCredential, packageName: candidate.identifier)
                     importedManifest.mergeGoogleImport(listing)
+                    skipped += listing.failures
                     try await materializeImportedAssets(
                         listing.assets, store: .google, root: folder,
                         manifest: &importedManifest)
@@ -58,6 +64,10 @@ extension AppState {
             importedURLs.append(manifestURL)
         }
         selectedTab = .build
+        if !skipped.isEmpty {
+            errorMessage = "The apps were imported. These parts stayed empty:\n"
+                + skipped.map { "· \($0)" }.joined(separator: "\n")
+        }
         return importedURLs
     }
 
