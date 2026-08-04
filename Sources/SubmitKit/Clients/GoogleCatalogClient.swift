@@ -1,17 +1,17 @@
 import Foundation
 
-/// Reads one Google catalog product at a time, and switches one offer.
+/// Reads the Google catalog for the plan.
 ///
 /// The plan needs a per-field diff. A list read answers "which products exist"
 /// and nothing else, so the plan could only ever say "write every product".
 /// These reads carry the titles, the prices, and the offer states, and the
 /// planner compares them field by field.
 ///
-/// The offer switches sit here too, because they name one offer and the batch
-/// form in `GoogleCatalog.swift` names a whole product.
+/// Every write lives on the runner, in `Run/GoogleCatalog.swift`. This file
+/// held single-product and single-offer twins of those writes, and no caller
+/// ever reached them, so they are gone.
 ///
-/// `// ponytail: one client for the reads and the single switches. The batch
-/// // writes stay on the runner, because only a plan step sends those.`
+/// `// ponytail: reads here, writes on the runner. One home per direction.`
 public struct GoogleCatalogClient: Sendable {
     /// Google limits a batch read. The client sends several batches rather
     /// than one oversized request.
@@ -24,18 +24,6 @@ public struct GoogleCatalogClient: Sendable {
     }
 
     // MARK: - The one-time products
-
-    /// One product. Returns nil when Google holds no product with that id.
-    public func oneTimeProduct(packageName: String,
-                               productId: String) async throws
-        -> ActualState.Google.CatalogProduct? {
-        let path = "\(Self.base(packageName))/oneTimeProducts/\(StateReader.escape(productId))"
-        do {
-            return Self.parseOneTimeProduct(JSON(data: try await api.google("GET", path).data))
-        } catch ConnectionError.http(let status, _) where status == 404 {
-            return nil
-        }
-    }
 
     /// Every named product, in as few requests as the batch limit allows.
     public func oneTimeProducts(packageName: String, productIds: [String]) async throws
@@ -54,17 +42,6 @@ public struct GoogleCatalogClient: Sendable {
     }
 
     // MARK: - The subscriptions
-
-    public func subscription(packageName: String,
-                             productId: String) async throws
-        -> ActualState.Google.CatalogProduct? {
-        let path = "\(Self.base(packageName))/subscriptions/\(StateReader.escape(productId))"
-        do {
-            return Self.parseSubscription(JSON(data: try await api.google("GET", path).data))
-        } catch ConnectionError.http(let status, _) where status == 404 {
-            return nil
-        }
-    }
 
     public func subscriptions(packageName: String, productIds: [String]) async throws
         -> [String: ActualState.Google.CatalogProduct] {
@@ -95,17 +72,6 @@ public struct GoogleCatalogClient: Sendable {
         }
     }
 
-    public func subscriptionOffer(packageName: String, productId: String, basePlanId: String,
-                                  offerId: String) async throws -> Offer? {
-        let path = "\(Self.offerBase(packageName, productId, basePlanId))"
-            + "/\(StateReader.escape(offerId))"
-        do {
-            return Self.parseOffer(JSON(data: try await api.google("GET", path).data))
-        } catch ConnectionError.http(let status, _) where status == 404 {
-            return nil
-        }
-    }
-
     /// Every offer of one base plan. Pass `-` as the base plan to read the
     /// offers of every base plan of the product, which is what Google
     /// documents for the wildcard.
@@ -122,23 +88,6 @@ public struct GoogleCatalogClient: Sendable {
             result += payload["subscriptionOffers"].array.compactMap(Self.parseOffer)
             token = payload["nextPageToken"].string
             if token?.isEmpty != false { break }
-        }
-        return result
-    }
-
-    /// The named offers of one base plan. Google takes this one as a POST,
-    /// unlike the two product batch reads.
-    public func subscriptionOffers(packageName: String, productId: String, basePlanId: String,
-                                   offerIds: [String]) async throws -> [Offer] {
-        var result: [Offer] = []
-        for chunk in Self.chunks(offerIds) {
-            let payload = JSON(data: try await api.google(
-                "POST", "\(Self.offerBase(packageName, productId, basePlanId)):batchGet",
-                body: ["requests": chunk.map {
-                    ["packageName": packageName, "productId": productId,
-                     "basePlanId": basePlanId, "offerId": $0]
-                }]).data)
-            result += payload["subscriptionOffers"].array.compactMap(Self.parseOffer)
         }
         return result
     }
@@ -162,33 +111,6 @@ public struct GoogleCatalogClient: Sendable {
             if token?.isEmpty != false { break }
         }
         return result
-    }
-
-    // MARK: - One offer switch
-
-    /// Activates or stops one subscription offer. Google keeps the offer and
-    /// changes its state, the same rule as the base plan switch.
-    public func setSubscriptionOfferState(packageName: String, productId: String,
-                                          basePlanId: String, offerId: String,
-                                          active: Bool) async throws {
-        try await api.google(
-            "POST",
-            "\(Self.offerBase(packageName, productId, basePlanId))"
-                + "/\(StateReader.escape(offerId)):\(active ? "activate" : "deactivate")",
-            body: ["packageName": packageName, "productId": productId,
-                   "basePlanId": basePlanId, "offerId": offerId])
-    }
-
-    /// The same switch for a one-time product offer.
-    public func setOneTimeOfferState(packageName: String, productId: String,
-                                     purchaseOptionId: String, offerId: String,
-                                     active: Bool) async throws {
-        try await api.google(
-            "POST",
-            "\(Self.oneTimeOfferBase(packageName, productId, purchaseOptionId))"
-                + "/\(StateReader.escape(offerId)):\(active ? "activate" : "deactivate")",
-            body: ["packageName": packageName, "productId": productId,
-                   "purchaseOptionId": purchaseOptionId, "offerId": offerId])
     }
 
     // MARK: - The parsers
