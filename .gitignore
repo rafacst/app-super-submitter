@@ -14,3 +14,6 @@
 
 # Icon Composer writes these from super-submitter-icon.icon on every export.
 super-submitter-icon Exports/
+
+# The release workflow builds into this.
+dist/

@@ -47,6 +47,7 @@
 		4BBF9997B69994DE3558D2DD /* AppStateGoogleActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A1913387574636BF5B1062 /* AppStateGoogleActions.swift */; };
 		4C5125281AB8833C02CE6B86 /* ExistingAppImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FDC311FE6663720F580BBA /* ExistingAppImportTests.swift */; };
 		4CA3A601A81E0CC018CF74D9 /* PriceDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 624A241FEC59B61D4122D435 /* PriceDraft.swift */; };
+		4D2AE905E92F4FA904913562 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F76E73AB6D9C5A84E155BB1 /* Updater.swift */; };
 		4E0B74C2CB8334E6973E8DE7 /* CatalogAndMarketingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66B0D9F08A0D8947E42BFF7F /* CatalogAndMarketingTests.swift */; };
 		4EAE7ACFB6C1508C4D9699A0 /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173D08DC167E430EDF6B2071 /* TopBar.swift */; };
 		4EB50C468BFAD5941DA58FC8 /* ValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E023895E24988E09D1B1480A /* ValidatorTests.swift */; };
@@ -60,6 +61,7 @@
 		5D2BA12F88D7562DBBF950BB /* Redaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE871FE21655B5878BD19A1 /* Redaction.swift */; };
 		5D3969DAC2D6E8C4A65C85D3 /* BuildFlowRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF116D2CBC71AB75AA21129C /* BuildFlowRun.swift */; };
 		61410815C5F8D4261E355306 /* AppStateExistingImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD6FED9F592D6DC5898FB2 /* AppStateExistingImport.swift */; };
+		618AEF9EFCCF3D6C5EAA0C54 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = BC5CC2820B5F681A008E5559 /* Sparkle */; };
 		61D137CE5F8D28EDAD2B28B0 /* AppleApply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5113C7F49B355D564BB9796B /* AppleApply.swift */; };
 		6218146ED95885FB74E44A8C /* AppleActionsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B31BB11B6B6883A59E3B6AE /* AppleActionsClient.swift */; };
 		660667194BAFF16B78D85CCD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94ABF7EDA91568EFB6310536 /* Assets.xcassets */; };
@@ -222,6 +224,7 @@
 		1B1BACCC636778CEAA23A8EA /* DetailsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailsTab.swift; sourceTree = "<group>"; };
 		1DA4D52C3FAD900F87D3E9D4 /* StoreDiagnosticsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreDiagnosticsPanel.swift; sourceTree = "<group>"; };
 		1F000E34291F48D1BDA5A72E /* RemoteSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSafetyTests.swift; sourceTree = "<group>"; };
+		1F76E73AB6D9C5A84E155BB1 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		21CC445E1B00EA868C8788A8 /* StoreImportReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreImportReaderTests.swift; sourceTree = "<group>"; };
 		2201F42616724812E01D271C /* YAMLFidelityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YAMLFidelityTests.swift; sourceTree = "<group>"; };
 		220A6E0FD20FA397139568C1 /* PlanStep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanStep.swift; sourceTree = "<group>"; };
@@ -366,6 +369,7 @@
 			files = (
 				A832625613AAB63B47983FB8 /* SubmitKit.framework in Frameworks */,
 				141F8A18F1CF2F29288CE1BB /* PostHog in Frameworks */,
+				618AEF9EFCCF3D6C5EAA0C54 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -642,6 +646,7 @@
 				234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */,
 				CC15B00B50A626A5F4200EF8 /* SuperSubmitterApp.swift */,
 				7FE78CA68577267148B61B1E /* Tab.swift */,
+				1F76E73AB6D9C5A84E155BB1 /* Updater.swift */,
 				B74D951D644E0304AA9FF7C1 /* Build */,
 				E8C7151DACCABEA646B0907B /* Design */,
 				37004A89EF8A5C1345AFEC0F /* Overlays */,
@@ -804,6 +809,7 @@
 			name = SuperSubmitter;
 			packageProductDependencies = (
 				CF7B2BCCCD28B1CC68E61CC0 /* PostHog */,
+				BC5CC2820B5F681A008E5559 /* Sparkle */,
 			);
 			productName = SuperSubmitter;
 			productReference = E340A1A5704EE1348889575C /* SuperSubmitter.app */;
@@ -855,6 +861,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D0A14FD51D98974A7729EA4E /* XCRemoteSwiftPackageReference "posthog-ios" */,
+				508A813FD763084C0AC5DF02 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				7DB371C11FA1713DA7E42F06 /* XCRemoteSwiftPackageReference "Yams" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1043,6 +1050,7 @@
 				EEE3B2FC2F61E042BD0CCFA2 /* TabContent.swift in Sources */,
 				4B76E33517B6594891F7FCD3 /* Theme.swift in Sources */,
 				4EAE7ACFB6C1508C4D9699A0 /* TopBar.swift in Sources */,
+				4D2AE905E92F4FA904913562 /* Updater.swift in Sources */,
 				80D144147395B49327EAA66C /* VitalsPanel.swift in Sources */,
 				E87F3026CA9AC136AD93E44A /* XcodeCloudPanel.swift in Sources */,
 				FEE535EE2B646D0C2E07807E /* YAMLEditor.swift in Sources */,
@@ -1093,11 +1101,8 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Super Submitter";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Rafa CST";
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Supporting/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1174,11 +1179,8 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Super Submitter";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Rafa CST";
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Supporting/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1418,6 +1420,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		508A813FD763084C0AC5DF02 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.0;
+			};
+		};
 		7DB371C11FA1713DA7E42F06 /* XCRemoteSwiftPackageReference "Yams" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jpsim/Yams.git";
@@ -1441,6 +1451,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7DB371C11FA1713DA7E42F06 /* XCRemoteSwiftPackageReference "Yams" */;
 			productName = Yams;
+		};
+		BC5CC2820B5F681A008E5559 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 508A813FD763084C0AC5DF02 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		CF7B2BCCCD28B1CC68E61CC0 /* PostHog */ = {
 			isa = XCSwiftPackageProductDependency;
