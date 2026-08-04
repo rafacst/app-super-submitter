@@ -76,6 +76,13 @@ struct Sidebar: View {
             .padding(.bottom, 12)
 
             Spacer(minLength: 0)
+
+            if state.manifestURL != nil {
+                Hairline().padding(.horizontal, 12)
+                SavedChip()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+            }
         }
         .frame(width: Theme.sidebarWidth)
         .frame(maxHeight: .infinity)
@@ -185,6 +192,45 @@ private struct SettingsRow: View {
 }
 
 // MARK: - The shared small parts
+
+/// States that the work is on disk, and opens the file that holds it.
+///
+/// The app has no unsaved state to warn about: every field writes `store.yaml`
+/// when it changes. This says so, because a form with no Save button reads as
+/// a form that keeps nothing.
+struct SavedChip: View {
+    @Environment(AppState.self) private var state
+    var compact = false
+
+    private var line: String {
+        guard let date = state.lastSavedAt else { return "Saved to store.yaml" }
+        return "Saved \(date.formatted(date: .omitted, time: .shortened))"
+    }
+
+    var body: some View {
+        Button { state.revealManifest() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.green)
+                Text(line)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text2)
+                    .lineLimit(1)
+                if !compact { Spacer(minLength: 0) }
+            }
+            .padding(.horizontal, compact ? 8 : 0)
+            .padding(.vertical, compact ? 4 : 0)
+            .background(compact ? AnyShapeStyle(Theme.field) : AnyShapeStyle(Color.clear),
+                        in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help("Every change is written as you type. Click to show store.yaml in the Finder.")
+        .accessibilityLabel(line)
+        .accessibilityHint("Shows store.yaml in the Finder")
+    }
+}
 
 struct InitialsBadge: View {
     let text: String

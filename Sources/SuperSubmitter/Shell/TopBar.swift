@@ -34,6 +34,8 @@ struct TopBar: View {
 
             Spacer(minLength: 8)
 
+            if state.manifestURL != nil { SavedChip(compact: true) }
+
             Button {
                 state.showSettings = true
             } label: {

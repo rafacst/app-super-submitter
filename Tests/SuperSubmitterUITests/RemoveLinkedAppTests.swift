@@ -3,9 +3,13 @@ import SubmitKit
 import Testing
 @testable import SuperSubmitter
 
-/// Writes two workspaces in a temporary folder and links both.
+/// Writes two workspaces in a temporary folder and links both. The suite and
+/// the Keychain account belong to the test, so a run touches neither the real
+/// app list nor the real store key.
 @MainActor
-private func stateWithTwoLinkedApps() throws -> (AppState, [URL]) {
+private func stateWithTwoLinkedApps(
+    defaults: UserDefaults = UserDefaults(suiteName: UUID().uuidString)!
+) throws -> (AppState, [URL]) {
     let root = URL(fileURLWithPath: NSTemporaryDirectory())
         .appendingPathComponent("remove-\(UUID().uuidString)")
     var urls: [URL] = []
@@ -19,7 +23,7 @@ private func stateWithTwoLinkedApps() throws -> (AppState, [URL]) {
         try ManifestFile.save(manifest, to: url)
         urls.append(url)
     }
-    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+    let state = AppState(defaults: defaults, storeAccount: "test-\(UUID().uuidString)")
     for url in urls { state.link(manifestAt: url) }
     return (state, urls)
 }
@@ -51,6 +55,24 @@ private func stateWithTwoLinkedApps() throws -> (AppState, [URL]) {
     // The content area shows the two entry cards while this is nil.
     #expect(state.manifestURL == nil)
     #expect(state.stores.isEmpty)
+}
+
+/// The user continues where they stopped. A launch opens the app they worked
+/// on last, and not the first app of the list.
+@MainActor
+@Test func aLaunchOpensTheAppTheUserWorkedOnLast() throws {
+    let defaults = UserDefaults(suiteName: UUID().uuidString)!
+    let (state, urls) = try stateWithTwoLinkedApps(defaults: defaults)
+    // The second app, because index 0 is also what a lost choice falls back to.
+    state.selectApp(at: 1)
+    #expect(state.manifestURL == urls[1])
+
+    let relaunched = AppState(defaults: defaults, storeAccount: "test-\(UUID().uuidString)")
+
+    #expect(relaunched.manifestURL == urls[1])
+    #expect(relaunched.linkedApps.count == 2)
+    // Every edit writes the file, so the work of that app is already there.
+    #expect(relaunched.manifest.apps.apple?.bundleId == "com.example.beta")
 }
 
 @MainActor
