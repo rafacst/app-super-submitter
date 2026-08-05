@@ -76,22 +76,16 @@ jobs:
           rm "$RUNNER_TEMP/cert.p12"
 
       - name: Build and sign
-        env:
-          LICENSING_BASE_URL: ${{ secrets.LICENSING_BASE_URL }}
-          ENTITLEMENT_PUBLIC_KEYS: ${{ secrets.ENTITLEMENT_PUBLIC_KEYS }}
         run: |
           set -euo pipefail
           brew install --quiet xcodegen
           xcodegen generate
-          # An unset secret used to reach xcodebuild as LICENSING_BASE_URL="",
-          # which overrode the value project.yml carries and shipped an app
-          # that could not reach the licensing service. Only override when the
-          # secret actually holds something.
-          OVERRIDES=()
-          [ -n "$LICENSING_BASE_URL" ] && \
-            OVERRIDES+=("LICENSING_BASE_URL=$LICENSING_BASE_URL")
-          [ -n "$ENTITLEMENT_PUBLIC_KEYS" ] && \
-            OVERRIDES+=("ENTITLEMENT_PUBLIC_KEYS=$ENTITLEMENT_PUBLIC_KEYS")
+          # The licensing address and the verifier key come from project.yml,
+          # beside the Supabase pair. They are not secrets: the address is
+          # what the app calls, the key is the public half, and every
+          # privileged Stripe call happens on the service. They were passed
+          # here as secrets that RELEASING.md never asked anyone to set, so
+          # they arrived empty and blanked the real values.
           xcodebuild build \
             -project SuperSubmitter.xcodeproj \
             -scheme SuperSubmitter \
@@ -99,7 +93,6 @@ jobs:
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/dd" \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build }} \
-            "${OVERRIDES[@]}" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
