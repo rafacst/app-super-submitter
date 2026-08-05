@@ -66,8 +66,15 @@ public struct StateReader: Sendable {
                           groupNames: [String] = []) async throws -> ActualState.Apple {
         var result = ActualState.Apple()
 
+        // The categories are relationships, and App Store Connect fills the
+        // `data` of a to-one relationship only for the ones the request
+        // includes. Without this the category read nil on every app, the
+        // Review info tab showed two empty boxes on an app that has both, and
+        // the console checklist reported "the API reports no primary
+        // category" for the same reason.
         let infos = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appInfos?limit=200").data)
+            "GET", "/v1/apps/\(appID)/appInfos?limit=200"
+                + "&include=primaryCategory,secondaryCategory").data)
         let info = infos["data"].array.first {
             $0["attributes"]["appStoreState"].string == "PREPARE_FOR_SUBMISSION"
         } ?? infos["data"].array.first
@@ -259,41 +266,50 @@ public struct StateReader: Sendable {
         // Apple sells at a price point, never at the amount you asked for.
         // The plan shows the resolved amount, and the validator warns over a
         // 5 percent gap. Spec sections 6.7 and 10.4.
+        // Price and availability are optional blocks, the same as the
+        // marketing resources below. One HTTP 400 in here used to abort the
+        // whole App Store read: the plan then held no App Store state at all,
+        // so every line of a listing the store already carried was drawn as
+        // an add, and one banner said the store could not be read. A block
+        // that fails now costs its own rows, which the plan marks unverified.
         if let basePrice {
             let territory = basePrice.territory ?? "USA"
-            let points = JSON(data: try await api.apple(
+            if let response = try? await api.apple(
                 "GET",
-                "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)&limit=200").data)
-            let amounts = points["data"].array
-                .compactMap { $0["attributes"]["customerPrice"].string }
-                .compactMap { Decimal(string: $0) }
-            result.priceAmount = Self.nearest(to: basePrice.amount, in: amounts)
-            result.priceCurrency = basePrice.currency
-        }
-
-        let schedule = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appPriceSchedule"
-                + "?include=baseTerritory,manualPrices,manualPrices.appPricePoint").data)
-        for included in schedule["included"].array
-        where included["type"].string == "appPricePoints" {
-            if let text = included["attributes"]["customerPrice"].string {
-                result.currentPriceAmount = Decimal(string: text)
-                break
+                "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)&limit=200") {
+                let amounts = JSON(data: response.data)["data"].array
+                    .compactMap { $0["attributes"]["customerPrice"].string }
+                    .compactMap { Decimal(string: $0) }
+                result.priceAmount = Self.nearest(to: basePrice.amount, in: amounts)
+                result.priceCurrency = basePrice.currency
             }
         }
 
-        let availabilities = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities").data)
-        result.appAvailabilityId = availabilities["data"]["id"].string
-        result.availableInNewTerritories = availabilities["data"]["attributes"]["availableInNewTerritories"].bool
-        let territories = availabilities["data"]["relationships"]["territoryAvailabilities"]
-        result.territoryCount = territories["meta"]["paging"]["total"].int
-        for item in availabilities["included"].array
-        where item["type"].string == "territoryAvailabilities" {
-            guard let code = item["relationships"]["territory"]["data"]["id"].string else {
-                continue
+        // `manualPrices.appPricePoint` reads like a nested include and Apple
+        // refuses it: "not a valid relationship name". The schedule names the
+        // price, the price names its point, and the point is fetched by id.
+        if let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/appPriceSchedule?include=baseTerritory,manualPrices") {
+            let schedule = JSON(data: response.data)
+            let price = schedule["included"].array
+                .first { $0["type"].string == "appPrices" }
+            let pointID = price?["relationships"]["appPricePoint"]["data"]["id"].string
+            if let pointID, let point = try? await api.apple(
+                "GET", "/v1/appPricePoints/\(pointID)") {
+                result.currentPriceAmount = JSON(data: point.data)["data"]["attributes"]["customerPrice"]
+                    .string.flatMap { Decimal(string: $0) }
             }
-            result.territoryAvailability[code] = item["attributes"]["available"].bool ?? false
+        }
+
+        if let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities") {
+            let availabilities = JSON(data: response.data)
+            result.appAvailabilityId = availabilities["data"]["id"].string
+            result.availableInNewTerritories =
+                availabilities["data"]["attributes"]["availableInNewTerritories"].bool
+            let territories = availabilities["data"]["relationships"]["territoryAvailabilities"]
+            result.territoryCount = territories["meta"]["paging"]["total"].int
+            Self.readTerritories(availabilities, into: &result)
         }
 
         await readAppleMarketing(appID: appID, into: &result)
@@ -307,6 +323,16 @@ public struct StateReader: Sendable {
                     "UNRESOLVED_ISSUES"].contains(state)
         }
         return result
+    }
+
+    static func readTerritories(_ availabilities: JSON, into result: inout ActualState.Apple) {
+        for item in availabilities["included"].array
+        where item["type"].string == "territoryAvailabilities" {
+            guard let code = item["relationships"]["territory"]["data"]["id"].string else {
+                continue
+            }
+            result.territoryAvailability[code] = item["attributes"]["available"].bool ?? false
+        }
     }
 
     /// The seven App Store marketing resources.

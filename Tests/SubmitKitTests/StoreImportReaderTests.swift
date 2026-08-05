@@ -68,7 +68,7 @@ struct StoreImportReaderTests {
     @Test func theImportReadsTheEditableVersionAndNotTheFirstOneListed() async throws {
         ImportStubProtocol.state.configure([
             "/v1/apps/123": #"{"data":{"attributes":{"primaryLocale":"pt-BR","bundleId":"com.example.app"}}}"#,
-            "/v1/apps/123/appInfos?limit=200": """
+            "/v1/apps/123/appInfos?limit=200&include=primaryCategory,secondaryCategory": """
             {"data":[{"id":"info-live","attributes":{"appStoreState":"READY_FOR_SALE"}},
                      {"id":"info-edit","attributes":{"appStoreState":"PREPARE_FOR_SUBMISSION"},
                       "relationships":{"primaryCategory":{"data":{"id":"SOCIAL_NETWORKING"}}}}]}
@@ -111,6 +111,13 @@ struct StoreImportReaderTests {
         #expect(listing.locales["pt-BR"]?.keywords == "bluesky,social")
         #expect(listing.locales["pt-BR"]?.privacyPolicyURL == "https://example.com/p")
         #expect(listing.review.applePrimaryCategory == "SOCIAL_NETWORKING")
+        // The categories are relationships, and App Store Connect fills the
+        // `data` of a to-one relationship only for the ones the request
+        // includes. Without the include the category read nil on every real
+        // app while a stub that always answers it stayed green.
+        #expect(ImportStubProtocol.state.requested.contains {
+            $0.contains("appInfos") && $0.contains("include=primaryCategory,secondaryCategory")
+        })
         #expect(listing.review.contactEmail == "a@example.com")
         #expect(listing.review.notes == "Sign in with the demo account.")
         #expect(listing.purchases.map(\.id) == ["com.example.pro"])
@@ -128,7 +135,7 @@ struct StoreImportReaderTests {
     @Test func anEmptyDraftFallsBackToWhatTheStoreShowsToday() async throws {
         ImportStubProtocol.state.configure([
             "/v1/apps/7": #"{"data":{"attributes":{"primaryLocale":"en-US","bundleId":"com.example.app"}}}"#,
-            "/v1/apps/7/appInfos?limit=200": """
+            "/v1/apps/7/appInfos?limit=200&include=primaryCategory,secondaryCategory": """
             {"data":[{"id":"info","attributes":{"appStoreState":"PREPARE_FOR_SUBMISSION"}}]}
             """,
             "/v1/appInfos/info/appInfoLocalizations?limit=200": """
@@ -186,7 +193,7 @@ struct StoreImportReaderTests {
     @Test func anImportedListingFillsTheManifestTheDetailsTabReads() async throws {
         ImportStubProtocol.state.configure([
             "/v1/apps/9": #"{"data":{"attributes":{"primaryLocale":"en-US","bundleId":"com.example.app"}}}"#,
-            "/v1/apps/9/appInfos?limit=200": #"{"data":[{"id":"i"}]}"#,
+            "/v1/apps/9/appInfos?limit=200&include=primaryCategory,secondaryCategory": #"{"data":[{"id":"i"}]}"#,
             "/v1/appInfos/i/appInfoLocalizations?limit=200": """
             {"data":[{"id":"il","attributes":{"locale":"en-US","name":"Example",
                       "subtitle":"A subtitle"}}]}

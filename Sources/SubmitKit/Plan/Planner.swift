@@ -1751,15 +1751,19 @@ public enum Planner {
         if !unverified.isEmpty {
             result.findings.append(Finding(
                 id: "plan.unverified", severity: .warning,
-                message: "\(unverified.count) plan rows could not be compared, because the store read failed or the store holds nothing to compare yet. They may repeat on the next apply.",
+                message: "\(Self.rows(unverified.count)) the store did not answer for. They may repeat.",
                 location: "Summary", fix: .plan))
         }
         if !unreadable.isEmpty {
             result.findings.append(Finding(
                 id: "plan.unreadable", severity: .warning,
-                message: "\(unreadable.count) plan rows write to an endpoint that offers no matching read, so no run can confirm them. They repeat on every apply by design.",
+                message: "\(Self.rows(unreadable.count)) no read can confirm. They repeat by design.",
                 location: "Summary", fix: .plan))
         }
+    }
+
+    private static func rows(_ count: Int) -> String {
+        count == 1 ? "1 row" : "\(count) rows"
     }
 
     static func applePath(_ manifest: Manifest) -> String? {

@@ -30,17 +30,17 @@ public struct ConsoleRow: Sendable, Identifiable, Equatable {
     public var state: ConsoleState
     /// True when tab 6 owns this row too. The two tabs read one list, so a row
     /// is never done in one place and open in the other.
-    public var onReviewTab: Bool
+    public var onEditingTab: Bool
 
     public init(id: String, system: String, title: String, reason: String, link: String,
-                state: ConsoleState, onReviewTab: Bool = false) {
+                state: ConsoleState, onEditingTab: Bool = false) {
         self.id = id
         self.system = system
         self.title = title
         self.reason = reason
         self.link = link
         self.state = state
-        self.onReviewTab = onReviewTab
+        self.onEditingTab = onEditingTab
     }
 }
 
@@ -113,7 +113,7 @@ public enum ConsoleChecklist {
                     : "App review needs the \(missing.joined(separator: ", "))."),
             link: "\(base)/ios/version/inflight",
             state: apple?.versionId == nil ? .unknown : (missing.isEmpty ? .done : .needed),
-            onReviewTab: true))
+            onEditingTab: true))
 
         return result
     }
@@ -131,14 +131,14 @@ public enum ConsoleChecklist {
                     id: "apple.privacy", system: "App Store",
                     title: "App privacy (nutrition labels)",
                     reason: "No API reads or writes them. Open App privacy.",
-                    link: "\(base)/privacy", state: .unknown, onReviewTab: true),
+                    link: "\(base)/privacy", state: .unknown, onEditingTab: true),
                 ConsoleRow(
                     id: "apple.info", system: "App Store",
                     title: "App information and categories",
                     reason: apple?.primaryCategory.map { "Confirmed: \($0)." }
                         ?? "The API reports no primary category.",
                     link: "\(base)/info",
-                    state: apple?.primaryCategory == nil ? .needed : .done, onReviewTab: true),
+                    state: apple?.primaryCategory == nil ? .needed : .done, onEditingTab: true),
                 ConsoleRow(
                     id: "apple.pricing", system: "App Store", title: "Pricing and availability",
                     reason: manifest.pricing.map {
@@ -183,7 +183,7 @@ public enum ConsoleChecklist {
                 ConsoleRow(
                     id: "google.rating", system: "Google Play", title: "Content rating (IARC)",
                     reason: "Console only: Policy, then App content, then Content rating.",
-                    link: playConsole, state: .unknown, onReviewTab: true),
+                    link: playConsole, state: .unknown, onEditingTab: true),
                 ConsoleRow(
                     id: "google.dataSafety", system: "Google Play", title: "Data safety",
                     reason: (manifest.review?.dataSafetyAnswers?.isEmpty == false)
@@ -192,7 +192,7 @@ public enum ConsoleChecklist {
                     link: playConsole,
                     state: (manifest.review?.dataSafetyAnswers?.isEmpty == false)
                         ? .done : .needed,
-                    onReviewTab: true),
+                    onEditingTab: true),
                 ConsoleRow(
                     id: "google.countries", system: "Google Play", title: "Country availability",
                     reason: "Console only: Production, then Countries and regions.",
@@ -210,12 +210,12 @@ public enum ConsoleChecklist {
                 ConsoleRow(
                     id: "google.category", system: "Google Play", title: "App category",
                     reason: "Console only. The Android Publisher API writes no category.",
-                    link: playConsole, state: .unknown, onReviewTab: true),
+                    link: playConsole, state: .unknown, onEditingTab: true),
                 ConsoleRow(
                     id: "google.access", system: "Google Play",
                     title: "App access, the reviewer credentials",
                     reason: "Console only: Policy, then App content, then App access.",
-                    link: playConsole, state: .unknown, onReviewTab: true),
+                    link: playConsole, state: .unknown, onEditingTab: true),
             ]
         }
 

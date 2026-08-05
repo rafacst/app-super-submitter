@@ -38,8 +38,12 @@ public struct StoreImportReader: Sendable {
         // The same choice the plan makes. `limit=1` would take whichever record
         // App Store Connect happened to return first, and that is usually not
         // the version the developer is about to edit.
+        // The categories are relationships, and App Store Connect fills the
+        // `data` of a to-one relationship only for the ones the request
+        // includes. The import read nil for both on every app.
         let infos = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appInfos?limit=200").data)
+            "GET", "/v1/apps/\(appID)/appInfos?limit=200"
+                + "&include=primaryCategory,secondaryCategory").data)
         let info = infos["data"].array.first {
             $0["attributes"]["appStoreState"].string == "PREPARE_FOR_SUBMISSION"
         } ?? infos["data"].array.first

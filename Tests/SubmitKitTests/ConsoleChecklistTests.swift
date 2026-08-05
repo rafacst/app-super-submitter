@@ -80,7 +80,7 @@ private func manifest(provider: Manifest.Provider = .none) -> Manifest {
 @Test func tabSixAndTabNineReadOneList() {
     let rows = ConsoleChecklist.rows(manifest: manifest(), actual: ActualState(),
                                      stores: [.apple, .google])
-    let shared = rows.filter(\.onReviewTab)
+    let shared = rows.filter(\.onEditingTab)
 
     #expect(!shared.isEmpty)
     // Every row that tab 6 shows is the same object that tab 9 shows, so the
