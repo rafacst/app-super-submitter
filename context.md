@@ -164,7 +164,7 @@ Sources/SubmitKit/
 
 Sources/SuperSubmitter/
   AppState.swift + AppState*.swift   one @Observable @MainActor class, split by area
-  Shell/        RootView, Sidebar, TopBar
+  Shell/        RootView, Sidebar
   Tabs/         one file per tab, plus panels
   Overlays/     onboarding, settings, sheets, menu bar popover
   Build/        BuildFlow (@Observable) and its views
@@ -192,6 +192,7 @@ exact argument array. Use that seam instead of hitting the network.
 | `upload-spec.md` | The local build and upload flow (Xcode, Gradle, states, recovery). |
 | `stripe-spec.md` | The licensing product rules, the Stripe setup, and the server. The client half is implemented; raw YAML is **not** gated. |
 | `licensing-api.md` | The wire contract the shipped client speaks. Read it before you build the service. |
+| `supabase-auth-setup.md` | The dashboard half of the four sign-in providers. The client half is done. |
 | `RELEASING.md` | Signing, notarization, Sparkle, GitHub secrets. |
 | `.design-notes/`, `design/` | The HTML mockup the SwiftUI screens follow. |
 
@@ -208,10 +209,13 @@ commit from a `feat/`, `fix/`, or `chore/` branch.
 - Saving `store.yaml` loses comments and block scalars. Yams re-encodes the
   whole file. Values survive and a test proves it. See SPEC open question 8.
 - Licensing: the client and Supabase sign-in are in `Sources/SubmitKit/Access/`
-  and every gate is live. Debug points at the test Worker. Release stays closed
-  until `LICENSING_BASE_URL` reaches the build. The deployed test and live
-  Workers still report zero configured Stripe Prices, so do not set that
-  Release value yet.
+  and every gate is live. Debug points at the test Worker, Release at the live
+  one, both set in `project.yml`. The live Worker reports all three Stripe
+  Prices as available; the test Worker still reports none.
+- Sign-in: email and password work. The four provider buttons (Apple, Google,
+  GitHub, GitLab) are built and tested, and every one answers "provider is not
+  enabled" until the Supabase dashboard is set up. See
+  `supabase-auth-setup.md`.
 - SPEC section 3.1 rows 3 to 10 and section 3.3 name the store endpoints that
   no code calls yet. Read them before you add a call, so you do not
   re-discover the surface.
