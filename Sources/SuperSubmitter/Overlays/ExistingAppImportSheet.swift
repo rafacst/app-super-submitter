@@ -399,6 +399,17 @@ private struct CandidateTile: View {
                         .foregroundStyle(Theme.text3)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    // What the record ships on. A Mac icon carries its own
+                    // rounded corners and a transparent margin, so a Mac app
+                    // already looks unlike its neighbours here. This says why.
+                    if let label = candidate.platformLabel {
+                        Text(label)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(Theme.text2)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Theme.sunken, in: Capsule())
+                            .padding(.top, 2)
+                    }
                 }
             }
             .padding(.horizontal, 8)

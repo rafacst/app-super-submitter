@@ -36,6 +36,13 @@ public struct LinkedSourceProject: Codable, Sendable, Equatable, Identifiable {
     public var folderBookmark: Data?
     public var containerPath: String
     public var containerKind: ContainerKind
+    /// The `store.yaml` this project builds for.
+    ///
+    /// The links are one list for the whole Mac, and the Build tab used to
+    /// open whichever one was linked last. With ten apps in the sidebar that
+    /// is nine wrong answers. Optional, so a list written before this field
+    /// existed still decodes; those links match by folder instead.
+    public var manifestPath: String?
     /// Apple: the scheme, the configuration. Android: the module, the variant.
     public var selection: Selection
     public var productIdentifier: String?
@@ -44,7 +51,8 @@ public struct LinkedSourceProject: Codable, Sendable, Equatable, Identifiable {
 
     public init(id: UUID = UUID(), platform: BuildPlatform, rootPath: String,
                 folderBookmark: Data? = nil, containerPath: String,
-                containerKind: ContainerKind, selection: Selection = Selection(),
+                containerKind: ContainerKind, manifestPath: String? = nil,
+                selection: Selection = Selection(),
                 productIdentifier: String? = nil, createdAt: Date = Date(),
                 lastValidatedAt: Date? = nil) {
         self.id = id
@@ -53,6 +61,7 @@ public struct LinkedSourceProject: Codable, Sendable, Equatable, Identifiable {
         self.folderBookmark = folderBookmark
         self.containerPath = containerPath
         self.containerKind = containerKind
+        self.manifestPath = manifestPath
         self.selection = selection
         self.productIdentifier = productIdentifier
         self.createdAt = createdAt

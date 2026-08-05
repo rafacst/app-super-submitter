@@ -6,11 +6,20 @@ public struct RemoteStoreApp: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public let name: String
     public let identifier: String
+    /// What the app ships on, in Apple's own order of a platform picker.
+    ///
+    /// One App Store record covers every platform, so "an iOS app" and "a Mac
+    /// app" are the same record with different versions under it. Empty means
+    /// the record carries no version yet, and the app then says so rather
+    /// than guessing at iOS.
+    public let platforms: [Manifest.Platform]
 
-    public init(id: String, name: String, identifier: String) {
+    public init(id: String, name: String, identifier: String,
+                platforms: [Manifest.Platform] = []) {
         self.id = id
         self.name = name
         self.identifier = identifier
+        self.platforms = platforms
     }
 }
 
@@ -122,20 +131,51 @@ public struct StoreConnectionClient: Sendable {
         self.session = session
     }
 
+    /// Every app the key can see, and what each one ships on.
+    ///
+    /// The versions ride along on the same request. One App Store record
+    /// carries every platform it ships on, so "is this a Mac app" is only
+    /// answerable from its versions, and a second request per app to learn it
+    /// would cost one round trip for every row of the picker.
+    ///
+    /// `fields[appStoreVersions]` names the `app` relationship as well as the
+    /// platform. The field list decides the relationships too, so asking for
+    /// the platform alone returns versions that name no app, and there is
+    /// then no way to tell whose they are.
     public func appleApps(credential: AppleCredential) async throws -> [RemoteStoreApp] {
         let token = try AppleJWT.make(credential: credential)
-        var next = URL(string: "https://api.appstoreconnect.apple.com/v1/apps?limit=200")
+        var next = URL(string: "https://api.appstoreconnect.apple.com/v1/apps?limit=200"
+            + "&include=appStoreVersions"
+            + "&fields%5BappStoreVersions%5D=platform,app"
+            + "&limit%5BappStoreVersions%5D=50")
         var result: [RemoteStoreApp] = []
         while let url = next {
             let data = try await appleGET(url, token: token)
             let payload = try JSONDecoder().decode(AppleAppsResponse.self, from: data)
+            let platforms = Self.platforms(payload.included ?? [])
             result.append(contentsOf: payload.data.map {
                 RemoteStoreApp(id: $0.id, name: $0.attributes.name,
-                               identifier: $0.attributes.bundleID)
+                               identifier: $0.attributes.bundleID,
+                               platforms: platforms[$0.id] ?? [])
             })
             next = payload.links?.next.flatMap(URL.init(string:))
         }
         return result
+    }
+
+    /// App id -> the platforms its versions name, in `Platform.allCases`
+    /// order so two apps on the same platforms always read the same way.
+    static func platforms(_ included: [AppleIncluded]) -> [String: [Manifest.Platform]] {
+        var found: [String: Set<Manifest.Platform>] = [:]
+        for item in included where item.type == "appStoreVersions" {
+            guard let appID = item.relationships?.app?.data?.id,
+                  let raw = item.attributes?.platform,
+                  let platform = Manifest.Platform(rawValue: raw) else { continue }
+            found[appID, default: []].insert(platform)
+        }
+        return found.mapValues { set in
+            Manifest.Platform.allCases.filter(set.contains)
+        }
     }
 
     /// The Publishing API is package-scoped, but the Play Developer Reporting
@@ -486,7 +526,26 @@ private struct AppleAppsResponse: Decodable {
         let attributes: Attributes
     }
     let data: [Item]
+    let included: [AppleIncluded]?
     let links: AppleLinks?
+}
+
+/// One row of the `included` array. Only the app store versions are read, and
+/// only for their platform, so everything here is optional and a shape the
+/// reader does not know costs nothing.
+struct AppleIncluded: Decodable {
+    struct Attributes: Decodable { let platform: String? }
+    struct Relationships: Decodable {
+        struct Related: Decodable {
+            struct Item: Decodable { let id: String }
+            let data: Item?
+        }
+        let app: Related?
+    }
+
+    let type: String
+    let attributes: Attributes?
+    let relationships: Relationships?
 }
 
 private struct AppleLinks: Decodable { let next: String? }

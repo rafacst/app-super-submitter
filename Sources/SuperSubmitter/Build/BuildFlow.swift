@@ -81,7 +81,26 @@ final class BuildFlow {
         discover(root: url)
     }
 
-    func discover(root: URL) {
+    /// The folder the developer already chose, without asking for it again.
+    ///
+    /// The import asks for the app folder and writes `store.yaml` inside it,
+    /// so by the time the Build tab opens, the app already knows where the
+    /// project is. Asking a second time is the app forgetting what it was
+    /// told one screen ago.
+    ///
+    /// A scan reads the folder and runs nothing. The build itself still asks
+    /// on its own sheet, so the consent boundary in upload-spec 7.1 stays
+    /// exactly where it was.
+    func adoptTheAppFolder() {
+        guard project == nil, candidate == nil, failure == nil, !state.isActive,
+              let root = app?.manifestRoot else { return }
+        discover(root: root, quietWhenEmpty: true)
+    }
+
+    /// `quietWhenEmpty` is for the folder the app chose for itself. A folder
+    /// with no project in it is an ordinary answer there, and an error panel
+    /// about a choice the developer never made is not.
+    func discover(root: URL, quietWhenEmpty: Bool = false) {
         reset()
         run.move(to: .discovering)
         task = Task { [weak self] in
@@ -94,6 +113,7 @@ final class BuildFlow {
             if let recommended = ProjectDiscovery.recommended(result.containers) {
                 await select(container: recommended, root: root)
             } else if result.containers.isEmpty {
+                guard !quietWhenEmpty else { reset(); return }
                 fail(BuildFailure(
                     category: .projectDiscovery, stage: "Validate the project",
                     message: "No Xcode workspace, Xcode project, or Gradle wrapper is in this folder.",
@@ -110,7 +130,8 @@ final class BuildFlow {
         let platform: BuildPlatform = container.kind == .gradle ? .android : .ios
         var project = LinkedSourceProject(
             platform: platform, rootPath: root.path,
-            containerPath: container.path, containerKind: container.kind)
+            containerPath: container.path, containerKind: container.kind,
+            manifestPath: app?.manifestURL?.path)
         project.folderBookmark = try? root.bookmarkData(includingResourceValuesForKeys: nil,
                                                         relativeTo: nil)
         project.selection.allowProvisioningUpdates = allowProvisioningUpdates
@@ -139,12 +160,48 @@ final class BuildFlow {
         try? storage.saveProjects(list)
     }
 
+    /// The project of the app that is open, and no other.
+    ///
+    /// The links are one list for the whole Mac. Taking the last one showed
+    /// the app you linked most recently under whichever app you had open,
+    /// which is nine wrong answers in a sidebar of ten. A link written before
+    /// the manifest path existed still matches, by its folder.
     func loadSavedProject() {
-        guard project == nil, let saved = storage.loadProjects().last else { return }
+        // The sidebar can change the open app while this tab holds another
+        // app's project. A running build keeps the tab as it is, because
+        // killing it to redraw a card would cost the developer the build.
+        if let held = project?.manifestPath, !state.isActive,
+           held != app?.manifestURL?.standardizedFileURL.path {
+            reset()
+        }
+        guard project == nil else { return }
+        guard let saved = savedProjectForOpenApp() else {
+            // Nothing linked for this app. The folder the developer already
+            // chose for it is the answer often enough that asking first is
+            // the wrong order.
+            adoptTheAppFolder()
+            return
+        }
         project = saved
         run.platform = saved.platform
         run.linkedProjectID = saved.id
         allowProvisioningUpdates = saved.selection.allowProvisioningUpdates
+    }
+
+    private func savedProjectForOpenApp() -> LinkedSourceProject? {
+        guard let manifest = app?.manifestURL?.standardizedFileURL.path else { return nil }
+        let root = (manifest as NSString).deletingLastPathComponent
+        let list = storage.loadProjects()
+        return list.last { $0.manifestPath == manifest }
+            ?? list.last { $0.manifestPath == nil && Self.folder($0.rootPath, isInside: root) }
+    }
+
+    /// True when the project sits in the app's own folder or under it. Pure
+    /// string work, so it needs no actor and a test can call it directly.
+    nonisolated static func folder(_ path: String, isInside root: String) -> Bool {
+        let project = (path as NSString).standardizingPath
+        let root = (root as NSString).standardizingPath
+        return project == root || project.hasPrefix(root + "/")
     }
 
     // MARK: - Preflight

@@ -7,8 +7,33 @@ struct ExistingAppCandidate: Identifiable, Hashable, Sendable {
     let remoteID: String
     let name: String
     let identifier: String
+    /// What the App Store record ships on. Empty for Google Play, which has
+    /// one platform and never needs to say so.
+    var platforms: [Manifest.Platform] = []
 
     var id: String { "\(store.rawValue):\(remoteID)" }
+
+    /// The short label the picker puts under the icon: "iOS", "macOS",
+    /// "iOS · macOS". Nil when the record carries no version yet, because a
+    /// guess here is what wrote every Mac app into `store.yaml` as an iPhone
+    /// app.
+    var platformLabel: String? {
+        guard !platforms.isEmpty else { return nil }
+        return platforms.map(\.shortName).joined(separator: " · ")
+    }
+}
+
+extension Manifest.Platform {
+    /// Apple's own spelling, which is what the developer reads everywhere
+    /// else about the same app.
+    var shortName: String {
+        switch self {
+        case .ios: "iOS"
+        case .macOS: "macOS"
+        case .tvOS: "tvOS"
+        case .visionOS: "visionOS"
+        }
+    }
 }
 
 struct ExistingAppSelection: Sendable {
@@ -153,7 +178,8 @@ final class ExistingAppImportModel {
             do {
                 found += try await client.appleApps(credential: credential).map {
                     ExistingAppCandidate(store: .apple, remoteID: $0.id,
-                                         name: $0.name, identifier: $0.identifier)
+                                         name: $0.name, identifier: $0.identifier,
+                                         platforms: $0.platforms)
                 }
             } catch { failures.append("App Store: \(error.localizedDescription)") }
         }
