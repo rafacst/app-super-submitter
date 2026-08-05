@@ -109,6 +109,7 @@
 		A832625613AAB63B47983FB8 /* SubmitKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F0A38C40B86738E2ABCE03A /* SubmitKit.framework */; };
 		A869655F8A2E446669E2C5D7 /* PlayMarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA20D03CFA77AF800B818FB1 /* PlayMarkTests.swift */; };
 		A9A480FFB5A1DB4185CB37D6 /* AppStorePanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35D49903E91FE8C20866E17B /* AppStorePanels.swift */; };
+		AA14B3B41D2BD34C026B5158 /* TrafficLights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58FE78DF7C1509A86C443FC4 /* TrafficLights.swift */; };
 		AAE43DA4ABC43627D75C71B3 /* ManifestDrafts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514BD0BE0520FD8F26338DB8 /* ManifestDrafts.swift */; };
 		AC51904FE56A1C1FBB6B258A /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9E25B3162E791B57E85330 /* Credentials.swift */; };
 		ACA4BE2A48864A4C49A13960 /* BindingLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = B552F0B4703F1833D8640EF6 /* BindingLimits.swift */; };
@@ -290,6 +291,7 @@
 		5205CFBC837A5CED79239DED /* OAuthSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthSession.swift; sourceTree = "<group>"; };
 		54D8576A89F9578A2DA413B5 /* PlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannerTests.swift; sourceTree = "<group>"; };
 		58B7BDBC4CFA41B779503C46 /* EntitlementVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementVerifier.swift; sourceTree = "<group>"; };
+		58FE78DF7C1509A86C443FC4 /* TrafficLights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrafficLights.swift; sourceTree = "<group>"; };
 		5A67B6ECB1980E83D80C7245 /* BindingLimitsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BindingLimitsTests.swift; sourceTree = "<group>"; };
 		5B843901D2B0B6BADB67B316 /* MenuBarPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPopover.swift; sourceTree = "<group>"; };
 		5E03D77E5EACC67FD82CB493 /* StoreVitalsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreVitalsClient.swift; sourceTree = "<group>"; };
@@ -760,6 +762,7 @@
 			children = (
 				3BE9B11225EBCA1175F86028 /* RootView.swift */,
 				8D79C5DE3F2E7E5B601B24DD /* Sidebar.swift */,
+				58FE78DF7C1509A86C443FC4 /* TrafficLights.swift */,
 			);
 			path = Shell;
 			sourceTree = "<group>";
@@ -1149,6 +1152,7 @@
 				FD29EAE3D515911AA70F5DE0 /* Tab.swift in Sources */,
 				EEE3B2FC2F61E042BD0CCFA2 /* TabContent.swift in Sources */,
 				4B76E33517B6594891F7FCD3 /* Theme.swift in Sources */,
+				AA14B3B41D2BD34C026B5158 /* TrafficLights.swift in Sources */,
 				4D2AE905E92F4FA904913562 /* Updater.swift in Sources */,
 				80D144147395B49327EAA66C /* VitalsPanel.swift in Sources */,
 				E87F3026CA9AC136AD93E44A /* XcodeCloudPanel.swift in Sources */,
