@@ -62,39 +62,33 @@ struct AccountSheet: View {
         .onExitCommand { dismiss() }
     }
 
-    /// The four identity providers, two to a row.
+    /// The identity providers, one to a row.
     ///
     /// They sit above the email form, because a developer who already has a
     /// GitHub account is one click from done and never needs the form.
     private var providers: some View {
-        let all = SupabaseOAuthProvider.allCases
-        return VStack(spacing: 8) {
-            ForEach(Array(stride(from: 0, to: all.count, by: 2)), id: \.self) { index in
-                HStack(spacing: 8) {
-                    ForEach(all[index..<min(index + 2, all.count)]) { provider in
-                        Button {
-                            Task { await state.signIn(with: provider) }
-                        } label: {
-                            HStack(spacing: 7) {
-                                Image(systemName: provider.symbol)
-                                    .font(.system(size: 13))
-                                Text("Continue with \(provider.title)")
-                                    .font(.system(size: 12))
-                                    .lineLimit(1)
-                            }
-                            .foregroundStyle(Theme.text)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 7)
-                            .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
-                            .overlay(RoundedRectangle(cornerRadius: 7)
-                                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(state.accountBusy || !state.accountServiceReady)
-                        .accessibilityLabel("Continue with \(provider.title)")
+        VStack(spacing: 8) {
+            ForEach(SupabaseOAuthProvider.allCases) { provider in
+                Button {
+                    Task { await state.signIn(with: provider) }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: provider.symbol)
+                            .font(.system(size: 13))
+                        Text("Continue with \(provider.title)")
+                            .font(.system(size: 12.5))
                     }
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                    .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
+                .disabled(state.accountBusy || !state.accountServiceReady)
+                .accessibilityLabel("Continue with \(provider.title)")
             }
         }
     }

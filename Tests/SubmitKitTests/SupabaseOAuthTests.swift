@@ -50,7 +50,7 @@ private func query(_ url: URL) -> [String: String] {
 
 @Test func everyProviderKeepsTheNameSupabaseExpectsOnTheWire() {
     #expect(SupabaseOAuthProvider.allCases.map(\.rawValue)
-            == ["apple", "google", "github", "gitlab"])
+            == ["apple", "github", "gitlab"])
 }
 
 @Test func aRefusedSignInReadsAsTheProvidersReasonAndNotAMissingCode() async throws {
