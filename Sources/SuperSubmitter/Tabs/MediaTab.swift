@@ -18,6 +18,9 @@ struct MediaTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
+            // Publishing sends this tab through the Summary and the Submit
+            // tabs. Managing has neither, so it writes here.
+            if state.mode == .managing { DirectApplyBar(target: .media) }
             if let error = state.mediaError {
                 Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.red)
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
@@ -47,6 +50,7 @@ struct MediaTab: View {
                         MediaTile(path: path, info: state.imageInfo(for: path),
                                   stores: state.imageStores(for: path, deviceClass: device),
                                   url: state.mediaURL(for: path),
+                                  fromStore: AppState.isImported(path),
                                   canMoveEarlier: index > 0,
                                   canMoveLater: index < paths.count - 1,
                                   move: { offset in
@@ -70,9 +74,16 @@ struct MediaTab: View {
 
     /// What each store shows today. It is faded and it takes no input, because
     /// nothing here is a file the developer owns yet.
+    ///
+    /// An import already downloaded these same images into the tiles above,
+    /// so the strip stays out of the way when the bucket holds them. The
+    /// alternative was every screenshot drawn twice on one row.
     @ViewBuilder
     private func liveScreenshots(_ device: Manifest.DeviceClass) -> some View {
-        let live = state.storeSnapshot.screenshots(locale: state.locale, deviceClass: device)
+        let imported = state.mediaPaths(deviceClass: device).contains(where: AppState.isImported)
+        let live = imported
+            ? []
+            : state.storeSnapshot.screenshots(locale: state.locale, deviceClass: device)
         if !live.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(live, id: \.store) { entry in
@@ -219,6 +230,7 @@ private struct MediaTile: View {
     let info: ImageAssetInfo?
     let stores: Set<Store>
     let url: URL
+    var fromStore = false
     var canMoveEarlier = false
     var canMoveLater = false
     var move: (Int) -> Void = { _ in }
@@ -233,6 +245,19 @@ private struct MediaTile: View {
             }
             .frame(width: 112, height: 160)
             .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(alignment: .topLeading) {
+                // The import downloaded this one. It says so, because a tile
+                // reads as a file the developer chose and this one is the
+                // store's own picture coming back.
+                if fromStore {
+                    Text("From the store")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(Theme.text2)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Theme.raised, in: Capsule())
+                        .padding(5)
+                }
+            }
             Text(url.lastPathComponent).font(.system(size: 10.5)).lineLimit(1)
             if let info {
                 Text("\(info.width) × \(info.height)")

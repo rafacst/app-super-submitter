@@ -99,3 +99,69 @@ import Testing
 
     #expect(snapshot.screenshots.isEmpty)
 }
+
+/// Grey on a field means "sending this changes nothing". The tab may only say
+/// it when every store that holds the field holds this exact text.
+@Test func aFieldIsUnchangedOnlyWhenEveryStoreAgreesWithIt() {
+    var apple = ImportedStoreListing()
+    var appleLocale = ImportedStoreListing.Locale()
+    appleLocale.description = "The same words"
+    appleLocale.subtitle = "A subtitle"
+    apple.locales["en-US"] = appleLocale
+
+    var google = ImportedStoreListing()
+    var googleLocale = ImportedStoreListing.Locale()
+    googleLocale.description = "The same words"
+    google.locales["en-US"] = googleLocale
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(apple, store: .apple)
+    snapshot.merge(google, store: .google)
+
+    #expect(snapshot.isUnchanged(.description, locale: "en-US", value: "The same words"))
+    #expect(!snapshot.isUnchanged(.description, locale: "en-US", value: "New words"))
+    // One store that differs is one write the run still makes.
+    snapshot.merge(differentGoogleDescription(), store: .google)
+    #expect(!snapshot.isUnchanged(.description, locale: "en-US", value: "The same words"))
+    // A field no store holds claims nothing, so it is never grey.
+    #expect(!snapshot.isUnchanged(.keywords, locale: "en-US", value: ""))
+    #expect(!snapshot.isUnchanged(.subtitle, locale: "pt-BR", value: "A subtitle"))
+}
+
+private func differentGoogleDescription() -> ImportedStoreListing {
+    var listing = ImportedStoreListing()
+    var locale = ImportedStoreListing.Locale()
+    locale.description = "Other words"
+    listing.locales["en-US"] = locale
+    return listing
+}
+
+/// The grey survives a quit. Without the file, a reopened workspace showed
+/// every field black until somebody ran a read, which claims the developer
+/// changed text they never touched.
+@Test func theSnapshotSurvivesARelaunchAndBelongsToOneApp() throws {
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("snapshot-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    var listing = ImportedStoreListing()
+    var locale = ImportedStoreListing.Locale()
+    locale.description = "The live description"
+    listing.locales["en-US"] = locale
+    listing.assets = [ImportedStoreAsset(locale: "en-US", kind: "APP_IPHONE_69",
+                                         url: URL(string: "https://example.com/a.png")!,
+                                         fileName: "a.png")]
+    var snapshot = StoreSnapshot()
+    snapshot.merge(listing, store: .apple)
+    snapshot.save(toRoot: folder)
+
+    let reloaded = StoreSnapshot.load(fromRoot: folder)
+    #expect(reloaded.text(.description, locale: "en-US").map(\.value) == ["The live description"])
+    #expect(reloaded.screenshots(locale: "en-US", deviceClass: .phone).count == 1)
+    #expect(reloaded.isUnchanged(.description, locale: "en-US", value: "The live description"))
+
+    // Another app has its own folder and therefore its own picture.
+    #expect(StoreSnapshot.load(fromRoot: FileManager.default.temporaryDirectory
+        .appendingPathComponent("snapshot-\(UUID().uuidString)")).isEmpty)
+}

@@ -170,10 +170,18 @@ final class AppState {
     // Tabs 3 and 4.
     var mediaError: String?
 
-    // Managing. The Marketing tab writes on its own button, so it carries its
-    // own small state instead of the run state that tab 8 uses.
-    var marketingApplyState: MarketingApplyState = .idle
-    var marketingApplyMessage = ""
+    // Managing. The Details, Media, and Marketing tabs write on their own
+    // button, so they carry this small state instead of the run state that
+    // tab 8 uses. One write runs at a time, and the target says whose message
+    // is on the screen.
+    var directApplyState: MarketingApplyState = .idle
+    var directApplyMessage = ""
+    var directApplyTarget: DirectApplyTarget?
+    /// The plan the button counts its rows from. `stateGeneration` covers the
+    /// store read and the manifest covers the edits, so the pair is the whole
+    /// input of a plan. See `directPlan()`.
+    @ObservationIgnored
+    var directPlanCache: (generation: Int, manifest: Manifest, plan: PlanResult)?
 
     // Tab 3.
     var locale = ""
@@ -1387,6 +1395,10 @@ final class AppState {
             locale = manifest.listing?.defaultLocale
                 ?? manifest.listing?.locales.keys.sorted().first
                 ?? ""
+            // One app at a time, and the picture belongs to the app. Without
+            // this line the app that opens second showed the first one's live
+            // text under its own fields.
+            storeSnapshot = StoreSnapshot.load(fromRoot: manifestRoot)
             syncEditingStateFromManifest()
             packages = [:]
             packageErrors = [:]

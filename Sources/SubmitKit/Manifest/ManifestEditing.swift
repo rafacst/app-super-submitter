@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ListingTextField: String, Sendable, CaseIterable {
+public enum ListingTextField: String, Codable, Sendable, CaseIterable {
     case name, subtitle, description, whatsNew, keywords, promotionalText
     case supportURL, marketingURL, privacyPolicyURL, privacyPolicyText, privacyChoicesURL
     case googleShortDescription, googleWhatsNew, googleVideo
