@@ -1,3 +1,4 @@
+import SubmitKit
 import SwiftUI
 
 /// The sidebar. 240 points, the Apps list on top, the nine tabs below, and
@@ -39,7 +40,7 @@ struct Sidebar: View {
                         }
                     }
                     .accessibilityLabel(app.name)
-                    .accessibilityValue("App Store \(app.apple.mark), Google Play \(app.google.mark)")
+                    .accessibilityValue(app.storeSummary)
                     .accessibilityAddTraits(index == state.selectedAppIndex ? .isSelected : [])
                 }
                 Button { state.chooseAppFolder() } label: { NewAppRow() }
@@ -99,8 +100,8 @@ private struct AppRow: View {
                     .font(.system(size: 12.5, weight: .medium))
                     .lineLimit(1)
                 HStack(spacing: 5) {
-                    HealthChip(letter: "A", health: app.apple)
-                    HealthChip(letter: "G", health: app.google)
+                    if let apple = app.apple { HealthChip(store: .apple, health: apple) }
+                    if let google = app.google { HealthChip(store: .google, health: google) }
                 }
             }
             Spacer(minLength: 0)
@@ -305,17 +306,27 @@ struct InitialsBadge: View {
     }
 }
 
+/// One store, and how that store stands.
+///
+/// The logo says which store faster than a letter does, and it is the same
+/// mark every other tab uses for the same store. The glyph beside it keeps
+/// its severity colour, so the chip still reads at a glance.
 struct HealthChip: View {
-    let letter: String
+    let store: Store
     let health: StoreHealth
 
     var body: some View {
-        Text("\(letter) \(health.mark)")
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(health.color)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(health.background, in: RoundedRectangle(cornerRadius: 4))
+        HStack(spacing: 3) {
+            StoreMark(store: store, size: 9)
+            Text(health.mark)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(health.color)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1.5)
+        .background(health.background, in: RoundedRectangle(cornerRadius: 4))
+        .accessibilityElement()
+        .accessibilityLabel("\(store.storeName) \(health.label)")
     }
 }
 

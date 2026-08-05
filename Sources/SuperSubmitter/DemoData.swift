@@ -59,6 +59,15 @@ enum StoreHealth {
         }
     }
 
+    /// The glyph in words. A screen reader cannot say "✕".
+    var label: String {
+        switch self {
+        case .matched: "in sync"
+        case .changed: "has changes"
+        case .blocked: "blocked"
+        }
+    }
+
     var color: Color {
         switch self {
         case .matched: Theme.green
@@ -81,6 +90,19 @@ struct AppSummary: Identifiable {
     let name: String
     let initials: String
     let summary: String
-    let apple: StoreHealth
-    let google: StoreHealth
+    /// Nil when the app does not go to that store at all.
+    ///
+    /// A store the developer never picked used to show a red cross, which
+    /// says "this is wrong" about a choice they made on purpose. An app that
+    /// goes to one store now wears one logo.
+    let apple: StoreHealth?
+    let google: StoreHealth?
+
+    /// The row read aloud. A store the app does not go to is not named at
+    /// all, the same as on the screen.
+    var storeSummary: String {
+        let parts = [apple.map { "App Store \($0.label)" },
+                     google.map { "Google Play \($0.label)" }].compactMap { $0 }
+        return parts.isEmpty ? "No store yet" : parts.joined(separator: ", ")
+    }
 }
