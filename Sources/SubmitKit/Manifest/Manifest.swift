@@ -518,6 +518,9 @@ extension Manifest {
         public var contentHosting: Bool?
         public var content: String?
         public var promotedPurchase: Bool?
+        /// The promotional image the App Store shows for this purchase.
+        /// Apple asks for 1024 by 1024 pixels. Google offers no equivalent.
+        public var promotionalImage: String?
 
         public init(id: String, kind: Kind, name: String? = nil, price: Price? = nil,
                     reviewNote: String? = nil, entitlements: [String]? = nil,
@@ -526,7 +529,8 @@ extension Manifest {
                     reviewScreenshot: String? = nil,
                     availableTerritories: [String]? = nil,
                     contentHosting: Bool? = nil, content: String? = nil,
-                    promotedPurchase: Bool? = nil) {
+                    promotedPurchase: Bool? = nil,
+                    promotionalImage: String? = nil) {
             self.id = id
             self.kind = kind
             self.name = name
@@ -542,6 +546,7 @@ extension Manifest {
             self.contentHosting = contentHosting
             self.content = content
             self.promotedPurchase = promotedPurchase
+            self.promotionalImage = promotionalImage
         }
 
         public enum Kind: String, Codable, Sendable, CaseIterable {
@@ -595,6 +600,10 @@ extension Manifest {
             /// list on a subscription, on its own pair of resources.
             public var reviewScreenshot: String?
             public var availableTerritories: [String]?
+            /// The promotional image the App Store shows for this
+            /// subscription. Apple asks for 1024 by 1024 pixels. Google
+            /// offers no equivalent.
+            public var promotionalImage: String?
 
             public init(id: String, duration: String, basePlanId: String? = nil,
                         price: Price? = nil, entitlements: [String]? = nil,
@@ -603,7 +612,8 @@ extension Manifest {
                         tax: Tax? = nil, offers: [Offer]? = nil,
                         migrateExistingSubscribers: Bool? = nil,
                         reviewScreenshot: String? = nil,
-                        availableTerritories: [String]? = nil) {
+                        availableTerritories: [String]? = nil,
+                        promotionalImage: String? = nil) {
                 self.id = id
                 self.duration = duration
                 self.basePlanId = basePlanId
@@ -617,6 +627,7 @@ extension Manifest {
                 self.migrateExistingSubscribers = migrateExistingSubscribers
                 self.reviewScreenshot = reviewScreenshot
                 self.availableTerritories = availableTerritories
+                self.promotionalImage = promotionalImage
             }
         }
     }
@@ -642,13 +653,23 @@ extension Manifest {
         /// starts in the draft state, so an offer without this key reaches no
         /// customer. Nil leaves the Play Console state untouched.
         ///
-        /// The App Store has no equivalent switch. It sells an offer as soon
-        /// as the subscription itself is live.
+        /// The App Store reads it too, and on one shape only: an offer code.
+        /// Apple has no switch for an introductory, a promotional, or a
+        /// win-back offer, and sells each as soon as the product is live.
+        /// `false` on an offer code deactivates it, which stops a redemption
+        /// and keeps every subscription that already used one.
         public var active: Bool?
+        /// The redeemable codes of an offer code. Apple creates the offer and
+        /// no code, so an offer code without this key reaches nobody.
+        ///
+        /// Google generates its promotion codes in the Play Console, so this
+        /// block reaches the App Store only.
+        public var codes: Codes?
 
         public init(id: String, kind: Kind, duration: String? = nil, price: Price? = nil,
                     periods: Int? = nil, regions: [String]? = nil,
-                    eligibility: Eligibility? = nil, active: Bool? = nil) {
+                    eligibility: Eligibility? = nil, active: Bool? = nil,
+                    codes: Codes? = nil) {
             self.id = id
             self.kind = kind
             self.duration = duration
@@ -657,6 +678,31 @@ extension Manifest {
             self.regions = regions
             self.eligibility = eligibility
             self.active = active
+            self.codes = codes
+        }
+
+        /// The two kinds of redeemable code Apple issues for one offer.
+        ///
+        /// A custom code is a string the developer picks and hands to
+        /// everybody, with a redemption limit. A one-time use code is one of a
+        /// batch Apple generates, and each one works once.
+        public struct Codes: Codable, Sendable, Equatable {
+            /// The key is the code the customer types. The value is how many
+            /// redemptions Apple allows for it.
+            public var custom: [String: Int]?
+            /// How many single-use codes Apple generates. Apple caps a batch
+            /// at 25,000 and needs an expiry date for it.
+            public var oneTimeUse: Int?
+            /// `YYYY-MM-DD`. Apple requires it for a one-time use batch and
+            /// takes it as optional on a custom code.
+            public var expiresOn: String?
+
+            public init(custom: [String: Int]? = nil, oneTimeUse: Int? = nil,
+                        expiresOn: String? = nil) {
+                self.custom = custom
+                self.oneTimeUse = oneTimeUse
+                self.expiresOn = expiresOn
+            }
         }
 
         public enum Kind: String, Codable, Sendable, CaseIterable {
@@ -865,13 +911,19 @@ extension Manifest {
                 public var longDescription: String?
                 /// `card` and `details` map to Apple's two event asset types.
                 public var screenshots: [String: [String]]?
+                /// One video clip per asset type, keyed the same way as the
+                /// screenshots. Apple takes one clip for the card and one for
+                /// the details page, so the value is a path and not a list.
+                public var videoClips: [String: String]?
                 public init(name: String? = nil, shortDescription: String? = nil,
                             longDescription: String? = nil,
-                            screenshots: [String: [String]]? = nil) {
+                            screenshots: [String: [String]]? = nil,
+                            videoClips: [String: String]? = nil) {
                     self.name = name
                     self.shortDescription = shortDescription
                     self.longDescription = longDescription
                     self.screenshots = screenshots
+                    self.videoClips = videoClips
                 }
             }
         }

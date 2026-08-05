@@ -602,7 +602,11 @@ public enum Validator {
                     message: "The offer \(offer.id) runs for fewer than one period.",
                     location: location, fix: .money))
             }
+            result += codeFindings(offer, productID: productID, location: location,
+                                   stores: input.stores)
         }
+
+        result += promotionalImageFindings(input)
 
         // Apple keeps one grace period for the whole app. Two different
         // values in one manifest means the second one never reaches Apple.
@@ -620,6 +624,121 @@ public enum Validator {
                     id: "offer.migrate.\(plan.id)", severity: .warning,
                     message: "The plan \(plan.id) migrates the existing subscribers. This changes what a paying customer is charged at the next renewal, and no call undoes it.",
                     location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
+            }
+        }
+        return result
+    }
+
+    /// The redeemable codes of one offer.
+    ///
+    /// The writer skips a batch that names no expiry, because Apple answers a
+    /// 400 that reads like a server fault. This says so first, by name, before
+    /// anything reaches the network.
+    private static func codeFindings(_ offer: Manifest.Offer, productID: String,
+                                     location: String,
+                                     stores: Set<Store>) -> [Finding] {
+        guard let codes = offer.codes else { return [] }
+        var result: [Finding] = []
+        let key = "\(productID).\(offer.id)"
+
+        // Google mints its promotion codes in the Play Console, so the block
+        // reaches the App Store only.
+        if !stores.contains(.apple) {
+            result.append(Finding(
+                id: "offer.codesStore.\(key)", severity: .warning,
+                message: "The offer \(offer.id) carries redeemable codes and the App Store is off. Google Play mints its promotion codes in the Play Console, so nothing writes them.",
+                location: location, fix: .money))
+        } else if offer.kind != .offerCode {
+            result.append(Finding(
+                id: "offer.codesKind.\(key)", severity: .warning,
+                message: "The offer \(offer.id) carries redeemable codes and is not an offer code. The App Store takes them on an offer code only, so nothing writes them.",
+                location: location, fix: .money))
+        }
+
+        if let count = codes.oneTimeUse {
+            if count > 25_000 {
+                result.append(Finding(
+                    id: "offer.oneTimeUseCount.\(key)", severity: .error,
+                    message: "The App Store mints at most 25,000 one-time use codes in one batch. \(offer.id) asks for \(count).",
+                    location: location, fix: .money))
+            }
+            if count < 1 {
+                result.append(Finding(
+                    id: "offer.oneTimeUseEmpty.\(key)", severity: .error,
+                    message: "The one-time use batch of \(offer.id) mints \(count) codes.",
+                    location: location, fix: .money))
+            }
+            if codes.expiresOn?.isEmpty != false {
+                result.append(Finding(
+                    id: "offer.oneTimeUseExpiry.\(key)", severity: .error,
+                    message: "The one-time use codes of \(offer.id) name no expiresOn. The App Store requires an expiry date for a batch, so nothing is minted without one.",
+                    location: location, fix: .money))
+            }
+        }
+
+        if let expiry = codes.expiresOn, !expiry.isEmpty, !isCalendarDay(expiry) {
+            result.append(Finding(
+                id: "offer.codesExpiry.\(key)", severity: .error,
+                message: "expiresOn is a YYYY-MM-DD date. \(offer.id) names \(expiry).",
+                location: location, fix: .money))
+        }
+        return result
+    }
+
+    /// `2026-08-05`, and nothing that only looks like it. Apple rejects the
+    /// rest, and a 32nd of March never reaches a customer.
+    static func isCalendarDay(_ text: String) -> Bool {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.isLenient = false
+        guard let date = formatter.date(from: text) else { return false }
+        // `isLenient = false` still rolls 2026-02-30 into March, so the round
+        // trip is what actually rejects a day that does not exist.
+        return formatter.string(from: date) == text
+    }
+
+    /// The promotional image of a purchase or a plan. Apple asks for 1024 by
+    /// 1024 and rejects anything else, and the writer would send it anyway.
+    private static func promotionalImageFindings(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple) else { return [] }
+        var targets: [(key: String, location: String, path: String)] = []
+        for purchase in input.manifest.purchases ?? [] {
+            guard let path = purchase.promotionalImage, !path.isEmpty else { continue }
+            targets.append((purchase.id, "Monetization · \(purchase.id)", path))
+        }
+        for group in input.manifest.subscriptions ?? [] {
+            for plan in group.plans {
+                guard let path = plan.promotionalImage, !path.isEmpty else { continue }
+                targets.append((plan.id,
+                                "Monetization · \(group.groupId) · \(plan.id)", path))
+            }
+        }
+
+        var result: [Finding] = []
+        for target in targets {
+            guard let url = Planner.resolve(target.path, root: input.root) else {
+                result.append(Finding(
+                    id: "offer.promotionalImage.missing.\(target.key)", severity: .error,
+                    message: "The file \(target.path) does not exist.",
+                    location: target.location, fix: .money))
+                continue
+            }
+            do {
+                let info = try AssetInspector.image(at: url)
+                guard info.width == 1024, info.height == 1024 else {
+                    result.append(Finding(
+                        id: "offer.promotionalImage.size.\(target.key)", severity: .error,
+                        message: "The App Store asks for a 1024 by 1024 promotional image. \(target.path) is \(info.width) by \(info.height).",
+                        location: target.location, fix: .money))
+                    continue
+                }
+            } catch {
+                result.append(Finding(
+                    id: "offer.promotionalImage.unreadable.\(target.key)", severity: .error,
+                    message: error.localizedDescription,
+                    location: target.location, fix: .money))
             }
         }
         return result

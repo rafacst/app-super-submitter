@@ -49,6 +49,11 @@ struct DetailsTab: View {
                 // the reviewer need?" on a tab that answers "what does the
                 // listing say?".
                 ListingDeclarations().padding(.top, 6)
+                // Apple's own keyword resource, beside the Keywords field it
+                // is so easily mistaken for.
+                if state.stores.contains(.apple) {
+                    SearchKeywordsPanel().padding(.top, 6)
+                }
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)

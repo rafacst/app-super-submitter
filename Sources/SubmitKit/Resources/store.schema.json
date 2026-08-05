@@ -437,6 +437,10 @@
         "promotedPurchase": {
           "type": "boolean"
         },
+        "promotionalImage": {
+          "type": "string",
+          "description": "The promotional image the App Store shows for this purchase. 1024 by 1024 pixels. Google offers no equivalent."
+        },
         "locales": {
           "type": "object"
         },

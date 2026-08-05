@@ -51,6 +51,9 @@ extension Runner {
                 try await appleSubscriptionAvailability(plan, subscriptionID: subscriptionID)
                 try await appleSubscriptionReviewScreenshot(plan,
                                                             subscriptionID: subscriptionID)
+                try await appleProductImage(plan.promotionalImage,
+                                            productID: subscriptionID,
+                                            family: .subscription)
             }
         }
     }
@@ -423,26 +426,36 @@ extension Runner {
     private func appleOfferCode(_ offer: Manifest.Offer, subscriptionID: String) async throws {
         let existing = JSON(data: try await api.apple(
             "GET", "/v1/subscriptions/\(subscriptionID)/offerCodes?limit=200").data)
-        if existing["data"].array.contains(where: {
+        // The offer that Apple already holds keeps its id. The codes and the
+        // active switch below still run against it, so a second pass fills in
+        // what an earlier version of this app created and left empty.
+        var offerCodeID = existing["data"].array.first {
             $0["attributes"]["name"].string == offer.id
-        }) { return }
+        }?["id"].string
 
-        try await api.apple("POST", "/v1/subscriptionOfferCodes", body: [
-            "data": [
-                "type": "subscriptionOfferCodes",
-                "attributes": [
-                    "name": offer.id,
-                    "customerEligibilities": [Self.appleEligibility(offer.eligibility)],
-                    "offerEligibility": "STACK_WITH_INTRO_OFFERS",
-                    "duration": AppleDurations.offerDuration(for: offer.duration ?? "P1M")
-                        ?? "ONE_MONTH",
-                    "offerMode": offer.kind == .freeTrial ? "FREE_TRIAL" : "PAY_UP_FRONT",
-                    "numberOfPeriods": offer.periods ?? 1,
-                ],
-                "relationships": ["subscription": [
-                    "data": ["type": "subscriptions", "id": subscriptionID]]],
-            ],
-        ])
+        if offerCodeID == nil {
+            let created = JSON(data: try await api.apple(
+                "POST", "/v1/subscriptionOfferCodes", body: [
+                    "data": [
+                        "type": "subscriptionOfferCodes",
+                        "attributes": [
+                            "name": offer.id,
+                            "customerEligibilities": [Self.appleEligibility(offer.eligibility)],
+                            "offerEligibility": "STACK_WITH_INTRO_OFFERS",
+                            "duration": AppleDurations.offerDuration(for: offer.duration ?? "P1M")
+                                ?? "ONE_MONTH",
+                            "offerMode": offer.kind == .freeTrial ? "FREE_TRIAL" : "PAY_UP_FRONT",
+                            "numberOfPeriods": offer.periods ?? 1,
+                        ],
+                        "relationships": ["subscription": [
+                            "data": ["type": "subscriptions", "id": subscriptionID]]],
+                    ],
+                ]).data)
+            offerCodeID = created["data"]["id"].string
+        }
+
+        guard let offerCodeID else { return }
+        try await appleOfferCodeValues(offer, offerCodeID: offerCodeID, family: .subscription)
     }
 
     private func applePromotionalOffer(_ offer: Manifest.Offer,

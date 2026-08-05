@@ -313,10 +313,13 @@ extension Runner {
             }
             if let localizationID {
                 for (kind, screenshots) in text.screenshots ?? [:] {
-                    let assetType = kind.lowercased() == "card"
-                        ? "EVENT_CARD" : "EVENT_DETAILS_PAGE"
                     try await appleEventScreenshots(
-                        screenshots, assetType: assetType,
+                        screenshots, assetType: Self.appleEventAssetType(kind),
+                        localizationID: localizationID)
+                }
+                for (kind, clip) in (text.videoClips ?? [:]).sorted(by: { $0.key < $1.key }) {
+                    try await appleEventVideoClip(
+                        clip, assetType: Self.appleEventAssetType(kind),
                         localizationID: localizationID)
                 }
             }
@@ -601,6 +604,43 @@ extension Runner {
             "data": ["type": "appScreenshots", "id": id,
                      "attributes": ["uploaded": true,
                                     "sourceFileChecksum": Checksums.md5(data)]],
+        ])
+    }
+
+    /// `card` and `details` are what the manifest writes. Apple names the two
+    /// asset types, and a screenshot and a video clip share the pair.
+    static func appleEventAssetType(_ kind: String) -> String {
+        kind.lowercased() == "card" ? "EVENT_CARD" : "EVENT_DETAILS_PAGE"
+    }
+
+    /// The video clip of one app event asset type.
+    ///
+    /// Apple takes one clip for the card and one for the details page, so the
+    /// manifest holds a path and not a list. The three calls are the
+    /// reservation, the bytes, and the commit, exactly as the screenshot below
+    /// does it.
+    private func appleEventVideoClip(_ path: String, assetType: String,
+                                     localizationID: String) async throws {
+        guard let url = resolve(path) else { return }
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        let reservation = JSON(data: try await api.apple(
+            "POST", "/v1/appEventVideoClips", body: [
+                "data": [
+                    "type": "appEventVideoClips",
+                    "attributes": ["fileName": url.lastPathComponent,
+                                   "appEventAssetType": assetType,
+                                   "fileSize": data.count],
+                    "relationships": ["appEventLocalization": [
+                        "data": ["type": "appEventLocalizations",
+                                 "id": localizationID]]],
+                ],
+            ]).data)
+        guard let id = reservation["data"]["id"].string else { return }
+        try await executeUploadOperations(
+            reservation["data"]["attributes"]["uploadOperations"], data: data)
+        try await api.apple("PATCH", "/v1/appEventVideoClips/\(id)", body: [
+            "data": ["type": "appEventVideoClips", "id": id,
+                     "attributes": ["uploaded": true]],
         ])
     }
 

@@ -482,8 +482,11 @@ extension Runner {
     /// step. Apple keeps the one-time purchase codes on their own collection,
     /// so they take their own step and name their product.
     ///
-    /// Apple creates the code in a draft state, so nobody can redeem one until
-    /// the developer activates it in App Store Connect.
+    /// Apple creates the offer in a draft state and creates no redeemable
+    /// code. `codes:` writes the codes and `active: true` opens the offer, both
+    /// through `appleOfferCodeValues`, exactly as the subscription twin does.
+    /// An offer without `codes:` still reaches nobody, which is the state the
+    /// validator names.
     func applePurchaseOfferCodes(productId: String) async throws {
         guard let purchase = (manifest.purchases ?? []).first(where: { $0.id == productId }),
               let offers = purchase.offers, !offers.isEmpty else { return }
@@ -495,31 +498,46 @@ extension Runner {
 
         let known = JSON(data: try await api.apple(
             "GET", "/v2/inAppPurchases/\(purchaseID)/offerCodes?limit=200").data)
-        let heldNames = Set(known["data"].array
-            .compactMap { $0["attributes"]["name"].string })
+        // The id and not only the name. The offer Apple already holds keeps
+        // its id, so a second pass fills in the codes that an earlier version
+        // of this app never wrote.
+        var heldIDs: [String: String] = [:]
+        for item in known["data"].array {
+            guard let name = item["attributes"]["name"].string,
+                  let id = item["id"].string else { continue }
+            heldIDs[name] = id
+        }
 
         for offer in offers where offer.kind == .offerCode {
-            guard !heldNames.contains(offer.id) else { continue }
-            var attributes: [String: Any] = ["name": offer.id, "customerEligibilities": ["NEW"]]
-            if let eligibility = offer.eligibility {
-                attributes["customerEligibilities"] = [Self.appleEligibility(eligibility)]
+            try Task.checkCancellation()
+            var offerCodeID = heldIDs[offer.id]
+            if offerCodeID == nil {
+                var attributes: [String: Any] = ["name": offer.id,
+                                                 "customerEligibilities": ["NEW"]]
+                if let eligibility = offer.eligibility {
+                    attributes["customerEligibilities"] = [Self.appleEligibility(eligibility)]
+                }
+                if let duration = offer.duration,
+                   let period = AppleDurations.offerDuration(for: duration) {
+                    attributes["duration"] = period
+                }
+                attributes["offerMode"] = offer.price == nil ? "FREE" : "PAY_UP_FRONT"
+                attributes["numberOfPeriods"] = offer.periods ?? 1
+                let created = JSON(data: try await api.apple(
+                    "POST", "/v1/inAppPurchaseOfferCodes", body: [
+                        "data": [
+                            "type": "inAppPurchaseOfferCodes",
+                            "attributes": attributes,
+                            "relationships": [
+                                "inAppPurchaseV2": ["data": ["type": "inAppPurchases",
+                                                             "id": purchaseID]],
+                            ],
+                        ],
+                    ]).data)
+                offerCodeID = created["data"]["id"].string
             }
-            if let duration = offer.duration,
-               let period = AppleDurations.offerDuration(for: duration) {
-                attributes["duration"] = period
-            }
-            attributes["offerMode"] = offer.price == nil ? "FREE" : "PAY_UP_FRONT"
-            attributes["numberOfPeriods"] = offer.periods ?? 1
-            try await api.apple("POST", "/v1/inAppPurchaseOfferCodes", body: [
-                "data": [
-                    "type": "inAppPurchaseOfferCodes",
-                    "attributes": attributes,
-                    "relationships": [
-                        "inAppPurchaseV2": ["data": ["type": "inAppPurchases",
-                                                     "id": purchaseID]],
-                    ],
-                ],
-            ])
+            guard let offerCodeID else { continue }
+            try await appleOfferCodeValues(offer, offerCodeID: offerCodeID, family: .purchase)
         }
     }
 
@@ -846,6 +864,8 @@ extension Runner {
                     ])
             }
         }
+        try await appleProductImage(purchase.promotionalImage,
+                                    productID: purchaseID, family: .purchase)
         // `purchase.content` writes nothing. Apple publishes a read for
         // `inAppPurchaseContents` and no create, so the hosted content upload
         // left the API. The validator names the key, so a silent skip here

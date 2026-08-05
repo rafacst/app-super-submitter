@@ -43,7 +43,7 @@ The app does not do these things in v1. Each line gives the reason.
 
 | Not in v1 | Reason |
 |---|---|
-| Sales reports and finance reports | A different product. Both stores offer them, and neither one helps a submission. |
+| Sales and finance reporting as a product: charts, trends, and a stored history | A different product. The app shows the newest report and keeps none of it. |
 | Customers, purchases, refunds, and charts, in either provider | Run-time data. This app manages the catalog only. Section 3.1 holds the Google endpoints for a later version. |
 | Paywall design and A/B tests, in either provider | A design task, not a submission task. The app creates a paywall that holds the right products. The developer styles it in the dashboard. |
 | Adapty segments and audience targeting | The Adapty CLI reads segments and cannot write them. The app manages the default audience only. |
@@ -52,13 +52,20 @@ The app does not do these things in v1. Each line gives the reason.
 | Amazon Appstore, Huawei AppGallery, Microsoft Store | Two stores cover the request. Add a third only on demand. |
 | A web dashboard, a server, or user accounts | The app runs on the developer machine. The stores hold the state. |
 | A local database | The manifest is the desired state. The APIs are the actual state. Git is the history. |
-| App Store Connect certificates, profiles, and devices | Xcode does this. Do not duplicate Xcode. |
+| Creating, revoking, or deleting a certificate, a profile, or a device | Xcode does this. Do not duplicate Xcode. A revoked certificate breaks every machine that signs with it, so it stays in the Developer portal. The app reads them and their expiry dates. |
 
 The Managing mode covers four areas that an earlier draft of this section
 excluded. The app now ships each one, so none of them is a non-goal:
 the customer reviews of both stores, TestFlight and the Play internal test
 distribution, the Play Developer Reporting vitals, and the Play app recovery.
 Section 3.1 records the same correction row by row.
+
+Two more rows above narrowed for the same reason. The App Store reports and the
+signing identities are both **reads**, and each one answers a question that no
+other screen answers: what the store paid, and when a certificate lapses. A
+read is cheap to ship and cannot damage a listing. What stays excluded is the
+product around them: no stored history, no chart, and no call that creates or
+revokes an identity. See `AppleReportsClient` and `AppleProvisioningClient`.
 
 ### 3.1 The deferred Google Play surface
 
@@ -127,19 +134,24 @@ replaces the generated coverage file that the repository used to hold.
 
 | Area | Endpoints | What it adds |
 |---|---|---|
-| Offer code values | `subscriptionOfferCodeCustomCodes`, `subscriptionOfferCodeOneTimeUseCodes`, and the two `inAppPurchaseOfferCode` twins | The app creates an offer code and no redeemable code. |
-| Offer code edits | `PATCH /v1/subscriptionOfferCodes/{id}`, `PATCH /v1/inAppPurchaseOfferCodes/{id}` | Deactivate an offer code. |
-| Promotional images | `subscriptionImages`, `inAppPurchaseImages`, both v1 and v2 | A promotional image on a purchase or a subscription. |
-| App event video | `appEventVideoClips` | The app writes an event screenshot and no video clip. |
 | App Clip media | `appClipHeaderImages`, `appClipAppStoreReviewDetails`, `appClipAdvancedExperienceImages` | The header image and the App Clip review detail. |
 | Media order | `PATCH /v1/appScreenshotSets/{id}/relationships/appScreenshots`, and the preview twin | Set the order of the screenshots. |
-| Search keywords | The `searchKeywords` relationships of `appStoreVersionLocalizations` and `appCustomProductPageLocalizations` | A newer Apple field. The manifest holds no key for it. |
 | Experiment stop | `DELETE /v2/appStoreVersionExperiments/{id}` | Stop a running experiment. |
 | Featuring | `appStoreVersionPromotions` | A second featuring resource beside `nominations`. |
 | TestFlight notices | `betaTesterInvitations`, `buildBetaNotifications` | Invite a tester again. Notify a group about a new build. |
 | Tester removal | `DELETE /v1/betaTesters/{id}` and its four relationship deletes | The app adds a tester and removes none. |
 | Game Center | The `gameCenter*` family | A game configuration, not a submission. |
 | App tags | `appTags` | A newer Apple field for the listing. |
+
+These rows closed. The app calls each one now:
+
+| Area | Endpoints | Where it landed |
+|---|---|---|
+| Offer code values | `subscriptionOfferCodeCustomCodes`, `subscriptionOfferCodeOneTimeUseCodes`, and the two `inAppPurchaseOfferCode` twins | `AppleOfferCodes`, from the `codes:` key of an offer. One writer serves both families. |
+| Offer code edits | `PATCH /v1/subscriptionOfferCodes/{id}`, `PATCH /v1/inAppPurchaseOfferCodes/{id}` | `AppleOfferCodes`, from `active:`. A missing key leaves the offer alone. |
+| Promotional images | `subscriptionImages`, `inAppPurchaseImages` | `AppleProductImages`, from the `promotionalImage:` key. The checksum decides, so a re-run is free. |
+| App event video | `appEventVideoClips` | `AppleMarketing`, from the `videoClips:` key of an event locale. |
+| Search keywords | The `searchKeywords` relationships of `appCustomProductPageLocalizations` and `appStoreVersionLocalizations` | `AppleKeywordsClient` and the Search keywords panel on Details. **No manifest key.** Apple publishes no create call and no attributes for `appKeywords`, so the app links what the account already holds and invents nothing. A repository of opaque Apple ids would say nothing to anybody. The panel writes the custom product page half, which is where the feature lives: Apple opened those pages to organic search in July 2025, and a search for a linked word reaches that page instead of the default one. |
 
 The v2 drift is a separate item. The app writes `subscriptionLocalizations` and
 `subscriptionGroupLocalizations` on v1, and Apple publishes a v2 of both. The
@@ -1053,6 +1065,9 @@ these is a desired state. A diff row for one of them could never close.
 | The build bundles | `/v1/builds/{id}/buildBundles`, `/v1/buildBundles/{id}/buildBundleFileSizes` | What is inside a processed build: the app, every extension, the download size, and the encryption flag. |
 | The build icons | `/v1/builds/{id}/icons` | Which icons Apple extracted from the build. |
 | The territories | `/v1/territories` | Every territory id, so a code in the availability block or the licence agreement can be checked. |
+| The signing identities | `/v1/bundleIds`, `/v1/certificates`, `/v1/devices`, `/v1/profiles`, `/v1/merchantIds`, `/v1/passTypeIds` | When a certificate or a profile lapses. Nothing else in the app shows that date, and the first sign of a lapse is a failed build. A resource that answers 403 costs its own rows and no others. |
+| The sales and finance reports | `/v1/salesReports`, `/v1/financeReports` | What the store paid. Both answer gzip, so `Gzip` unpacks them, and the panel shows the first rows only. Apple answers 404 for a period it holds no report for, which is a state and not a failure. |
+| The analytics reports | `/v1/analyticsReportRequests` and its `reports`, `instances`, and `segments` | What the store measured. **One write:** creating the report request is how Apple starts a feed. It touches no listing and reaches no customer, and deleting the request stops it again, so the panel confirms it and section 7.11 keeps it. |
 
 ---
 
