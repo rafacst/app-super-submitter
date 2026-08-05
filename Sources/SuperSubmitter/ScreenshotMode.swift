@@ -46,6 +46,16 @@ enum ScreenshotMode {
         isActive ? "screenshots-no-credentials" : "store-credentials"
     }
 
+    /// Whether the script named an appearance. The stored preference stands
+    /// back when it did, so the two do not fight over `NSApp.appearance`.
+    static var pinsAppearance: Bool {
+        #if DEBUG
+        ["light", "dark"].contains(value(for: "--appearance") ?? "")
+        #else
+        false
+        #endif
+    }
+
     /// Forces the appearance, so the script leaves the system setting alone.
     static func applyAppearance() {
         #if DEBUG

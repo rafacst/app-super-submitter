@@ -208,3 +208,28 @@ private let sampleKey = AppleCredential(keyID: "Z2YFP2FP9D", issuerID: "issuer",
     found.urls = ["1": URL(string: "https://example.com/icon.png")!]
     #expect(found.explanation == nil)
 }
+
+/// Both stores used to be ticked before the developer said anything, which
+/// asked for two sets of credentials to import an app that lives in one store.
+@MainActor
+@Test func theImportStartsWithNoStorePickedAndRefusesToDiscover() {
+    let model = ExistingAppImportModel()
+
+    #expect(model.stores.isEmpty)
+    #expect(model.canDiscover == false)
+
+    // One store, and only that store's credentials stand in the way.
+    model.toggleStore(.apple)
+    #expect(model.stores == [.apple])
+    #expect(model.canDiscover == false)
+
+    model.appleKeyID = "K"
+    model.appleIssuerID = "I"
+    model.applePrivateKey = "PEM"
+    #expect(model.canDiscover)
+
+    // Picking it again clears it, and Continue shuts with it.
+    model.toggleStore(.apple)
+    #expect(model.stores.isEmpty)
+    #expect(model.canDiscover == false)
+}

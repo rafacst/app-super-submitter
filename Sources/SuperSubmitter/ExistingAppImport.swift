@@ -61,7 +61,11 @@ final class ExistingAppImportModel {
     enum Step: Int { case credentials, apps, destination, complete }
 
     var step: Step = .credentials
-    var stores: Set<Store> = [.apple, .google]
+    /// Empty, so the developer says where the app lives. Both stores
+    /// preselected asked for two sets of credentials before anyone chose
+    /// anything. `canDiscover` already refuses an empty set, so Continue
+    /// stays shut until one is picked.
+    var stores: Set<Store> = []
     var appleKeyID = ""
     var appleIssuerID = ""
     var applePrivateKey = ""

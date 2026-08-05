@@ -21,14 +21,8 @@ struct Sidebar: View {
                     .padding(.top, 4)
                     .padding(.bottom, 6)
 
-                if state.appRows.isEmpty {
-                    Text("No apps linked")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.text3)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 7)
-                }
-
+                // No "No apps linked" row. The Add app row below is already
+                // the whole story when the list is empty.
                 ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
                     Button {
                         state.selectApp(at: index)
@@ -149,18 +143,28 @@ private struct TabRow: View {
             HStack(spacing: 9) {
                 Image(systemName: tab.symbol(selected: selected))
                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                    // Always its own colour, so the column reads as thirteen
+                    // places and not one shape repeated.
+                    .foregroundStyle(tab.tint)
                     .frame(width: 20)
                 Text(tab.title)
                     .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? tab.tint : Theme.text)
                 Spacer(minLength: 0)
                 if let badge = state.badge(for: tab) {
-                    BadgeView(count: badge.count, severity: badge.severity, selected: selected, size: 16)
+                    BadgeView(count: badge.count, severity: badge.severity, size: 16)
                 }
             }
-            .foregroundStyle(selected ? Theme.accentText : Theme.text)
+            // The row wears the colour of its tab, as a wash rather than a
+            // solid. Thirteen solid fills would each need their own readable
+            // text colour, and the lighter ones cannot carry white at all.
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(selected ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .background(selected ? tab.tint.opacity(0.16) : .clear,
+                        in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(selected ? tab.tint.opacity(0.45) : .clear,
+                              lineWidth: Theme.hairline))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -200,13 +204,18 @@ private struct SettingsRow: View {
 /// sends a version; a manager runs the app that is already out there.
 struct ModeSwitch: View {
     @Environment(AppState.self) private var state
+    /// The pill is one view that moves between the two halves, so the switch
+    /// slides instead of blinking from one fill to another.
+    @Namespace private var pill
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(Mode.allCases) { mode in
                 let selected = state.mode == mode
                 Button {
-                    withAnimation(.easeOut(duration: 0.16)) { state.mode = mode }
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        state.mode = mode
+                    }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: mode.symbol)
@@ -215,13 +224,18 @@ struct ModeSwitch: View {
                             .font(.system(size: 12,
                                           weight: selected ? .semibold : .regular))
                     }
-                    .foregroundStyle(selected ? Theme.text : Theme.text2)
+                    .foregroundStyle(selected ? Theme.accentText : Theme.text2)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .frame(maxWidth: .infinity)
-                    .background(selected ? Theme.field : .clear,
-                                in: RoundedRectangle(cornerRadius: 6))
-                    .shadow(color: selected ? .black.opacity(0.14) : .clear, radius: 1, y: 1)
+                    .background {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(mode.tint)
+                                .matchedGeometryEffect(id: "modePill", in: pill)
+                                .shadow(color: mode.tint.opacity(0.45), radius: 3, y: 1)
+                        }
+                    }
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -305,23 +319,21 @@ struct HealthChip: View {
     }
 }
 
+/// The count on a tab row. It keeps its severity colour whether the row is
+/// selected or not: the row is a wash now, not a solid fill, so there is
+/// nothing to invert against.
 struct BadgeView: View {
     let count: Int
     let severity: Severity
-    let selected: Bool
     var size: CGFloat
 
     var body: some View {
         Text("\(count)")
             .font(.system(size: size * 0.65, weight: .semibold))
-            .foregroundStyle(selected ? .white : severity.color)
+            .foregroundStyle(severity.color)
             .padding(.horizontal, 4)
             .frame(minWidth: size, minHeight: size)
-            .background(
-                selected ? AnyShapeStyle(Color.white.opacity(0.25))
-                         : AnyShapeStyle(severity.background),
-                in: Capsule()
-            )
+            .background(severity.background, in: Capsule())
     }
 }
 

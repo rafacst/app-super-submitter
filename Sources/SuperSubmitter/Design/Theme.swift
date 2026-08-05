@@ -23,6 +23,15 @@ enum Theme {
     static let accent = Color(light: 0x0A6FD8, dark: 0x4D9BF7)
     static let accentText = Color.white
 
+    /// Fills that carry white text.
+    ///
+    /// The display tints above are tuned to be read AS colour against a dark
+    /// surface, which makes them too light to put white on: `accent` in dark
+    /// mode is about 2.5 to 1, well under the 4.5 to 1 that body text needs.
+    /// These are the same hues, deep enough to sit under white in both modes.
+    static let accentFill = Color(light: 0x0A6FD8, dark: 0x2C6ECF)
+    static let purpleFill = Color(light: 0x6A35C9, dark: 0x6A44C4)
+
     /// Red says irreversible, and nothing else in the app may use it.
     static let red = Color(light: 0xC9302A, dark: 0xFF5C50)
     static let redFill = Color(light: 0xC9302A, dark: 0xC9362D)
