@@ -269,11 +269,20 @@ extension AppState {
         }
     }
 
+    /// The typed code, trimmed, or nil when the field holds nothing.
+    ///
+    /// One reading of the field for the validate call, the checkout call, and
+    /// the idempotency key. A field of spaces used to pass the `isEmpty` test
+    /// and send an empty code to the server.
+    var trimmedPromotionCode: String? {
+        let code = promotionCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        return code.isEmpty ? nil : code
+    }
+
     /// Asks the server what the code is worth for the selected plan. A local
     /// check would be a guess: Stripe holds every restriction.
     func validatePromotionCode() async {
-        let code = promotionCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !code.isEmpty else { promotionPreview = nil; return }
+        guard let code = trimmedPromotionCode else { promotionPreview = nil; return }
         guard let config = LicensingConfig.current,
               let bearer = try? await accountToken() else {
             billingMessage = AccessError.signedOut.errorDescription
@@ -317,7 +326,7 @@ extension AppState {
         do {
             let session = try await HTTPLicensingClient(base: config.baseURL).checkout(
                 plan: selectedPlan,
-                promotionCode: promotionCode.isEmpty ? nil : promotionCode,
+                promotionCode: trimmedPromotionCode,
                 idempotencyKey: checkoutIdempotencyKey(),
                 idToken: bearer)
             PostHogSDK.shared.capture("checkout_opened", properties: ["plan": selectedPlan])
@@ -337,10 +346,27 @@ extension AppState {
         }
     }
 
-    /// One key per user and plan, so pressing the button twice returns the
-    /// same unexpired Checkout Session instead of a second one.
-    private func checkoutIdempotencyKey() -> String {
-        let key = "checkoutKey.\(selectedPlan)"
+    /// Where the key of one plan and one promotion code is remembered.
+    ///
+    /// The promotion code belongs in here. The plan alone was the bug: the
+    /// server returns the same unexpired session for a repeated key, which is
+    /// the whole point of the key, so the first Subscribe pinned the plan. A
+    /// customer who pressed Subscribe, closed the browser, came back, typed a
+    /// code, and pressed Subscribe again reached the first session and paid
+    /// the full price. The code changes the request, so it changes the key.
+    ///
+    /// Upper case because Stripe matches a code either way, and two keys for
+    /// one code would mint a second session for the same discount.
+    func checkoutDefaultsKey() -> String {
+        let code = trimmedPromotionCode?.uppercased() ?? ""
+        return "checkoutKey.\(selectedPlan).\(code)"
+    }
+
+    /// One key per user, plan, and promotion code, so pressing the button
+    /// twice returns the same unexpired Checkout Session instead of a second
+    /// one.
+    func checkoutIdempotencyKey() -> String {
+        let key = checkoutDefaultsKey()
         if let existing = defaults.string(forKey: key) { return existing }
         let fresh = UUID().uuidString
         defaults.set(fresh, forKey: key)
@@ -360,7 +386,7 @@ extension AppState {
                     billingOperation = .idle
                     billingMessage = nil
                     paywall = nil
-                    defaults.removeObject(forKey: "checkoutKey.\(selectedPlan)")
+                    defaults.removeObject(forKey: checkoutDefaultsKey())
                     PostHogSDK.shared.capture("checkout_confirmed",
                                               properties: ["plan": selectedPlan])
                     return
