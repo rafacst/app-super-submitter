@@ -20,6 +20,7 @@ struct RootView: View {
         .background(Theme.content)
         .foregroundStyle(Theme.text)
         .font(.system(size: 13))
+        .background(TrafficLightInset(inset: Theme.panelGap).frame(width: 0, height: 0))
         // The window hides its title bar, but SwiftUI still insets for it.
         // Without this the panel starts below the traffic lights instead of
         // carrying them, and the shell reads as a bar above a panel.
