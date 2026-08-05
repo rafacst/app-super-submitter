@@ -48,6 +48,9 @@ struct DetailsTab: View {
                 // the parts of it no API will write. They asked "what does
                 // the reviewer need?" on a tab that answers "what does the
                 // listing say?".
+                // Which app this is, in each store. It came off the credential
+                // card, where a per-app id sat inside an account-wide key.
+                if !state.stores.isEmpty { AppIdentifiers().padding(.top, 6) }
                 ListingDeclarations().padding(.top, 6)
                 // Apple's own keyword resource, beside the Keywords field it
                 // is so easily mistaken for.

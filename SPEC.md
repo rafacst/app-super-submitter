@@ -1590,9 +1590,9 @@ The onboarding writes nothing. One click skips it.
 
 | # | Tab | Question it answers | Manifest block |
 |---|---|---|---|
-| 1 | Stores | Where does this app go, and who am I? | `apps`, `monetization` ids |
+| 1 | Stores | Which stores, and who am I? | `apps` presence, `monetization` ids |
 | 2 | Build | What do I submit? | `release.build`, `release.versionName` |
-| 3 | Details | What does the listing say? | `listing` |
+| 3 | Details | What does the listing say, and which app is it? | `listing`, the `apps` ids |
 | 4 | Media | What does the listing show? | `media` |
 | 5 | Money | What does it cost, and what can I buy? | `pricing`, `purchases`, `subscriptions`, `entitlements`, `offerings` |
 | 6 | Marketing | How does the App Store sell it? | `marketing` |
@@ -1617,6 +1617,27 @@ a credential card below it.
 |---|---|---|
 | App Store | The `.p8` key file, the key id, the issuer id | Section 9.1 |
 | Google Play | The service account JSON file | Section 9.2 |
+
+**The card asks for the credential and for nothing else.** A key covers the
+whole account: an App Store Connect key covers the team, a Play service account
+covers the developer account, and every app opened in Super Submitter uses the
+same one. The developer enters it once and never again. A tested connection
+therefore survives a switch between two apps, and only a change to the
+credential itself sets it back to "Not connected".
+
+The App id, the bundle id, and the package name name **one** app, so they sit
+on tab 3 with the rest of what describes this app. They used to sit inside the
+credential card, where a per-app value inside an account-wide key read as
+"enter your key again" on every app the developer added.
+
+**Switching a store off offers to remove its credential**, after a
+confirmation that names the consequence. The key leaves every app at once,
+because it was never per-app. The Apple confirmation states that App Store
+Connect offers a `.p8` file once and never again.
+
+The sidebar pins Stores under everything, above the saved-state chip. It is a
+setting rather than step one: the credential is entered once for the account,
+and the tabs above it are the steps a release actually walks through.
 
 Each card holds a **Where do I get this?** disclosure. It opens an inline
 guide with the numbered steps, and one button that opens the correct console

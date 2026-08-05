@@ -7,10 +7,18 @@ import UniformTypeIdentifiers
 /// panel opens in the column under its own store card.
 struct StoresTab: View {
     @Environment(AppState.self) private var state
+    /// The store the developer just switched off, while the app asks whether
+    /// the key goes with it.
+    @State private var removing: Store?
 
     var body: some View {
         StoreSelectionGrid(selected: state.stores) { store in
-            state.setStore(store, enabled: !state.stores.contains(store))
+            let turningOff = state.stores.contains(store)
+            state.setStore(store, enabled: !turningOff)
+            // Switching a store off is how a developer says "not this one".
+            // The key is the other half of that, and it is the half no other
+            // control reaches, so this is where it gets offered.
+            if turningOff, state.hasCredential(for: store) { removing = store }
         } detail: { store in
             switch store {
             case .apple:
@@ -20,6 +28,21 @@ struct StoresTab: View {
             }
         }
         .frame(maxWidth: 900, alignment: .leading)
+        .confirmationDialog("Remove the stored credential?", isPresented: removingBinding,
+                            presenting: removing) { store in
+            Button("Remove the credential", role: .destructive) {
+                state.forgetCredential(for: store)
+            }
+            Button("Keep it", role: .cancel) {}
+        } message: { store in
+            Text(store == .apple
+                 ? "\(store.storeName) is off for this app. The key covers every app on the account, so removing it removes it everywhere. App Store Connect offers a .p8 file once and never again, so keep your copy before you do this."
+                 : "\(store.storeName) is off for this app. The service account covers every app on the account, so removing it removes it everywhere. You can download the JSON key again from the Google Cloud console.")
+        }
+    }
+
+    private var removingBinding: Binding<Bool> {
+        Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
     }
 }
 
@@ -39,31 +62,13 @@ private struct AppleCredentialPanel: View {
         CredentialCard(
             store: .apple,
             status: state.appleConnection,
-            keychainNote: "The key is stored in the macOS Keychain, once for every app you open here. The original file is not copied.",
+            keychainNote: "One key for the whole App Store Connect account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
             guideOpen: state.appleGuideOpen,
             toggleGuide: { state.appleGuideOpen.toggle() },
             guide: guide,
             test: state.testAppleConnection
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                EditableField(label: "App id", value: $state.appleAppID,
-                              prompt: "Numeric App Store ID")
-                    .onChange(of: state.appleAppID) { state.updateAppleAppFields() }
-                EditableField(label: "Bundle id", value: $state.appleBundleID,
-                              prompt: "Reverse-DNS bundle identifier")
-                    .onChange(of: state.appleBundleID) { state.updateAppleAppFields() }
-                if !state.remoteAppleApps.isEmpty {
-                    Menu("Choose visible app") {
-                        ForEach(state.remoteAppleApps) { app in
-                            Button("\(app.name) · \(app.identifier)") {
-                                state.chooseRemoteAppleApp(app)
-                            }
-                        }
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                }
-
                 FileWell(
                     name: state.appleCredentialFileName,
                     emptyName: "App Store Connect private key",
@@ -115,16 +120,13 @@ private struct GoogleCredentialPanel: View {
         CredentialCard(
             store: .google,
             status: state.googleConnection,
-            keychainNote: "The JSON is stored in the macOS Keychain, once for every app you open here. The original file is not copied.",
+            keychainNote: "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
             guideOpen: state.googleGuideOpen,
             toggleGuide: { state.googleGuideOpen.toggle() },
             guide: guide,
             test: state.testGoogleConnection
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                EditableField(label: "Package name", value: $state.googlePackageName,
-                              prompt: "Reverse-DNS package name")
-                    .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
                 FileWell(
                     name: state.googleCredentialFileName,
                     emptyName: "Google service-account key",

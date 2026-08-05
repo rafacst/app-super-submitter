@@ -13,6 +13,23 @@ Distribution: direct download, Developer ID signed, hardened runtime,
 notarized, **not sandboxed**. There is no Mac App Store variant. Do not add an
 App Sandbox entitlement.
 
+### Where the product is, as of 2026-08-05
+
+**Live, and nobody uses it yet.** It has not been announced or linked
+anywhere. There are no accounts, no purchases, and no rows worth keeping in
+the licensing database.
+
+That is a licence to move fast on anything that would otherwise be a
+migration. A change to the auth provider, the database, or the entitlement
+schema costs a redeploy today and costs a data migration and an outage after
+the first customer. Take those decisions **now**, not later.
+
+It also means no backup exists and none is needed yet. The day that stops
+being true is the day the product is announced, so the backup job is a launch
+blocker rather than a today blocker. See `supabase-auth-setup.md` section 6.
+
+Keep this paragraph honest. When the first real user signs in, edit it.
+
 ## 2. Build, test, run
 
 ```bash

@@ -201,7 +201,10 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// the stores. The second marks the only tab that can send a version to
     /// review. Two hairlines carry the whole mental model.
     ///
-    /// Managing has one rule, before the tabs that touch a live app, and the
-    /// Stores tab sits above it.
+    /// Managing has one rule, before the tabs that touch a live app.
+    ///
+    /// Stores draws no rule of its own. The sidebar pins it to the foot,
+    /// under everything, because one credential covers the whole account and
+    /// the tab is a setting rather than step one.
     var startsZone: Bool { self == .plan || self == .release || self == .reviews }
 }

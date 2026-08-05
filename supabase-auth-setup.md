@@ -140,3 +140,211 @@ send until the session comes back. Two ways out, and both are yours to pick.
 
 The entitlement hangs off the account, so whichever you pick, decide before
 the first Apple sign-in reaches a paying customer.
+
+---
+
+## 6. The custom domain, `auth.rafacst.me`
+
+**Not done, and not scheduled.** Read this section before you start it.
+
+Supabase serves auth from `cvrvyxcjddtpsyfxieuf.supabase.co`. A custom domain
+puts your own name in front of it. The project domain keeps working, so both
+answer once this is done.
+
+### What it costs, and the three ways to get it
+
+| Way | Cost per month | What you own |
+|---|---|---|
+| Hosted add-on | 10 USD, **and** a paid plan. 35 USD from Free. | Nothing. Supabase runs it. |
+| Reverse proxy in front of hosted | Free | It does not work. See below. |
+| Self-host on Railway | Roughly 7 to 14 USD, on the Hobby plan already paid for | The database, **and the backups** |
+
+Railway is the cheapest of the three and it is not close. Its rates are 10 USD
+per GB of RAM per month, 20 USD per vCPU per month, and 0.15 USD per GB of
+volume. Four small services idle at roughly 7 to 14 USD, and the Hobby plan
+already includes 5 USD of that.
+
+**Use four services, not twelve.** Railway's own Supabase template deploys the
+whole stack and costs 20 to 40 USD per month. This project uses Postgres,
+GoTrue for auth, PostgREST for `/rest/v1`, and Kong to put both behind one
+name. It uses no Realtime, no Storage, no edge functions, no analytics, and no
+pooler. Deploying those is paying rent on nothing.
+
+**A reverse proxy does not solve this on hosted Supabase.** A proxy on
+`auth.rafacst.me` can carry the API calls the app makes, but it cannot change
+the `redirect_uri` that Supabase Auth hands to GitHub, GitLab, or Apple. That
+value comes from the project's own external URL, and hosted Supabase pins it to
+the project name unless the add-on is on. So the provider consent screen still
+says `supabase.co`, which is the one place a customer actually reads it. The
+proxy buys a hop and a failure point and almost nothing else.
+
+**Self-hosting does solve it**, because `API_EXTERNAL_URL` and
+`GOTRUE_SITE_URL` become yours. Railway also carries the parts of self-hosting
+that usually hurt: it provisions the machine, patches the host, and restarts a
+dead container.
+
+It does not carry the one that matters here.
+
+### Backups: not yet, and that is what makes now the moment
+
+**Railway Hobby takes no database backups.** Its 72 hour retention is of
+deployment images, which rolls back code and not data. Lose the Postgres volume
+and every account and every row of `entitlement_grants` goes with it.
+
+Today there is nothing in there. The product is live, unannounced, and has no
+users, so there is no data to lose and nobody to lock out. `context.md`
+section 1 records that.
+
+This is what makes the decision easy, and it points the other way from the
+usual advice. Moving now is a fresh deployment: stand the stack up, point the
+config at it, sign in once. Moving after the first customer is a data
+migration, a session cutover, and an outage on the system that gates paid
+access.
+
+So the backup job is a **launch blocker, not a today blocker**. Before the
+product is announced anywhere, a scheduled `pg_dump` to R2 and a restore you
+have actually performed have to exist. An untested dump does not count.
+
+### What the move still costs
+
+Two of the usual costs are free right now, and stop being free the day someone
+signs up.
+
+- ~~The user ids have to survive~~. `entitlement_grants.user_id` points at
+  `auth.users(id)`, and a migration that mints new ids would disconnect every
+  paying customer. **No users, so nothing to preserve.**
+- ~~Everyone signs in once more~~. The signing keys change at the cutover.
+  **Nobody is signed in.** `acceptedIssuers()` in the Worker already reads a
+  list rather than one string, so this stays cheap later too.
+
+These still apply:
+
+- **GoTrue must be told to sign with ES256.** Set `JWT_KEYS` and `JWT_JWKS`, or
+  it falls back to the legacy shared secret and serves an empty JWKS. The
+  Worker refuses that loudly on purpose, so auth would stop dead.
+- **The providers move.** GitHub, GitLab, and Apple all need the new callback,
+  and Apple needs a fresh client secret. Same work on either path.
+- **SMTP moves too.** Confirmation mail goes through Proton today, and
+  self-hosted GoTrue needs those credentials again. Email confirmation must
+  stay on.
+- **The schema moves.** `migrations/` is the whole of it, and it applies to a
+  fresh Postgres unchanged.
+- **Do not expose Studio.** It is full access to the database and the auth
+  configuration, with no authentication in front of it by default.
+
+### The decision, 2026-08-05
+
+**Stay on hosted Supabase. Nothing moves for now.** The project keeps
+`cvrvyxcjddtpsyfxieuf.supabase.co`, and `auth.rafacst.me` does not exist.
+
+The analysis above stands and the recommendation was the other way, so the
+reason to revisit is written down rather than rediscovered: while the product
+has no users, this move is a fresh deployment. After the first customer it is a
+data migration, a session cutover, and an outage on the system that gates paid
+access. The cost of waiting is real and it only goes up.
+
+Two rules for the day it happens. Do not deploy the twelve service template,
+only the four this project uses. And write the backup job before the product is
+announced, not before the move.
+
+### The steps, when the day comes
+
+**Wrangler cannot do the DNS half.** Wrangler manages Workers and ships no
+`dns` command. The records go through the Cloudflare DNS API, and
+`super-submitter-worker/scripts/supabase-domain-dns.sh` calls it.
+
+### What it costs and what it needs
+
+Custom domains are a **paid add-on on a paid Supabase plan**, per domain. The
+Supabase CLI is not installed on this Mac. Install it and log in first.
+
+### The order matters
+
+The `iss` claim of every token changes the moment the domain activates. The
+Worker checks that claim. Do these in order or every signed-in developer is
+signed out, and a paying one loses access until they sign in again.
+
+**1. Teach the Worker both issuers, and deploy it. Do this first.**
+
+In `wrangler.toml`, under both `[env.test.vars]` and `[env.live.vars]`, leave
+`SUPABASE_ISSUER` alone and add the new one as the alternate:
+
+```toml
+SUPABASE_ISSUER_ALTERNATES = "https://auth.rafacst.me/auth/v1"
+```
+
+Deploy both. The Worker now accepts a token from either name. Nothing has
+changed yet for anybody, which is the point: this step is free to take early
+and it is the one that removes the outage.
+
+**2. Register the domain and read back the TXT value.**
+
+```bash
+supabase domains create --project-ref cvrvyxcjddtpsyfxieuf --custom-hostname auth.rafacst.me
+```
+
+**3. Write the two DNS records.**
+
+```bash
+export CF_API_TOKEN=...        # Zone:DNS:Edit on rafacst.me
+cd super-submitter-worker
+./scripts/supabase-domain-dns.sh '<the _acme-challenge value from step 2>'
+```
+
+Both records stay **DNS only**. A proxied record puts Cloudflare in front of
+the hostname, and Supabase then cannot answer the ACME challenge or serve its
+own certificate. The script sets `proxied: false` for exactly this reason.
+
+**4. Move every OAuth provider to the new callback before you activate.**
+
+Each provider still points at
+`https://cvrvyxcjddtpsyfxieuf.supabase.co/auth/v1/callback`. Change each one to:
+
+```
+https://auth.rafacst.me/auth/v1/callback
+```
+
+- **GitHub** → the OAuth app's Authorization callback URL.
+- **GitLab** → the application's Redirect URI.
+- **Apple** → the Services ID. Both the **Domains** field, which becomes
+  `auth.rafacst.me`, and the **Return URL**. Apple is the one that also needs
+  a **new client secret**, because the JWT is bound to the Services ID. Run
+  `tools/apple-client-secret.swift` again afterwards and paste the result into
+  Supabase.
+
+Supabase's own note says to do this before activation, or the providers break
+at the moment of the switch.
+
+**5. Verify and activate.**
+
+```bash
+supabase domains reverify --project-ref cvrvyxcjddtpsyfxieuf
+supabase domains activate --project-ref cvrvyxcjddtpsyfxieuf
+```
+
+The certificate can take up to 30 minutes.
+
+**6. Move the primary name over.**
+
+Only now, and only after a sign-in on the new name works:
+
+- `project.yml`: `SUPABASE_URL` becomes `https://auth.rafacst.me`.
+- `wrangler.toml`, both environments: `SUPABASE_URL` and `SUPABASE_ISSUER`
+  become the new name. Move the **old** issuer into
+  `SUPABASE_ISSUER_ALTERNATES`, so the tokens already in the wild keep working.
+- `.github/workflows/release.yml`, wherever `SUPABASE_URL` is set.
+
+Deploy the Worker, then ship a client build.
+
+**7. Drop the alternate, later.**
+
+A Supabase access token lasts an hour and a refresh token far longer, so leave
+`SUPABASE_ISSUER_ALTERNATES` in place for at least a week. Empty it once
+nothing signs in on the old name.
+
+### Rolling it back
+
+`supabase domains delete --project-ref cvrvyxcjddtpsyfxieuf` gives up the
+custom domain, and the project name keeps working throughout. Keep the
+alternate issuer configured until you are sure, because it is what makes the
+switch reversible in both directions.
