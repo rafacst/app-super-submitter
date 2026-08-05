@@ -328,10 +328,12 @@ final class AppState {
 
     /// A dot per store. Only the open app can claim a match, because only the
     /// open app has been read.
+    /// Nil for a store this app does not go to. It is not a fault, so the
+    /// sidebar shows nothing rather than a red cross.
     private func health(_ store: Store, manifest loaded: Manifest?,
-                        selected: Bool) -> StoreHealth {
+                        selected: Bool) -> StoreHealth? {
         let configured = store == .apple ? loaded?.apps.apple != nil : loaded?.apps.google != nil
-        guard configured else { return .blocked }
+        guard configured else { return nil }
         guard selected, let plan else { return .changed }
         // An error blocks the whole apply, so it marks every store.
         guard !plan.isBlocked else { return .blocked }
