@@ -280,10 +280,10 @@ struct SettingsPanel: View {
                         }
                     }
                     if let message = state.billingMessage {
-                        Note(message)
+                        WarningNote(message, width: Self.controlWidth)
                     }
                     if !state.accountServiceReady {
-                        Note(AppState.noAccountService)
+                        WarningNote(AppState.noAccountService, width: Self.controlWidth)
                     }
                     Note("Signing out returns Super Submitter to free access. It deletes no app, no store.yaml, no build, and no store key.")
                 }
@@ -356,14 +356,26 @@ struct SettingsPanel: View {
         .frame(width: Self.controlWidth, alignment: .leading)
     }
 
+    /// Connected is green, refused is yellow, and everything else stays quiet.
+    /// A refusal in the same grey as the help beside it is a refusal nobody
+    /// reads.
     private func connectionRow(_ status: ConnectionStatus) -> some View {
-        HStack(spacing: 6) {
-            Circle().fill(status.isConnected ? Theme.green : Theme.text3)
-                .frame(width: 7, height: 7)
-            Text(status.label)
+        Group {
+            if status.isFailed {
+                WarningNote(status.label, width: Self.controlWidth)
+            } else {
+                HStack(alignment: .top, spacing: 6) {
+                    Circle().fill(status.isConnected ? Theme.green : Theme.text3)
+                        .frame(width: 7, height: 7)
+                        .padding(.top, 4)
+                    Text(status.label)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.system(size: 11.5))
+                .foregroundStyle(status.isConnected ? Theme.green : Theme.text2)
+                .frame(width: Self.controlWidth, alignment: .leading)
+            }
         }
-        .font(.system(size: 11.5))
-        .foregroundStyle(status.isConnected ? Theme.green : Theme.text2)
     }
 
     /// One width for every control, so the second column has one left edge and

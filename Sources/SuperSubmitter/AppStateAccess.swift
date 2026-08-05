@@ -79,6 +79,10 @@ extension AppState {
         "This build carries no account service address, so it cannot sign in. Build it with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY."
 
     func submitAccount() async {
+        // One call at a time. The Return key and the button both land here,
+        // and Supabase answers a second signup for the same address by sending
+        // the confirmation email again, so a double fire is two emails.
+        guard !accountBusy else { return }
         let email = accountEmailInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !email.isEmpty, !accountPassword.isEmpty else { return }
         // A missing controller used to return here in silence, and the button
@@ -140,6 +144,38 @@ extension AppState {
             showAccount = false
         } catch {
             accountMessage = error.localizedDescription
+        }
+    }
+
+    /// The link in the confirmation email.
+    ///
+    /// macOS launches the app with the redirect, because `store.yaml` is not
+    /// the only thing the scheme is registered for. Without this the app came
+    /// forward and did nothing, and the account stayed unconfirmed.
+    ///
+    /// A URL that carries no session is the return from Stripe Checkout. It
+    /// grants nothing on its own, and `didBecomeActive` already asks the
+    /// server, so this leaves it alone.
+    func handle(callback url: URL) {
+        let parts = SupabaseAuth.parameters(in: url)
+        let carriesSession = parts["refresh_token"] != nil
+            || parts["error_description"] != nil || parts["error"] != nil
+        guard carriesSession, let auth = authController else { return }
+        Task {
+            accountBusy = true
+            defer { accountBusy = false }
+            do {
+                accountEmail = try await auth.adopt(callback: url)
+                accessController?.forgetLater()
+                entitlement = .free(at: Date())
+                await refreshEntitlement()
+                accountMessage = nil
+                showAccount = false
+                errorMessage = "Your email address is confirmed. You are signed in as \(accountEmail ?? "")."
+            } catch {
+                accountMessage = error.localizedDescription
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -224,6 +260,13 @@ extension AppState {
         if billingPlans == nil {
             billingMessage = "The plans could not be loaded. Check your connection and try again."
         }
+        // A selection nobody can buy sends the developer to a shut checkout
+        // for no reason. Move to a plan that is on sale, when one is.
+        if let plans = billingPlans,
+           plans.plans.first(where: { $0.id == selectedPlan })?.available != true,
+           let open = plans.plans.first(where: \.available) {
+            selectedPlan = open.id
+        }
     }
 
     /// Asks the server what the code is worth for the selected plan. A local
@@ -278,7 +321,14 @@ extension AppState {
                 idempotencyKey: checkoutIdempotencyKey(),
                 idToken: bearer)
             PostHogSDK.shared.capture("checkout_opened", properties: ["plan": selectedPlan])
-            NSWorkspace.shared.open(session.url)
+            // A browser that refuses the address is the one failure this
+            // screen used to swallow: the button worked, nothing opened, and
+            // the sheet said nothing. Hand over the address instead.
+            guard NSWorkspace.shared.open(session.url) else {
+                billingOperation = .idle
+                billingMessage = "The browser did not open. Finish the checkout at \(session.url.absoluteString)"
+                return
+            }
             await waitForEntitlement()
         } catch {
             billingOperation = .idle

@@ -103,6 +103,26 @@ extension Color {
     }
 }
 
+// MARK: - Input limits
+
+extension Binding where Value == String {
+    /// Refuses input that would carry the text past `limit`.
+    ///
+    /// Growth is refused, never the text that is already there. A value that
+    /// arrives over the limit from an import or a paste stays whole, and the
+    /// field can always be edited back down, so the app still never shortens
+    /// anything the developer wrote. Section 7 of context.md.
+    func limited(to limit: Int?) -> Binding<String> {
+        guard let limit else { return self }
+        return Binding(
+            get: { wrappedValue },
+            set: { new in
+                guard new.count <= limit || new.count < wrappedValue.count else { return }
+                wrappedValue = new
+            })
+    }
+}
+
 // MARK: - The shared pieces
 
 extension View {
@@ -175,6 +195,41 @@ struct Card<Content: View>: View {
         }
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+}
+
+/// A line that reports an error, or something the developer has to act on.
+///
+/// It carries a colour and a tinted background because a warning set in the
+/// same grey as the help beside it reads as one more sentence of help. Yellow
+/// and not red: red says irreversible and nothing else in the app may use it.
+struct WarningNote: View {
+    let text: String
+    var width: CGFloat?
+
+    init(_ text: String, width: CGFloat? = nil) {
+        self.text = text
+        self.width = width
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10))
+                .padding(.top, 1)
+            Text(text)
+                .font(.system(size: 11.5))
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Theme.yellow)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(width: width, alignment: .leading)
+        .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Warning. \(text)")
     }
 }
 

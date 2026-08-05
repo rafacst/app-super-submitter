@@ -1,5 +1,6 @@
 import Foundation
 import SubmitKit
+import SwiftUI
 import Testing
 @testable import SuperSubmitter
 
@@ -164,4 +165,67 @@ private func differentGoogleDescription() -> ImportedStoreListing {
     // Another app has its own folder and therefore its own picture.
     #expect(StoreSnapshot.load(fromRoot: FileManager.default.temporaryDirectory
         .appendingPathComponent("snapshot-\(UUID().uuidString)")).isEmpty)
+}
+
+/// The App Store answers twice and the two answers mean different things.
+///
+/// The draft is what a run patches, so it decides "Kept". The live version is
+/// what a customer reads, and App Store Connect leaves the draft empty, so
+/// reading the draft alone reported an app with no description while its store
+/// page was full. Both are kept, and only the draft is allowed near "Kept".
+@Test func theLiveTextIsShownWithoutClaimingTheDraftHoldsIt() {
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    var draft = ActualState.Apple.VersionLocale()
+    draft.description = ""
+    draft.keywords = "atproto,deck"
+    apple.versionLocales["en-US"] = draft
+    var live = ActualState.Apple.VersionLocale()
+    live.description = "The words the customer reads"
+    live.keywords = "atproto,deck"
+    apple.liveVersionLocales["en-US"] = live
+    actual.apple = apple
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+
+    // The tab can print what the store serves.
+    #expect(snapshot.liveOnAppStore(.description, locale: "en-US")
+            == "The words the customer reads")
+    // The draft holds none of it, so the run writes it and the chip must not
+    // say the field is kept.
+    #expect(!snapshot.isUnchanged(.description, locale: "en-US",
+                                  value: "The words the customer reads"))
+    // A field the two agree on says nothing twice.
+    #expect(snapshot.liveOnAppStore(.keywords, locale: "en-US") == nil)
+    #expect(snapshot.isUnchanged(.keywords, locale: "en-US", value: "atproto,deck"))
+    #expect(snapshot.liveOnAppStore(.description, locale: "pt-BR") == nil)
+}
+
+/// The fields stop at the store's limit while the developer types, and they
+/// still never shorten what is already there. Section 7 of context.md: the app
+/// never truncates text.
+@Test func aFieldRefusesGrowthPastTheLimitAndShortensNothing() {
+    var value = "12345"
+    let field = Binding(get: { value }, set: { value = $0 })
+    let limited = field.limited(to: 8)
+
+    limited.wrappedValue = "12345678"
+    #expect(value == "12345678")
+    // One character past the limit is refused, and the text stands.
+    limited.wrappedValue = "123456789"
+    #expect(value == "12345678")
+
+    // A value that arrives over the limit stays whole, because an import and a
+    // paste both land this way and neither may lose a word.
+    value = "an imported description that is far too long"
+    #expect(limited.wrappedValue == "an imported description that is far too long")
+    // And it can always be edited back down.
+    limited.wrappedValue = "an imported description that is far too lon"
+    #expect(value == "an imported description that is far too lon")
+
+    // No limit means no interference.
+    let free = field.limited(to: Int?.none)
+    free.wrappedValue = String(repeating: "x", count: 5_000)
+    #expect(value.count == 5_000)
 }

@@ -89,6 +89,10 @@ struct AppSummary: Identifiable {
     let id: UUID
     let name: String
     let initials: String
+    /// The app's own icon on disk, which the import downloads beside
+    /// `store.yaml`. Nil until an import has run, and the row then draws the
+    /// initials instead.
+    var icon: URL?
     let summary: String
     /// Nil when the app does not go to that store at all.
     ///

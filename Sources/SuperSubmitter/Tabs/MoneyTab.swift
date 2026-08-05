@@ -8,13 +8,16 @@ struct MoneyTab: View {
     var body: some View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 22) {
-            if let error = state.moneyError {
-                Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.red)
-                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 7))
+            // Yellow, not red. Red says irreversible in this app, and a value
+            // the developer can fix in the next keystroke is not that.
+            if let error = state.moneyError { WarningNote(error) }
+            // Two short blocks that answer "what does it cost, and where",
+            // so they share a row and a height the way Review info does.
+            HStack(alignment: .top, spacing: 14) {
+                priceSection
+                availabilitySection
             }
-            priceSection
-            availabilitySection
+            .fixedSize(horizontal: false, vertical: true)
             purchasesSection
             subscriptionsSection
             if state.provider != .none { providerCatalog }
@@ -40,7 +43,12 @@ struct MoneyTab: View {
                        isOn: state.autoConvertPricesBinding)
                     .disabled(!state.stores.contains(.google))
                 resolvedPoint
-            }.moneyPanel()
+                Spacer(minLength: 0)
+            }
+            // The stretch happens before the panel is painted, so the two
+            // panels on this row draw to one height instead of two.
+            .frame(maxHeight: .infinity, alignment: .top)
+            .moneyPanel()
         }
     }
 
@@ -84,7 +92,11 @@ struct MoneyTab: View {
                     Link("Open Play Console countries ↗",
                          destination: URL(string: "https://play.google.com/console/")!)
                 }
-            }.font(.system(size: 12)).moneyPanel()
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 12))
+            .frame(maxHeight: .infinity, alignment: .top)
+            .moneyPanel()
         }
     }
 

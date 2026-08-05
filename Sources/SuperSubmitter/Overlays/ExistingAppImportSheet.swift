@@ -63,9 +63,11 @@ struct ExistingAppImportSheet: View {
             if model.stores.contains(.apple) {
                 credentialSection(store: .apple) {
                     HStack(alignment: .bottom, spacing: 12) {
-                        labeledField("Key ID", text: $model.appleKeyID, prompt: "ABC123DEFG")
+                        labeledField("Key ID", text: $model.appleKeyID, prompt: "ABC123DEFG",
+                                     limit: AppleCredential.keyIDLength)
                         labeledField("Issuer ID", text: $model.appleIssuerID,
-                                     prompt: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+                                     prompt: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                                     limit: AppleCredential.issuerIDLength)
                         chooseFile(title: model.appleFileName.isEmpty
                                    ? "Choose .p8 key" : model.appleFileName) {
                             appleImporterOpen = true
@@ -265,10 +267,10 @@ struct ExistingAppImportSheet: View {
     }
 
     private func labeledField(_ label: String, text: Binding<String>,
-                              prompt: String) -> some View {
+                              prompt: String, limit: Int? = nil) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
-            TextField(prompt, text: text).textFieldStyle(.roundedBorder)
+            TextField(prompt, text: text.limited(to: limit)).textFieldStyle(.roundedBorder)
         }
         .frame(maxWidth: .infinity)
     }

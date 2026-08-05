@@ -20,6 +20,10 @@ struct SuperSubmitterApp: App {
             RootView()
                 .environment(state)
                 .frame(minWidth: 1120, minHeight: 720)
+                // The confirmation link in an account email, and the return
+                // from Stripe Checkout. Both come back on the registered
+                // scheme, and until this existed the app opened and sat there.
+                .onOpenURL { state.handle(callback: $0) }
                 .task {
                     // Sparkle quits the app to install, and AppKit will not
                     // quit an app that holds a modal sheet. The updater has

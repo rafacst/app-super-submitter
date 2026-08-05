@@ -131,7 +131,10 @@ then `TabContent.swift`, then the view in `Tabs/`.
   states. A plain `Optional` loses the intent and the file goes back into the
   developer's repository.
 - **The app never truncates text.** Over a binding limit is an error the
-  developer fixes. `Mapping/BindingLimits.swift` holds the limits.
+  developer fixes. `Mapping/BindingLimits.swift` holds the limits. A field
+  refuses input that would carry it past its limit, which is not the same
+  thing: `Binding.limited(to:)` blocks growth and never shortens a value that
+  arrived over the limit from an import or a paste.
 - **The app archives, it never deletes.**
 - **Dry run is on by default for a new app.** An app with a run log keeps its
   own toggle. See `applyDryRunDefault()`.

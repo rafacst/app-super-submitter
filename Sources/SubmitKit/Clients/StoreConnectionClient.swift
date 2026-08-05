@@ -381,13 +381,60 @@ public enum ConnectionError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidResponse: "The store returned an invalid response."
-        case .invalidTokenURL: "The service account has an invalid token URL."
-        case .invalidPrivateKey: "The private key could not be read. Choose the original credential file."
-        case .malformedPrivateKey: "The service account private key is not valid PKCS#8 data."
-        case .signingFailed(let detail): "The Google assertion could not be signed. \(detail)"
-        case .http(let status, let detail): "The store returned HTTP \(status): \(detail)"
+        case .invalidResponse:
+            "The store answered with something this app could not read. Try again in a moment."
+        case .invalidTokenURL:
+            "The service account file is missing its token address. Download the key again from the Google Cloud console."
+        case .invalidPrivateKey:
+            "The private key could not be read. Choose the original file the store gave you, not a copy you edited."
+        case .malformedPrivateKey:
+            "The service account file does not hold a usable key. Download it again from the Google Cloud console."
+        case .signingFailed:
+            "The Google credentials could not be signed. Download the service account file again."
+        case .http(let status, let detail): Self.explain(status: status, detail: detail)
         }
+    }
+
+    /// What a refusal means, in the developer's terms.
+    ///
+    /// A status code names the protocol, not the problem. The developer needs
+    /// to know which of three things went wrong: who they are, what they
+    /// asked for, or the store itself. The store's own sentence follows when
+    /// it has one, because Apple and Google usually name the exact field.
+    static func explain(status: Int, detail: String) -> String {
+        let cause = switch status {
+        case 400:
+            "The store refused this as it stands."
+        case 401:
+            "The store did not accept the credentials. Check the key file, the key id, and the issuer id on the Stores tab."
+        case 403:
+            "This account is not allowed to do that. Check the role its key was given in the store console."
+        case 404:
+            "The store holds no record of this. Check the app id and the bundle id on the Stores tab."
+        case 409:
+            "The store already holds something that conflicts with this."
+        case 422:
+            "The store understood the request and refused the values in it."
+        case 429:
+            "The store is holding this account back for a moment. Wait a minute and run it again."
+        case 500...599:
+            "The store is having trouble on its own side. Nothing here is wrong, so try again in a few minutes."
+        default:
+            "The store refused this."
+        }
+        let sentence = Self.sentence(from: detail)
+        return sentence.isEmpty ? cause : "\(cause) \(sentence)"
+    }
+
+    /// The store's own words, when they are words.
+    ///
+    /// A payload that is still JSON, or a wall of it, says nothing to a
+    /// developer, so it is dropped rather than printed at them.
+    static func sentence(from detail: String) -> String {
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("{"), !trimmed.hasPrefix("["),
+              !trimmed.hasPrefix("<"), trimmed.count <= 240 else { return "" }
+        return trimmed.hasSuffix(".") ? trimmed : trimmed + "."
     }
 }
 

@@ -70,7 +70,7 @@ private struct ContentArea: View {
         VStack(spacing: 0) {
             ContentHeader()
             Hairline()
-            if state.manifestURL == nil {
+            if state.manifestURL == nil || state.showEntryScreen {
                 EmptyAppView()
             } else {
                 ScrollView {
@@ -143,6 +143,13 @@ private struct EmptyAppView: View {
             // The entry screen offers the doors that start work. Opening a
             // store.yaml continues work that already exists, so it lives in
             // the File menu with the rest of the file commands.
+
+            // The way back, for a developer who opened this over an app they
+            // already had. Without it "Add app" is a one-way door.
+            if state.showEntryScreen, let open = state.currentApp {
+                QuietButton(title: "Back to \(open.name)") { state.showEntryScreen = false }
+                    .padding(.top, 26)
+            }
 
             Spacer(minLength: 40)
         }
@@ -246,7 +253,9 @@ private struct ContentHeader: View {
                 LocalePicker()
             case .plan:
                 HStack(spacing: 7) {
-                    if state.planReading { Spinner() }
+                    // No spinner here. The tab body already says "Reading both
+                    // stores" beside one, and two spinners for one read read
+                    // as two reads.
                     QuietButton(title: "Read the stores again") {
                         Task { await state.readStores() }
                     }

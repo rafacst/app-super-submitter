@@ -65,13 +65,13 @@ struct DetailsTab: View {
         // Grey means "this is what the store already says". The developer
         // types over it and it goes black, because the text no longer matches
         // what the store holds and the run will write it.
-        let unchanged = state.storeSnapshot.isUnchanged(field, locale: state.locale,
-                                                        value: value)
+        let live = state.storeSnapshot.text(field, locale: state.locale)
+        let unchanged = !live.isEmpty && live.allSatisfy { $0.value == value }
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(.system(size: 11.5, weight: .medium))
                 if let tag { Tag(tag) }
-                if unchanged { KeptTag() }
+                if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
                 if let limit {
                     Text("\(value.count) / \(limit)")
@@ -80,7 +80,7 @@ struct DetailsTab: View {
                 }
             }
             if multiline {
-                TextEditor(text: state.listingBinding(field))
+                TextEditor(text: state.listingBinding(field).limited(to: limit))
                     .font(.system(size: 13))
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
                     .scrollContentBackground(.hidden)
@@ -91,7 +91,7 @@ struct DetailsTab: View {
                         .strokeBorder(overLimit ? Theme.red : Theme.sep,
                                       lineWidth: overLimit ? 1 : Theme.hairline))
             } else {
-                TextField(title, text: state.listingBinding(field))
+                TextField(title, text: state.listingBinding(field).limited(to: limit))
                     .textFieldStyle(.roundedBorder)
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
             }
@@ -99,37 +99,35 @@ struct DetailsTab: View {
                 Text("\(value.count - (limit ?? 0)) characters over the store limit. The value is not shortened automatically.")
                     .font(.system(size: 11)).foregroundStyle(Theme.red)
             }
-            liveValues(field, current: value)
+            liveValues(field, live: live, current: value)
         }
     }
 
     /// What the stores hold for this field today, when it is not what the
     /// developer is about to send. A matching value says nothing, so it stays
     /// out of the way.
+    ///
+    /// The App Store answers twice, and both answers matter. The draft is what
+    /// a run patches, and an App Store Connect draft is usually empty. The
+    /// live version is what a customer reads. Showing only the draft reported
+    /// an app with no description while its page was full, so the live text is
+    /// listed too, with the one button that takes it.
     @ViewBuilder
-    private func liveValues(_ field: ListingTextField, current: String) -> some View {
-        let live = state.storeSnapshot.text(field, locale: state.locale)
-            .filter { $0.value != current }
-        if !live.isEmpty {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(live, id: \.store) { entry in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 5) {
-                            StoreMark(store: entry.store, size: 11)
-                            Text("On \(entry.store.storeName) now")
-                                .font(.system(size: 10.5, weight: .medium))
-                                .foregroundStyle(Theme.text3)
-                                .textCase(.uppercase)
-                                .kerning(0.3)
-                        }
-                        Text(entry.value)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.text2)
-                            .lineSpacing(2)
-                            .lineLimit(6)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+    private func liveValues(_ field: ListingTextField,
+                            live: [(store: Store, value: String)],
+                            current: String) -> some View {
+        let differing = live.filter { $0.value != current }
+        let onAppStore = state.storeSnapshot.liveOnAppStore(field, locale: state.locale)
+            .flatMap { $0 == current ? nil : $0 }
+        if !differing.isEmpty || onAppStore != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(differing, id: \.store) { entry in
+                    entryRow(label: "In the \(entry.store.storeName) draft",
+                             store: entry.store, value: entry.value, field: field)
+                }
+                if let onAppStore {
+                    entryRow(label: "On the App Store now", store: .apple,
+                             value: onAppStore, field: field)
                 }
             }
             .padding(.horizontal, 10)
@@ -138,6 +136,32 @@ struct DetailsTab: View {
             .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7)
                 .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
+        }
+    }
+
+    private func entryRow(label: String, store: Store, value: String,
+                          field: ListingTextField) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                StoreMark(store: store, size: 11)
+                Text(label)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.text3)
+                    .textCase(.uppercase)
+                    .kerning(0.3)
+                Spacer(minLength: 8)
+                QuietButton(title: "Use this") {
+                    state.listingBinding(field).wrappedValue = value
+                }
+                .accessibilityLabel("Use the text \(label.lowercased())")
+            }
+            Text(value)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.text2)
+                .lineSpacing(2)
+                .lineLimit(6)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -214,6 +238,24 @@ struct KeptTag: View {
         .padding(.horizontal, 5).padding(.vertical, 1)
         .background(Theme.sunken, in: Capsule())
         .accessibilityLabel("Unchanged. The store already holds this text.")
+    }
+}
+
+/// The mark on a field that no longer says what the store says.
+///
+/// It appears only once a store has answered for this field. A field nobody
+/// has read carries neither chip, because "changed from what" has no answer
+/// yet. Orange and not red: red says irreversible, and an edit is not.
+struct ChangedTag: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "pencil").font(.system(size: 8, weight: .bold))
+            Text("Changed").font(.system(size: 10, weight: .medium))
+        }
+        .foregroundStyle(Theme.orange)
+        .padding(.horizontal, 5).padding(.vertical, 1)
+        .background(Theme.orange.opacity(0.13), in: Capsule())
+        .accessibilityLabel("Changed. The run will write this text to the store.")
     }
 }
 

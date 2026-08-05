@@ -68,3 +68,15 @@ public enum BindingLimits {
         return max(0, text.count - limit)
     }
 }
+
+/// The limits Apple sets on the marketing resources.
+///
+/// They are not listing fields, so they stay out of `ListingField`, but a
+/// limit is a rule and a rule does not live in a view. The Marketing tab
+/// already printed these numbers as help text; now the fields keep them.
+public enum MarketingLimits {
+    public static let customProductPagePromotionalText = 170
+    public static let appEventName = 30
+    public static let appEventShortDescription = 50
+    public static let appEventLongDescription = 120
+}

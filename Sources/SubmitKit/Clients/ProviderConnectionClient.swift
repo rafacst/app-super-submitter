@@ -138,8 +138,24 @@ public enum ProviderConnectionError: Error, LocalizedError {
         switch self {
         case .missingAPIKey: "Enter the RevenueCat secret v2 API key."
         case .missingProjectID: "Enter the RevenueCat project id."
-        case .invalidResponse: "The provider returned an invalid response."
-        case .http(let status, let message): "RevenueCat returned HTTP \(status): \(message)"
+        case .invalidResponse:
+            "RevenueCat answered with something this app could not read. Try again in a moment."
+        case .http(let status, let message):
+            // The same three questions the stores get: who you are, what you
+            // asked for, or the service itself. Not the number.
+            switch status {
+            case 401, 403:
+                "RevenueCat did not accept the API key. Check the secret v2 key in Settings."
+            case 404:
+                "RevenueCat holds no record of this. Check the project id in Settings."
+            case 429:
+                "RevenueCat is holding this account back for a moment. Wait a minute and try again."
+            case 500...599:
+                "RevenueCat is having trouble on its own side. Try again in a few minutes."
+            default:
+                "RevenueCat refused this. "
+                    + ConnectionError.sentence(from: message)
+            }
         case .adaptyMissing: "The adapty CLI is not installed or is not on PATH."
         case .adapty(let message): message.isEmpty ? "The adapty CLI is not logged in." : message
         }

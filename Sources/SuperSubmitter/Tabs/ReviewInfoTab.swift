@@ -36,8 +36,10 @@ struct ReviewInfoTab: View {
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
-            .storePanel()
+            // The stretch happens before the panel is painted, so the two
+            // panels on this row draw to one height instead of two.
             .frame(maxHeight: .infinity, alignment: .top)
+            .storePanel()
         }
     }
 
@@ -55,16 +57,26 @@ struct ReviewInfoTab: View {
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
-            .storePanel()
+            // The stretch happens before the panel is painted, so the two
+            // panels on this row draw to one height instead of two.
             .frame(maxHeight: .infinity, alignment: .top)
+            .storePanel()
         }
     }
+
+    /// A fixed height, not a minimum.
+    ///
+    /// The reviewer notes run to a page and a half on a real app, and the tab
+    /// is inside a scroll view, so a growing editor pushed everything below it
+    /// past the bottom of the window. A fixed box scrolls its own text and the
+    /// tab stays the size of the window.
+    private static let notesHeight: CGFloat = 420
 
     private var reviewNotes: some View {
         Section_("Notes for the reviewer", icon: "note.text", tint: Theme.teal) {
             TextEditor(text: state.reviewBinding(.notes))
                 .font(.system(size: 12.5)).scrollContentBackground(.hidden)
-                .padding(7).frame(minHeight: 100)
+                .padding(7).frame(height: Self.notesHeight)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
