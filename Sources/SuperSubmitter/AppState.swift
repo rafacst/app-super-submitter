@@ -1507,12 +1507,23 @@ final class AppState {
         appleSubmissionID = nil
     }
 
-    /// Fills the credential fields of tab 1 from the Keychain of the open app.
+    /// Fills the credential fields of the Stores tab from the Keychain.
     /// Anything that writes a credential outside these fields calls it again,
     /// so the panels never ask for a file the app already holds.
+    ///
+    /// A store credential belongs to the account and not to the app. An App
+    /// Store Connect key covers the team and a Play service account covers the
+    /// developer account, so opening a second app loads the same key. This used
+    /// to set both connections back to "Not connected" every time, and a
+    /// developer who saw that on the app they had just added read it as "enter
+    /// your key again". The status now falls only when the credential itself
+    /// changes, which is the one thing that can invalidate it.
     func loadCredentials() {
         guard let credentialAccount else { return }
         do {
+            let appleWas = [appleKeyID, appleIssuerID, applePrivateKeyPEM]
+            let googleWas = googleCredential?.clientEmail ?? ""
+
             let apple = try storeCredential(AppleCredential.self, kind: .apple,
                                             savedUnder: credentialAccount)
             appleKeyID = apple?.keyID ?? ""
@@ -1532,11 +1543,60 @@ final class AppState {
                 ReviewerCredential.self, kind: .reviewAccount, account: credentialAccount)
             reviewerUsername = reviewer?.username ?? ""
             reviewerPassword = reviewer?.password ?? ""
-            appleConnection = .notTested
-            googleConnection = .notTested
-            remoteAppleApps = []
+
+            if appleWas != [appleKeyID, appleIssuerID, applePrivateKeyPEM] {
+                appleConnection = .notTested
+                // The visible apps came from the key that just went away.
+                remoteAppleApps = []
+            }
+            if googleWas != (googleCredential?.clientEmail ?? "") {
+                googleConnection = .notTested
+            }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Forgets a store credential, from every app at once.
+    ///
+    /// One key covers the account, so removing it removes it everywhere. The
+    /// panel confirms it first. Apple offers a `.p8` exactly once and never
+    /// again, so this is the one credential action the app cannot undo, and
+    /// the confirmation says so.
+    func forgetCredential(for store: Store) {
+        do {
+            switch store {
+            case .apple:
+                try KeychainCredentials.delete(kind: .apple, account: storeAccount)
+                if let credentialAccount {
+                    try KeychainCredentials.delete(kind: .apple, account: credentialAccount)
+                }
+                appleKeyID = ""
+                appleIssuerID = ""
+                applePrivateKeyPEM = ""
+                appleCredentialFileName = ""
+                appleConnection = .notTested
+                remoteAppleApps = []
+            case .google:
+                try KeychainCredentials.delete(kind: .google, account: storeAccount)
+                if let credentialAccount {
+                    try KeychainCredentials.delete(kind: .google, account: credentialAccount)
+                }
+                googleCredential = nil
+                googleCredentialFileName = ""
+                googleAccountEmail = ""
+                googleConnection = .notTested
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Whether a store has a credential worth asking about before it goes.
+    func hasCredential(for store: Store) -> Bool {
+        switch store {
+        case .apple: !applePrivateKeyPEM.isEmpty
+        case .google: googleCredential != nil
         }
     }
 

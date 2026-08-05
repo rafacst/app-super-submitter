@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SubmitKit
 
 /// Drives the app to one screen, in one appearance, for the website
 /// screenshots. `tools/screenshots.sh` is the only caller.
@@ -26,7 +27,23 @@ enum ScreenshotMode {
         #endif
     }
 
-    static var isActive: Bool { screen != nil }
+    /// A demo run: the same isolation as a screenshot run, and none of its
+    /// window placement.
+    ///
+    /// It exists so a build full of example data can be opened beside the real
+    /// app without touching it. The isolation is the point: the throwaway
+    /// defaults keep the demo apps out of the real app list, and the empty
+    /// Keychain account keeps an unsigned build from raising the "allow
+    /// access" dialog on every read.
+    static var isDemo: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("--demo")
+        #else
+        return false
+        #endif
+    }
+
+    static var isActive: Bool { screen != nil || isDemo }
 
     /// A throwaway suite while a screenshot runs, so the demo app never joins
     /// the linked apps of the developer running the script. The script deletes
@@ -40,10 +57,40 @@ enum ScreenshotMode {
     ///
     /// The real one does. This binary is unsigned, and the items were written
     /// by a signed build, so every read raises the "allow access" dialog and
-    /// blocks the main thread behind it. An account with no items answers
-    /// `errSecItemNotFound` and asks nobody anything.
+    /// blocks the main thread behind it.
+    ///
+    /// The account alone stopped being enough when the credentials became one
+    /// vault item: every account is a key **inside** that item now, so the
+    /// account no longer decides which Keychain item is opened.
+    /// `isolateCredentials()` is what actually keeps this run off the real
+    /// vault, and this name only keeps the two apart inside it.
     static var storeAccount: String {
         isActive ? "screenshots-no-credentials" : "store-credentials"
+    }
+
+    /// Points the credential vault at a service of its own.
+    ///
+    /// It runs before the first read of the process, so nothing has opened the
+    /// real item by the time this lands.
+    static func isolateCredentials() {
+        #if DEBUG
+        guard isActive else { return }
+        KeychainCredentials.useIsolatedService(
+            "com.rafacst.SuperSubmitter.credentials.demo")
+        #endif
+    }
+
+    /// The state for this run, built after the vault is pointed somewhere
+    /// safe.
+    ///
+    /// The order matters and a property default is the only place that
+    /// guarantees it: `AppState.init` opens the last app and reads its
+    /// credentials, and a struct assigns its property defaults before the body
+    /// of `init` runs.
+    @MainActor
+    static func makeAppState() -> AppState {
+        isolateCredentials()
+        return AppState(defaults: defaults, storeAccount: storeAccount)
     }
 
     /// Whether the script named an appearance. The stored preference stands
@@ -67,15 +114,33 @@ enum ScreenshotMode {
         #endif
     }
 
+    /// Every workspace the run names, in order. A demo run links several, so
+    /// the sidebar holds one app per scenario.
+    static var manifestPaths: [String] {
+        #if DEBUG
+        return (value(for: "--manifest") ?? "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        #else
+        return []
+        #endif
+    }
+
     /// Puts the app on the named screen.
     @MainActor
     static func apply(to state: AppState) {
         #if DEBUG
-        guard let screen else { return }
+        guard isActive else { return }
         // The welcome screen is the one that needs no app, so linking is
         // driven by the flag and never by the screen name.
-        if let path = value(for: "--manifest") {
+        for path in manifestPaths {
             state.link(manifestAt: URL(fileURLWithPath: path))
+        }
+        guard let screen else {
+            // A demo run lands on the app it linked, not on the welcome card.
+            state.showOnboarding = false
+            return
         }
         switch screen {
         case "welcome":
@@ -97,7 +162,9 @@ enum ScreenshotMode {
     @MainActor
     static func placeWindow() {
         #if DEBUG
-        guard isActive,
+        // A demo run keeps the ordinary window. Only the screenshot script
+        // wants a fixed frame and a floating level.
+        guard screen != nil,
               // The MenuBarExtra owns a window too. The real one is the big one.
               let window = NSApp.windows.filter(\.isVisible)
                   .max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }),

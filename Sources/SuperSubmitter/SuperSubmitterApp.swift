@@ -9,10 +9,9 @@ struct SuperSubmitterApp: App {
     init() {
         PostHogClient.setup()
     }
-    // The real defaults and the real Keychain account, except while
-    // `tools/screenshots.sh` runs. See ScreenshotMode.
-    @State private var state = AppState(defaults: ScreenshotMode.defaults,
-                                        storeAccount: ScreenshotMode.storeAccount)
+    // The real defaults, the real Keychain, and the real app list, except
+    // while `tools/screenshots.sh` or a `--demo` run is on. See ScreenshotMode.
+    @State private var state = ScreenshotMode.makeAppState()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     var body: some Scene {

@@ -58,7 +58,7 @@ struct Sidebar: View {
             ModeSwitch().padding(.horizontal, 8).padding(.bottom, 10)
 
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(Tab.tabs(in: state.mode)) { tab in
+                ForEach(Tab.tabs(in: state.mode).filter { $0 != .stores }) { tab in
                     // A rule before tab 7 and before tab 9. It marks where
                     // the app stops editing a file and starts touching a
                     // store.
@@ -76,6 +76,14 @@ struct Sidebar: View {
             .padding(.bottom, 12)
 
             Spacer(minLength: 0)
+
+            // Stores sits at the foot of the sidebar and not at the head of
+            // the work. One credential covers every app on the account, so the
+            // tab answers "who am I" once and then stays out of the way. The
+            // steps above it are the ones a release actually walks through.
+            TabRow(tab: .stores)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
 
             if state.manifestURL != nil {
                 Hairline().padding(.horizontal, 12)
