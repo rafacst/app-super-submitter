@@ -116,6 +116,22 @@ final class AppState {
     var releaseSheet: Store?
     var showAddLocale = false
 
+    /// Takes every sheet off the shell.
+    ///
+    /// AppKit refuses to quit an app that has a modal sheet on a window, and
+    /// Sparkle installs an update by quitting. "Check for updates" is inside
+    /// the Settings sheet, so the install waited for the user to close a
+    /// panel that nothing on the screen connected to the update. See Updater.
+    func closeEverySheet() {
+        showSettings = false
+        showOnboarding = false
+        showExistingAppImport = false
+        showAddLocale = false
+        releaseSheet = nil
+        paywall = nil
+        pendingPaywall = nil
+    }
+
     // Paid access. Every gate reads `entitlement`; nothing keeps its own
     // `isPaid` boolean. See AppStateAccess.swift.
     /// The gate every mutation boundary in SubmitKit receives. It refuses
