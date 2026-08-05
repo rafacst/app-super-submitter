@@ -7,8 +7,7 @@ import SubmitKit
 /// `ASWebAuthenticationSession` is the only door Apple sanctions here: the
 /// password is typed into the provider's own page, in a browser this app
 /// cannot read, and only the callback comes back. A `WKWebView` would put the
-/// provider's login form inside our process, and Google and Apple both refuse
-/// that.
+/// provider's login form inside our process, which Apple refuses outright.
 ///
 /// ponytail: no delegate object kept around, no state machine. One call, one
 /// URL back, and the session dies with the continuation.
@@ -72,7 +71,6 @@ extension SupabaseOAuthProvider {
     var title: String {
         switch self {
         case .apple: "Apple"
-        case .google: "Google"
         case .github: "GitHub"
         case .gitlab: "GitLab"
         }

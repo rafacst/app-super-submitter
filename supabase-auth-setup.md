@@ -1,11 +1,11 @@
 # Supabase sign-in setup
 
-The app ships four provider buttons: Apple, Google, GitHub, and GitLab. The
-client half is done and tested. This file is the half that only you can do,
+The app ships three provider buttons: Apple, GitHub, and GitLab. The client
+half is done and tested. This file is the half that only you can do,
 because each step needs a login and a secret that must never reach this
 repository.
 
-Today all four answer `Unsupported provider: provider is not enabled`. The
+Today all three answer `Unsupported provider: provider is not enabled`. The
 buttons stay in the sheet and report that message until you finish the steps
 below, one provider at a time. Email and password already work.
 
@@ -51,24 +51,7 @@ The shortest one. Start here to prove the flow end to end.
 
 Self-hosted GitLab needs its base URL in the Supabase provider panel as well.
 
-## 3. Google
-
-1. Google Cloud Console → pick or make a project.
-2. **APIs & Services → OAuth consent screen**. External. Fill the app name,
-   the support email, and the developer email. Add the scopes `userinfo.email`
-   and `userinfo.profile`.
-3. **Credentials → Create credentials → OAuth client ID → Web application**.
-   A **Web application** client, not a desktop one: Supabase performs the
-   exchange, so the client must be the kind that holds a secret.
-4. Authorized redirect URI: the Supabase callback above.
-5. Copy the Client ID and the Client Secret.
-6. Supabase → **Sign In / Providers → Google**. Turn it on, paste both, save.
-
-Your consent screen starts in testing mode, where only the accounts you list
-can sign in. Publish it before you ship, or every user outside that list is
-refused.
-
-## 4. Apple
+## 3. Apple
 
 The longest one, and it needs a paid Apple Developer account. You already
 have one, because the app is Developer ID signed.
@@ -93,7 +76,7 @@ is a Mac app, because Supabase performs the exchange.
 The `.p8` is a private key. It belongs in your password manager and nowhere
 in this repository.
 
-## 5. Check it
+## 4. Check it
 
 Run the app, open **Settings → Account → Sign in or create account**, and
 press a provider button. A browser window opens, you approve, and the sheet
@@ -117,7 +100,7 @@ session lands in the Keychain beside the one the email form makes. Everything
 after that is identical for both doors.
 
 Identity linking is on, so a developer who signs in with GitHub today and
-with Google tomorrow lands on one account, as long as both providers hand
+with GitLab tomorrow lands on one account, as long as both providers hand
 Supabase the same verified address.
 
 **Apple is the one that can break that.** A user who picks **Hide My Email**
