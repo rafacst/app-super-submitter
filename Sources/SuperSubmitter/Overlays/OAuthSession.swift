@@ -26,9 +26,18 @@ final class OAuthSession: NSObject, ASWebAuthenticationPresentationContextProvid
     /// that case answers nil and the caller says nothing.
     func run(_ url: URL) async throws -> URL? {
         try await withCheckedThrowingContinuation { continuation in
+            // `@Sendable`, and nothing but the continuation inside it.
+            //
+            // The class is `@MainActor`, so a plain closure written here
+            // inherits that isolation and checks the executor as it starts.
+            // AuthenticationServices calls this one on its XPC reply queue,
+            // never on the main thread, so the check trapped and took the app
+            // down the moment Apple sign-in answered. A continuation is
+            // `Sendable` and resumes safely from any thread, so the closure
+            // needs no main actor and must not ask for one.
             let session = ASWebAuthenticationSession(
                 url: url, callbackURLScheme: Self.scheme
-            ) { callback, error in
+            ) { @Sendable callback, error in
                 if let callback {
                     continuation.resume(returning: callback)
                 } else if let error = error as? ASWebAuthenticationSessionError,

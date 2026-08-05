@@ -21,6 +21,10 @@ struct SuperSubmitterApp: App {
                 .environment(state)
                 .frame(minWidth: 1120, minHeight: 720)
                 .task {
+                    // Sparkle quits the app to install, and AppKit will not
+                    // quit an app that holds a modal sheet. The updater has
+                    // no way to reach the shell, so the shell hands it one.
+                    Updater.closeSheets = { state.closeEverySheet() }
                     guard !ScreenshotMode.isActive else {
                         ScreenshotMode.apply(to: state)
                         ScreenshotMode.placeWindow()
