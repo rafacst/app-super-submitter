@@ -6,7 +6,10 @@ import Foundation
 /// The raw value is the wire name Supabase expects on `/authorize`, so it is
 /// a mapping and not a label. The display name lives with the button.
 public enum SupabaseOAuthProvider: String, CaseIterable, Sendable, Identifiable {
-    case apple, google, github, gitlab
+    // Google is absent on purpose: its console needs a consent screen, a
+    // verification review, and a publish step before anyone outside a test
+    // list can sign in. Email covers those people.
+    case apple, github, gitlab
 
     public var id: String { rawValue }
 }
