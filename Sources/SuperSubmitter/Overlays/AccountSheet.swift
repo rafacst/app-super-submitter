@@ -17,11 +17,7 @@ struct AccountSheet: View {
             // autofill suggestion right under the password field, and it
             // covered the one line that says why the sign-in failed.
             if let message = state.accountMessage {
-                Text(message)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.yellow)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                WarningNote(message)
             }
             providers
 

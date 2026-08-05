@@ -140,12 +140,22 @@ public struct StoreImportReader: Sendable {
             }
         }
 
+        // The newest build, by date. `limit=1` alone took whichever build App
+        // Store Connect listed first, which is not the one that shipped.
         if let builds = await attempt("App Store encryption declaration", &failures, {
             JSON(data: try await api.apple(
-                "GET", "/v1/builds?filter%5Bapp%5D=\(appID)&limit=1").data)
+                "GET",
+                "/v1/builds?filter%5Bapp%5D=\(appID)&limit=1&sort=-uploadedDate").data)
         }) {
-            result.review.usesNonExemptEncryption =
-                builds["data"][0]["attributes"]["usesNonExemptEncryption"].bool
+            let attributes = builds["data"][0]["attributes"]
+            result.review.usesNonExemptEncryption = attributes["usesNonExemptEncryption"].bool
+            // The app icon rides along in the same payload. It costs no
+            // request, and it is what the sidebar draws beside the app name.
+            if let url = Self.imageURL(attributes["iconAssetToken"], side: 512) {
+                result.assets.append(ImportedStoreAsset(
+                    locale: result.defaultLocale ?? "en-US", kind: "icon",
+                    url: url, fileName: "icon.png"))
+            }
         }
 
         if let purchases = await attempt("App Store in-app purchases", &failures, {

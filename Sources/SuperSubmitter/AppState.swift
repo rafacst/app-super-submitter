@@ -29,6 +29,12 @@ enum ConnectionStatus: Equatable {
     var isConnected: Bool {
         if case .connected = self { true } else { false }
     }
+
+    /// A refusal, as opposed to a question nobody has asked yet. The two used
+    /// to draw the same grey, so a failed connection read as "not tested".
+    var isFailed: Bool {
+        if case .failed = self { true } else { false }
+    }
 }
 
 enum PurchaseTextField { case id, name, amount, currency, entitlement }
@@ -110,6 +116,12 @@ final class AppState {
     var showSettings = false
     var showOnboarding = false
     var showExistingAppImport = false
+    /// Shows the entry screen over an app that is already open.
+    ///
+    /// "Add app" used to open a folder picker, which answers one of the three
+    /// doors before the developer has chosen a door. Any app that opens clears
+    /// this, so nothing has to remember to put it back.
+    var showEntryScreen = false
     /// The index of the app the user asked to remove. It holds the choice
     /// while the confirmation is open.
     var appPendingRemoval: Int?
@@ -306,6 +318,9 @@ final class AppState {
                 id: record.id,
                 name: record.name,
                 initials: Self.initials(for: record.name),
+                icon: loaded?.media?.icon.map {
+                    url.deletingLastPathComponent().appendingPathComponent($0)
+                },
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
                 apple: health(.apple, manifest: loaded, selected: selected),
                 google: health(.google, manifest: loaded, selected: selected))
@@ -1406,6 +1421,7 @@ final class AppState {
     private func activateLinkedApp(at index: Int) {
         guard linkedApps.indices.contains(index) else { return }
         selectedAppIndex = index
+        showEntryScreen = false
         defaults.set(linkedApps[index].id.uuidString, forKey: lastOpenAppKey)
         let url = URL(fileURLWithPath: linkedApps[index].manifestPath)
         do {

@@ -32,6 +32,14 @@ public struct ActualState: Sendable, Equatable {
         public var secondaryCategory: String?
         public var infoLocales: [String: InfoLocale] = [:]
         public var versionLocales: [String: VersionLocale] = [:]
+        /// The text the customers read today, from the live version.
+        ///
+        /// `versionLocales` holds the editable draft, and the draft is often an
+        /// empty shell: App Store Connect creates one with no words, and so
+        /// does this app's own apply. The plan and the run must diff against
+        /// that shell, so this is kept apart from it and never feeds either.
+        /// It exists so the editing tabs can say what the store is serving.
+        public var liveVersionLocales: [String: VersionLocale] = [:]
         /// "locale/displayType" to the set of `sourceFileChecksum` values that
         /// Apple already holds. An upload that matches is skipped. Spec 7.5.
         public var screenshotChecksums: [String: Set<String>] = [:]

@@ -72,3 +72,41 @@ private final class AuthStubProtocol: URLProtocol, @unchecked Sendable {
     #expect(request?.value(forHTTPHeaderField: "apikey") == "public-key")
     #expect(try store.load()?.refreshToken == "next")
 }
+
+/// The link in the confirmation email.
+///
+/// Supabase answers a confirmation in the fragment and a refusal in the query,
+/// so a reader that looks at one half misses the case it is not in. The app
+/// registered the scheme, opened on the link, and did nothing at all until
+/// this existed.
+@Test func theConfirmationLinkCarriesTheSessionInTheFragment() {
+    let confirmed = URL(string: "supersubmitter://auth-callback#access_token=a&expires_in=3600&refresh_token=next&token_type=bearer&type=signup")!
+    let parts = SupabaseAuth.parameters(in: confirmed)
+    #expect(parts["refresh_token"] == "next")
+    #expect(parts["type"] == "signup")
+
+    let refused = URL(string: "supersubmitter://auth-callback?error=access_denied&error_description=Email%20link%20is%20invalid%20or%20has%20expired")!
+    #expect(SupabaseAuth.parameters(in: refused)["error_description"]
+        == "Email link is invalid or has expired")
+
+    // Nothing at all is the return from Stripe Checkout, which grants nothing.
+    #expect(SupabaseAuth.parameters(in: URL(string: "supersubmitter://billing")!).isEmpty)
+}
+
+/// A used or expired link fails here, with the reason Supabase gave, instead
+/// of at the first store call.
+@Test func aRefusedConfirmationLinkSaysWhy() async throws {
+    let auth = SupabaseAuth(
+        configuration: .init(baseURL: URL(string: "https://project.supabase.co")!,
+                             publishableKey: "public-key"),
+        store: AuthSessionStore(nil))
+    let refused = URL(string: "supersubmitter://auth-callback#error=access_denied&error_description=Email%20link%20is%20invalid")!
+
+    await #expect(throws: SupabaseAuthError.service("Email link is invalid")) {
+        try await auth.adopt(callback: refused)
+    }
+    // A callback with neither a session nor a reason is not a sign-in.
+    await #expect(throws: SupabaseAuthError.invalidResponse) {
+        try await auth.adopt(callback: URL(string: "supersubmitter://auth-callback")!)
+    }
+}

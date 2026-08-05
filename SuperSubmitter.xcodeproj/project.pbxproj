@@ -17,6 +17,7 @@
 		0F5A529BE543E831DF44DDC6 /* GooglePlayGapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93181C8DC0781E6FBE6E8267 /* GooglePlayGapTests.swift */; };
 		114F6E5A94D031BC16E25734 /* Manifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125542C9DF2F69ED1E405146 /* Manifest.swift */; };
 		1161CC92C0496D661C068BBC /* YAMLFidelityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2201F42616724812E01D271C /* YAMLFidelityTests.swift */; };
+		12B61CBF632C65881AD260D0 /* AppRowStoresTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD6651F8318B42732684163 /* AppRowStoresTests.swift */; };
 		12ECDCCAEE58C52A8D43739F /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFF1088B761BD08BFC5EE1C /* ScreenshotMode.swift */; };
 		1391DFA85273D4E1A9B7E468 /* SubmitKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0F0A38C40B86738E2ABCE03A /* SubmitKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		141F8A18F1CF2F29288CE1BB /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = CF7B2BCCCD28B1CC68E61CC0 /* PostHog */; };
@@ -64,6 +65,7 @@
 		52F03A056D7BF750D953FC53 /* PackageReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 230C5A844A3509EB5DF115C0 /* PackageReaderTests.swift */; };
 		530A43C6C1763DE8F8E08836 /* SuperSubmitterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC15B00B50A626A5F4200EF8 /* SuperSubmitterApp.swift */; };
 		55CE06F6D950B18D5222F276 /* ProjectDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1117E3BE5331194E42ADC9 /* ProjectDiscovery.swift */; };
+		5626E2A933EE220FB26A93A4 /* LiveListingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F571F5345E4A808D4A06AF /* LiveListingTests.swift */; };
 		58F248D6A9D53BAAD9E22788 /* AppStateRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AA57DF716DDDCF5552F76F /* AppStateRun.swift */; };
 		5A5AA8F8953D57357C9DF875 /* AndroidManifest.pb in Resources */ = {isa = PBXBuildFile; fileRef = B4CDB9A4E6D89AF09E2C51A2 /* AndroidManifest.pb */; };
 		5BB3EED42330645D14C4A588 /* StatusReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29104E1FA3BB399C3F6D6180 /* StatusReader.swift */; };
@@ -109,6 +111,7 @@
 		A2B2E86A33D5389C6B28683E /* UploadRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D1B38E1BC07601F5407CE3 /* UploadRun.swift */; };
 		A3DF738028ED3B6D4DBE4BCE /* AppFolderReuseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B90EFFA4868C208543779B0 /* AppFolderReuseTests.swift */; };
 		A48816B18E57DE09033279CE /* SupabaseAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DAD049B48F2F0FED6A0328 /* SupabaseAuth.swift */; };
+		A4A866A48F32A3D24240E2ED /* CredentialVaultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6036F77D05B6A96B4A48E61B /* CredentialVaultTests.swift */; };
 		A6890A8ED17C170CDF48CC8A /* DirectApplyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B711B900DC3B36F741DC7CD3 /* DirectApplyBar.swift */; };
 		A7BC7411ABBA934D1E15DD54 /* BuildModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE54D096EF55A82E4DEB084 /* BuildModels.swift */; };
 		A7BC8EEAAF218D2A98D5EABD /* ToolProcessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE25EB6EE4E699B2EC3E7B0 /* ToolProcessTests.swift */; };
@@ -292,6 +295,7 @@
 		485C733B823964B46B2EBAEB /* AndroidArtifactsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidArtifactsSection.swift; sourceTree = "<group>"; };
 		48B7D7160F37672B80B343B9 /* TabStructureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabStructureTests.swift; sourceTree = "<group>"; };
 		4A635A3AFE93A076F712DF77 /* AppleCatalogClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleCatalogClient.swift; sourceTree = "<group>"; };
+		4DD6651F8318B42732684163 /* AppRowStoresTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRowStoresTests.swift; sourceTree = "<group>"; };
 		4DE1B143847CE02CF815F91C /* Managed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Managed.swift; sourceTree = "<group>"; };
 		4EBD6FED9F592D6DC5898FB2 /* AppStateExistingImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateExistingImport.swift; sourceTree = "<group>"; };
 		50F26613D3523CC89CAEE629 /* ManifestBlockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestBlockTests.swift; sourceTree = "<group>"; };
@@ -307,6 +311,7 @@
 		5E48B63C295F6C782072D309 /* StoreImportReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreImportReader.swift; sourceTree = "<group>"; };
 		5ECDD17458C514D401C4D2F8 /* RunLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunLog.swift; sourceTree = "<group>"; };
 		5F4F3378A0BEE186A462E629 /* ReleaseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSheet.swift; sourceTree = "<group>"; };
+		6036F77D05B6A96B4A48E61B /* CredentialVaultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialVaultTests.swift; sourceTree = "<group>"; };
 		624A241FEC59B61D4122D435 /* PriceDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceDraft.swift; sourceTree = "<group>"; };
 		644F3BF0C515DF65ADD79CDB /* GoogleCatalogClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCatalogClient.swift; sourceTree = "<group>"; };
 		66B0D9F08A0D8947E42BFF7F /* CatalogAndMarketingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogAndMarketingTests.swift; sourceTree = "<group>"; };
@@ -365,6 +370,7 @@
 		BC3602DC179AF46821363E1A /* Runner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Runner.swift; sourceTree = "<group>"; };
 		BCB1E1387A606C12224884C7 /* ManagingTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagingTabs.swift; sourceTree = "<group>"; };
 		BEFADD5D0C024A395A42101D /* ToolProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolProcess.swift; sourceTree = "<group>"; };
+		C0F571F5345E4A808D4A06AF /* LiveListingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListingTests.swift; sourceTree = "<group>"; };
 		C41BC3684D9EAD02C78DA986 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		C555136432A192B5111694D2 /* GoogleActionsPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleActionsPanelTests.swift; sourceTree = "<group>"; };
 		C7DF63306FED48988313FED2 /* UploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadService.swift; sourceTree = "<group>"; };
@@ -505,6 +511,7 @@
 			children = (
 				9B90EFFA4868C208543779B0 /* AppFolderReuseTests.swift */,
 				73E24AAA8D152CDC338E536D /* AppIconTests.swift */,
+				4DD6651F8318B42732684163 /* AppRowStoresTests.swift */,
 				7934EB70A5C0A23285EE2D40 /* ExistingAppAssetTests.swift */,
 				A1FDC311FE6663720F580BBA /* ExistingAppImportTests.swift */,
 				C555136432A192B5111694D2 /* GoogleActionsPanelTests.swift */,
@@ -578,9 +585,11 @@
 				66B0D9F08A0D8947E42BFF7F /* CatalogAndMarketingTests.swift */,
 				18027E4A08DB8F660315C028 /* ConsoleChecklistTests.swift */,
 				369BD68FC3B4A58C282FA68C /* CoverageGapTests.swift */,
+				6036F77D05B6A96B4A48E61B /* CredentialVaultTests.swift */,
 				3991BCE17C8474603E45F5BC /* DisplayTypeRoundTripTests.swift */,
 				7AD41B89B54A1D15B576B54E /* GoogleArtifactTests.swift */,
 				93181C8DC0781E6FBE6E8267 /* GooglePlayGapTests.swift */,
+				C0F571F5345E4A808D4A06AF /* LiveListingTests.swift */,
 				50F26613D3523CC89CAEE629 /* ManifestBlockTests.swift */,
 				425AF414536E2877618D5BBF /* ManifestEditingTests.swift */,
 				2C8DF457A1D20CFB570F21A9 /* ManifestTests.swift */,
@@ -935,9 +944,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					72E69774B43F9BB49182FEB4 = {
-						ProvisioningStyle = Automatic;
-					};
 				};
 			};
 			buildConfigurationList = D7617BB5D83DAD593F2A09DD /* Build configuration list for PBXProject "SuperSubmitter" */;
@@ -1032,9 +1038,11 @@
 				4E0B74C2CB8334E6973E8DE7 /* CatalogAndMarketingTests.swift in Sources */,
 				4A8EE31346BF79191030021B /* ConsoleChecklistTests.swift in Sources */,
 				9D21037A87BCF8695A14D7CA /* CoverageGapTests.swift in Sources */,
+				A4A866A48F32A3D24240E2ED /* CredentialVaultTests.swift in Sources */,
 				3C2563BCA6B5232C98C44490 /* DisplayTypeRoundTripTests.swift in Sources */,
 				72856A3A54EA6635E8F43083 /* GoogleArtifactTests.swift in Sources */,
 				0F5A529BE543E831DF44DDC6 /* GooglePlayGapTests.swift in Sources */,
+				5626E2A933EE220FB26A93A4 /* LiveListingTests.swift in Sources */,
 				011F6A3C642A88D045102753 /* ManifestBlockTests.swift in Sources */,
 				C5D2D71BDF83A54C4F1B6C44 /* ManifestEditingTests.swift in Sources */,
 				920195C212422C9A6B85D01A /* ManifestTests.swift in Sources */,
@@ -1198,6 +1206,7 @@
 			files = (
 				A3DF738028ED3B6D4DBE4BCE /* AppFolderReuseTests.swift in Sources */,
 				7FC432426D57FA25E2FD9433 /* AppIconTests.swift in Sources */,
+				12B61CBF632C65881AD260D0 /* AppRowStoresTests.swift in Sources */,
 				24B75668C6A1D14896B9022B /* ExistingAppAssetTests.swift in Sources */,
 				4C5125281AB8833C02CE6B86 /* ExistingAppImportTests.swift in Sources */,
 				2B920DF6A3FBD642BAA29343 /* GoogleActionsPanelTests.swift in Sources */,
@@ -1236,9 +1245,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SuperSubmitter.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 88BXH8KNVZ;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENTITLEMENT_PUBLIC_KEYS = "entitlement-2026-01=8dO3jS7trDDIf3o/k1raACoLvxAVSVzKSxXijjTlKNQ=";
 				GENERATE_INFOPLIST_FILE = NO;

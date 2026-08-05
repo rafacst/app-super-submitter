@@ -21,6 +21,13 @@ provider fails at the last step.
 That is the scheme the app registers in `project.yml` under
 `CFBundleURLTypes`, and the one `OAuthSession.callback` opens with.
 
+The confirmation email uses the same address. Set **Site URL** to
+`supersubmitter://auth-callback` as well, because that is where Supabase sends
+a signup link when nothing else asks for a different one. The app catches it in
+`onOpenURL`, hands it to `SupabaseAuth.adopt(callback:)`, and the developer is
+signed in without typing the password again. Supabase puts the token pair in
+the fragment, so anything that drops a fragment breaks the link.
+
 The callback URL you paste into each provider below is always the same:
 
 ```

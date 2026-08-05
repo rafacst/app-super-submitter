@@ -134,10 +134,11 @@ public struct StateReader: Sendable {
         // The highest, not the first. App Store Connect fixes no order here,
         // and comparing against an older release would let a lower version
         // through.
-        result.liveVersionString = versions["data"].array
+        let liveVersion = versions["data"].array
             .filter { releasedStates.contains(versionState($0)) }
-            .compactMap { $0["attributes"]["versionString"].string }
-            .max { Validator.isVersion($1, above: $0) }
+            .max { Validator.isVersion($1["attributes"]["versionString"].string ?? "",
+                                        above: $0["attributes"]["versionString"].string ?? "") }
+        result.liveVersionString = liveVersion?["attributes"]["versionString"].string
 
         // No fallback to "whatever App Store Connect returned first". A live
         // version is not writable, and handing its id to the runner would
@@ -163,16 +164,7 @@ public struct StateReader: Sendable {
                     "GET",
                     "/v1/appStoreVersions/\(versionID)/appStoreVersionLocalizations?limit=200").data)
                 for item in localizations["data"].array {
-                    let attributes = item["attributes"]
-                    guard let locale = attributes["locale"].string else { continue }
-                    var value = ActualState.Apple.VersionLocale()
-                    value.id = item["id"].string
-                    value.description = attributes["description"].string
-                    value.whatsNew = attributes["whatsNew"].string
-                    value.keywords = attributes["keywords"].string
-                    value.promotionalText = attributes["promotionalText"].string
-                    value.supportUrl = attributes["supportUrl"].string
-                    value.marketingUrl = attributes["marketingUrl"].string
+                    guard let (locale, value) = Self.versionLocale(item) else { continue }
                     result.versionLocales[locale] = value
 
                     // The checksums make a second apply skip an upload that
@@ -226,6 +218,25 @@ public struct StateReader: Sendable {
                 result.reviewContactPhone = review["contactPhone"].string
                 result.reviewDemoAccountRequired = review["demoAccountRequired"].bool
                 result.reviewNotes = review["notes"].string
+            }
+        }
+
+        // The words the customers read today.
+        //
+        // The block above reads the editable draft and nothing else, which is
+        // right for every write: a draft is the only thing the app may patch.
+        // But App Store Connect creates that draft empty, and so does this
+        // app's own apply, so reading it alone reported an app with no
+        // description while its store page was full. This fills the picture
+        // the editing tabs draw. It touches no id, no plan, and no diff.
+        //
+        // The read is optional. A failure costs the display, never the plan.
+        if let liveID = liveVersion?["id"].string, liveID != result.versionId,
+           let payload = try? await api.apple(
+            "GET", "/v1/appStoreVersions/\(liveID)/appStoreVersionLocalizations?limit=200") {
+            for item in JSON(data: payload.data)["data"].array {
+                guard let (locale, value) = Self.versionLocale(item) else { continue }
+                result.liveVersionLocales[locale] = value
             }
         }
 
@@ -427,6 +438,25 @@ public struct StateReader: Sendable {
     }
 
     /// The app previews of one locale, in the shape the screenshots use.
+    /// The words of one `appStoreVersionLocalizations` record.
+    ///
+    /// The draft and the live version are read through this one mapping, so a
+    /// field added to one is never missing from the other.
+    static func versionLocale(_ item: JSON)
+        -> (locale: String, value: ActualState.Apple.VersionLocale)? {
+        let attributes = item["attributes"]
+        guard let locale = attributes["locale"].string else { return nil }
+        var value = ActualState.Apple.VersionLocale()
+        value.id = item["id"].string
+        value.description = attributes["description"].string
+        value.whatsNew = attributes["whatsNew"].string
+        value.keywords = attributes["keywords"].string
+        value.promotionalText = attributes["promotionalText"].string
+        value.supportUrl = attributes["supportUrl"].string
+        value.marketingUrl = attributes["marketingUrl"].string
+        return (locale, value)
+    }
+
     static func readPreviews(_ payload: JSON, locale: String,
                              into result: inout ActualState.Apple) {
         var byBucket: [String: String] = [:]

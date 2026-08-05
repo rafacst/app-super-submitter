@@ -76,10 +76,12 @@ private struct AppleCredentialPanel: View {
                         return true
                     })
 
-                EditableField(label: "Key id", value: $state.appleKeyID, prompt: "Key ID")
+                EditableField(label: "Key id", value: $state.appleKeyID, prompt: "Key ID",
+                              limit: AppleCredential.keyIDLength)
                     .onChange(of: state.appleKeyID) { state.appleCredentialFieldsChanged() }
                 EditableField(label: "Issuer id", value: $state.appleIssuerID,
-                              prompt: "Issuer UUID")
+                              prompt: "Issuer UUID",
+                              limit: AppleCredential.issuerIDLength)
                     .onChange(of: state.appleIssuerID) { state.appleCredentialFieldsChanged() }
             }
         }
@@ -231,8 +233,7 @@ private struct CredentialCard<Content: View>: View {
                     Text(keychainNote).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     if case .failed(let message) = status {
-                        Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.red)
-                            .fixedSize(horizontal: false, vertical: true)
+                        WarningNote(message)
                     } else if case .connected(let message) = status {
                         Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.green)
                             .fixedSize(horizontal: false, vertical: true)
@@ -348,11 +349,14 @@ private struct EditableField: View {
     let label: String
     @Binding var value: String
     let prompt: String
+    /// The length the store issues, where it issues a fixed one. Nil means the
+    /// field takes whatever the developer has.
+    var limit: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
-            TextField(prompt, text: $value)
+            TextField(prompt, text: $value.limited(to: limit))
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))
                 .padding(.horizontal, 8)

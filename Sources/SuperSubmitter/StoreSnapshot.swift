@@ -15,13 +15,31 @@ import SubmitKit
 struct StoreSnapshot: Codable, Equatable {
     /// store -> locale -> field -> the text the store holds.
     private(set) var text: [Store: [String: [ListingTextField: String]]] = [:]
+    /// locale -> field -> the text the App Store shows customers today.
+    ///
+    /// The App Store keeps a live version and an editable draft, and `text`
+    /// holds the draft, because the draft is what a run writes and therefore
+    /// what "Kept" has to mean. The draft is often empty, so this carries the
+    /// paragraphs the customer is reading and the tabs print them under the
+    /// field. Google Play has one listing and needs no second picture.
+    private(set) var appleLive: [String: [ListingTextField: String]] = [:]
     /// store -> locale -> device class -> the images the store shows, in order.
     private(set) var screenshots: [Store: [String: [Manifest.DeviceClass: [URL]]]] = [:]
     /// The App Store previews. Google takes a YouTube URL on the listing.
     private(set) var previews: [String: [Manifest.DeviceClass: [URL]]] = [:]
     private(set) var readAt: Date?
 
-    var isEmpty: Bool { text.isEmpty && screenshots.isEmpty && previews.isEmpty }
+    var isEmpty: Bool {
+        text.isEmpty && appleLive.isEmpty && screenshots.isEmpty && previews.isEmpty
+    }
+
+    /// What the App Store shows customers for this field, when the draft that
+    /// a run writes does not already say the same thing. Nil means the two
+    /// agree, or that nothing is known, and the tab then says nothing.
+    func liveOnAppStore(_ field: ListingTextField, locale: String) -> String? {
+        guard let live = appleLive[locale]?[field], !live.isEmpty else { return nil }
+        return live == text[.apple]?[locale]?[field] ? nil : live
+    }
 
     /// The stores that hold something for this field, and what they hold.
     /// The App Store comes first, the same order the tabs use everywhere.
@@ -95,12 +113,13 @@ struct StoreSnapshot: Codable, Equatable {
                                      .privacyChoicesURL: info.privacyChoicesUrl])
             }
             for (locale, version) in apple.versionLocales {
-                set(.apple, locale, [.description: version.description,
-                                     .whatsNew: version.whatsNew,
-                                     .keywords: version.keywords,
-                                     .promotionalText: version.promotionalText,
-                                     .supportURL: version.supportUrl,
-                                     .marketingURL: version.marketingUrl])
+                set(.apple, locale, Self.words(of: version))
+            }
+            for (locale, version) in apple.liveVersionLocales {
+                for (field, value) in Self.words(of: version) {
+                    guard let value, !value.isEmpty else { continue }
+                    appleLive[locale, default: [:]][field] = value
+                }
             }
             merge(bucketed: apple.screenshotURLs, store: .apple)
             merge(bucketed: apple.previewURLs, into: &previews)
@@ -163,6 +182,15 @@ struct StoreSnapshot: Codable, Equatable {
     /// downloaded.
     static func isVideo(_ url: URL) -> Bool {
         videoExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// The six fields an App Store version localization carries. The draft and
+    /// the live version go through this one mapping, so neither can drift.
+    private static func words(
+        of version: ActualState.Apple.VersionLocale) -> [ListingTextField: String?] {
+        [.description: version.description, .whatsNew: version.whatsNew,
+         .keywords: version.keywords, .promotionalText: version.promotionalText,
+         .supportURL: version.supportUrl, .marketingURL: version.marketingUrl]
     }
 
     private mutating func set(_ store: Store, _ locale: String,
