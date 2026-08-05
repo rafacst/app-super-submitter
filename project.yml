@@ -51,6 +51,26 @@ targets:
         product: Sparkle
     entitlements:
       path: SuperSubmitter.entitlements
+    # The build number is the commit count, the same formula the release
+    # workflow uses. Without this a local build stays at CURRENT_PROJECT_VERSION
+    # and Sparkle reads it as older than every published release, so "Check for
+    # updates" offers the version you already have. Runs before the code
+    # signature, so the stamped bundle is the signed one.
+    postBuildScripts:
+      - name: Stamp the build number from git
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          cd "$SRCROOT"
+          BUILD=$(git rev-list --count HEAD 2>/dev/null || echo "")
+          # A missing or shallow checkout answers with nothing or with a
+          # count lower than the truth. Leave the plist alone rather than
+          # stamping a number that makes a new build look old.
+          case "$BUILD" in
+            ''|*[!0-9]*) echo "note: no git build number; keeping CURRENT_PROJECT_VERSION"; exit 0 ;;
+          esac
+          plutil -replace CFBundleVersion -string "$BUILD" \
+            "$TARGET_BUILD_DIR/$INFOPLIST_PATH"
     # Sparkle reads SUFeedURL and SUPublicEDKey out of the bundle, and the
     # INFOPLIST_KEY_ build settings only carry the keys Apple knows. So the
     # app writes a real Info.plist. XcodeGen generates it from this block, and
@@ -63,6 +83,12 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
+        # The OAuth callback and the billing return. ASWebAuthenticationSession
+        # catches the redirect itself, but a registered scheme is what lets a
+        # provider that hands off to the real browser find its way home.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.rafacst.supersubmitter.callback
+            CFBundleURLSchemes: [supersubmitter]
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: Copyright © 2026 Rafa CST
         NSPrincipalClass: NSApplication
@@ -82,7 +108,11 @@ targets:
         SSSupabasePublishableKey: $(SUPABASE_PUBLISHABLE_KEY)
     settings:
       base:
-        LICENSING_BASE_URL: ""
+        # The live licensing service. Not a secret: it is the address the app
+        # calls, and every privileged Stripe call happens on the other side of
+        # it. A release with this empty ships a paywall in front of nothing,
+        # so the workflow fails the build rather than publish one.
+        LICENSING_BASE_URL: https://super-submitter.rafacst.me
         ENTITLEMENT_PUBLIC_KEYS: "entitlement-2026-01=8dO3jS7trDDIf3o/k1raACoLvxAVSVzKSxXijjTlKNQ="
         SUPABASE_URL: https://cvrvyxcjddtpsyfxieuf.supabase.co
         SUPABASE_PUBLISHABLE_KEY: sb_publishable_sI-T324LV-ymezJ0j9uecA_XZ2Dyep3

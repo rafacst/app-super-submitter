@@ -36,15 +36,6 @@ enum ScreenshotMode {
         return UserDefaults(suiteName: "com.rafacst.supersubmitter.screenshots") ?? .standard
     }
 
-    /// The sidebar, whatever the developer running the script prefers.
-    ///
-    /// `navigationPosition` is an `@AppStorage` on the real defaults, so
-    /// without this the chrome in the pictures follows whoever took them.
-    /// The sidebar is the documented default and it shows the four zones.
-    static var navigationPosition: NavigationPosition? {
-        isActive ? .sidebar : nil
-    }
-
     /// A Keychain account that holds nothing.
     ///
     /// The real one does. This binary is unsigned, and the items were written

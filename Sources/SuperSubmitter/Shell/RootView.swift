@@ -3,37 +3,27 @@ import SwiftUI
 
 /// The shell. Spec section 16.1.
 ///
-/// Two navigation positions, one set of views. The content area does not know
-/// which position is active.
+/// The content is the window surface, and the sidebar is a panel floating on
+/// it, so the two read apart with a gap instead of a rule.
 struct RootView: View {
     @Environment(AppState.self) private var state
-    @AppStorage("navigationPosition") private var position: NavigationPosition = .sidebar
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     var body: some View {
         @Bindable var state = state
-        // A screenshot run pins the sidebar, so the chrome in the pictures
-        // does not follow the preference of whoever took them.
-        let position = ScreenshotMode.navigationPosition ?? position
-        ZStack(alignment: .topLeading) {
-            switch position {
-            case .sidebar:
-                HStack(spacing: 0) {
-                    Sidebar()
-                    VHairline(color: Theme.sep)
-                    ContentArea()
-                }
-            case .topBar:
-                VStack(spacing: 0) {
-                    TopBar()
-                    ContentArea()
-                }
-            }
+        HStack(spacing: 0) {
+            Sidebar()
+                .panelSurface()
+                .padding(Theme.panelGap)
+            ContentArea()
         }
-        .background(Theme.bg)
+        .background(Theme.content)
         .foregroundStyle(Theme.text)
         .font(.system(size: 13))
-        .overlay(alignment: .topLeading) { SwitcherPopover(position: position) }
+        // The window hides its title bar, but SwiftUI still insets for it.
+        // Without this the panel starts below the traffic lights instead of
+        // carrying them, and the shell reads as a bar above a panel.
+        .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $state.showSettings) { SettingsPanel() }
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
             OnboardingPanel()
