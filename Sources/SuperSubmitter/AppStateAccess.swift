@@ -175,8 +175,30 @@ extension AppState {
 
     func openPaywall(_ trigger: PaywallTrigger) {
         billingMessage = nil
-        paywall = trigger
         PostHogSDK.shared.capture("paywall_shown", properties: ["trigger": trigger.rawValue])
+        // The shell hosts one sheet at a time, and Settings is a sheet. Asking
+        // for the paywall from inside it set the trigger and presented
+        // nothing, so "See plans" looked dead. Settings closes first, and its
+        // own dismissal opens the paywall. No timer: the callback is the
+        // moment the shell is free.
+        guard !showSettings else {
+            pendingPaywall = trigger
+            showSettings = false
+            return
+        }
+        present(trigger)
+    }
+
+    /// Opens the paywall that Settings had to close for. RootView calls this
+    /// when the Settings sheet finishes dismissing.
+    func openPendingPaywall() {
+        guard let trigger = pendingPaywall else { return }
+        pendingPaywall = nil
+        present(trigger)
+    }
+
+    private func present(_ trigger: PaywallTrigger) {
+        paywall = trigger
         Task { await loadBillingPlans() }
     }
 
