@@ -147,10 +147,14 @@ struct PlanTab: View {
         }
     }
 
+    /// The message already opens with the name of the store that failed, so
+    /// the banner adds no sentence of its own. "A store could not be read"
+    /// in front of "App Store: …" reads as two stores to anyone who
+    /// connected one.
     private func readFailure(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 11) {
-            StatePill(text: "Read", foreground: Theme.red, background: Theme.redBg)
-            Text("A store could not be read, so this plan is incomplete. \(message)")
+            StatePill(text: "Read failed", foreground: Theme.red, background: Theme.redBg)
+            Text(message)
                 .font(.system(size: 12))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -172,12 +176,11 @@ struct PlanTab: View {
             Rectangle().fill(Theme.sep2).frame(width: 1, height: 28)
             Counter(value: plan.uploadSizeText, label: "to upload")
             Spacer(minLength: 0)
-            Text("This plan writes nothing to a customer. It ends with a draft in each store.")
+            // The apply row below already says where this ends. Saying it
+            // twice on one screen is what made the page long.
+            Text("Ends in a draft. Nothing reaches a customer.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)
-                .lineSpacing(3)
-                .frame(maxWidth: 300, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 13)
@@ -194,11 +197,13 @@ struct PlanTab: View {
                 Text(headline(plan))
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(accent)
-                Text(blocked
-                     ? "An error blocks the apply. A warning needs one acknowledgement."
-                     : "A warning needs one acknowledgement. Nothing blocks the apply.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.text2)
+                // Only the blocking case needs a sentence. Every warning row
+                // carries its own "I accept this", which says the rest.
+                if blocked {
+                    Text("Fix the errors to unlock the apply.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.text2)
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 15)
@@ -335,22 +340,24 @@ struct PlanTab: View {
         }
     }
 
+    /// One line, and never a second one. The counters, the warning rows, and
+    /// the button already carry what they carry.
     private func applyNote(_ plan: PlanResult) -> String {
         if state.dryRun {
-            return "A dry run logs every request and sends none. Nothing reaches a store."
+            return "A dry run logs every request and sends none."
         }
         if !state.can(.storeWrite) {
-            return "Store writes need paid access. Your plan is kept, and reading the stores and running a dry run stay free."
+            return "Store writes need paid access. Reading and dry runs stay free."
         }
         if plan.isBlocked {
             let count = plan.errors.count
-            return "\(count) \(count == 1 ? "error blocks" : "errors block") the apply. Fix \(count == 1 ? "it" : "them") above, then this button writes a draft to each store."
+            return "\(count) \(count == 1 ? "error blocks" : "errors block") the apply."
         }
         if state.unacknowledgedWarnings > 0 {
             let count = state.unacknowledgedWarnings
-            return "\(count) \(count == 1 ? "warning needs" : "warnings need") one acknowledgement each. Accept \(count == 1 ? "it" : "them") to unlock the apply."
+            return "Accept \(count == 1 ? "the warning" : "the \(count) warnings") to unlock the apply."
         }
-        return "This writes \(plan.writeCount) changes and \(plan.uploadCount) uploads. It ends with a draft in each store. It sends nothing to review."
+        return "Writes a draft to each store. It sends nothing to review."
     }
 }
 

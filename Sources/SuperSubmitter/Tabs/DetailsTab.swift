@@ -44,6 +44,11 @@ struct DetailsTab: View {
                     editor("Privacy choices URL", field: .privacyChoicesURL,
                            tag: "Apple only")
                 }
+                // What the listing says about itself, what it declares, and
+                // the parts of it no API will write. They asked "what does
+                // the reviewer need?" on a tab that answers "what does the
+                // listing say?".
+                ListingDeclarations().padding(.top, 6)
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
