@@ -108,8 +108,9 @@ struct SuperSubmitterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        // Before any window draws, so both themes come off one system setting.
+        // Before any window draws, so no screen flashes the other theme.
         ScreenshotMode.applyAppearance()
+        Appearance.applyStored()
         Updater.start()
         // Only the plain executable needs this. The app bundle carries the
         // asset catalog icon, and overriding it here would replace a whole
