@@ -17,3 +17,9 @@ super-submitter-icon Exports/
 
 # The release workflow builds into this.
 dist/
+
+# Private keys. The Sign in with Apple .p8 downloads once and the signing
+# certificate .p12 comes out of the Keychain, and both are easy to drop in
+# here on the way to a password manager. Neither belongs in a commit.
+*.p8
+*.p12
