@@ -9,7 +9,7 @@ struct Sidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             // The traffic lights are drawn over the top of this panel. This
             // row is the space they need, so the Apps header clears them.
-            Color.clear.frame(height: 30)
+            Color.clear.frame(height: 42)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Apps")
