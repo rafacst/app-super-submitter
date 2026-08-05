@@ -54,7 +54,9 @@ struct MarketingTab: View {
                         }
                         TextField("Promotional text, \(state.locale)",
                                   text: state.customProductPageTextBinding(index: index,
-                                                                           locale: state.locale))
+                                                                           locale: state.locale)
+                                      .limited(to: MarketingLimits
+                                          .customProductPagePromotionalText))
                         Text("The limit is 170 characters. Apple allows 35 pages.")
                             .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
                     }.marketingPanel()
@@ -123,15 +125,18 @@ struct MarketingTab: View {
                         TextField("Name, \(state.locale)  ·  30 characters",
                                   text: state.appEventTextBinding(index: index,
                                                                   locale: state.locale,
-                                                                  field: .name))
+                                                                  field: .name)
+                                      .limited(to: MarketingLimits.appEventName))
                         TextField("Short description  ·  50 characters",
                                   text: state.appEventTextBinding(index: index,
                                                                   locale: state.locale,
-                                                                  field: .shortDescription))
+                                                                  field: .shortDescription)
+                                      .limited(to: MarketingLimits.appEventShortDescription))
                         TextField("Long description  ·  120 characters",
                                   text: state.appEventTextBinding(index: index,
                                                                   locale: state.locale,
-                                                                  field: .longDescription))
+                                                                  field: .longDescription)
+                                      .limited(to: MarketingLimits.appEventLongDescription))
                     }.marketingPanel()
                 }
                 Button("Add an in-app event") { state.addAppEvent() }

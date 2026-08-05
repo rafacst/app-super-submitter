@@ -50,11 +50,14 @@ struct BuildTab: View {
 
     private var importSection: some View {
         VStack(alignment: .leading, spacing: 20) {
+            // One row, one height. Each box stretches to the taller of the
+            // two, so the rule between them runs the whole way down.
             HStack(alignment: .top, spacing: 14) {
                 submitBuilds
                 Rectangle().fill(Theme.sep2).frame(width: 1)
                 updateExistingApp
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             if !state.packages.isEmpty {
                 packageCards
@@ -102,7 +105,7 @@ struct BuildTab: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 15)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
@@ -158,7 +161,7 @@ struct BuildTab: View {
                 case .connected(let message):
                     Text(message).foregroundStyle(Theme.green)
                 case .failed(let message):
-                    Text(message).foregroundStyle(Theme.red)
+                    WarningNote(message)
                 default:
                     EmptyView()
                 }
@@ -167,7 +170,7 @@ struct BuildTab: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 15)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))

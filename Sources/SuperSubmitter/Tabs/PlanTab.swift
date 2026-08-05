@@ -23,7 +23,13 @@ struct PlanTab: View {
         .task(id: state.manifestURL) {
             // The app never skips the plan. Without it, the app writes to a
             // live listing on a guess.
-            guard state.plan == nil, !state.stores.isEmpty else { return }
+            //
+            // Opening the tab is the whole request. It used to read only when
+            // no plan existed at all, so a developer who edited a field and
+            // came back read a diff against the stores as they were an hour
+            // ago. A read writes nothing and costs nothing, and a stale plan
+            // is the one thing this screen may not show.
+            guard !state.planReading, !state.stores.isEmpty else { return }
             await state.readStores()
         }
     }

@@ -43,7 +43,10 @@ struct Sidebar: View {
                     .accessibilityValue(app.storeSummary)
                     .accessibilityAddTraits(index == state.selectedAppIndex ? .isSelected : [])
                 }
-                Button { state.chooseAppFolder() } label: { NewAppRow() }
+                // The entry screen, not a folder picker. "Add app" is the
+                // question "what do I want to do", and the entry screen is
+                // where that question is already answered three ways.
+                Button { state.showEntryScreen = true } label: { NewAppRow() }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Add app")
             }
@@ -94,7 +97,7 @@ private struct AppRow: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            InitialsBadge(text: app.initials, size: 26)
+            AppIconBadge(icon: app.icon, initials: app.initials, size: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.name)
                     .font(.system(size: 12.5, weight: .medium))
@@ -306,27 +309,54 @@ struct InitialsBadge: View {
     }
 }
 
+/// The app's own icon, and its initials until an import has fetched one.
+///
+/// The file is read once per row and cached by `NSImage`, so a sidebar of ten
+/// apps costs ten reads on the first draw and none after it.
+struct AppIconBadge: View {
+    let icon: URL?
+    let initials: String
+    var size: CGFloat
+
+    private var image: NSImage? {
+        guard let icon, FileManager.default.fileExists(atPath: icon.path) else { return nil }
+        return NSImage(contentsOf: icon)
+    }
+
+    var body: some View {
+        if let image {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
+                // The stores serve a square icon and draw the corner
+                // themselves, so this draws the same corner Apple does.
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.225))
+                .overlay(RoundedRectangle(cornerRadius: size * 0.225)
+                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        } else {
+            InitialsBadge(text: initials, size: size)
+        }
+    }
+}
+
 /// One store, and how that store stands.
 ///
-/// The logo says which store faster than a letter does, and it is the same
-/// mark every other tab uses for the same store. The glyph beside it keeps
-/// its severity colour, so the chip still reads at a glance.
+/// The logo says which store, and the tinted panel behind it says how the
+/// store stands. The glyph that used to sit beside the logo said the same
+/// thing a second time, and an exclamation mark under an app name reads as a
+/// fault even when the state is "there are edits to send".
 struct HealthChip: View {
     let store: Store
     let health: StoreHealth
 
     var body: some View {
-        HStack(spacing: 3) {
-            StoreMark(store: store, size: 9)
-            Text(health.mark)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(health.color)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 1.5)
-        .background(health.background, in: RoundedRectangle(cornerRadius: 4))
-        .accessibilityElement()
-        .accessibilityLabel("\(store.storeName) \(health.label)")
+        StoreMark(store: store, size: 9)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2.5)
+            .background(health.background, in: RoundedRectangle(cornerRadius: 4))
+            .accessibilityElement()
+            .accessibilityLabel("\(store.storeName) \(health.label)")
     }
 }
 

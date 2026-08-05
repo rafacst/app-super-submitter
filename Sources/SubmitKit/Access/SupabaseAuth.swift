@@ -21,9 +21,40 @@ public enum SupabaseAuthError: Error, LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidResponse: "The account service returned an invalid response."
-        case .service(let message): message.replacingOccurrences(of: "—", with: "-")
+        case .invalidResponse:
+            "The account service answered with something this app could not read. Try again in a moment."
+        case .service(let message): Self.humanize(message)
         }
+    }
+
+    /// The account service speaks its own dialect. These are the answers a
+    /// developer actually meets, said the way a person would say them.
+    static func humanize(_ message: String) -> String {
+        let plain = message.replacingOccurrences(of: "—", with: "-")
+        let lower = plain.lowercased()
+        if lower.contains("invalid login credentials") {
+            return "That email address and password do not match an account. Check both, or create an account."
+        }
+        if lower.contains("already registered") || lower.contains("already exists") {
+            return "An account already uses that email address. Sign in instead, or reset the password."
+        }
+        if lower.contains("email not confirmed") {
+            return "This account is not confirmed yet. Open the link in the email we sent you."
+        }
+        if lower.contains("password") && lower.contains("6 characters") {
+            return "The password is too short. Use at least six characters."
+        }
+        if lower.contains("rate limit") || lower.contains("too many") {
+            return "Too many attempts for now. Wait a minute and try again."
+        }
+        if lower.contains("expired") || lower.contains("invalid") && lower.contains("link") {
+            return "That link has already been used or has expired. Ask for a new one."
+        }
+        // A status line with a number in it says nothing to a developer.
+        if lower.contains("answered with status") {
+            return "The account service refused the request. Try again in a moment."
+        }
+        return plain
     }
 }
 
@@ -109,6 +140,42 @@ public actor SupabaseAuth {
         let session = try storedSession(from: response, fallbackEmail: email)
         try remember(session)
         return .signedIn(session.email)
+    }
+
+    /// Adopts the session that a confirmation link hands back.
+    ///
+    /// Supabase puts the token pair in the fragment of the redirect, because a
+    /// link opened from a mail client carries no PKCE verifier. The refresh
+    /// token is exchanged for a session rather than trusted as it stands, so a
+    /// link that was already used, or that expired, fails here and says so
+    /// instead of failing at the first store call.
+    @discardableResult
+    public func adopt(callback: URL) async throws -> String {
+        let parts = Self.parameters(in: callback)
+        if let message = parts["error_description"] ?? parts["error"] {
+            throw SupabaseAuthError.service(message)
+        }
+        guard let refreshToken = parts["refresh_token"] else {
+            throw SupabaseAuthError.invalidResponse
+        }
+        return try await refresh(refreshToken).email
+    }
+
+    /// The query and the fragment of a callback, in one dictionary.
+    ///
+    /// Supabase answers a confirmation in the fragment and an error in either
+    /// half, so reading one half alone misses the case it is not in.
+    public static func parameters(in url: URL) -> [String: String] {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        var pairs: [String: String] = [:]
+        for item in components?.queryItems ?? [] { pairs[item.name] = item.value }
+        // The encoded half, not `fragment`. `URLComponents` hands the decoded
+        // one back, and assigning a decoded space to `percentEncodedQuery`
+        // traps rather than returning nil.
+        var fragment = URLComponents()
+        fragment.percentEncodedQuery = components?.percentEncodedFragment
+        for item in fragment.queryItems ?? [] { pairs[item.name] = item.value }
+        return pairs
     }
 
     public func signOut() async {

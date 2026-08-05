@@ -21,11 +21,7 @@ struct MediaTab: View {
             // Publishing sends this tab through the Summary and the Submit
             // tabs. Managing has neither, so it writes here.
             if state.mode == .managing { DirectApplyBar(target: .media) }
-            if let error = state.mediaError {
-                Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.red)
-                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 7))
-            }
+            if let error = state.mediaError { WarningNote(error) }
             ForEach(groups, id: \.1) { name, device in
                 mediaGroup(name, device: device)
             }
