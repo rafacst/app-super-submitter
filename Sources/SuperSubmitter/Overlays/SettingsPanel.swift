@@ -14,6 +14,7 @@ import SwiftUI
 struct SettingsPanel: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(Appearance.defaultsKey) private var appearance: Appearance = .system
     @AppStorage("pollIntervalMinutes") private var pollMinutes = 5
     @AppStorage("dryRunByDefault") private var dryRun = true
     @AppStorage("showYAMLToggle") private var showYAMLToggle = false
@@ -169,6 +170,16 @@ struct SettingsPanel: View {
 
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 13) {
+            SettingRow("Appearance") {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: Self.controlWidth)
+                .onChange(of: appearance) { appearance.apply() }
+            }
+
             SettingRow("Poll interval") {
                 Picker("Poll interval", selection: $pollMinutes) {
                     ForEach(Self.intervals, id: \.self) { Text("\($0) minutes").tag($0) }

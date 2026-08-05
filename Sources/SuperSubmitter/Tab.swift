@@ -32,6 +32,15 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
         case .managing: "dial.medium.fill"
         }
     }
+
+    /// Two jobs, two colours. The switch is the one control that changes
+    /// which tabs exist, so it earns a colour of its own.
+    var tint: Color {
+        switch self {
+        case .publishing: Theme.accentFill
+        case .managing: Theme.purpleFill
+        }
+    }
 }
 
 /// The tabs, in the order of the work. Spec section 16.3.
@@ -105,6 +114,33 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .reviews: selected ? "star.bubble.fill" : "star.bubble"
         case .analytics: selected ? "chart.xyaxis.line" : "chart.line.uptrend.xyaxis"
         case .health: selected ? "cross.case.fill" : "cross.case"
+        }
+    }
+
+    /// The colour of the tab in the sidebar.
+    ///
+    /// It carries no meaning, the way the four extra hues in `Theme` carry
+    /// none: a column of thirteen identical grey icons is one shape repeated,
+    /// and a colour per tab is thirteen places you can find by eye.
+    ///
+    /// Release is the exception and it is red on purpose. Red says
+    /// irreversible everywhere else in the app, and Release is the one tab
+    /// that is.
+    var tint: Color {
+        switch self {
+        case .stores: Theme.accent
+        case .build: Theme.purple
+        case .details: Theme.teal
+        case .media: Theme.pink
+        case .money: Theme.green
+        case .marketing: Theme.orange
+        case .reviewInfo: Theme.teal
+        case .plan: Theme.accent
+        case .submit: Theme.orange
+        case .release: Theme.red
+        case .reviews: Theme.yellow
+        case .analytics: Theme.purple
+        case .health: Theme.pink
         }
     }
 
