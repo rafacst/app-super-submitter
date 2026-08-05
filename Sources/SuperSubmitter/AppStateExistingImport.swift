@@ -42,7 +42,7 @@ extension AppState {
                     importedManifest.mergeAppleImport(listing)
                     snapshot.merge(listing, store: .apple)
                     skipped += listing.failures
-                    try await materializeImportedAssets(
+                    skipped += await materializeImportedAssets(
                         listing.assets, store: .apple, root: folder,
                         manifest: &importedManifest)
                 case .google:
@@ -55,13 +55,17 @@ extension AppState {
                     importedManifest.mergeGoogleImport(listing)
                     snapshot.merge(listing, store: .google)
                     skipped += listing.failures
-                    try await materializeImportedAssets(
+                    skipped += await materializeImportedAssets(
                         listing.assets, store: .google, root: folder,
                         manifest: &importedManifest)
                 }
             }
 
             try ManifestFile.save(importedManifest, to: manifestURL)
+            // Every app keeps its own picture of its own stores. Only one app
+            // is open at the end, so an import of five that held the picture
+            // in memory alone left four of them grey-less.
+            snapshot.save(toRoot: folder)
             // `link` activates the app, which clears the read state, so the
             // snapshot of the app that stays open is set after it.
             link(manifestAt: manifestURL)
@@ -136,28 +140,38 @@ extension AppState {
         }
     }
 
-    private func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,
-                                           root: URL, manifest: inout Manifest) async throws {
+    /// Downloads what the store shows and writes the paths into the manifest.
+    ///
+    /// One file that will not download costs that one file. It used to cost
+    /// the whole app: a single failed image threw out of the loop before the
+    /// save, so every description the import had already read was thrown away
+    /// with it and the folder was left without a `store.yaml`. The names of
+    /// the files that stayed behind are returned instead, and they reach the
+    /// developer in the same list as the reads the store refused.
+    func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,
+                                   root: URL, manifest: inout Manifest) async -> [String] {
+        var failures: [String] = []
         for asset in assets {
             let safeName = asset.fileName
                 .components(separatedBy: CharacterSet(charactersIn: "/:"))
                 .joined(separator: "-")
-            let relative = "Store Import/\(store.rawValue)/\(asset.locale)/\(asset.kind)/\(safeName)"
-            let destination = root.appendingPathComponent(relative)
-            try FileManager.default.createDirectory(
-                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if !FileManager.default.fileExists(atPath: destination.path) {
-                let (data, response) = try await URLSession.shared.data(from: asset.url)
-                if let http = response as? HTTPURLResponse,
-                   !(200..<300).contains(http.statusCode) {
-                    throw ConnectionError.http(http.statusCode,
-                        "Could not download \(asset.fileName) from \(store.storeName).")
-                }
-                try data.write(to: destination, options: .atomic)
+            let relative = "\(Self.importFolder)/\(store.rawValue)/\(asset.locale)"
+                + "/\(asset.kind)/\(safeName)"
+            do {
+                try await download(asset, to: root.appendingPathComponent(relative))
+            } catch {
+                failures.append("\(store.storeName) \(asset.kind) \(asset.fileName): "
+                    + error.localizedDescription)
+                continue
             }
             if let deviceClass = asset.deviceClass {
+                // Apple names a preview bucket after the same display type as
+                // a screenshot, so only the file says which one this is. A
+                // video in the screenshot list fails validation later, on a
+                // tab that never mentions the import.
                 manifest.addMediaPaths([relative], locale: asset.locale,
-                                       deviceClass: deviceClass)
+                                       deviceClass: deviceClass,
+                                       previews: StoreSnapshot.isVideo(asset.url))
             } else if asset.kind == "icon" {
                 var media = manifest.media ?? Manifest.Media()
                 media.icon = relative
@@ -168,5 +182,26 @@ extension AppState {
                 manifest.media = media
             }
         }
+        return failures
+    }
+
+    private func download(_ asset: ImportedStoreAsset, to destination: URL) async throws {
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard !FileManager.default.fileExists(atPath: destination.path) else { return }
+        let (data, response) = try await URLSession.shared.data(from: asset.url)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw ConnectionError.http(http.statusCode, "The store refused the file.")
+        }
+        try data.write(to: destination, options: .atomic)
+    }
+
+    /// Where the import puts what it downloads, relative to `store.yaml`.
+    /// The Media tab reads it to tell a file that came from the store from a
+    /// file the developer chose.
+    static let importFolder = "Store Import"
+
+    static func isImported(_ path: String) -> Bool {
+        path.hasPrefix("\(importFolder)/")
     }
 }

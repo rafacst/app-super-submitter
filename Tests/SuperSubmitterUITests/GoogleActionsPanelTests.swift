@@ -42,14 +42,22 @@ private func source(_ relativePath: String) throws -> String {
     #expect(build.contains("XcodeCloudPanel()"))
 }
 
-/// Managing writes the marketing resources on one button, so that button asks
-/// first. It is the only write in Managing that a publish flow would have
-/// shown a diff for.
-@Test func theMarketingApplyAsksBeforeItWrites() throws {
-    let marketing = try source("Sources/SuperSubmitter/Tabs/MarketingTab.swift")
+/// Managing writes on one button, so that button asks first. These are the
+/// writes that a publish flow would have shown a diff for.
+@Test func everyDirectApplyAsksBeforeItWrites() throws {
+    let bar = try source("Sources/SuperSubmitter/Tabs/DirectApplyBar.swift")
 
-    #expect(marketing.contains("confirmationDialog(\"Write these to the App Store?\""))
-    #expect(marketing.contains("state.applyMarketing()"))
+    #expect(bar.contains("confirmationDialog(\"Write these to \\(destination)?\""))
+    #expect(bar.contains("state.applyDirectly(target)"))
+
+    // Three tabs write, and each one goes through that bar rather than
+    // calling the runner itself.
+    for (file, target) in [("MarketingTab", ".marketing"), ("DetailsTab", ".listing"),
+                           ("MediaTab", ".media")] {
+        let tab = try source("Sources/SuperSubmitter/Tabs/\(file).swift")
+        #expect(tab.contains("DirectApplyBar(target: \(target))"),
+                "\(file) does not use the bar that asks first.")
+    }
 }
 
 @Test func theTwoOutwardFacingActionsAskBeforeTheyRun() throws {

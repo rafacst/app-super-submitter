@@ -8,6 +8,9 @@ struct DetailsTab: View {
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
+                // Publishing sends this tab through the Summary and the
+                // Submit tabs. Managing has neither, so it writes here.
+                if state.mode == .managing { DirectApplyBar(target: .listing) }
                 editor("Name", field: .name,
                        limit: BindingLimits.binding(for: .name, stores: state.stores))
                 googleOverrideEditor("Subtitle", shared: .subtitle,
@@ -54,10 +57,16 @@ struct DetailsTab: View {
                         multiline: Bool = false, tag: String? = nil) -> some View {
         let value = state.manifest.listingText(locale: state.locale, field: field)
         let overLimit = limit.map { value.count > $0 } ?? false
+        // Grey means "this is what the store already says". The developer
+        // types over it and it goes black, because the text no longer matches
+        // what the store holds and the run will write it.
+        let unchanged = state.storeSnapshot.isUnchanged(field, locale: state.locale,
+                                                        value: value)
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(.system(size: 11.5, weight: .medium))
                 if let tag { Tag(tag) }
+                if unchanged { KeptTag() }
                 Spacer()
                 if let limit {
                     Text("\(value.count) / \(limit)")
@@ -68,6 +77,7 @@ struct DetailsTab: View {
             if multiline {
                 TextEditor(text: state.listingBinding(field))
                     .font(.system(size: 13))
+                    .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
                     .scrollContentBackground(.hidden)
                     .padding(6)
                     .frame(minHeight: 90)
@@ -78,6 +88,7 @@ struct DetailsTab: View {
             } else {
                 TextField(title, text: state.listingBinding(field))
                     .textFieldStyle(.roundedBorder)
+                    .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
             }
             if overLimit {
                 Text("\(value.count - (limit ?? 0)) characters over the store limit. The value is not shortened automatically.")
@@ -180,6 +191,24 @@ struct Tag: View {
             .padding(.horizontal, 4)
             .overlay(RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+}
+
+/// The mark on a field that still says what the store says.
+///
+/// The grey text carries the message and this names it, because grey alone is
+/// a colour and a colour alone is not a label. Both stores hold this text, so
+/// the update sends nothing for this field.
+struct KeptTag: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "checkmark").font(.system(size: 8, weight: .bold))
+            Text("Kept").font(.system(size: 10, weight: .medium))
+        }
+        .foregroundStyle(Theme.text3)
+        .padding(.horizontal, 5).padding(.vertical, 1)
+        .background(Theme.sunken, in: Capsule())
+        .accessibilityLabel("Unchanged. The store already holds this text.")
     }
 }
 

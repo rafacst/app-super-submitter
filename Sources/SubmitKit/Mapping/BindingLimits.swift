@@ -1,6 +1,6 @@
 import Foundation
 
-public enum Store: String, Sendable, CaseIterable, Hashable, Identifiable {
+public enum Store: String, Codable, Sendable, CaseIterable, Hashable, Identifiable {
     case apple, google
 
     public var id: String { rawValue }

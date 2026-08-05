@@ -84,8 +84,12 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var modes: Set<Mode> {
         switch self {
         case .stores: [.publishing, .managing]
-        case .build, .details, .media, .money, .reviewInfo, .plan, .submit, .release:
-            [.publishing]
+        case .build, .money, .reviewInfo, .plan, .submit, .release: [.publishing]
+        // What the listing says and what it shows are the two things a
+        // manager changes most, and Managing had nowhere to show them: an
+        // imported app filled these tabs and the mode that imported it could
+        // not open either one. Each writes on its own button here.
+        case .details, .media: [.publishing, .managing]
         // Marketing edits a live listing, so it belongs to the manager. The
         // publishing plan still writes it when the manifest holds it, so an
         // import loses nothing.

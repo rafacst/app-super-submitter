@@ -27,14 +27,21 @@ import Testing
 
 /// The two modes describe two jobs. A publisher never wants a crash rate on
 /// the way to a submission, and a manager never wants a build step.
-@Test func theTwoModesShareOnlyTheStoresTab() {
+///
+/// They share the credentials and the two tabs that describe the listing. A
+/// manager changes a description and a screenshot more often than anything
+/// else, and Managing used to hold neither: an import filled both tabs and
+/// the mode that imported the app could open neither one.
+@Test func theTwoModesShareTheStoresAndTheListingTabs() {
     let publishing = Set(Tab.tabs(in: .publishing))
     let managing = Set(Tab.tabs(in: .managing))
 
-    #expect(publishing.intersection(managing) == [.stores])
+    #expect(publishing.intersection(managing) == [.stores, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
     #expect(Tab.tabs(in: .managing).map(\.title)
-        == ["Stores", "Marketing", "Reviews", "Analytics", "App health"])
+        == ["Stores", "Details", "Media", "Marketing", "Reviews", "Analytics", "App health"])
+    // Nothing that builds, plans, submits, or releases reaches a manager.
+    #expect(managing.isDisjoint(with: [.build, .money, .reviewInfo, .plan, .submit, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.
     #expect(Tab.allCases.allSatisfy { !$0.modes.isEmpty })
 }

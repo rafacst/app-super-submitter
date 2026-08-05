@@ -94,18 +94,23 @@ public extension Manifest.DeviceClass {
     /// Apple names a screenshot bucket by display type and Google names it by
     /// image type. Both land here, so the import and the editing tabs group
     /// live media the same way.
+    ///
+    /// The Apple half comes out of `screenshot-sizes.json`, the one table the
+    /// upload already reads. A hand-written copy sat here and drifted: it
+    /// missed `APP_IPHONE_69`, and it spelled the watch and the vision types
+    /// the way Apple does not. Every screenshot in those buckets was dropped
+    /// on the way in without a word.
     init?(storeBucket: String) {
         switch storeBucket {
-        case "phoneScreenshots", "APP_IPHONE_67", "APP_IPHONE_65",
-             "APP_IPHONE_61", "APP_IPHONE_58", "APP_IPHONE_55", "APP_IPHONE_47": self = .phone
+        case "phoneScreenshots": self = .phone
         case "sevenInchScreenshots": self = .tablet7
-        case "tenInchScreenshots", "APP_IPAD_PRO_3GEN_129", "APP_IPAD_PRO_129",
-             "APP_IPAD_PRO_3GEN_11": self = .tablet10
-        case "tvScreenshots", "APP_APPLE_TV": self = .tv
-        case "wearScreenshots", "APP_APPLE_WATCH_SERIES_10": self = .watch
-        case "APP_DESKTOP": self = .desktop
-        case "APP_VISION_PRO": self = .vision
-        default: return nil
+        case "tenInchScreenshots": self = .tablet10
+        case "tvScreenshots": self = .tv
+        case "wearScreenshots": self = .watch
+        default:
+            guard let derived = AssetInspector.deviceClass(forAppleDisplayType: storeBucket)
+            else { return nil }
+            self = derived
         }
     }
 }
