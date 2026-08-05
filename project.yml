@@ -129,6 +129,14 @@ targets:
       configs:
         Debug:
           LICENSING_BASE_URL: https://super-submitter-test.rafacst.me
+          # Signed, not ad-hoc. The file Keychain ties each item to the
+          # signature of the binary that wrote it, and an ad-hoc signature is
+          # the build's own hash, so every rebuild asked for the login
+          # password again. A Developer ID signature is the same requirement
+          # every time, so the developer allows it once.
+          CODE_SIGN_IDENTITY: Developer ID Application
+          DEVELOPMENT_TEAM: 88BXH8KNVZ
+          CODE_SIGN_STYLE: Manual
   SubmitKitTests:
     type: bundle.unit-test
     platform: macOS
