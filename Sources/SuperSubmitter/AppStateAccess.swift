@@ -44,34 +44,49 @@ extension AppState {
     /// Supabase owns the account session. The licensing service receives only
     /// its short-lived access token.
     func configureAccess() {
-        guard let config = LicensingConfig.current else { return }
-        let auth = SupabaseAuth(configuration: config.auth)
+        guard let auth = LicensingConfig.auth.map({ SupabaseAuth(configuration: $0) }) else { return }
         authController = auth
-        let controller = AccessController(
-            client: HTTPLicensingClient(base: config.baseURL),
-            verifier: config.verifier,
-            store: KeychainEntitlementStore(),
-            token: { try await auth.accessToken() })
+        // The account works without the licensing half. Only the entitlement
+        // does not, and a build with no licensing service stays on free access.
+        let controller = LicensingConfig.current.map { config in
+            AccessController(
+                client: HTTPLicensingClient(base: config.baseURL),
+                verifier: config.verifier,
+                store: KeychainEntitlementStore(),
+                token: { try await auth.accessToken() })
+        }
         accessController = controller
-        access = controller
+        if let controller { access = controller }
         Task {
             accountEmail = await auth.email
-            await controller.loadCachedDocument()
-            entitlement = await controller.current
+            await controller?.loadCachedDocument()
+            if let controller { entitlement = await controller.current }
             await refreshEntitlement()
         }
     }
 
+    /// Whether this build can reach an account service at all.
+    var accountServiceReady: Bool { authController != nil }
+
     func openAccount() {
         accountEmailInput = accountEmail ?? ""
         accountPassword = ""
-        accountMessage = nil
+        accountMessage = accountServiceReady ? nil : Self.noAccountService
         showAccount = true
     }
 
+    static let noAccountService =
+        "This build carries no account service address, so it cannot sign in. Build it with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY."
+
     func submitAccount() async {
         let email = accountEmailInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let auth = authController, !email.isEmpty, !accountPassword.isEmpty else { return }
+        guard !email.isEmpty, !accountPassword.isEmpty else { return }
+        // A missing controller used to return here in silence, and the button
+        // then looked broken. Say why instead.
+        guard let auth = authController else {
+            accountMessage = Self.noAccountService
+            return
+        }
         accountBusy = true
         accountMessage = nil
         defer { accountBusy = false }
@@ -89,6 +104,35 @@ extension AppState {
             } else {
                 accountEmail = try await auth.signIn(email: email, password: accountPassword)
             }
+            accessController?.forgetLater()
+            entitlement = .free(at: Date())
+            await refreshEntitlement()
+            accountPassword = ""
+            showAccount = false
+        } catch {
+            accountMessage = error.localizedDescription
+        }
+    }
+
+    /// Signs in through an identity provider.
+    ///
+    /// The password is typed into the provider's own page, so this app never
+    /// sees one. Everything after the callback is the same path the email
+    /// form takes, so a session from either door behaves alike.
+    func signIn(with provider: SupabaseOAuthProvider) async {
+        guard let auth = authController else {
+            accountMessage = Self.noAccountService
+            return
+        }
+        accountBusy = true
+        accountMessage = nil
+        defer { accountBusy = false }
+        let request = auth.authorization(with: provider, redirectTo: OAuthSession.callback)
+        do {
+            // A closed window is a choice, not a failure. Say nothing.
+            guard let callback = try await OAuthSession().run(request.url) else { return }
+            accountEmail = try await auth.completeOAuth(callback: callback,
+                                                        verifier: request.verifier)
             accessController?.forgetLater()
             entitlement = .free(at: Date())
             await refreshEntitlement()
