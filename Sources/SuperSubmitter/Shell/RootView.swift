@@ -25,7 +25,8 @@ struct RootView: View {
         // Without this the panel starts below the traffic lights instead of
         // carrying them, and the shell reads as a bar above a panel.
         .ignoresSafeArea(.container, edges: .top)
-        .sheet(isPresented: $state.showSettings) { SettingsPanel() }
+        .sheet(isPresented: $state.showSettings,
+               onDismiss: { state.openPendingPaywall() }) { SettingsPanel() }
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
             OnboardingPanel()
         }
