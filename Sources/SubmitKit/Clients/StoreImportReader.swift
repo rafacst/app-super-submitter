@@ -1,5 +1,13 @@
 import Foundation
 
+private extension Optional where Wrapped == String {
+    /// This value when it says something, and the other one otherwise. An
+    /// empty string is a store answering "nothing here", the same as nil.
+    func orFilled(_ other: String?) -> String? {
+        (self?.isEmpty == false) ? self : other
+    }
+}
+
 /// Reads an app that already lives in a store, so a new workspace opens with
 /// what the store holds instead of an empty form.
 ///
@@ -58,42 +66,53 @@ public struct StoreImportReader: Sendable {
 
         let versions = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
-        let editable = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
-                            "REJECTED", "METADATA_REJECTED"])
-        let version = versions["data"].array.first {
-            let state = $0["attributes"]["appVersionState"].string
-                ?? $0["attributes"]["appStoreState"].string ?? ""
-            return editable.contains(state)
-        } ?? versions["data"].array.first
+        let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
+                                  "REJECTED", "METADATA_REJECTED"])
+        // The same set `StateReader` calls released. A version pulled from
+        // sale still shipped, and its text is still the text the app had.
+        let releasedStates = Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION",
+                                  "PENDING_DEVELOPER_RELEASE", "REMOVED_FROM_SALE",
+                                  "DEVELOPER_REMOVED_FROM_SALE"])
+        func state(_ version: JSON) -> String {
+            version["attributes"]["appVersionState"].string
+                ?? version["attributes"]["appStoreState"].string ?? ""
+        }
+        let editableVersion = versions["data"].array.first { editableStates.contains(state($0)) }
+        let liveVersion = versions["data"].array.first { releasedStates.contains(state($0)) }
+        // The editable version decides the number the developer is about to
+        // submit, so it still leads.
+        let version = editableVersion ?? liveVersion ?? versions["data"].array.first
         if let version, let versionID = version["id"].string {
             result.versionName = version["attributes"]["versionString"].string
             result.appleReleaseType = version["attributes"]["releaseType"].string
 
-            let localizations = JSON(data: try await api.apple(
-                "GET",
-                "/v1/appStoreVersions/\(versionID)/appStoreVersionLocalizations?limit=200").data)
-            var assets: [ImportedStoreAsset] = []
-            for item in localizations["data"].array {
-                let attributes = item["attributes"]
-                guard let code = attributes["locale"].string,
-                      let localizationID = item["id"].string else { continue }
-                var locale = result.locales[code] ?? .init()
-                locale.description = attributes["description"].string
-                locale.whatsNew = attributes["whatsNew"].string
-                locale.keywords = attributes["keywords"].string
-                locale.promotionalText = attributes["promotionalText"].string
-                locale.supportURL = attributes["supportUrl"].string
-                locale.marketingURL = attributes["marketingUrl"].string
-                result.locales[code] = locale
+            var content = await versionContent(versionID: versionID, failures: &failures)
 
-                assets += await attempt("App Store screenshots for \(code)", &failures) {
-                    try await appleScreenshots(localizationID: localizationID, locale: code)
-                } ?? []
-                assets += await attempt("App Store previews for \(code)", &failures) {
-                    try await applePreviews(localizationID: localizationID, locale: code)
-                } ?? []
+            // What the customer reads today, for every field the editable
+            // version leaves empty.
+            //
+            // An editable version can be an empty shell: App Store Connect
+            // creates one with no text and no screenshots, and so does this
+            // app's own apply. Reading that shell literally reported an app
+            // with no description and no media while its store page was full,
+            // and the developer then saw an update flow offering to replace a
+            // listing it had failed to read.
+            if let liveVersion, let liveID = liveVersion["id"].string, liveID != versionID {
+                let live = await versionContent(versionID: liveID, failures: &failures)
+                content.fill(from: live)
             }
-            result.assets = assets
+
+            for (code, locale) in content.locales {
+                var target = result.locales[code] ?? .init()
+                target.description = locale.description
+                target.whatsNew = locale.whatsNew
+                target.keywords = locale.keywords
+                target.promotionalText = locale.promotionalText
+                target.supportURL = locale.supportURL
+                target.marketingURL = locale.marketingURL
+                result.locales[code] = target
+            }
+            result.assets = content.assets
 
             if let detail = await attempt("App Store review details", &failures, {
                 JSON(data: try await api.apple(
@@ -240,6 +259,69 @@ public struct StoreImportReader: Sendable {
             : try await client.subscriptions(packageName: packageName, productIds: planIds)
         return (ids.compactMap { products[$0] }.map(Self.googlePurchase),
                 planIds.compactMap { plans[$0] }.map(Self.googleSubscription))
+    }
+
+    // MARK: - One version's text and media
+
+    /// The localizations of one App Store version, and the files they show.
+    struct VersionContent {
+        var locales: [String: ImportedStoreListing.Locale] = [:]
+        var assets: [ImportedStoreAsset] = []
+
+        /// Takes from `other` whatever this version does not have.
+        ///
+        /// Field by field, so a half-written draft keeps every word the
+        /// developer typed and still gains the paragraphs they did not.
+        /// Media goes by locale: a locale with no screenshots on this version
+        /// shows the ones the store shows, and a locale that has its own set
+        /// keeps it whole rather than mixing two.
+        mutating func fill(from other: VersionContent) {
+            for (code, source) in other.locales {
+                var target = locales[code] ?? .init()
+                target.description = target.description.orFilled(source.description)
+                target.whatsNew = target.whatsNew.orFilled(source.whatsNew)
+                target.keywords = target.keywords.orFilled(source.keywords)
+                target.promotionalText = target.promotionalText.orFilled(source.promotionalText)
+                target.supportURL = target.supportURL.orFilled(source.supportURL)
+                target.marketingURL = target.marketingURL.orFilled(source.marketingURL)
+                locales[code] = target
+            }
+            let covered = Set(assets.map(\.locale))
+            assets += other.assets.filter { !covered.contains($0.locale) }
+        }
+    }
+
+    private func versionContent(versionID: String,
+                                failures: inout [String]) async -> VersionContent {
+        var content = VersionContent()
+        guard let localizations = await attempt("App Store text for version \(versionID)",
+                                                &failures, {
+            JSON(data: try await api.apple(
+                "GET",
+                "/v1/appStoreVersions/\(versionID)/appStoreVersionLocalizations?limit=200").data)
+        }) else { return content }
+
+        for item in localizations["data"].array {
+            let attributes = item["attributes"]
+            guard let code = attributes["locale"].string,
+                  let localizationID = item["id"].string else { continue }
+            var locale = ImportedStoreListing.Locale()
+            locale.description = attributes["description"].string
+            locale.whatsNew = attributes["whatsNew"].string
+            locale.keywords = attributes["keywords"].string
+            locale.promotionalText = attributes["promotionalText"].string
+            locale.supportURL = attributes["supportUrl"].string
+            locale.marketingURL = attributes["marketingUrl"].string
+            content.locales[code] = locale
+
+            content.assets += await attempt("App Store screenshots for \(code)", &failures) {
+                try await appleScreenshots(localizationID: localizationID, locale: code)
+            } ?? []
+            content.assets += await attempt("App Store previews for \(code)", &failures) {
+                try await applePreviews(localizationID: localizationID, locale: code)
+            } ?? []
+        }
+        return content
     }
 
     // MARK: - The optional reads
