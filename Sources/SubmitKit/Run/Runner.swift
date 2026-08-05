@@ -36,6 +36,8 @@ public actor Runner {
     let root: URL?
     let api: StoreAPI
     let dryRun: Bool
+    /// The paywall boundary for an apply. A dry run never asks it anything.
+    let access: any AccessGate
 
     private let emit: @Sendable (RunEvent) -> Void
     private let log: RunLog?
@@ -62,14 +64,21 @@ public actor Runner {
     var createdProviderObjects: [(kind: String, id: String)] = []
     let reviewerCredential: ReviewerCredential?
 
+    /// - Parameter session: the seam. The tests hand in a stubbed session and
+    ///   assert on the exact calls a step makes, which needs no network.
+    /// - Parameter access: the paywall boundary. It carries no default,
+    ///   because a default would be inherited by the next caller somebody adds
+    ///   and an inherited gate is an open one.
     public init(plan: PlanResult, manifest: Manifest, actual: ActualState, root: URL?,
-                credentials: StoreCredentials, dryRun: Bool,
+                credentials: StoreCredentials, dryRun: Bool, access: any AccessGate,
+                session: URLSession = .shared,
                 emit: @escaping @Sendable (RunEvent) -> Void) {
         self.plan = plan
         self.manifest = manifest
         self.actual = actual
         self.root = root
         self.dryRun = dryRun
+        self.access = access
         self.emit = emit
         self.reviewerCredential = credentials.reviewer
         let runLog = root.flatMap { try? RunLog(root: $0) }
@@ -79,7 +88,7 @@ public actor Runner {
             emit(.log(call.line(at: now)))
             await runLog?.append(call, at: now)
         }
-        self.api = StoreAPI(credentials: credentials, record: sink)
+        self.api = StoreAPI(credentials: credentials, record: sink, session: session)
         self.appleVersionID = actual.apple?.versionId
         self.appleInfoID = actual.apple?.appInfoId
         self.appleInfoLocalizationIDs = actual.apple?.infoLocales
@@ -91,6 +100,21 @@ public actor Runner {
     /// - Parameter from: the step to start at. A retry after a failure starts
     ///   at the failed step, and every earlier step already landed.
     public func run(from start: Int = 0) async {
+        // The lowest boundary an apply can be stopped at. The screen checks
+        // first and stops earlier, but a stale screen, a menu command, or a
+        // second entry point added later all still arrive here.
+        if !dryRun {
+            do {
+                try await access.authorize(.storeWrite)
+            } catch {
+                emit(.step(index: start, state: .failed, meta: ""))
+                emit(.failure(RunFailure(
+                    stepIndex: start, system: plan.steps.first?.system ?? .apple,
+                    message: error.localizedDescription, canUndoGoogleEdit: false)))
+                return
+            }
+        }
+
         for index in plan.steps.indices where index >= start {
             let step = plan.steps[index]
             guard !Task.isCancelled else {

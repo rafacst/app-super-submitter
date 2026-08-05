@@ -371,6 +371,13 @@ extension BuildFlow {
 
     func startUpload() {
         guard let candidate, let app else { return }
+        // Building, archiving, and inspecting are free. Only the send is not.
+        // The artifact is kept and the run stays where it is, so pressing
+        // upload again after paying costs no second build.
+        guard app.requirePaid(.storeUpload, .upload) else {
+            showUploadConfirmation = false
+            return
+        }
         showUploadConfirmation = false
         failure = nil
         uploadProgress = 0
@@ -429,6 +436,7 @@ extension BuildFlow {
             exportPath: try storage.exportURL(runID: run.id), optionsPlist: options,
             authentication: authentication,
             allowProvisioningUpdates: allowProvisioningUpdates,
+            access: app?.access ?? UnconfiguredAccess(),
             onLine: { [weak self] _, line in
                 Task { @MainActor in self?.append(line) }
             })
@@ -526,6 +534,7 @@ extension BuildFlow {
             bundle: candidate.artifactURL,
             expectedVersionCode: versionCode,
             versionName: candidate.marketingVersion,
+            access: app.access,
             onEditCreated: { [weak self] editID in
                 await self?.rememberGoogleEdit(editID)
             },

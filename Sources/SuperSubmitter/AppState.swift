@@ -131,6 +131,30 @@ final class AppState {
     var releaseSheet: Store?
     var showAddLocale = false
 
+    // Paid access. Every gate reads `entitlement`; nothing keeps its own
+    // `isPaid` boolean. See AppStateAccess.swift.
+    /// The gate every mutation boundary in SubmitKit receives. It refuses
+    /// until `configureAccess` replaces it.
+    @ObservationIgnored var access: any AccessGate = UnconfiguredAccess()
+    @ObservationIgnored var accessController: AccessController?
+    @ObservationIgnored var authController: SupabaseAuth?
+    var entitlement = Entitlement.free(at: .distantPast)
+    var paywall: PaywallTrigger?
+    var billingPlans: BillingPlans?
+    var billingOperation: BillingOperation = .idle
+    var billingMessage: String?
+    var selectedPlan = "annual"
+    var promotionCode = ""
+    var promotionPreview: PromotionPreview?
+    /// The address the Supabase account is signed in with.
+    var accountEmail: String?
+    var showAccount = false
+    var accountCreating = false
+    var accountEmailInput = ""
+    var accountPassword = ""
+    var accountBusy = false
+    var accountMessage: String?
+
     // Tab 1.
     var appleGuideOpen = false
     var googleGuideOpen = false

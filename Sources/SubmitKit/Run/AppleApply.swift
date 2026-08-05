@@ -23,6 +23,26 @@ extension Runner {
         ]).data)
         guard let id = created["data"]["id"].string else { throw RunError.missingVersion }
         appleVersionID = id
+
+        // The run seeded the localization ids from the read, and that read
+        // found no version to write to. Whatever sits in the map now belongs
+        // to another version, and every later step writes through this map:
+        // `appleVersionLocale` patches these ids, and `appleScreenshots`
+        // deletes and re-uploads inside them. A stale id here would edit the
+        // listing the customers are reading.
+        //
+        // Apple pre-fills a new version from the last one, so this read
+        // usually returns the copied localizations and the later steps patch
+        // them. When it returns nothing, they create their own. Both are
+        // correct, and neither one guesses.
+        appleVersionLocalizationIDs = [:]
+        let localizations = JSON(data: try await api.apple(
+            "GET", "/v1/appStoreVersions/\(id)/appStoreVersionLocalizations?limit=200").data)
+        for item in localizations["data"].array {
+            guard let locale = item["attributes"]["locale"].string,
+                  let localizationID = item["id"].string else { continue }
+            appleVersionLocalizationIDs[locale] = localizationID
+        }
     }
 
     func appleVersionAttributes() async throws {

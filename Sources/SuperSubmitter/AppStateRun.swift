@@ -245,6 +245,9 @@ extension AppState {
 
     var canApply: Bool {
         guard let plan, !plan.isEmpty else { return false }
+        // A dry run writes nothing, so it stays free. Anything else needs the
+        // capability, and `Runner` asks again before the first request.
+        guard dryRun || can(.storeWrite) else { return false }
         return !plan.isBlocked && unacknowledgedWarnings == 0 && !isRunning
     }
 
@@ -259,6 +262,8 @@ extension AppState {
     func startRun(from start: Int = 0) {
         guard let plan, !plan.steps.isEmpty else { return }
         guard !isRunning else { return }
+        // A retry skips `canApply`, so the paywall check cannot live in it.
+        guard dryRun || requirePaid(.storeWrite, .apply) else { return }
         guard start > 0 || canApply else { return }
         let previous = runTask
         previous?.cancel()
@@ -300,7 +305,7 @@ extension AppState {
         runContinuation = events.continuation
         let runner = Runner(
             plan: plan, manifest: manifest, actual: actualState, root: manifestRoot,
-            credentials: credentials, dryRun: dryRun,
+            credentials: credentials, dryRun: dryRun, access: access,
             emit: { event in events.continuation.yield(event) })
         self.runner = runner
         eventTask = Task { @MainActor [weak self] in
@@ -502,9 +507,10 @@ extension AppState {
     /// One store, one button, one failure. Spec 7.9 and 11.3.
     func release(_ store: Store) async {
         guard releasing == nil else { return }
+        guard requirePaid(.storeRelease, .release) else { return }
         releasing = store
         releaseError = nil
-        let client = ReleaseClient(api: readOnlyAPI())
+        let client = ReleaseClient(api: readOnlyAPI(), access: access)
         do {
             switch store {
             case .apple:
@@ -566,9 +572,10 @@ extension AppState {
     /// The other half of `release`. One store, one button, one failure.
     func undoRelease(_ store: Store) async {
         guard releasing == nil else { return }
+        guard requirePaid(.storeRelease, .release) else { return }
         releasing = store
         releaseError = nil
-        let client = ReleaseClient(api: readOnlyAPI())
+        let client = ReleaseClient(api: readOnlyAPI(), access: access)
         do {
             switch store {
             case .apple:

@@ -4,7 +4,10 @@
     "specular-location"
   ],
   "fill" : {
-    "automatic-gradient" : "display-p3:0.32755,0.28338,0.86189,1.00000"
+    "linear-gradient" : [
+      "display-p3:0.25466,0.20867,0.96997,1.00000",
+      "display-p3:0.51400,0.86189,0.67914,1.00000"
+    ]
   },
   "groups" : [
     {

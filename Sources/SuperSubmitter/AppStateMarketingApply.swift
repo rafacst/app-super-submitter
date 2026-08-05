@@ -44,6 +44,9 @@ extension AppState {
     /// second press writes only what is still missing.
     func applyMarketing() {
         guard !marketingApplyRunning else { return }
+        // These rows land in App Store Connect, so they are a store write like
+        // any other. Reading and editing them stays free.
+        guard requirePaid(.storeWrite, .marketing) else { return }
         marketingApplyState = .running
         marketingApplyMessage = ""
         let generation = stateGeneration
@@ -66,7 +69,7 @@ extension AppState {
             let box = FailureBox()
             let runner = Runner(
                 plan: only, manifest: manifest, actual: actualState, root: manifestRoot,
-                credentials: credentials, dryRun: false,
+                credentials: credentials, dryRun: false, access: access,
                 emit: { event in
                     if case .failure(let failure) = event { box.record(failure.message) }
                     if case .providerFailed(let message) = event { box.record(message) }
