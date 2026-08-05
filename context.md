@@ -28,6 +28,10 @@ It also means no backup exists and none is needed yet. The day that stops
 being true is the day the product is announced, so the backup job is a launch
 blocker rather than a today blocker. See `supabase-auth-setup.md` section 6.
 
+Nothing ships at the moment either. The GitHub repository that carried the
+releases was deleted on 2026-08-05 and a public one returns later. Section 2.1
+holds what that costs and what has to be in place first.
+
 Keep this paragraph honest. When the first real user signs in, edit it.
 
 ## 2. Build, test, run
@@ -66,6 +70,32 @@ test host wants and the run fails for that reason alone.
 |---|---|---|
 | `origin` (GitLab) | The source code | Push whenever you like |
 | `github` | The release channel | **Never push without the maintainer asking for that push** |
+
+### The GitHub repository does not exist right now
+
+`rafacst/super-submitter-app` was **deleted on 2026-08-05**, on purpose, to
+start its public history from scratch. Its eight releases and its five Actions
+secrets went with it.
+
+The local `github` remote still points at that address, so a push to it fails
+with "repository not found". That failure is the correct outcome today. Do not
+work around it.
+
+A public GitHub repository is coming back later. When it does:
+
+- **The same owner and name, `rafacst/super-submitter-app`.** `SUFeedURL` in
+  `project.yml` is inside every bundle already shipped, and a different name
+  orphans each of them for good.
+- **All five secrets go in before the first push.** The workflow runs on every
+  push to `main`, so the first one cuts a release immediately and a missing
+  secret leaves a failed run and a tag pointing at nothing. `RELEASING.md`
+  section 4 lists them, and the reset section at the end of that file holds the
+  whole procedure.
+- The Sparkle private key survived, in the login keychain under the service
+  `https://sparkle-project.org`. It is the one thing that could not have been
+  replaced, because a GitHub secret cannot be read back.
+
+Until that repository exists, GitLab holds everything and nothing ships.
 
 Every push to `main` on **github** runs `.github/workflows/release.yml`, which
 signs, notarizes, and publishes a GitHub release plus the Sparkle appcast that
