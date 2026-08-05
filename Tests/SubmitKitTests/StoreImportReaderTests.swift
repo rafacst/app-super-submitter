@@ -116,9 +116,71 @@ struct StoreImportReaderTests {
         #expect(listing.purchases.map(\.id) == ["com.example.pro"])
         // The reads that answered 404 cost their own block and nothing else.
         #expect(!listing.failures.isEmpty)
-        #expect(!ImportStubProtocol.state.requested.contains {
-            $0.contains("/v1/appStoreVersions/v-live/")
-        })
+    }
+
+    /// The bug this guards, and it is the same bug one turn further on. The
+    /// import preferred the editable version, which was right, and then took
+    /// it literally, which was not. An editable version can be an empty
+    /// shell: App Store Connect creates one with no text and no screenshots,
+    /// and so does this app's own apply. A store page with 3699 characters of
+    /// description and five screenshots imported as a blank Details tab and
+    /// an empty Media tab, and nothing said why.
+    @Test func anEmptyDraftFallsBackToWhatTheStoreShowsToday() async throws {
+        ImportStubProtocol.state.configure([
+            "/v1/apps/7": #"{"data":{"attributes":{"primaryLocale":"en-US","bundleId":"com.example.app"}}}"#,
+            "/v1/apps/7/appInfos?limit=200": """
+            {"data":[{"id":"info","attributes":{"appStoreState":"PREPARE_FOR_SUBMISSION"}}]}
+            """,
+            "/v1/appInfos/info/appInfoLocalizations?limit=200": """
+            {"data":[{"id":"il","attributes":{"locale":"en-US","name":"DeckDeckDeck",
+                      "subtitle":"Social client for Bluesky"}}]}
+            """,
+            "/v1/apps/7/appStoreVersions?limit=200": """
+            {"data":[{"id":"v-draft","attributes":{"versionString":"1.2",
+                      "appVersionState":"PREPARE_FOR_SUBMISSION"}},
+                     {"id":"v-live","attributes":{"versionString":"1.4",
+                      "appVersionState":"READY_FOR_SALE"}}]}
+            """,
+            // The draft carries the keywords and the URLs and nothing else,
+            // which is exactly the shape the real account was in.
+            "/v1/appStoreVersions/v-draft/appStoreVersionLocalizations?limit=200": """
+            {"data":[{"id":"vl-draft","attributes":{"locale":"en-US","description":"",
+                      "keywords":"atproto,deck,columns",
+                      "supportUrl":"https://example.com/support"}}]}
+            """,
+            "/v1/appStoreVersions/v-live/appStoreVersionLocalizations?limit=200": """
+            {"data":[{"id":"vl-live","attributes":{"locale":"en-US",
+                      "description":"DeckDeckDeck turns Bluesky into a deck of live columns.",
+                      "whatsNew":"A secret menu.","keywords":"old,keywords",
+                      "marketingUrl":"https://example.com/"}}]}
+            """,
+            "/v1/appStoreVersionLocalizations/vl-live/appScreenshotSets?include=appScreenshots&limit=50": """
+            {"data":[{"id":"set","attributes":{"screenshotDisplayType":"APP_DESKTOP"}}],
+             "included":[{"type":"appScreenshots","id":"s1",
+                          "relationships":{"appScreenshotSet":{"data":{"id":"set"}}},
+                          "attributes":{"fileName":"one.png",
+                            "imageAsset":{"templateUrl":"https://example.com/{w}x{h}.{f}",
+                                          "width":2880,"height":1800}}}]}
+            """,
+        ])
+
+        let listing = try await StoreImportReader(
+            credentials: StoreCredentials(apple: testCredential()),
+            session: importStubSession()).apple(appID: "7")
+
+        // The number stays the one the developer is about to submit.
+        #expect(listing.versionName == "1.2")
+        // The words come from the version that has them.
+        #expect(listing.locales["en-US"]?.description
+            == "DeckDeckDeck turns Bluesky into a deck of live columns.")
+        #expect(listing.locales["en-US"]?.whatsNew == "A secret menu.")
+        // The draft still wins wherever it says something of its own.
+        #expect(listing.locales["en-US"]?.keywords == "atproto,deck,columns")
+        #expect(listing.locales["en-US"]?.supportURL == "https://example.com/support")
+        #expect(listing.locales["en-US"]?.marketingURL == "https://example.com/")
+        // The screenshots the customer sees today, on a draft that has none.
+        #expect(listing.assets.count == 1)
+        #expect(listing.assets.first?.deviceClass == .desktop)
     }
 
     @Test func anImportedListingFillsTheManifestTheDetailsTabReads() async throws {

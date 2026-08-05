@@ -32,13 +32,20 @@ extension AppState {
                 switch candidate.store {
                 case .apple:
                     guard let appleCredential else { continue }
+                    // The platforms the picker read off the store, not the
+                    // `[.ios]` default. Every Mac app imported so far was
+                    // written into `store.yaml` as an iPhone app.
+                    let platforms = candidate.platforms.isEmpty
+                        ? [Manifest.Platform.ios] : candidate.platforms
                     importedManifest.setAppleApp(appID: candidate.remoteID,
-                                                 bundleID: candidate.identifier)
+                                                 bundleID: candidate.identifier,
+                                                 platforms: platforms)
                     let listing = try await client.importApple(
                         appID: candidate.remoteID, credential: appleCredential)
                     importedManifest.setAppleApp(
                         appID: candidate.remoteID,
-                        bundleID: listing.bundleID ?? candidate.identifier)
+                        bundleID: listing.bundleID ?? candidate.identifier,
+                        platforms: platforms)
                     importedManifest.mergeAppleImport(listing)
                     snapshot.merge(listing, store: .apple)
                     skipped += listing.failures
