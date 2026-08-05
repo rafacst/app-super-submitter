@@ -8,9 +8,11 @@ import SubmitKit
 /// beside the value the developer is about to write, so "what is live" and
 /// "what I will send" are never the same box.
 ///
-/// ponytail: memory only. It is a picture of a remote system, and a picture
-/// saved to disk goes stale without saying so. A read refreshes it.
-struct StoreSnapshot: Equatable {
+/// It is saved beside `store.yaml`, under `.super-submitter/`, because the
+/// editing tabs grey every field that still matches the store and a field
+/// cannot go grey against a picture the app forgot when it quit. `readAt`
+/// travels with it, so the age of the picture is always on the screen.
+struct StoreSnapshot: Codable, Equatable {
     /// store -> locale -> field -> the text the store holds.
     private(set) var text: [Store: [String: [ListingTextField: String]]] = [:]
     /// store -> locale -> device class -> the images the store shows, in order.
@@ -42,6 +44,42 @@ struct StoreSnapshot: Equatable {
 
     func previews(locale: String, deviceClass: Manifest.DeviceClass) -> [URL] {
         previews[locale]?[deviceClass] ?? []
+    }
+
+    /// True when sending `value` would change nothing anywhere.
+    ///
+    /// Every store that holds this field has to hold this exact text. One
+    /// store that differs is one write the run still makes, so the field is
+    /// not unchanged and the tab must not say it is. A field no store holds
+    /// answers false: nothing is known, so nothing is claimed.
+    func isUnchanged(_ field: ListingTextField, locale: String, value: String) -> Bool {
+        let live = text(field, locale: locale)
+        guard !live.isEmpty else { return false }
+        return live.allSatisfy { $0.value == value }
+    }
+
+    // MARK: - Disk
+
+    /// Beside `store.yaml`, in the one directory the app is allowed to write.
+    private static let fileName = ".super-submitter/store-snapshot.json"
+
+    static func load(fromRoot root: URL?) -> StoreSnapshot {
+        guard let root,
+              let data = try? Data(contentsOf: root.appendingPathComponent(fileName)),
+              let stored = try? JSONDecoder().decode(StoreSnapshot.self, from: data)
+        else { return StoreSnapshot() }
+        return stored
+    }
+
+    /// A cache write, so a failure costs the grey fields and never the edit
+    /// the developer just made.
+    func save(toRoot root: URL?) {
+        guard let root else { return }
+        let url = root.appendingPathComponent(Self.fileName)
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                 withIntermediateDirectories: true)
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     // MARK: - The two sources
@@ -108,7 +146,7 @@ struct StoreSnapshot: Equatable {
             guard let device = asset.deviceClass else { continue }
             // Apple names a video bucket by the same display type as a
             // screenshot, so the file extension tells the two apart.
-            if store == .apple, Self.videoExtensions.contains(asset.url.pathExtension.lowercased()) {
+            if store == .apple, Self.isVideo(asset.url) {
                 previews[asset.locale, default: [:]][device, default: []].append(asset.url)
             } else {
                 screenshots[store, default: [:]][asset.locale, default: [:]][device, default: []]
@@ -118,6 +156,14 @@ struct StoreSnapshot: Equatable {
     }
 
     private static let videoExtensions: Set<String> = ["mov", "m4v", "mp4"]
+
+    /// Apple names a preview bucket after the same display type as a
+    /// screenshot, so the file extension is the only thing that tells a video
+    /// from an image. The import asks the same question when it files what it
+    /// downloaded.
+    static func isVideo(_ url: URL) -> Bool {
+        videoExtensions.contains(url.pathExtension.lowercased())
+    }
 
     private mutating func set(_ store: Store, _ locale: String,
                               _ values: [ListingTextField: String?]) {

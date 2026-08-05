@@ -131,9 +131,48 @@ public enum AssetInspector {
     public static func appleDisplayType(for info: ImageAssetInfo,
                                         deviceClass: Manifest.DeviceClass) throws -> String? {
         if deviceClass == .vision { return "APP_APPLE_VISION_PRO" }
-        let (short, long) = normalized(info.width, info.height)
-        return try catalog().appleDisplayTypes["\(short)x\(long)"]
+        return try catalog().appleDisplayTypes[sizeKey(info.width, info.height)]
     }
+
+    /// The device class behind an Apple `screenshotDisplayType`.
+    ///
+    /// It comes out of the same table the upload uses. A second hand-written
+    /// list is what broke the import: it never named `APP_IPHONE_69`, so the
+    /// 6.9 inch set that every current app ships vanished on the way in, and
+    /// the Media tab opened empty on an app whose store is full.
+    ///
+    /// Nil for an unknown type, so a display type Apple adds tomorrow costs
+    /// that one bucket and never the import.
+    public static func deviceClass(forAppleDisplayType type: String) -> Manifest.DeviceClass? {
+        appleDeviceClasses[type]
+    }
+
+    /// Built once. The catalog is a file read and this runs per screenshot.
+    private static let appleDeviceClasses: [String: Manifest.DeviceClass] = {
+        guard let catalog = try? catalog() else { return [:] }
+        var result: [String: Manifest.DeviceClass] = [
+            // No size row of its own: vision shares 3840 x 2160 with the TV,
+            // so `appleDisplayType` special-cases it and so does this.
+            "APP_APPLE_VISION_PRO": .vision,
+            // The pre-3rd-generation 12.9 inch iPad. Apple still answers with
+            // it for an older screenshot set, and it shares its pixels with
+            // `APP_IPAD_PRO_3GEN_129`, so no size row names it.
+            "APP_IPAD_PRO_129": .tablet10,
+        ]
+        // In `allCases` order, not dictionary order, and the first class to
+        // claim a display type keeps it. The TV and the vision share 3840 x
+        // 2160, so an unordered walk would hand `APP_APPLE_TV` to whichever
+        // one the hash table listed first that day.
+        for deviceClass in Manifest.DeviceClass.allCases {
+            for size in catalog.apple[deviceClass.rawValue] ?? [] where size.count == 2 {
+                guard let type = catalog.appleDisplayTypes[sizeKey(size[0], size[1])] else {
+                    continue
+                }
+                if result[type] == nil { result[type] = deviceClass }
+            }
+        }
+        return result
+    }()
 
     /// The Google `imageType`. Google sorts by device class, so this needs no
     /// dimensions. Spec section 6.3.
@@ -175,7 +214,16 @@ public enum AssetInspector {
               let catalog = try? JSONDecoder().decode(ScreenshotCatalog.self, from: data) else {
             throw AssetInspectionError.missingDimensionCatalog
         }
-        return catalog
+        // The file writes a phone size portrait and a desktop or TV size
+        // landscape, the way each store's own documentation writes them. The
+        // lookup takes one shape, so every key becomes short x long here. It
+        // was landscape keys against a portrait lookup that left a Mac and a
+        // TV screenshot with no display type at all.
+        return ScreenshotCatalog(
+            apple: catalog.apple,
+            appleDisplayTypes: Dictionary(
+                catalog.appleDisplayTypes.map { (normalizedSizeKey($0.key), $0.value) },
+                uniquingKeysWith: { first, _ in first }))
     }
 
     private static func appleSizes() throws -> [String: [[Int]]] {
@@ -184,6 +232,17 @@ public enum AssetInspector {
 
     private static func normalized(_ width: Int, _ height: Int) -> (Int, Int) {
         (min(width, height), max(width, height))
+    }
+
+    private static func sizeKey(_ width: Int, _ height: Int) -> String {
+        let (short, long) = normalized(width, height)
+        return "\(short)x\(long)"
+    }
+
+    private static func normalizedSizeKey(_ key: String) -> String {
+        let parts = key.split(separator: "x").compactMap { Int($0) }
+        guard parts.count == 2 else { return key }
+        return sizeKey(parts[0], parts[1])
     }
 
     private static func distance(_ lhs: (Int, Int), _ rhs: (Int, Int)) -> Int {
