@@ -158,6 +158,7 @@
 		F073523BDF1472BFB79275B1 /* LicensingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B250B0D5FEBCFE87793711BE /* LicensingClient.swift */; };
 		F39F7E355F37B20BF46985CD /* BuildFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065E15DF6AFE7DCA28B9E994 /* BuildFlow.swift */; };
 		F72277A85EE651C7DDD90F59 /* MarketingTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C0183D2E989679F9F418ACC /* MarketingTab.swift */; };
+		F7997F9BD64F0382BB79659F /* PaywallPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC85D798CDF72F2460CAB075 /* PaywallPresentationTests.swift */; };
 		F82ADF7D6568471646AD461D /* OnboardingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D79543711F7C6E1462DED4B /* OnboardingPanel.swift */; };
 		F8BE96D6021A97655433EC7F /* screenshot-sizes.json in Resources */ = {isa = PBXBuildFile; fileRef = A68D788C058A969747CCDAA8 /* screenshot-sizes.json */; };
 		FA6146E83AAD3EADDBE3B3B5 /* ExistingAppImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A36C4DB016021EBF8FC5FAA /* ExistingAppImportSheet.swift */; };
@@ -387,6 +388,7 @@
 		FB55B4C53BDCF96EEBBA3656 /* StorePathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePathTests.swift; sourceTree = "<group>"; };
 		FBB41041C7A6A47CB6BA5FF6 /* AppleMarketing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMarketing.swift; sourceTree = "<group>"; };
 		FC097DCA30B2597397FCC4A8 /* ReleaseTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseTab.swift; sourceTree = "<group>"; };
+		FC85D798CDF72F2460CAB075 /* PaywallPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallPresentationTests.swift; sourceTree = "<group>"; };
 		FF23AA4C0151543B1900E997 /* AppIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIcon.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -488,6 +490,7 @@
 				73E24AAA8D152CDC338E536D /* AppIconTests.swift */,
 				A1FDC311FE6663720F580BBA /* ExistingAppImportTests.swift */,
 				C555136432A192B5111694D2 /* GoogleActionsPanelTests.swift */,
+				FC85D798CDF72F2460CAB075 /* PaywallPresentationTests.swift */,
 				EA20D03CFA77AF800B818FB1 /* PlayMarkTests.swift */,
 				379E2A61EE4C2961128B9042 /* RemoveLinkedAppTests.swift */,
 				1078FF3E049104204DA90EFF /* StoreSnapshotTests.swift */,
@@ -1167,6 +1170,7 @@
 				7FC432426D57FA25E2FD9433 /* AppIconTests.swift in Sources */,
 				4C5125281AB8833C02CE6B86 /* ExistingAppImportTests.swift in Sources */,
 				2B920DF6A3FBD642BAA29343 /* GoogleActionsPanelTests.swift in Sources */,
+				F7997F9BD64F0382BB79659F /* PaywallPresentationTests.swift in Sources */,
 				A869655F8A2E446669E2C5D7 /* PlayMarkTests.swift in Sources */,
 				BE96E12BD8444E627DCA4C3A /* RemoveLinkedAppTests.swift in Sources */,
 				8E42713758764C12892142D6 /* StoreSnapshotTests.swift in Sources */,
