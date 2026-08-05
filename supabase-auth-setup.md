@@ -69,12 +69,23 @@ is a Mac app, because Supabase performs the exchange.
 5. **Keys → new key**, enable Sign In with Apple, download the `.p8` once.
    Apple gives it to you a single time.
 6. Note the Key ID and your Team ID.
-7. Supabase → **Sign In / Providers → Apple**. Turn it on. Client ID is the
-   Services ID from step 3. Then paste the Team ID, the Key ID, and the
-   contents of the `.p8`. Supabase builds the client secret from those.
+7. Make the client secret. Supabase does **not** take the `.p8`. Apple's
+   client secret is a JWT signed with it, so build one on your own machine:
+
+   ```bash
+   swift tools/apple-client-secret.swift --key ~/Downloads/AuthKey_XXXXXXXXXX.p8 --key-id XXXXXXXXXX --team-id 88BXH8KNVZ --services-id com.rafacst.supersubmitter.signin
+   ```
+
+8. Supabase → **Sign In / Providers → Apple**. Turn it on. Put the Services ID
+   in **Client IDs** and the token from step 7 in **Secret Key (for OAuth)**.
+
+**This secret expires after six months.** Apple allows no longer. When it
+lapses every Apple sign-in fails, and nothing else does, so it looks like a
+provider outage. The script prints the expiry date. Put it in a calendar, and
+keep the `.p8`, because the next secret needs it.
 
 The `.p8` is a private key. It belongs in your password manager and nowhere
-in this repository.
+in this repository. `.gitignore` refuses `*.p8` and `*.p12` as a backstop.
 
 ## 4. Check it
 
