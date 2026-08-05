@@ -1522,13 +1522,17 @@ The window holds three parts.
 - **The tab list.** It sits below the switcher.
 - **The content area.** It fills the rest of the window.
 
-**The position of the tabs.** Settings holds one picker, **Navigation:
-Sidebar or Top bar**. The sidebar is the default. The top bar shows the same
-ten tabs as a segmented control and moves the app switcher into the toolbar.
-The two positions render the same views. Nothing else changes.
+**The position of the tabs.** The sidebar, and nothing else. A top bar was
+the second position and it carried a second copy of the app switcher, the
+mode switch, and the saved chip for one layout nobody chose.
 
-`// ponytail: one preference, two containers, one set of views. No second
-// navigation model.`
+`// ponytail: one container, one set of views. No preference to keep in
+// step, and no second navigation model.`
+
+**The window is panels over a surface.** The sidebar is the window surface.
+The content area is a rounded panel that floats on it, inset by 8 points,
+with a hairline edge and a shadow. The gap separates the two, so no rule
+runs between them. `Design/Theme.swift` holds `panelSurface()`.
 
 **The tabs are a form over `store.yaml`.** Every field writes the manifest,
 and the manifest stays the source of truth. Section 5 does not change. Each
@@ -1820,18 +1824,21 @@ its own block of the same file. The Plan, Run, and Finish windows became tabs
 Settings opens as a **panel over the window**. It is not a second window, and
 the app holds no Settings scene.
 
-Three controls open it, and all three do the same thing: the last row of the
-sidebar, the button beside the top bar, and the standard macOS shortcut. The
-panel closes with **Done** and with the Escape key.
+Two controls open it, and both do the same thing: the last row of the
+sidebar and the standard macOS shortcut. The panel closes with the close
+button and with the Escape key.
 
-It holds five things and no more.
+**The sections are tabs across the top of the panel.** One row of four, and
+the body below them has a fixed height. A single column of every section was
+taller than the window, which put the close button off the top of the screen.
 
-1. **Navigation.** Sidebar or Top bar. Section 16.1.
-2. **The poll interval.** The default is 5 minutes. Section 7.10.
-3. **The dry run.** The default state for a new app. Section 17.
-4. **The manifest path.** The location of `store.yaml`.
-5. **The monetization provider.** None, RevenueCat, or Adapty, with the
-   credential panel of the choice.
+1. **Workspace.** The poll interval (5 minutes by default, section 7.10),
+   the raw YAML toggle, the dry run default (section 17), and the update
+   check.
+2. **Files.** The location of `store.yaml`, and the build storage.
+3. **Account.** The plan, the billing, and the sign-in.
+4. **Provider.** None, RevenueCat, or Adapty, with the credential panel of
+   the choice.
 
 | Provider | The panel asks for | Help |
 |---|---|---|
