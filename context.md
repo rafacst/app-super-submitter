@@ -212,8 +212,8 @@ commit from a `feat/`, `fix/`, or `chore/` branch.
   and every gate is live. Debug points at the test Worker, Release at the live
   one, both set in `project.yml`. The live Worker reports all three Stripe
   Prices as available; the test Worker still reports none.
-- Sign-in: email and password work. The four provider buttons (Apple, Google,
-  GitHub, GitLab) are built and tested, and every one answers "provider is not
+- Sign-in: email and password work. The three provider buttons (Apple, GitHub,
+  GitLab) are built and tested, and every one answers "provider is not
   enabled" until the Supabase dashboard is set up. See
   `supabase-auth-setup.md`.
 - SPEC section 3.1 rows 3 to 10 and section 3.3 name the store endpoints that
