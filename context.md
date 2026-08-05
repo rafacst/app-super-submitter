@@ -302,6 +302,21 @@ Section 2.1 is what keeps that safe, so read it before you push anything.
   already provides for.
 - SPEC section 3.1 rows 3 to 10 and section 3.3 name the store endpoints that
   no code calls yet. Read them before you add a call, so you do not
-  re-discover the surface.
+  re-discover the surface. The four rows that closed have their own table
+  under 3.3, and the two new reads are rows in section 7.11.
+- **Unproven against a real account:** the Search keywords panel on Details
+  lists whatever `appKeywords` ids Apple returns. Apple publishes no attributes
+  for that resource, so if the ids come back as UUIDs rather than words, the
+  panel is honest and useless at the same time. Check it against a real account
+  before you rely on it. Everything else it does is safe: the pool read cannot
+  create a keyword, and an unlink keeps the keyword in the account.
+
+  The panel writes the **custom product page** half of `searchKeywords`, not
+  the version localization half. That is where the feature lives. Apple opened
+  custom product pages to organic search in July 2025, so a linked word sends
+  the customer to that page instead of the default one. The pool comes from the
+  Keywords field of the latest approved version, the title and the subtitle
+  contribute nothing, and a page reaches search only once Apple approves it and
+  the developer makes it visible. A Search Ads campaign on the same word wins.
 - `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` come from the environment. A
   missing value is loud in a debug build and silent in a release build.

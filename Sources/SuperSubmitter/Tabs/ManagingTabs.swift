@@ -35,6 +35,7 @@ struct AnalyticsTab: View {
                     line: "Turn a store on in Stores, and its measurements appear here.")
             } else {
                 VitalsPanel()
+                if state.stores.contains(.apple) { ReportsPanel() }
             }
         }
     }

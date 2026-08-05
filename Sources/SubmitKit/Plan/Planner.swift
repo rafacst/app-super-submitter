@@ -274,6 +274,8 @@ public enum Planner {
                     title: "Write \(offerCount) subscription offers",
                     requests: [RequestSketch("POST", "/v1/subscriptionIntroductoryOffers"),
                                RequestSketch("POST", "/v1/subscriptionOfferCodes"),
+                               RequestSketch("POST", "/v1/subscriptionOfferCodeCustomCodes"),
+                               RequestSketch("POST", "/v1/subscriptionOfferCodeOneTimeUseCodes"),
                                RequestSketch("POST", "/v1/subscriptionPromotionalOffers"),
                                RequestSketch("POST", "/v1/winBackOffers")],
                     operation: .appleSubscriptionOffers,
@@ -289,7 +291,9 @@ public enum Planner {
                 id: "apple.purchaseOfferCodes.\(purchase.id)", system: .apple, kind: .add,
                 summary: "\(codes.count) offer codes on \(purchase.id)  (draft)",
                 title: "Write \(codes.count) offer codes on \(purchase.id)",
-                requests: [RequestSketch("POST", "/v1/inAppPurchaseOfferCodes")],
+                requests: [RequestSketch("POST", "/v1/inAppPurchaseOfferCodes"),
+                           RequestSketch("POST", "/v1/inAppPurchaseOfferCodeCustomCodes"),
+                           RequestSketch("POST", "/v1/inAppPurchaseOfferCodeOneTimeUseCodes")],
                 operation: .applePurchaseOfferCodes(productId: purchase.id),
                 // The writer reads the held names and skips the ones Apple has.
                 comparison: .unverified))

@@ -273,6 +273,19 @@ final class AppState {
     var appleSubmissionID: String?
     var rechecking = false
 
+    /// The vendor number of the App Store account, which only the sales and
+    /// the finance reports need.
+    ///
+    /// It stays in the defaults and out of `store.yaml`. It says nothing about
+    /// the listing, it is the same for every app on the account, and a second
+    /// developer who clones the repository has a different one.
+    var appleVendorNumber = "" {
+        didSet {
+            guard appleVendorNumber != oldValue else { return }
+            defaults.set(appleVendorNumber, forKey: "appleVendorNumber")
+        }
+    }
+
     /// The app list and the two settings live here. A test passes its own
     /// suite, so a test run never rewrites the real app list.
     @ObservationIgnored let defaults: UserDefaults
@@ -296,6 +309,7 @@ final class AppState {
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
         }
+        appleVendorNumber = defaults.string(forKey: "appleVendorNumber") ?? ""
         if let saved = defaults.string(forKey: modeDefaultsKey),
            let restored = Mode(rawValue: saved) {
             mode = restored
@@ -705,13 +719,16 @@ final class AppState {
                     let imported = try await client.importApple(
                         appID: appleAppID, credential: appleCredential)
                     manifest.mergeAppleImport(imported)
+                    await adopt(imported, store: .apple)
                 }
                 if stores.contains(.google), let googleCredential {
                     let imported = try await client.importGoogle(
                         credential: googleCredential, packageName: googlePackageName)
                     manifest.mergeGoogleImport(imported)
+                    await adopt(imported, store: .google)
                 }
                 try save()
+                storeSnapshot.save(toRoot: manifestURL?.deletingLastPathComponent())
                 locale = manifest.listing?.defaultLocale ?? locale
                 updateLinkedAppNameFromManifest()
                 listingImportStatus = .connected("Imported \(manifest.listing?.locales.count ?? 0) locales into store.yaml")

@@ -237,6 +237,13 @@ public struct StateReader: Sendable {
             for item in JSON(data: payload.data)["data"].array {
                 guard let (locale, value) = Self.versionLocale(item) else { continue }
                 result.liveVersionLocales[locale] = value
+                // The pictures the customer sees, for the buckets the draft
+                // leaves empty. The checksums stay the draft's, because they
+                // decide which upload the apply may skip and an upload must
+                // never be skipped against a version nobody is writing to.
+                guard let localizationID = value.id else { continue }
+                await Self.readLiveMedia(localizationID: localizationID, locale: locale,
+                                          api: api, into: &result)
             }
         }
 
@@ -438,6 +445,40 @@ public struct StateReader: Sendable {
     }
 
     /// The app previews of one locale, in the shape the screenshots use.
+    /// The images and the videos one live localization shows.
+    ///
+    /// Display only. A bucket the draft already filled is left alone, so what
+    /// the developer is about to send always wins the screen, and a locale the
+    /// draft has not touched shows the store instead of an empty grid.
+    ///
+    /// Both reads are optional. A failure costs the pictures, never the plan.
+    static func readLiveMedia(localizationID: String, locale: String, api: StoreAPI,
+                              into result: inout ActualState.Apple) async {
+        if let payload = try? await api.apple(
+            "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
+                + "/appScreenshotSets?include=appScreenshots&limit=50") {
+            fill(&result.screenshotURLs, locale: locale, with: StoreImportReader.appleAssets(
+                JSON(data: payload.data), locale: locale, setKey: "appScreenshotSet",
+                itemType: "appScreenshots", kindKey: "screenshotDisplayType"))
+        }
+        if let payload = try? await api.apple(
+            "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
+                + "/appPreviewSets?include=appPreviews&limit=50") {
+            fill(&result.previewURLs, locale: locale, with: StoreImportReader.appleAssets(
+                JSON(data: payload.data), locale: locale, setKey: "appPreviewSet",
+                itemType: "appPreviews", kindKey: "previewType"))
+        }
+    }
+
+    private static func fill(_ target: inout [String: [URL]], locale: String,
+                             with assets: [ImportedStoreAsset]) {
+        for asset in assets {
+            let key = "\(locale)/\(asset.kind)"
+            guard target[key] == nil else { continue }
+            target[key, default: []].append(asset.url)
+        }
+    }
+
     /// The words of one `appStoreVersionLocalizations` record.
     ///
     /// The draft and the live version are read through this one mapping, so a

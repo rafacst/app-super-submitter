@@ -16,6 +16,9 @@ struct BuildTab: View {
             }
             StoreDiagnosticsPanel()
             if state.stores.contains(.apple) { XcodeCloudPanel() }
+            // A lapsed certificate reads as a failed build, so it belongs
+            // beside the build and not on a tab of its own.
+            if state.stores.contains(.apple) { SigningIdentitiesPanel() }
             if state.stores.contains(.google) { InternalSharingPanel() }
         }
         .frame(maxWidth: 980, alignment: .leading)

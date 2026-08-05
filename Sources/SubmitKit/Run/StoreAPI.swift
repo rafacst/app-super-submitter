@@ -74,10 +74,17 @@ public actor StoreAPI {
 
     // MARK: - The three systems
 
+    /// `query` carries the items that need encoding. Apple names its filters
+    /// `filter[reportType]`, and a bracket pasted into a path string is not a
+    /// legal URL, so the report reads pass their filters here.
     @discardableResult
     public func apple(_ method: String, _ path: String,
-                      body: Any? = nil) async throws -> Result {
-        var request = URLRequest(url: try Self.url("https://api.appstoreconnect.apple.com" + path))
+                      body: Any? = nil,
+                      query: [URLQueryItem] = []) async throws -> Result {
+        var components = URLComponents(string: "https://api.appstoreconnect.apple.com" + path)
+        if !query.isEmpty { components?.queryItems = query }
+        guard let url = components?.url else { throw ConnectionError.invalidResponse }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(try appleBearer())", forHTTPHeaderField: "Authorization")
         if let body {
@@ -385,6 +392,18 @@ public extension ConnectionError {
         .http(401, store == .apple
               ? "Connect the App Store on the Stores tab first."
               : "Connect Google Play on the Stores tab first.")
+    }
+}
+
+/// Apple writes its constants in upper snake case, and no screen should show
+/// one that way.
+public enum AppleWords {
+    /// `IOS_DISTRIBUTION` becomes `Ios distribution`, which is what a reader
+    /// wants.
+    public static func title(_ identifier: String) -> String {
+        guard !identifier.isEmpty else { return identifier }
+        let words = identifier.replacingOccurrences(of: "_", with: " ").lowercased()
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 }
 

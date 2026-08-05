@@ -110,10 +110,7 @@ public struct StoreVitalsClient: Sendable {
     }
 
     /// `LAUNCH_TIME` becomes `Launch time`, which is what a reader wants.
-    static func title(_ identifier: String) -> String {
-        let words = identifier.replacingOccurrences(of: "_", with: " ").lowercased()
-        return words.prefix(1).uppercased() + words.dropFirst()
-    }
+    static func title(_ identifier: String) -> String { AppleWords.title(identifier) }
 
     static func trim(_ value: Double) -> String {
         value == value.rounded()
