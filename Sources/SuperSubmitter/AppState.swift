@@ -125,6 +125,8 @@ final class AppState {
     @ObservationIgnored var authController: SupabaseAuth?
     var entitlement = Entitlement.free(at: .distantPast)
     var paywall: PaywallTrigger?
+    /// A paywall that waits for the Settings sheet to close. See openPaywall.
+    var pendingPaywall: PaywallTrigger?
     var billingPlans: BillingPlans?
     var billingOperation: BillingOperation = .idle
     var billingMessage: String?
