@@ -116,3 +116,46 @@ struct LiveListingTests {
         #expect(apple.versionLocales["en-US"]?.description == "The first one.")
     }
 }
+
+/// The pictures the customer sees, beside the ones the app is about to send.
+///
+/// The bug this guards: the read took the editable version's screenshots and
+/// nothing else. An App Store Connect draft carries no media until something
+/// uploads it, so the Media tab drew an empty grid over an app whose store
+/// page was full of screenshots.
+extension LiveListingTests {
+    @Test func theReadSeesTheLiveScreenshotsTheDraftDoesNotHave() async throws {
+        LiveStubProtocol.configure([
+            "/v1/apps/9/appStoreVersions?limit=200": """
+            {"data":[{"id":"v-draft","attributes":{"versionString":"2.0",
+                      "appVersionState":"PREPARE_FOR_SUBMISSION"}},
+                     {"id":"v-live","attributes":{"versionString":"1.9",
+                      "appVersionState":"READY_FOR_DISTRIBUTION"}}]}
+            """,
+            "/v1/appStoreVersions/v-draft/appStoreVersionLocalizations?limit=200": """
+            {"data":[{"id":"vl-draft","attributes":{"locale":"en-US"}}]}
+            """,
+            // The draft has a localization and no screenshot behind it.
+            "/v1/appStoreVersionLocalizations/vl-draft/appScreenshotSets?include=appScreenshots&limit=50": #"{"data":[],"included":[]}"#,
+            "/v1/appStoreVersions/v-live/appStoreVersionLocalizations?limit=200": """
+            {"data":[{"id":"vl-live","attributes":{"locale":"en-US"}}]}
+            """,
+            "/v1/appStoreVersionLocalizations/vl-live/appScreenshotSets?include=appScreenshots&limit=50": """
+            {"data":[{"id":"set","attributes":{"screenshotDisplayType":"APP_DESKTOP"}}],
+             "included":[{"type":"appScreenshots","id":"s1",
+                          "relationships":{"appScreenshotSet":{"data":{"id":"set"}}},
+                          "attributes":{"fileName":"one.png",
+                            "imageAsset":{"templateUrl":"https://example.com/{w}x{h}.{f}",
+                                          "width":2880,"height":1800}}}]}
+            """,
+        ])
+
+        let apple = try await reader().readApple(appID: "9")
+
+        // The tab can draw what the store shows.
+        #expect(apple.screenshotURLs["en-US/APP_DESKTOP"]?.count == 1)
+        // The checksums stay the draft's. They decide which upload the apply
+        // skips, and the live version is not the version being written to.
+        #expect(apple.screenshotChecksums.isEmpty)
+    }
+}

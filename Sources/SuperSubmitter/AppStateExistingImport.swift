@@ -147,6 +147,32 @@ extension AppState {
         }
     }
 
+    /// Takes everything one import read, not only its words.
+    ///
+    /// "Read current listings" used to call `mergeAppleImport` and stop, so
+    /// every screenshot the store had just handed over was thrown away: no
+    /// file on disk, no path in `store.yaml`, and nothing behind the Media
+    /// tab. The wizard already did this; the button beside it did not.
+    ///
+    /// A file that will not download costs that one file and reaches the
+    /// developer by name.
+    func adopt(_ imported: ImportedStoreListing, store: Store) async {
+        guard let root = manifestURL?.deletingLastPathComponent() else { return }
+        storeSnapshot.merge(imported, store: store)
+        // `// ponytail: a copy across the downloads, because an observed
+        // // property cannot go inout over an await. An edit made while the
+        // // files come down is lost. The button reads "Reading…" for that
+        // // whole window, so nothing is aimed at the form.`
+        var working = manifest
+        let failures = await materializeImportedAssets(
+            imported.assets, store: store, root: root, manifest: &working)
+        manifest = working
+        let skipped = imported.failures + failures
+        guard !skipped.isEmpty else { return }
+        errorMessage = "The listing was read. These parts stayed empty:\n"
+            + skipped.map { "· \($0)" }.joined(separator: "\n")
+    }
+
     /// Downloads what the store shows and writes the paths into the manifest.
     ///
     /// One file that will not download costs that one file. It used to cost
