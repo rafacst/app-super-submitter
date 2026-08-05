@@ -30,13 +30,37 @@ xcodegen generate && xcodebuild build -project SuperSubmitter.xcodeproj -scheme 
 ```
 
 `SuperSubmitter.xcodeproj` is checked in but generated. **Edit `project.yml`,
-never the `.pbxproj`.** Every push to `main` runs
-`.github/workflows/release.yml`, which signs, notarizes, and publishes a
-GitHub release plus a Sparkle appcast. `RELEASING.md` holds the one-time
-setup.
+never the `.pbxproj`.**
 
 Tests use **swift-testing** (`import Testing`, `@Test`, `#expect`), never
-XCTest. 33 test files, no network, no Xcode needed.
+XCTest. 39 test files, 31 in `SubmitKitTests` and 8 in `SuperSubmitterUITests`,
+no network. `swift test` covers the kit; the UI tests need the Xcode project:
+
+```bash
+xcodebuild test -project SuperSubmitter.xcodeproj -scheme SuperSubmitter -destination "platform=macOS"
+```
+
+Quit any running copy of the app first. A live instance holds the defaults the
+test host wants and the run fails for that reason alone.
+
+## 2.1 The two remotes. Read this before you push.
+
+| Remote | What it is | Rule |
+|---|---|---|
+| `origin` (GitLab) | The source code | Push whenever you like |
+| `github` | The release channel | **Never push without the maintainer asking for that push** |
+
+Every push to `main` on **github** runs `.github/workflows/release.yml`, which
+signs, notarizes, and publishes a GitHub release plus the Sparkle appcast that
+every installed copy then offers to install. A push to GitHub is a release, not
+a backup. Approval for one push never carries to the next.
+
+The workflow stops at a manual approval gate, so a push alone ships nothing.
+That gate is the maintainer's, not a reason to push and let them sort it out.
+
+`RELEASING.md` holds the one-time signing setup. The build number is the commit
+count, stamped from git in a build phase, so a local build and a release agree
+and "Check for updates" does not offer you the version you already have.
 
 ## 3. The one architectural rule
 
@@ -51,11 +75,11 @@ between the kit and the screen and does nothing else.
 
 ## 4. The four concepts
 
-1. **Manifest** — `store.yaml`, beside the developer's app. The only desired
+1. **Manifest**. `store.yaml`, beside the developer's app. The only desired
    state. Tabs 1 to 7 are a form over it.
-2. **Plan** — read every API, diff against the manifest, write nothing.
-3. **Apply** — perform the writes. Idempotent. Ends in a draft everywhere.
-4. **Release** — one store, one button. The only irreversible action.
+2. **Plan**. Read every API, diff against the manifest, write nothing.
+3. **Apply**. Perform the writes. Idempotent. Ends in a draft everywhere.
+4. **Release**. One store, one button. The only irreversible action.
 
 Same model as `terraform plan` / `terraform apply`.
 
@@ -127,6 +151,13 @@ then `TabContent.swift`, then the view in `Tabs/`.
   gate. Everything else, including editing, validation, local builds, store
   reads, the plan, and the dry run, is free.
 - **No em dashes in any user-visible string.**
+- **A push to the `github` remote is a release.** It fires the workflow that
+  publishes the appcast every installed copy reads. Never push there without
+  the maintainer asking for that push. `origin` (GitLab) is the source and is
+  always free to push. Section 2.1.
+- **No private key enters the repository.** `.gitignore` refuses `*.p8` and
+  `*.p12`, which is a backstop and not the plan. The Apple sign-in key and the
+  signing certificate belong in a password manager.
 
 ## 8. The two modes and the tabs
 
@@ -138,6 +169,11 @@ Managing: Stores, Marketing, Reviews, Analytics, App health.
 
 Tabs group into four zones: edits, reads, writes, releases. The sidebar draws
 a hairline between them. That is the whole mental model.
+
+Settings is a panel over the window with five tabs across the top: Workspace,
+Files, Account, Provider, About. The body has a fixed height on purpose. One
+column of every section was taller than the window and put the panel's own
+close button off the top of the screen.
 
 ## 9. File map
 
@@ -158,18 +194,45 @@ Sources/SubmitKit/
   Assets/       image dimension reader and checksums
   Access/       the paywall: capabilities, signed entitlement, Ed25519 verifier,
                 AccessController, LicensingClient. `licensing-api.md` is the
-                contract.
+                contract. SupabaseAuth is the account; SupabaseOAuth is the
+                PKCE half of Apple, GitHub, and GitLab sign-in.
   Credentials/  Keychain
   Resources/    store.schema.json, screenshot-sizes.json
 
 Sources/SuperSubmitter/
   AppState.swift + AppState*.swift   one @Observable @MainActor class, split by area
-  Shell/        RootView, Sidebar
+  Shell/        RootView, Sidebar, TrafficLights
   Tabs/         one file per tab, plus panels
-  Overlays/     onboarding, settings, sheets, menu bar popover
+  Overlays/     onboarding, settings, sheets, menu bar popover, OAuthSession
   Build/        BuildFlow (@Observable) and its views
-  Design/       Theme, StoreMark
+  Design/       Theme, Appearance, StoreMark
+
+tools/          screenshots.sh, apple-client-secret.swift
 ```
+
+## 9.1 The shell
+
+The window is one surface with panels on it, the way Xcode draws its editor.
+The content **is** the window surface. The sidebar is a rounded panel floating
+on it, inset by `Theme.panelGap`, and it carries the traffic lights.
+
+There is one navigation position. A second one, a top bar, existed and was
+removed: it kept its own copy of the app switcher, the mode switch, and the
+saved chip so one preference could move the same tabs to the top.
+
+`TrafficLights.swift` moves the three window buttons in by the panel inset.
+AppKit pins them to the window corner, which lands them on the panel's edge.
+
+**One sheet at a time.** The shell hosts a single sheet, so a second one asked
+for while Settings is open presents nothing and fails silently. `openPaywall`
+closes Settings and opens the paywall from its dismissal for exactly this
+reason. A sheet presented *from* another sheet is fine; two sheets on RootView
+are not.
+
+Every colour in `Theme` is a light and dark pair, and `Appearance` sets
+`NSApp.appearance` so the AppKit controls follow too. Each tab carries a tint,
+and a selected row is a wash of it rather than a solid fill, because the
+lighter tints cannot carry white text at a readable contrast.
 
 ## 10. Technology choices, already decided
 
@@ -192,7 +255,7 @@ exact argument array. Use that seam instead of hitting the network.
 | `upload-spec.md` | The local build and upload flow (Xcode, Gradle, states, recovery). |
 | `stripe-spec.md` | The licensing product rules, the Stripe setup, and the server. The client half is implemented; raw YAML is **not** gated. |
 | `licensing-api.md` | The wire contract the shipped client speaks. Read it before you build the service. |
-| `supabase-auth-setup.md` | The dashboard half of the four sign-in providers. The client half is done. |
+| `supabase-auth-setup.md` | The dashboard half of the three sign-in providers, and the Apple secret that expires. |
 | `RELEASING.md` | Signing, notarization, Sparkle, GitHub secrets. |
 | `.design-notes/`, `design/` | The HTML mockup the SwiftUI screens follow. |
 
@@ -212,10 +275,21 @@ commit from a `feat/`, `fix/`, or `chore/` branch.
   and every gate is live. Debug points at the test Worker, Release at the live
   one, both set in `project.yml`. The live Worker reports all three Stripe
   Prices as available; the test Worker still reports none.
-- Sign-in: email and password work. The three provider buttons (Apple, GitHub,
-  GitLab) are built and tested, and every one answers "provider is not
-  enabled" until the Supabase dashboard is set up. See
-  `supabase-auth-setup.md`.
+- Sign-in: email and password work, and Apple, GitHub, and GitLab are all
+  enabled in Supabase and answer the authorize call. `supabase-auth-setup.md`
+  holds the dashboard steps and the Apple client secret, which is a JWT that
+  **expires every six months**. `tools/apple-client-secret.swift` makes the
+  next one from the `.p8`. When it lapses only Apple sign-in breaks, which
+  reads as a provider outage rather than an expiry.
+- Email confirmation must stay on. Supabase links identities by email and
+  refuses to link an unverified one, because that is a pre-account-takeover
+  path. Mail goes out through Proton SMTP.
+- **Untested, and the one that costs money if wrong:** no purchase has ever
+  completed, so nothing has proved the live Worker signs entitlements with the
+  key in `ENTITLEMENT_PUBLIC_KEYS`. A mismatch looks like nothing happening:
+  Stripe takes the money, Settings still says Free. Test it with a 100% off
+  promotion code on the lifetime plan, which `stripe-spec.md` section 2.4
+  already provides for.
 - SPEC section 3.1 rows 3 to 10 and section 3.3 name the store endpoints that
   no code calls yet. Read them before you add a call, so you do not
   re-discover the surface.
