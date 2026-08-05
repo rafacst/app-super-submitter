@@ -264,8 +264,15 @@ exact argument array. Use that seam instead of hitting the network.
 Comments explain **why**, never what. A deliberate simplification carries a
 `// ponytail:` comment that names the ceiling and the upgrade path. Prose in
 the code and the docs is short and plain. Commit messages are Conventional
-Commits with a lowercase sentence subject, and work lands through a merge
-commit from a `feat/`, `fix/`, or `chore/` branch.
+Commits with a lowercase sentence subject.
+
+**Commit straight to `main`. Do not branch.** No `feat/`, `fix/`, or `chore/`
+branches, and no merge commits. One maintainer, no reviewer, a flat history.
+
+Branching is the usual way to keep unfinished work off a shared branch, and it
+is not needed here: `main` holds unreleased commits for as long as you like,
+because nothing reaches a user until the maintainer asks for the GitHub push.
+Section 2.1 is what keeps that safe, so read it before you push anything.
 
 ## 13. Known gaps
 
