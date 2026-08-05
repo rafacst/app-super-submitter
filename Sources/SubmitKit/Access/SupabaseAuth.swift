@@ -66,7 +66,9 @@ public struct KeychainSupabaseSessionStore: SupabaseSessionStoring {
 /// The app's Supabase session. Stripe and entitlement routes receive only its
 /// short-lived access token; the refresh token stays in the Keychain.
 public actor SupabaseAuth {
-    private let configuration: SupabaseAuthConfiguration
+    // Not private: the OAuth half lives in SupabaseOAuth.swift and builds the
+    // authorize URL from it. A `let` of a Sendable type reads nonisolated.
+    let configuration: SupabaseAuthConfiguration
     private let urlSession: URLSession
     private let store: any SupabaseSessionStoring
     private let now: @Sendable () -> Date
@@ -119,6 +121,18 @@ public actor SupabaseAuth {
         }
         session = nil
         try? store.clear()
+    }
+
+    /// The PKCE half of the OAuth flow. The provider gave the browser a code;
+    /// this proves the code belongs to this app and takes the session.
+    @discardableResult
+    func exchange(code: String, verifier: String) async throws -> String {
+        let response = try await request("auth/v1/token", query: "grant_type=pkce",
+                                         body: ["auth_code": code,
+                                                "code_verifier": verifier])
+        let session = try storedSession(from: response, fallbackEmail: "")
+        try remember(session)
+        return session.email
     }
 
     private func refresh(_ refreshToken: String) async throws -> SupabaseSession {
