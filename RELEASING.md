@@ -152,3 +152,96 @@ failed. If it loads but shows the old version, the run did not finish.
 **The Sparkle tools and the framework drift apart.** `SPARKLE_TOOLS_VERSION` in
 the workflow and `from: 2.9.0` in `project.yml` move on their own. Keep the
 tools version at or above the resolved framework version.
+
+---
+
+## Starting the GitHub repository again from scratch
+
+Planned, not done. Read the whole section before you run anything.
+
+### What is on the repository today
+
+`rafacst/super-submitter-app`, public, created 2026-08-04. No stars, no forks,
+no issues, no pull requests. **8 releases**, each carrying a signed
+`SuperSubmitter-*.zip`, an `appcast.xml`, and release notes.
+
+### Three things to know first
+
+**1. The history holds no secret.** Every `.p8`, `.p12`, and `.pem` pattern in
+the history is a test fixture or a line of prose. No key was ever committed. So
+if the reason for erasing is a leak, there is no leak. Erase it because you want
+a clean start, not because you have to.
+
+**2. The Sparkle private key is safe.** It lives in the login keychain under
+the service `https://sparkle-project.org`, and a GitHub secret cannot be read
+back, so the keychain is the only copy that matters. Export it before you touch
+anything:
+
+```bash
+/tmp/sparkle/bin/generate_keys -x /tmp/sparkle_private_key
+```
+
+Lose that key and no installed copy can ever update again, whatever you do to
+the repository.
+
+**3. The feed URL is baked into every shipped build.** `project.yml` sets
+`SUFeedURL` to
+`https://github.com/rafacst/super-submitter-app/releases/latest/download/appcast.xml`.
+**Keep the same owner and repository name** and every installed copy keeps
+updating. Change the name and each one is orphaned for good, because the name
+is inside the bundle they already have. Today only your own installs are
+affected, and that stops being true the day the product is announced.
+
+### Two ways to do it
+
+**The cheap one, and it does what was asked.** One commit, no history, and the
+releases, the secrets, and the approval gate all stay:
+
+```bash
+git checkout --orphan fresh && git add -A && git commit -m "chore: start the public history again" && git branch -M fresh main && git push github main --force
+```
+
+Nothing else needs re-creating. The eight old releases stay reachable, which is
+either what you want or the reason to use the other way.
+
+**The full one, if the releases must go too.** This destroys the eight releases
+and all five secrets. `gh` is not installed on this Mac, so either install it or
+use the web interface.
+
+```bash
+brew install gh && gh auth login --scopes delete_repo
+```
+
+```bash
+gh repo delete rafacst/super-submitter-app --yes
+```
+
+```bash
+gh repo create rafacst/super-submitter-app --public --description "Ship an iOS, macOS, and Android app to both stores from one YAML file."
+```
+
+Then re-add every secret from section 4 and the gate from section 5 **before**
+the first push. `SPARKLE_PRIVATE_KEY` comes from the export above; the rest are
+in your password manager:
+
+| Secret | Where it comes from |
+|---|---|
+| `SPARKLE_PRIVATE_KEY` | the export above |
+| `DEVELOPER_ID_CERT_P12` | Keychain Access, exported and base64 encoded |
+| `DEVELOPER_ID_CERT_PASSWORD` | the password you set on that export |
+| `NOTARY_APPLE_ID` | the Apple ID that notarizes |
+| `NOTARY_PASSWORD` | its app-specific password |
+
+Only then:
+
+```bash
+git push github main --force
+```
+
+### The trap
+
+The workflow runs on **every push to `main`**, so the first push to the new
+repository cuts a release immediately. Secrets missing at that moment means a
+failed run and a tag pointing at nothing. Add all five first. Section 2.1 of
+`context.md` is the rule this sits under: GitLab is the source, and a GitHub
+push ships.
