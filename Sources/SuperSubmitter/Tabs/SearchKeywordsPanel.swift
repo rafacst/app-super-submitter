@@ -43,11 +43,7 @@ struct SearchKeywordsPanel: View {
                         .disabled(busy || state.appleActionAppID == nil)
                 }
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
                 if loaded, pool.isEmpty {
                     Text("Your account holds no search keyword for this app. Apple builds the pool from the Keywords field of the latest approved version, so it stays empty until one is approved.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
@@ -60,14 +56,10 @@ struct SearchKeywordsPanel: View {
                 }
                 ForEach(targets) { target in targetBlock(target) }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
         .confirmationDialog("Change what the search reaches?",
-                            isPresented: confirmBinding, presenting: confirming) { change in
+                            isPresented: $confirming.isPresent, presenting: confirming) { change in
             Button(change.link ? "Link the keyword" : "Unlink the keyword",
                    role: change.link ? nil : .destructive) { apply(change) }
             Button("Cancel", role: .cancel) {}
@@ -76,10 +68,6 @@ struct SearchKeywordsPanel: View {
                  ? "A \(change.target.locale) search for this word reaches \(change.target.pageName) instead of your default product page. Apple Search Ads on the same word still wins."
                  : "A \(change.target.locale) search for this word returns to your default product page. The keyword stays in your account, so nothing is destroyed.")
         }
-    }
-
-    private var confirmBinding: Binding<Bool> {
-        Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
     }
 
     private func targetBlock(_ target: AppleKeywordsClient.Target) -> some View {
@@ -119,29 +107,19 @@ struct SearchKeywordsPanel: View {
     }
 
     private func load() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                pool = try await state.appleKeywordPool()
-                targets = try await state.appleKeywordTargets()
-                linked = await state.appleLinkedKeywords(for: targets)
-                loaded = true
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            pool = try await state.appleKeywordPool()
+            targets = try await state.appleKeywordTargets()
+            linked = await state.appleLinkedKeywords(for: targets)
+            loaded = true
         }
     }
 
     private func apply(_ change: Change) {
-        busy = true
-        error = nil
-        Task {
-            do {
-                try await state.setAppleKeyword(change.keyword, targetID: change.target.id,
-                                                linked: change.link)
-                linked = await state.appleLinkedKeywords(for: targets)
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            try await state.setAppleKeyword(change.keyword, targetID: change.target.id,
+                                            linked: change.link)
+            linked = await state.appleLinkedKeywords(for: targets)
         }
     }
 }

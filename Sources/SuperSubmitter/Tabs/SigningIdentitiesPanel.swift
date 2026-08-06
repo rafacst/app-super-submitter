@@ -46,11 +46,7 @@ struct SigningIdentitiesPanel: View {
                     if !group.isEmpty { block(kind, group) }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
     }
 

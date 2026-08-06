@@ -8,30 +8,6 @@ import Testing
 /// customer reviews are the twin of the Play reviews. Both used to exist on
 /// one side only.
 
-private func appleManifest() -> Manifest {
-    var manifest = Manifest()
-    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
-    manifest.addLocale("en-US", name: "Example")
-    manifest.setListingText("A long description.", locale: "en-US", field: .description)
-    manifest.setReleaseVersionName("1.2.0")
-    return manifest
-}
-
-private func appleState(_ build: (inout ActualState.Apple) -> Void) -> ActualState {
-    var apple = ActualState.Apple()
-    build(&apple)
-    var state = ActualState()
-    state.apple = apple
-    return state
-}
-
-private func steps(_ manifest: Manifest, _ actual: ActualState) -> [PlanStep] {
-    Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
-        .steps(for: .apple)
-}
-
-private func json(_ text: String) -> JSON { JSON(data: Data(text.utf8)) }
-
 private func testFlightManifest(
     _ testFlight: Manifest.Release.TestFlight) -> Manifest {
     var manifest = appleManifest()

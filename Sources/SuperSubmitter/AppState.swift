@@ -1008,7 +1008,7 @@ final class AppState {
 
     func addPurchase() {
         var values = manifest.purchases ?? []
-        values.append(ManifestDrafts.purchase())
+        values.append(Manifest.Purchase(id: "", kind: .nonConsumable))
         manifest.purchases = values
         saveManifestReportingErrors()
     }
@@ -1090,7 +1090,7 @@ final class AppState {
 
     func addSubscriptionGroup() {
         var groups = manifest.subscriptions ?? []
-        groups.append(ManifestDrafts.subscriptionGroup())
+        groups.append(Manifest.SubscriptionGroup(groupId: ""))
         manifest.subscriptions = groups
         saveManifestReportingErrors()
     }
@@ -1117,7 +1117,7 @@ final class AppState {
 
     func addPlan(to groupIndex: Int) {
         guard manifest.subscriptions?.indices.contains(groupIndex) == true else { return }
-        manifest.subscriptions?[groupIndex].plans.append(ManifestDrafts.subscriptionPlan())
+        manifest.subscriptions?[groupIndex].plans.append(Manifest.SubscriptionGroup.Plan(id: "", duration: ""))
         saveManifestReportingErrors()
     }
 
@@ -1245,7 +1245,7 @@ final class AppState {
 
     func addEntitlement() {
         var values = manifest.entitlements ?? []
-        values.append(ManifestDrafts.entitlement())
+        values.append(Manifest.Entitlement(key: ""))
         manifest.entitlements = values
         saveManifestReportingErrors()
     }
@@ -1258,7 +1258,7 @@ final class AppState {
 
     func addOffering() {
         var values = manifest.offerings ?? []
-        values.append(ManifestDrafts.offering(isFirst: values.isEmpty))
+        values.append(Manifest.Offering(key: "", isCurrent: values.isEmpty, products: []))
         manifest.offerings = values
         saveManifestReportingErrors()
     }

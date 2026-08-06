@@ -12,11 +12,6 @@ public struct AppleToolchain: Sendable, Equatable {
     public var label: String {
         xcodeVersion.isEmpty ? developerDirectory : "Xcode \(xcodeVersion) (\(buildVersion))"
     }
-
-    public func hasSDK(for platform: BuildPlatform) -> Bool {
-        let prefix = platform == .macos ? "macosx" : "iphoneos"
-        return sdks.contains { $0.hasPrefix(prefix) }
-    }
 }
 
 /// `xcodebuild -list -json`.
@@ -45,11 +40,6 @@ public struct AppleBuildSettings: Sendable, Equatable {
     public var signingIdentity: String? { self["CODE_SIGN_IDENTITY"] }
     public var provisioningProfile: String? { self["PROVISIONING_PROFILE_SPECIFIER"] }
     public var sdkRoot: String? { self["SDKROOT"] }
-    public var supportedPlatforms: [String] {
-        (self["SUPPORTED_PLATFORMS"] ?? "").split(separator: " ").map(String.init)
-    }
-    public var wrapperExtension: String? { self["WRAPPER_EXTENSION"] }
-    public var skipInstall: Bool { (self["SKIP_INSTALL"] ?? "NO").uppercased() == "YES" }
 
     /// The keys that upload-spec 8.4 requires the preflight to read.
     public static let required = [

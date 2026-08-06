@@ -228,27 +228,27 @@ import Testing
 }
 
 @Test func newCatalogRowsContainNoInventedStoreData() {
-    let purchase = ManifestDrafts.purchase()
+    let purchase = Manifest.Purchase(id: "", kind: .nonConsumable)
     #expect(purchase.id.isEmpty)
     #expect(purchase.name == nil)
     #expect(purchase.price == nil)
 
-    let group = ManifestDrafts.subscriptionGroup()
+    let group = Manifest.SubscriptionGroup(groupId: "")
     #expect(group.groupId.isEmpty)
     #expect(group.groupName == nil)
     #expect(group.plans.isEmpty)
 
-    let plan = ManifestDrafts.subscriptionPlan()
+    let plan = Manifest.SubscriptionGroup.Plan(id: "", duration: "")
     #expect(plan.id.isEmpty)
     #expect(plan.duration.isEmpty)
     #expect(plan.basePlanId == nil)
     #expect(plan.price == nil)
 
-    let entitlement = ManifestDrafts.entitlement()
+    let entitlement = Manifest.Entitlement(key: "")
     #expect(entitlement.key.isEmpty)
     #expect(entitlement.name == nil)
 
-    let offering = ManifestDrafts.offering(isFirst: true)
+    let offering = Manifest.Offering(key: "", isCurrent: true, products: [])
     #expect(offering.key.isEmpty)
     #expect(offering.name == nil)
     #expect(offering.products?.isEmpty == true)

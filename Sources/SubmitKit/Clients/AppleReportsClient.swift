@@ -167,21 +167,6 @@ public struct AppleReportsClient: Sendable {
         return try Gzip.unpackText(result.data)
     }
 
-    /// One finance report, unpacked to text. `regionCode` is `ZZ` for the
-    /// whole world, or a single Apple region.
-    public func financeReport(vendorNumber: String,
-                              regionCode: String = "ZZ",
-                              reportDate: String,
-                              reportType: String = "FINANCIAL") async throws -> String {
-        let result = try await api.apple("GET", "/v1/financeReports", query: [
-            URLQueryItem(name: "filter[vendorNumber]", value: vendorNumber),
-            URLQueryItem(name: "filter[regionCode]", value: regionCode),
-            URLQueryItem(name: "filter[reportDate]", value: reportDate),
-            URLQueryItem(name: "filter[reportType]", value: reportType),
-        ])
-        return try Gzip.unpackText(result.data)
-    }
-
     /// The first rows of a report, which is what a panel shows. The whole
     /// report belongs in a spreadsheet and not in a window.
     public static func preview(_ text: String, rows: Int = 12) -> [[String]] {

@@ -137,7 +137,7 @@ struct MediaTab: View {
                         LiveMediaWarning(noun: "previews")
                     }
                 }
-                .mediaPanel()
+                .storePanel(padding: 14)
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
@@ -150,7 +150,7 @@ struct MediaTab: View {
                     Text("Leave blank to omit the video.")
                         .font(.system(size: 11)).foregroundStyle(Theme.text2)
                 }
-                .mediaPanel()
+                .storePanel(padding: 14)
             }
         }
     }
@@ -293,15 +293,6 @@ private struct MediaDropTile: View {
         .buttonStyle(.plain)
         .overlay(RoundedRectangle(cornerRadius: 6)
             .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
-    }
-}
-
-private extension View {
-    func mediaPanel() -> some View {
-        padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }
 

@@ -3,6 +3,10 @@ import Foundation
 import Testing
 @testable import SubmitKit
 
+private func findings(_ manifest: Manifest, _ actual: ActualState) -> [Finding] {
+    Validator.findings(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+}
+
 /// Updating an app that is already on the App Store.
 ///
 /// The live version is not writable. The app used to read it anyway, hand its
@@ -28,15 +32,6 @@ private func liveState(_ live: String = "3.1.0") -> ActualState {
     var state = ActualState()
     state.apple = apple
     return state
-}
-
-private func steps(_ manifest: Manifest, _ actual: ActualState) -> [PlanStep] {
-    Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
-        .steps(for: .apple)
-}
-
-private func findings(_ manifest: Manifest, _ actual: ActualState) -> [Finding] {
-    Validator.findings(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
 }
 
 // MARK: - The plan

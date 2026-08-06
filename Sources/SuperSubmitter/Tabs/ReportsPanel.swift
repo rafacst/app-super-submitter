@@ -31,11 +31,7 @@ struct ReportsPanel: View {
                 Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
                 sales
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
         .confirmationDialog("Start a report feed?", isPresented: $confirmingRequest) {
             Button("Start an ongoing feed") { request(ongoing: true) }
@@ -44,17 +40,13 @@ struct ReportsPanel: View {
         } message: {
             Text("Apple starts producing analytics reports for this app. The first one appears a day or two later. Stopping the feed later removes the request and keeps every report Apple already made.")
         }
-        .confirmationDialog("Stop this feed?", isPresented: stopBinding,
+        .confirmationDialog("Stop this feed?", isPresented: $stopping.isPresent,
                             presenting: stopping) { feed in
             Button("Stop the feed", role: .destructive) { stop(feed) }
             Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("Apple stops producing new reports and keeps every report it already made.")
         }
-    }
-
-    private var stopBinding: Binding<Bool> {
-        Binding(get: { stopping != nil }, set: { if !$0 { stopping = nil } })
     }
 
     // MARK: - The analytics feed
@@ -69,11 +61,7 @@ struct ReportsPanel: View {
                 .disabled(busy || state.appleActionAppID == nil)
         }
 
-        if let error {
-            Label(error, systemImage: "exclamationmark.triangle.fill")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        if let error { ErrorLine(text: error) }
         if loaded, feeds.isEmpty {
             HStack(alignment: .firstTextBaseline) {
                 Text("This app has no report feed.")
@@ -180,41 +168,26 @@ struct ReportsPanel: View {
     // MARK: - The work
 
     private func load() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                feeds = try await state.appleAnalyticsFeeds()
-                for feed in feeds {
-                    reports[feed.id] = try? await state.appleReports().reports(feedID: feed.id)
-                }
-                loaded = true
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            feeds = try await state.appleAnalyticsFeeds()
+            for feed in feeds {
+                reports[feed.id] = try? await state.appleReports().reports(feedID: feed.id)
+            }
+            loaded = true
         }
     }
 
     private func request(ongoing: Bool) {
-        busy = true
-        error = nil
-        Task {
-            do {
-                try await state.requestAppleAnalytics(ongoing: ongoing)
-                feeds = try await state.appleAnalyticsFeeds()
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            try await state.requestAppleAnalytics(ongoing: ongoing)
+            feeds = try await state.appleAnalyticsFeeds()
         }
     }
 
     private func stop(_ feed: AppleReportsClient.Feed) {
-        busy = true
-        error = nil
-        Task {
-            do {
-                try await state.stopAppleAnalytics(feedID: feed.id)
-                feeds = try await state.appleAnalyticsFeeds()
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            try await state.stopAppleAnalytics(feedID: feed.id)
+            feeds = try await state.appleAnalyticsFeeds()
         }
     }
 
