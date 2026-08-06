@@ -157,72 +157,56 @@ tools version at or above the resolved framework version.
 
 ## Starting the GitHub repository again from scratch
 
-Planned, not done. Read the whole section before you run anything.
+**Done on 2026-08-05. The repository is deleted.** What follows is the record
+of what went, and the procedure for bringing it back.
 
-### What is on the repository today
+### What was there, and what went with it
 
 `rafacst/super-submitter-app`, public, created 2026-08-04. No stars, no forks,
 no issues, no pull requests. **8 releases**, each carrying a signed
-`SuperSubmitter-*.zip`, an `appcast.xml`, and release notes.
+`SuperSubmitter-*.zip`, an `appcast.xml`, and release notes, from `v1.0.0-59`
+to `v1.0.0-90`. All eight are gone, along with all five Actions secrets.
 
-### Three things to know first
+The code was on GitLab before the deletion and still is. The Sparkle private
+key was in the login keychain and still is.
 
-**1. The history holds no secret.** Every `.p8`, `.p12`, and `.pem` pattern in
-the history is a test fixture or a line of prose. No key was ever committed. So
-if the reason for erasing is a leak, there is no leak. Erase it because you want
-a clean start, not because you have to.
-
-**2. The Sparkle private key is safe.** It lives in the login keychain under
-the service `https://sparkle-project.org`, and a GitHub secret cannot be read
-back, so the keychain is the only copy that matters. Export it before you touch
-anything:
-
-```bash
-/tmp/sparkle/bin/generate_keys -x /tmp/sparkle_private_key
-```
-
-Lose that key and no installed copy can ever update again, whatever you do to
-the repository.
-
-**3. The feed URL is baked into every shipped build.** `project.yml` sets
-`SUFeedURL` to
-`https://github.com/rafacst/super-submitter-app/releases/latest/download/appcast.xml`.
-**Keep the same owner and repository name** and every installed copy keeps
-updating. Change the name and each one is orphaned for good, because the name
-is inside the bundle they already have. Today only your own installs are
-affected, and that stops being true the day the product is announced.
-
-### Two ways to do it
-
-**The cheap one, and it does what was asked.** One commit, no history, and the
-releases, the secrets, and the approval gate all stay:
-
-```bash
-git checkout --orphan fresh && git add -A && git commit -m "chore: start the public history again" && git branch -M fresh main && git push github main --force
-```
-
-Nothing else needs re-creating. The eight old releases stay reachable, which is
-either what you want or the reason to use the other way.
-
-**The full one, if the releases must go too.** This destroys the eight releases
-and all five secrets. `gh` is not installed on this Mac, so either install it or
-use the web interface.
-
-```bash
-brew install gh && gh auth login --scopes delete_repo
-```
-
-```bash
-gh repo delete rafacst/super-submitter-app --yes
-```
+### Bringing it back
 
 ```bash
 gh repo create rafacst/super-submitter-app --public --description "Ship an iOS, macOS, and Android app to both stores from one YAML file."
 ```
 
-Then re-add every secret from section 4 and the gate from section 5 **before**
-the first push. `SPARKLE_PRIVATE_KEY` comes from the export above; the rest are
-in your password manager:
+Then every secret from section 4 and the gate from section 5, **before** the
+first push. Deleting a repository needs the `delete_repo` scope, which is not
+part of `repo`; `gh auth refresh -h github.com -s delete_repo` grants it.
+
+The rest of this section is why the name and the secrets matter, and it is
+worth reading before the first push rather than after it.
+
+### Two things that decide whether this goes well
+
+**1. The name is not free to change.** `project.yml` sets `SUFeedURL` to
+`https://github.com/rafacst/super-submitter-app/releases/latest/download/appcast.xml`,
+and that string is inside every bundle already shipped. Recreate under the same
+owner and name and each installed copy keeps updating. Use a different name and
+every one of them is orphaned for good, because the old address is baked into
+software you no longer control. Today that is only your own installs. It stops
+being only your own the day the product is announced.
+
+**2. The Sparkle private key is the irreplaceable one.** A GitHub secret cannot
+be read back, so the copy in the login keychain, under the service
+`https://sparkle-project.org`, is the one that matters. It survived the
+deletion. Export it when you need to paste it into the new secret, and delete
+the file straight after:
+
+```bash
+/tmp/sparkle/bin/generate_keys -x /tmp/sparkle_private_key
+```
+
+Lose that key and no installed copy can ever update again, whatever the
+repository is called.
+
+### The five secrets, before the first push
 
 | Secret | Where it comes from |
 |---|---|
@@ -232,16 +216,23 @@ in your password manager:
 | `NOTARY_APPLE_ID` | the Apple ID that notarizes |
 | `NOTARY_PASSWORD` | its app-specific password |
 
-Only then:
+Add the approval gate from section 5 too. Only then:
 
 ```bash
-git push github main --force
+git push github main
 ```
 
 ### The trap
 
 The workflow runs on **every push to `main`**, so the first push to the new
-repository cuts a release immediately. Secrets missing at that moment means a
+repository cuts a release immediately. A secret missing at that moment means a
 failed run and a tag pointing at nothing. Add all five first. Section 2.1 of
 `context.md` is the rule this sits under: GitLab is the source, and a GitHub
 push ships.
+
+### For the record
+
+The history was checked before the deletion and held no secret. Every `.p8`,
+`.p12`, `.pem`, `sk_live`, and `whsec_` pattern in it was a test fixture or a
+line of prose, so nothing needed rotating and nothing needs rotating now. The
+erasure was a clean start, not a containment.
