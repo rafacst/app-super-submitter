@@ -105,7 +105,25 @@ public enum CredentialKind: String, Sendable {
 /// // at the same time would write over the first one's edits. The app is
 /// // single window and single instance, so nothing here reconciles.`
 public enum KeychainCredentials {
-    private static let service = "com.rafacst.SuperSubmitter.credentials"
+    /// The Keychain service the vault lives under.
+    ///
+    /// A run that must not touch the real vault sets this once, before any
+    /// read. That used to be what the `account` argument did, and the vault
+    /// ended that: every account is now a key **inside** one item, so the
+    /// account no longer decides which Keychain item is opened. A demo or
+    /// screenshot run that kept the real service therefore opened the real
+    /// item, and an unsigned build reading an item a signed build wrote raises
+    /// the "allow access" dialog and blocks on it.
+    nonisolated(unsafe) public static var service = "com.rafacst.SuperSubmitter.credentials"
+
+    /// Points the vault at a service of its own, and drops anything already
+    /// read. Call it before the first credential read of the process.
+    public static func useIsolatedService(_ name: String) {
+        lock.withLock {
+            service = name
+            cache = nil
+        }
+    }
     /// The one item. The old per-credential items used `kind:account` as their
     /// account, and none of them can collide with this.
     private static let vaultAccount = "all-credentials"
