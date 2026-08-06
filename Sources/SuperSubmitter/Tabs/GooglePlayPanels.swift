@@ -37,11 +37,7 @@ struct InternalSharingPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
                 }
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
 
                 if let shared {
                     VStack(alignment: .leading, spacing: 6) {
@@ -68,22 +64,12 @@ struct InternalSharingPanel: View {
                     }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
     }
 
     private func share() {
-        busy = true
-        error = nil
-        Task {
-            do { shared = try await state.shareGoogleArtifactInternally() }
-            catch { self.error = error.localizedDescription }
-            busy = false
-        }
+        track($busy, $error) { shared = try await state.shareGoogleArtifactInternally() }
     }
 }
 
@@ -124,11 +110,7 @@ struct GeneratedAPKPanel: View {
                     Text("Read the stores on the Plan tab first, so this knows which version code to ask for.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
                 }
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
                 if loaded, apks.isEmpty {
                     Text("Google generated no APK for this version code.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
@@ -154,35 +136,20 @@ struct GeneratedAPKPanel: View {
                     .padding(.vertical, 3)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
     }
 
     private func load() {
         guard let code = state.googleLatestVersionCode else { return }
-        busy = true
-        error = nil
-        Task {
-            do {
-                apks = try await state.googleGeneratedAPKs(versionCode: code)
-                loaded = true
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            apks = try await state.googleGeneratedAPKs(versionCode: code)
+            loaded = true
         }
     }
 
     private func download(_ apk: GoogleActionsClient.GeneratedAPK) {
-        busy = true
-        error = nil
-        Task {
-            do { saved[apk.id] = try await state.downloadGoogleAPK(apk) }
-            catch { self.error = error.localizedDescription }
-            busy = false
-        }
+        track($busy, $error) { saved[apk.id] = try await state.downloadGoogleAPK(apk) }
     }
 }
 
@@ -207,11 +174,7 @@ struct GoogleReviewsPanel: View {
                         .disabled(busy || state.googleActionPackage == nil)
                 }
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
                 if loaded, reviews.isEmpty {
                     Text("Google reports no review in the last week.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
@@ -223,23 +186,15 @@ struct GoogleReviewsPanel: View {
                     }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
-        .confirmationDialog("Publish this reply?", isPresented: confirmBinding,
+        .confirmationDialog("Publish this reply?", isPresented: $confirming.isPresent,
                             presenting: confirming) { review in
             Button("Publish the reply", role: .destructive) { send(review) }
             Button("Cancel", role: .cancel) {}
         } message: { review in
             Text("Every Play Store visitor reads it under \(review.authorName ?? "this review"). A second reply replaces it, and no call removes it.")
         }
-    }
-
-    private var confirmBinding: Binding<Bool> {
-        Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
     }
 
     @ViewBuilder private func reviewRow(_ review: GoogleActionsClient.Review) -> some View {
@@ -291,31 +246,21 @@ struct GoogleReviewsPanel: View {
     }
 
     private func load() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                reviews = try await state.googleReviews()
-                loaded = true
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            reviews = try await state.googleReviews()
+            loaded = true
         }
     }
 
     private func send(_ review: GoogleActionsClient.Review) {
         let text = (drafts[review.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        busy = true
-        error = nil
-        Task {
-            do {
-                try await state.replyToGoogleReview(id: review.id, text: text)
-                drafts[review.id] = ""
-                // Re-read, so the row shows what Google actually stored rather
-                // than what this app sent.
-                reviews = try await state.googleReviews()
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            try await state.replyToGoogleReview(id: review.id, text: text)
+            drafts[review.id] = ""
+            // Re-read, so the row shows what Google actually stored rather
+            // than what this app sent.
+            reviews = try await state.googleReviews()
         }
     }
 }
@@ -340,11 +285,7 @@ struct GoogleRecoveryPanel: View {
                         .disabled(busy || state.googleActionPackage == nil)
                 }
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
                 if loaded {
                     if actions.isEmpty {
                         Text("Google holds no recovery action for this app.")
@@ -359,23 +300,15 @@ struct GoogleRecoveryPanel: View {
                     }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
-        .confirmationDialog("Deploy this recovery?", isPresented: deployBinding,
+        .confirmationDialog("Deploy this recovery?", isPresented: $deploying.isPresent,
                             presenting: deploying) { action in
             Button("Deploy to every targeted device", role: .destructive) { deploy(action) }
             Button("Cancel", role: .cancel) {}
         } message: { action in
             Text("Recovery \(action.id) goes out to every installation it targets. Cancelling later stops a further rollout, and it restores nothing that already landed.")
         }
-    }
-
-    private var deployBinding: Binding<Bool> {
-        Binding(get: { deploying != nil }, set: { if !$0 { deploying = nil } })
     }
 
     @ViewBuilder private func recoveryRow(_ action: GoogleActionsClient.RecoveryAction) -> some View {
@@ -413,45 +346,33 @@ struct GoogleRecoveryPanel: View {
         return action.status ?? "DRAFT"
     }
 
-    private func load() { run { actions = try await state.googleRecoveryActions(); loaded = true } }
+    private func load() { track($busy, $error) { actions = try await state.googleRecoveryActions(); loaded = true } }
 
     private func createDraft() {
-        run {
+        track($busy, $error) {
             _ = try await state.createGoogleRecoveryDraft()
             actions = try await state.googleRecoveryActions()
         }
     }
 
     private func deploy(_ action: GoogleActionsClient.RecoveryAction) {
-        run {
+        track($busy, $error) {
             try await state.deployGoogleRecovery(id: action.id)
             actions = try await state.googleRecoveryActions()
         }
     }
 
     private func cancel(_ action: GoogleActionsClient.RecoveryAction) {
-        run {
+        track($busy, $error) {
             try await state.cancelGoogleRecovery(id: action.id)
             actions = try await state.googleRecoveryActions()
         }
     }
 
     private func widen(_ action: GoogleActionsClient.RecoveryAction) {
-        run {
+        track($busy, $error) {
             try await state.widenGoogleRecovery(id: action.id)
             actions = try await state.googleRecoveryActions()
-        }
-    }
-
-    /// One busy flag, one error line, one re-read. Every button here does the
-    /// same three things around its own call.
-    private func run(_ work: @escaping () async throws -> Void) {
-        busy = true
-        error = nil
-        Task {
-            do { try await work() }
-            catch { self.error = error.localizedDescription }
-            busy = false
         }
     }
 }

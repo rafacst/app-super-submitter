@@ -35,11 +35,7 @@ private struct AppleReviewsPanel: View {
                         .disabled(busy || state.appleActionAppID == nil)
                 }
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
                 if loaded, reviews.isEmpty {
                     Text("Apple reports no review for this app.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
@@ -51,23 +47,15 @@ private struct AppleReviewsPanel: View {
                     }
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
-        .confirmationDialog("Publish this reply?", isPresented: confirmBinding,
+        .confirmationDialog("Publish this reply?", isPresented: $confirming.isPresent,
                             presenting: confirming) { review in
             Button("Publish the reply", role: .destructive) { send(review) }
             Button("Cancel", role: .cancel) {}
         } message: { review in
             Text("Every App Store visitor reads it under \(review.authorName ?? "this review"). It replaces any reply that is there now.")
         }
-    }
-
-    private var confirmBinding: Binding<Bool> {
-        Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
     }
 
     @ViewBuilder private func reviewRow(_ review: AppleActionsClient.Review) -> some View {
@@ -132,14 +120,9 @@ private struct AppleReviewsPanel: View {
     }
 
     private func load() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                reviews = try await state.appleReviews()
-                loaded = true
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            reviews = try await state.appleReviews()
+            loaded = true
         }
     }
 
@@ -160,14 +143,9 @@ private struct AppleReviewsPanel: View {
     /// Every write re-reads afterwards, so a row shows what Apple stored
     /// rather than what this app sent.
     private func run(_ work: @escaping () async throws -> Void) {
-        busy = true
-        error = nil
-        Task {
-            do {
-                try await work()
-                reviews = try await state.appleReviews()
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            try await work()
+            reviews = try await state.appleReviews()
         }
     }
 }

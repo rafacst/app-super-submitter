@@ -123,9 +123,72 @@ extension Binding where Value == String {
     }
 }
 
+extension Optional {
+    /// True while a value is there, and clears it when set to false.
+    ///
+    /// `confirmationDialog(_:isPresented:presenting:)` wants a `Bool` binding
+    /// beside the value it presents, so every panel that confirms an action
+    /// wrote the same three-line `Binding(get:set:)`. `$item.isPresent` is
+    /// that binding.
+    var isPresent: Bool {
+        get { self != nil }
+        set { if !newValue { self = nil } }
+    }
+}
+
+/// Runs a store call the way every Managing panel reports one: busy while it
+/// runs, and the message on the line if it throws.
+///
+/// The panels are the only place this belongs. A failed read costs nothing and
+/// is never a plan row, so it never reaches `AppState` or the run log.
+@MainActor
+func track(_ busy: Binding<Bool>, _ error: Binding<String?>,
+           _ work: @escaping @MainActor () async throws -> Void) {
+    busy.wrappedValue = true
+    error.wrappedValue = nil
+    Task {
+        do { try await work() }
+        catch let failure { error.wrappedValue = failure.localizedDescription }
+        busy.wrappedValue = false
+    }
+}
+
 // MARK: - The shared pieces
 
+/// The line a panel shows when a store read failed.
+///
+/// Orange and not red. Red says irreversible, and a read that failed changed
+/// nothing, so it is a warning and the developer presses the button again.
+struct ErrorLine: View {
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 extension View {
+    /// The panel that a card on a tab sits on.
+    ///
+    /// One definition on purpose. Five private copies of this chain grew
+    /// across the tabs, and they disagreed about the corner radius, which is
+    /// the exact drift the first copy was written to prevent. A panel that
+    /// wants another radius is a different thing, not a card: a sheet, an
+    /// onboarding illustration, and the entry cards all keep their own.
+    func storePanel(padding: CGFloat = 13, horizontal: CGFloat? = nil,
+                    background: Color = Theme.raised,
+                    border: Color = Theme.sep,
+                    borderWidth: CGFloat = Theme.hairline) -> some View {
+        self.padding(.vertical, padding)
+            .padding(.horizontal, horizontal ?? padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(border, lineWidth: borderWidth))
+    }
+
     /// Turns a working area into a panel that floats on the window surface: a
     /// rounded fill, a hairline edge, and a shadow that lifts it off the back.
     func panelSurface() -> some View {
@@ -162,39 +225,6 @@ struct StatePill: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(background, in: RoundedRectangle(cornerRadius: 5))
-    }
-}
-
-/// A titled card on a tab. Every tab body is a stack of these.
-struct Card<Content: View>: View {
-    var title: String?
-    var trailing: AnyView?
-    @ViewBuilder var content: Content
-
-    init(_ title: String? = nil, trailing: AnyView? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.trailing = trailing
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if title != nil || trailing != nil {
-                HStack {
-                    if let title {
-                        Text(title).font(.system(size: 12.5, weight: .semibold))
-                    }
-                    Spacer(minLength: 8)
-                    if let trailing { trailing }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                Hairline()
-            }
-            content
-        }
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }
 

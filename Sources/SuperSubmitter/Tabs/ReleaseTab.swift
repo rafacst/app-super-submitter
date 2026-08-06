@@ -28,7 +28,7 @@ struct ReleaseTab: View {
             guard state.consoleRows.isEmpty, !state.stores.isEmpty else { return }
             state.loadConsoleMarks()
         }
-        .confirmationDialog(undoQuestion, isPresented: undoBinding, presenting: undoing) { store in
+        .confirmationDialog(undoQuestion, isPresented: $undoing.isPresent, presenting: undoing) { store in
             Button(store == .apple ? "Cancel the submission" : "Halt the rollout",
                    role: .destructive) {
                 Task { await state.undoRelease(store) }
@@ -43,10 +43,6 @@ struct ReleaseTab: View {
 
     private var undoQuestion: String {
         undoing == .apple ? "Cancel the App Store submission?" : "Halt the Google Play rollout?"
-    }
-
-    private var undoBinding: Binding<Bool> {
-        Binding(get: { undoing != nil }, set: { if !$0 { undoing = nil } })
     }
 
     private var appleReleaseControls: some View {
@@ -103,12 +99,7 @@ struct ReleaseTab: View {
             QuietButton(title: "Read the stores") { Task { await state.recheck() } }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .storePanel(padding: 12, horizontal: 15)
     }
 
     private var checklist: some View {
@@ -387,12 +378,7 @@ private struct StatusCard: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(status.phase.isReleased ? Theme.yellow : Theme.text)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .storePanel(padding: 12, horizontal: 15)
     }
 
     private var detail: String {
@@ -455,7 +441,6 @@ private struct ReleaseColumn: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
 
 /// The logo for a checklist card. The two providers carry no logo, so they take
 /// the glyph the Monetization tab already uses for a mirror.

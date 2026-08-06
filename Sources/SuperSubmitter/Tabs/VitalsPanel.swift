@@ -44,11 +44,7 @@ struct VitalsPanel: View {
 
                 if state.stores.contains(.google) { refundBlock }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
     }
 
@@ -120,12 +116,6 @@ struct VitalsPanel: View {
     }
 
     private func loadVoided() {
-        busy = true
-        voidedError = nil
-        Task {
-            do { voided = try await state.googleVoidedPurchases() }
-            catch { voidedError = error.localizedDescription }
-            busy = false
-        }
+        track($busy, $voidedError) { voided = try await state.googleVoidedPurchases() }
     }
 }

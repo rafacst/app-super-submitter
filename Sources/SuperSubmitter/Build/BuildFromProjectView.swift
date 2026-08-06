@@ -69,7 +69,7 @@ struct BuildFromProjectView: View {
                 .foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     // MARK: - 10.2 The project card
@@ -111,7 +111,7 @@ struct BuildFromProjectView: View {
             Text("Unlink removes this link only. It never deletes the project or its build output.")
                 .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     private var containerChooser: some View {
@@ -148,7 +148,7 @@ struct BuildFromProjectView: View {
                 }
             }
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     private var selectionRow: some View {
@@ -185,7 +185,7 @@ struct BuildFromProjectView: View {
                 }
             }
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     private func chooser(_ label: String, options: [String], selected: String?,
@@ -265,7 +265,7 @@ struct BuildFromProjectView: View {
                 Text(warning).font(.system(size: 11.5)).foregroundStyle(Theme.yellow)
             }
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     private func preflightRows(_ snapshot: PreflightSnapshot)
@@ -372,7 +372,7 @@ struct BuildFromProjectView: View {
                 .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
             }
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     private var explanation: String {
@@ -431,7 +431,7 @@ struct BuildFromProjectView: View {
                 Spacer(minLength: 0)
             }
         }
-        .buildPanel()
+        .storePanel(horizontal: 15)
     }
 
     private func artifactRows(_ candidate: BuildCandidate) -> [(String, String)] {
@@ -613,7 +613,7 @@ struct BuildFromProjectView: View {
                 Spacer(minLength: 0)
             }
         }
-        .buildPanel(background: Theme.greenBg, border: Theme.green)
+        .storePanel(horizontal: 15, background: Theme.greenBg, border: Theme.green, borderWidth: 1)
     }
 
     private func errorPanel(_ failure: BuildFailure) -> some View {
@@ -666,7 +666,7 @@ struct BuildFromProjectView: View {
                 .font(.system(size: 11.5))
             }
         }
-        .buildPanel(background: Theme.redBg, border: Theme.red)
+        .storePanel(horizontal: 15, background: Theme.redBg, border: Theme.red, borderWidth: 1)
     }
 
     private func retention(_ failure: BuildFailure) -> String {
@@ -804,17 +804,5 @@ struct ConfirmationSheet: View {
         .background(Theme.content)
         .foregroundStyle(Theme.text)
         .onExitCommand { dismiss() }
-    }
-}
-
-private extension View {
-    func buildPanel(background: Color = Theme.raised,
-                    border: Color = Theme.sep) -> some View {
-        padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(background, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(border, lineWidth: border == Theme.sep ? Theme.hairline : 1))
     }
 }

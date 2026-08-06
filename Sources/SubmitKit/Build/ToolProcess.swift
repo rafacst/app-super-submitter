@@ -232,15 +232,6 @@ public actor ToolProcess: ToolRunning {
         return result
     }
 
-    /// The toolchain inputs that a preflight screen reports.
-    public static func toolchainEnvironment() -> [String: String] {
-        let names = ["PATH", "HOME", "LANG", "TMPDIR", "DEVELOPER_DIR", "JAVA_HOME",
-                     "ANDROID_HOME", "ANDROID_SDK_ROOT"]
-        let environment = ProcessInfo.processInfo.environment
-        return names.reduce(into: [:]) { result, name in
-            if let value = environment[name] { result[name] = value }
-        }
-    }
 }
 
 /// A one-way flag that two threads may set.

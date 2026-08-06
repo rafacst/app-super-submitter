@@ -2,16 +2,6 @@ import Foundation
 import Testing
 @testable import SubmitKit
 
-private let repositoryRoot = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-
-private func source(_ relativePath: String) throws -> String {
-    try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath),
-               encoding: .utf8)
-}
-
 private func everySource() throws -> String {
     let root = repositoryRoot.appendingPathComponent("Sources")
     guard let walker = FileManager.default.enumerator(at: root,
