@@ -23,3 +23,18 @@ dist/
 # here on the way to a password manager. Neither belongs in a commit.
 *.p8
 *.p12
+
+# The specs, the plans, and the working notes at the root. They describe the
+# product rather than build it, they change on their own schedule, and several
+# carry service configuration that has no business in a repository. Nested
+# Markdown stays, so the vendored skill references under .claude keep working.
+/*.md
+
+# Local helpers: one takes the website screenshots, one mints an Apple client
+# secret. Neither is part of the build.
+tools/*.sh
+tools/*.swift
+
+# tools/screenshots.sh regenerates every one of these from the app on demand,
+# so the repository was carrying a few megabytes of build output.
+design/screenshots/
