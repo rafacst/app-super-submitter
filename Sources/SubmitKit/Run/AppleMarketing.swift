@@ -76,12 +76,7 @@ extension Runner {
         let existing = JSON(data: try await api.apple(
             "GET",
             "/v1/appCustomProductPageVersions/\(versionID)/appCustomProductPageLocalizations?limit=200").data)
-        var byLocale: [String: String] = [:]
-        for item in existing["data"].array {
-            guard let locale = item["attributes"]["locale"].string,
-                  let id = item["id"].string else { continue }
-            byLocale[locale] = id
-        }
+        let byLocale = existing.idsByLocale
 
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             var attributes: [String: Any] = [:]
@@ -279,12 +274,7 @@ extension Runner {
         guard let locales = event.locales, !locales.isEmpty else { return }
         let existing = JSON(data: try await api.apple(
             "GET", "/v1/appEvents/\(eventID)/localizations?limit=200").data)
-        var byLocale: [String: String] = [:]
-        for item in existing["data"].array {
-            guard let locale = item["attributes"]["locale"].string,
-                  let id = item["id"].string else { continue }
-            byLocale[locale] = id
-        }
+        let byLocale = existing.idsByLocale
 
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             var attributes: [String: Any] = [:]
@@ -531,12 +521,7 @@ extension Runner {
         let existing = JSON(data: try await api.apple(
             "GET",
             "/v1/appClipDefaultExperiences/\(experienceID)/appClipDefaultExperienceLocalizations?limit=200").data)
-        var byLocale: [String: String] = [:]
-        for item in existing["data"].array {
-            guard let locale = item["attributes"]["locale"].string,
-                  let id = item["id"].string else { continue }
-            byLocale[locale] = id
-        }
+        let byLocale = existing.idsByLocale
 
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             var attributes: [String: Any] = [:]

@@ -8,40 +8,6 @@ import Testing
 /// the wanted value produces no step, and a store that holds something else
 /// names the field that differs.
 
-private func appleManifest() -> Manifest {
-    var manifest = Manifest()
-    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
-    manifest.addLocale("en-US", name: "Example")
-    manifest.setListingText("A long description.", locale: "en-US", field: .description)
-    manifest.setReleaseVersionName("1.2.0")
-    return manifest
-}
-
-private func googleManifest() -> Manifest {
-    var manifest = Manifest()
-    manifest.setGoogleApp(packageName: "com.example.app")
-    manifest.addLocale("en-US", name: "Example")
-    manifest.setListingText("A long description.", locale: "en-US", field: .description)
-    manifest.setReleaseVersionName("1.2.0")
-    return manifest
-}
-
-private func appleState(_ build: (inout ActualState.Apple) -> Void) -> ActualState {
-    var apple = ActualState.Apple()
-    build(&apple)
-    var state = ActualState()
-    state.apple = apple
-    return state
-}
-
-private func googleState(_ build: (inout ActualState.Google) -> Void) -> ActualState {
-    var google = ActualState.Google()
-    build(&google)
-    var state = ActualState()
-    state.google = google
-    return state
-}
-
 private func appleSteps(_ manifest: Manifest, _ actual: ActualState) -> [PlanStep] {
     Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
         .steps(for: .apple)
@@ -51,8 +17,6 @@ private func googleSteps(_ manifest: Manifest, _ actual: ActualState) -> [PlanSt
     Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.google]))
         .steps(for: .google)
 }
-
-private func json(_ text: String) -> JSON { JSON(data: Data(text.utf8)) }
 
 private func appleLocale(name: String, description: String)
     -> ActualState.Apple.CatalogProduct.ProductLocale {

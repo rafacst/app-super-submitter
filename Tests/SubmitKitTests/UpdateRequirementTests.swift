@@ -2,6 +2,10 @@ import Foundation
 import Testing
 @testable import SubmitKit
 
+private func findings(_ manifest: Manifest, _ actual: ActualState) -> [Finding] {
+    Validator.findings(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+}
+
 /// What Apple demands of a version that follows a released one.
 ///
 /// Every rule here fires only when the app is already on the App Store. A
@@ -31,10 +35,6 @@ private func live(_ build: (inout ActualState.Apple) -> Void = { _ in }) -> Actu
     var state = ActualState()
     state.apple = apple
     return state
-}
-
-private func findings(_ manifest: Manifest, _ actual: ActualState) -> [Finding] {
-    Validator.findings(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
 }
 
 private func rows(_ manifest: Manifest, _ actual: ActualState) -> [ConsoleRow] {

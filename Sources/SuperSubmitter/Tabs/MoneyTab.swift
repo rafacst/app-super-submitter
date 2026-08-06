@@ -48,7 +48,7 @@ struct MoneyTab: View {
             // The stretch happens before the panel is painted, so the two
             // panels on this row draw to one height instead of two.
             .frame(maxHeight: .infinity, alignment: .top)
-            .moneyPanel()
+            .storePanel()
         }
     }
 
@@ -96,7 +96,7 @@ struct MoneyTab: View {
             }
             .font(.system(size: 12))
             .frame(maxHeight: .infinity, alignment: .top)
-            .moneyPanel()
+            .storePanel()
         }
     }
 
@@ -154,7 +154,7 @@ struct MoneyTab: View {
                             Spacer()
                         }
                         OfferEditor(target: .purchase(index))
-                    }.moneyPanel()
+                    }.storePanel()
                 }
                 Button("Add in-app purchase", action: state.addPurchase)
             }
@@ -201,7 +201,7 @@ struct MoneyTab: View {
                             }.padding(.leading, 14)
                         }
                         Button("Add plan") { state.addPlan(to: groupIndex) }.controlSize(.small)
-                    }.moneyPanel()
+                    }.storePanel()
                 }
                 Button("Add subscription group", action: state.addSubscriptionGroup)
             }
@@ -270,7 +270,7 @@ struct MoneyTab: View {
                         }
                     }
                     Button("Add entitlement", action: state.addEntitlement)
-                }.moneyPanel()
+                }.storePanel()
             }
             Section_(state.provider == .adapty ? "Paywalls" : "Offerings", icon: "rectangle.on.rectangle", tint: Theme.yellow) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -288,7 +288,7 @@ struct MoneyTab: View {
                         }
                     }
                     Button("Add offering", action: state.addOffering)
-                }.moneyPanel()
+                }.storePanel()
             }
         }
     }
@@ -320,14 +320,5 @@ struct Section_<Content: View>: View {
             }
             content
         }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private extension View {
-    func moneyPanel() -> some View {
-        padding(13).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }

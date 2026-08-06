@@ -2,33 +2,17 @@ import Foundation
 import Testing
 @testable import SubmitKit
 
+private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
+                   actual: ActualState = ActualState()) -> Planner.Input {
+    Planner.Input(manifest: manifest, actual: actual, stores: stores)
+}
+
 /// The gaps that the API coverage check found, each one held shut by a check.
 ///
 /// Every test here failed before the fix. None of them checks a helper in
 /// isolation: each one asks the planner or the manifest the same question the
 /// developer asks, so a regression shows up as the wrong plan and not as a
 /// wrong intermediate value.
-
-private func bothStores() -> Manifest {
-    var manifest = Manifest()
-    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
-    manifest.setGoogleApp(packageName: "com.example.app")
-    manifest.addLocale("en-US", name: "Example")
-    manifest.setListingText("A long description.", locale: "en-US", field: .description)
-    manifest.setReleaseVersionName("1.2.0")
-    return manifest
-}
-
-private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
-                   actual: ActualState = ActualState()) -> Planner.Input {
-    Planner.Input(manifest: manifest, actual: actual, stores: stores)
-}
-
-private func source(_ relativePath: String) throws -> String {
-    let root = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-}
 
 // MARK: - The Mac App Store reaches RevenueCat
 

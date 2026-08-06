@@ -204,14 +204,3 @@ private struct DataSafetySheet: View {
         }.padding(24).frame(width: 520)
     }
 }
-
-extension View {
-    /// The panel every editing section sits on. One definition, so Review
-    /// info and Details cannot drift apart by a corner radius.
-    func storePanel(padding: CGFloat = 13) -> some View {
-        self.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-    }
-}

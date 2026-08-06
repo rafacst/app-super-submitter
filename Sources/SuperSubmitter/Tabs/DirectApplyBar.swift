@@ -38,11 +38,7 @@ struct DirectApplyBar: View {
                 .tint(Theme.accent)
                 .disabled(changes.isEmpty || running || state.stores.isEmpty)
         }
-        .padding(13)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .storePanel()
         .confirmationDialog("Write these to \(destination)?", isPresented: $confirming) {
             Button("Write them") { state.applyDirectly(target) }
             Button("Cancel", role: .cancel) {}

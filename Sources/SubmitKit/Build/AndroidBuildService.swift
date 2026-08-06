@@ -41,7 +41,6 @@ public struct BundleInfo: Sendable, Equatable {
     public var versionName = ""
     public var versionCode = 0
     public var minimumSDK: String?
-    public var targetSDK: String?
     public var permissions: [String] = []
     public var size: Int64 = 0
     public var sha256 = ""

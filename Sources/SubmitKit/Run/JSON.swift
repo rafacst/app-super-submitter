@@ -36,4 +36,15 @@ public struct JSON: @unchecked Sendable {
     public var double: Double? { (raw as? Double) ?? (raw as? String).flatMap(Double.init) }
     public var bool: Bool? { raw as? Bool }
     public var exists: Bool { raw != nil }
+
+    /// `data[].id` keyed by `data[].attributes.locale`, read straight off a
+    /// localization list. Every Apple localization resource answers that one
+    /// shape, so an upsert asks this and never walks the array itself.
+    public var idsByLocale: [String: String] {
+        self["data"].array.reduce(into: [:]) { result, item in
+            guard let locale = item["attributes"]["locale"].string,
+                  let id = item["id"].string else { return }
+            result[locale] = id
+        }
+    }
 }

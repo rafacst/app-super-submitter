@@ -28,7 +28,7 @@ struct StoresTab: View {
             }
         }
         .frame(maxWidth: 900, alignment: .leading)
-        .confirmationDialog("Remove the stored credential?", isPresented: removingBinding,
+        .confirmationDialog("Remove the stored credential?", isPresented: $removing.isPresent,
                             presenting: removing) { store in
             Button("Remove the credential", role: .destructive) {
                 state.forgetCredential(for: store)
@@ -41,9 +41,6 @@ struct StoresTab: View {
         }
     }
 
-    private var removingBinding: Binding<Bool> {
-        Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
-    }
 }
 
 private extension AnyTransition {

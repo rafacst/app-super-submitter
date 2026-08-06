@@ -124,12 +124,7 @@ extension Runner {
         let existing = JSON(data: try await api.apple(
             "GET",
             "/v1/subscriptionGroups/\(groupID)/subscriptionGroupLocalizations?limit=200").data)
-        var byLocale: [String: String] = [:]
-        for item in existing["data"].array {
-            guard let locale = item["attributes"]["locale"].string,
-                  let id = item["id"].string else { continue }
-            byLocale[locale] = id
-        }
+        let byLocale = existing.idsByLocale
         try await appleDropLocalizations(existing, keeping: Set(locales.keys),
                                          path: "/v1/subscriptionGroupLocalizations")
 
@@ -159,12 +154,7 @@ extension Runner {
         let existing = JSON(data: try await api.apple(
             "GET",
             "/v1/subscriptions/\(subscriptionID)/subscriptionLocalizations?limit=200").data)
-        var byLocale: [String: String] = [:]
-        for item in existing["data"].array {
-            guard let locale = item["attributes"]["locale"].string,
-                  let id = item["id"].string else { continue }
-            byLocale[locale] = id
-        }
+        let byLocale = existing.idsByLocale
         try await appleDropLocalizations(existing, keeping: Set(locales.keys),
                                          path: "/v1/subscriptionLocalizations")
 

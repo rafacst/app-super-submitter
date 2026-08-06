@@ -2,16 +2,6 @@ import Foundation
 import Testing
 @testable import SubmitKit
 
-private let repositoryRoot = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-
-private func source(_ relativePath: String) throws -> String {
-    try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath),
-               encoding: .utf8)
-}
-
 @Test func removedGoogleCategoryCannotSilentlySurviveInTheManifest() throws {
     let manifest = try source("Sources/SubmitKit/Manifest/Manifest.swift")
     let editing = try source("Sources/SubmitKit/Manifest/ManifestEditing.swift")

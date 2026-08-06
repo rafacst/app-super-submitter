@@ -126,13 +126,6 @@ public struct BuildStorage: Sendable {
         }.sorted { $0.startedAt > $1.startedAt }
     }
 
-    /// One redacted JSONL line per streamed output line.
-    public func logURL(runID: UUID) throws -> URL {
-        let folder = runFolder(runID)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return folder.appendingPathComponent("build.jsonl")
-    }
-
     // MARK: - Retention
 
     /// Removes completed run and scratch folders older than the age, and

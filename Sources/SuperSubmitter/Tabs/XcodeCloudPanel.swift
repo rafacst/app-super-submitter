@@ -27,11 +27,7 @@ struct XcodeCloudPanel: View {
                         .disabled(busy || state.appleActionAppID == nil)
                 }
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let error { ErrorLine(text: error) }
                 if loaded, workflows.isEmpty {
                     Text("This app has no Xcode Cloud workflow. You create one in Xcode, and it appears here.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
@@ -39,23 +35,15 @@ struct XcodeCloudPanel: View {
                 }
                 ForEach(workflows) { workflow in workflowRow(workflow) }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .storePanel(padding: 14)
         }
-        .confirmationDialog("Start this build?", isPresented: confirmBinding,
+        .confirmationDialog("Start this build?", isPresented: $confirming.isPresent,
                             presenting: confirming) { workflow in
             Button("Start the build") { start(workflow) }
             Button("Cancel", role: .cancel) {}
         } message: { workflow in
             Text("Apple runs \(workflow.name) and it spends the compute minutes of your account. Cancelling the run later does not give them back.")
         }
-    }
-
-    private var confirmBinding: Binding<Bool> {
-        Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
     }
 
     @ViewBuilder private func workflowRow(_ workflow: XcodeCloudClient.Workflow) -> some View {
@@ -94,30 +82,19 @@ struct XcodeCloudPanel: View {
     }
 
     private func load() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                workflows = try await state.xcodeCloudWorkflows()
-                for workflow in workflows {
-                    runs[workflow.id] = try? await state.xcodeCloudRuns(
-                        workflowID: workflow.id)
-                }
-                loaded = true
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            workflows = try await state.xcodeCloudWorkflows()
+            for workflow in workflows {
+                runs[workflow.id] = try? await state.xcodeCloudRuns(workflowID: workflow.id)
+            }
+            loaded = true
         }
     }
 
     private func start(_ workflow: XcodeCloudClient.Workflow) {
-        busy = true
-        error = nil
-        Task {
-            do {
-                _ = try await state.startXcodeCloudBuild(workflowID: workflow.id)
-                runs[workflow.id] = try await state.xcodeCloudRuns(workflowID: workflow.id)
-            } catch { self.error = error.localizedDescription }
-            busy = false
+        track($busy, $error) {
+            _ = try await state.startXcodeCloudBuild(workflowID: workflow.id)
+            runs[workflow.id] = try await state.xcodeCloudRuns(workflowID: workflow.id)
         }
     }
 }

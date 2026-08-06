@@ -59,7 +59,7 @@ struct MarketingTab: View {
                                           .customProductPagePromotionalText))
                         Text("The limit is 170 characters. Apple allows 35 pages.")
                             .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-                    }.marketingPanel()
+                    }.storePanel()
                 }
                 Button("Add a custom product page") { state.addCustomProductPage() }
             }
@@ -97,7 +97,7 @@ struct MarketingTab: View {
                         }
                         Text("The app creates the experiment and never starts it. Apple allows 3 treatments.")
                             .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-                    }.marketingPanel()
+                    }.storePanel()
                 }
                 Button("Add an experiment") { state.addExperiment() }
             }
@@ -137,7 +137,7 @@ struct MarketingTab: View {
                                                                   locale: state.locale,
                                                                   field: .longDescription)
                                       .limited(to: MarketingLimits.appEventLongDescription))
-                    }.marketingPanel()
+                    }.storePanel()
                 }
                 Button("Add an in-app event") { state.addAppEvent() }
             }
@@ -165,7 +165,7 @@ struct MarketingTab: View {
                 }
                 Text("An empty agreement leaves the Apple standard licence in place.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-            }.marketingPanel()
+            }.storePanel()
         }
     }
 
@@ -197,7 +197,7 @@ struct MarketingTab: View {
                 }
                 Text("A GeoJSON file. Only a routing app needs one.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-            }.marketingPanel()
+            }.storePanel()
         }
     }
 
@@ -214,7 +214,7 @@ struct MarketingTab: View {
                     .lineLimit(2...4)
                 Text("The app creates a draft and never submits it.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-            }.marketingPanel()
+            }.storePanel()
         }
     }
 
@@ -228,7 +228,7 @@ struct MarketingTab: View {
                 }
                 Text("The declaration is written as a draft.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-            }.marketingPanel()
+            }.storePanel()
         }
     }
 
@@ -243,16 +243,7 @@ struct MarketingTab: View {
                           text: state.appClipSubtitleBinding(locale: state.locale))
                 Text("Xcode creates the clip. This writes what the store shows.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-            }.marketingPanel()
+            }.storePanel()
         }
-    }
-}
-
-private extension View {
-    func marketingPanel() -> some View {
-        padding(13).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }

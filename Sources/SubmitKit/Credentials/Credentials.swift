@@ -159,12 +159,6 @@ public enum KeychainCredentials {
         }
     }
 
-    /// Drops the in-memory copy. The next read asks the Keychain again, which
-    /// is what a test wants between cases and what nothing else needs.
-    public static func forgetCachedVault() {
-        lock.withLock { cache = nil }
-    }
-
     // MARK: - The one item
 
     private static func readVault() throws -> [String: Data] {

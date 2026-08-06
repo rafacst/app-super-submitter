@@ -2,29 +2,10 @@ import Foundation
 import Testing
 @testable import SubmitKit
 
-private func googleManifest() -> Manifest {
-    var manifest = Manifest()
-    manifest.setGoogleApp(packageName: "com.example.app")
-    manifest.addLocale("en-US", name: "Example")
-    manifest.setListingText("A long description.", locale: "en-US", field: .description)
-    manifest.setReleaseVersionName("1.2.0")
-    return manifest
-}
-
 private func input(_ manifest: Manifest,
                    actual: ActualState = ActualState()) -> Planner.Input {
     Planner.Input(manifest: manifest, actual: actual, stores: [.google])
 }
-
-private func googleState(_ build: (inout ActualState.Google) -> Void) -> ActualState {
-    var google = ActualState.Google()
-    build(&google)
-    var state = ActualState()
-    state.google = google
-    return state
-}
-
-private func json(_ text: String) -> JSON { JSON(data: Data(text.utf8)) }
 
 // MARK: - The track testers
 

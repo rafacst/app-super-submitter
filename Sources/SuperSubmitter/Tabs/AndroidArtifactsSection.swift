@@ -34,7 +34,7 @@ struct AndroidArtifactsSection: View {
                 }
                 externalApk
             }
-            .buildPanel()
+            .storePanel()
         }
     }
 
@@ -128,16 +128,7 @@ struct GoogleTracksSection: View {
                 Text("An empty country list reaches every country. Two-letter uppercase codes.")
                     .font(.system(size: 11)).foregroundStyle(Theme.text3)
             }
-            .buildPanel()
+            .storePanel()
         }
-    }
-}
-
-extension View {
-    func buildPanel() -> some View {
-        padding(13).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 }
