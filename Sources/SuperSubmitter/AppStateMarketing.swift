@@ -246,14 +246,6 @@ extension AppState {
         })
     }
 
-    /// Apple names one attribute per feature. The tab offers the common set
-    /// and the YAML editor takes any other value that Apple adds later.
-    static let accessibilityFeatures = [
-        "VOICE_OVER", "VOICE_CONTROL", "LARGER_TEXT", "SUFFICIENT_CONTRAST",
-        "DIFFERENTIATE_WITHOUT_COLOR_ALONE", "REDUCED_MOTION", "DARK_INTERFACE",
-        "CAPTIONS", "AUDIO_DESCRIPTIONS",
-    ]
-
     func accessibilityBinding(_ feature: String) -> Binding<Bool> {
         Binding(get: { self.marketing.accessibility?.supports.contains(feature) == true },
                 set: { on in

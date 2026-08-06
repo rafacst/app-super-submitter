@@ -39,25 +39,28 @@ struct MarketingTab: View {
         return Section_("Custom product pages", icon: "doc.on.doc.fill", tint: Theme.accent) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { index, _ in
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            TextField("Key",
-                                      text: state.customProductPageBinding(index: index,
-                                                                           name: false))
-                                .frame(width: 150)
-                            TextField("Name",
-                                      text: state.customProductPageBinding(index: index,
-                                                                           name: true))
+                    VStack(alignment: .leading, spacing: 8) {
+                        FieldRow {
+                            LabeledField("Key", width: 170) {
+                                TextField("", text: state.customProductPageBinding(index: index,
+                                                                                   name: false))
+                            }
+                            LabeledField("Name", width: 300) {
+                                TextField("", text: state.customProductPageBinding(index: index,
+                                                                                   name: true))
+                            }
+                            Spacer(minLength: 0)
                             Button(role: .destructive) {
                                 state.removeCustomProductPage(at: index)
                             } label: { Image(systemName: "trash") }
                         }
-                        TextField("Promotional text, \(state.locale)",
-                                  text: state.customProductPageTextBinding(index: index,
-                                                                           locale: state.locale)
-                                      .limited(to: MarketingLimits
-                                          .customProductPagePromotionalText))
-                        Text("The limit is 170 characters. Apple allows 35 pages.")
+                        LabeledField("Promotional text, \(state.locale)", note: "170",
+                                     width: 620) {
+                            TextField("", text: state.customProductPageTextBinding(
+                                index: index, locale: state.locale)
+                                .limited(to: MarketingLimits.customProductPagePromotionalText))
+                        }
+                        Text("Apple allows 35 pages.")
                             .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
                     }.storePanel()
                 }
@@ -73,27 +76,34 @@ struct MarketingTab: View {
         return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            TextField("Key",
-                                      text: state.experimentBinding(index: index, name: false))
-                                .frame(width: 150)
-                            TextField("Name",
-                                      text: state.experimentBinding(index: index, name: true))
+                    VStack(alignment: .leading, spacing: 8) {
+                        FieldRow {
+                            LabeledField("Key", width: 170) {
+                                TextField("", text: state.experimentBinding(index: index,
+                                                                            name: false))
+                            }
+                            LabeledField("Name", width: 300) {
+                                TextField("", text: state.experimentBinding(index: index,
+                                                                            name: true))
+                            }
+                            Spacer(minLength: 0)
                             Button(role: .destructive) {
                                 state.removeExperiment(at: index)
                             } label: { Image(systemName: "trash") }
                         }
-                        HStack(spacing: 10) {
-                            Text("Traffic")
-                                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
-                            Slider(value: state.experimentTrafficBinding(index: index),
-                                   in: 1...100, step: 1)
-                                .frame(width: 220)
-                            Text("\(Int(state.experimentTrafficBinding(index: index).wrappedValue)) %")
-                                .font(Theme.mono(11.5)).frame(width: 46, alignment: .leading)
-                            TextField("Treatments, comma-separated",
-                                      text: state.experimentTreatmentsBinding(index: index))
+                        FieldRow {
+                            LabeledField("Traffic", width: 290) {
+                                HStack(spacing: 8) {
+                                    Slider(value: state.experimentTrafficBinding(index: index),
+                                           in: 1...100, step: 1)
+                                    Text("\(Int(state.experimentTrafficBinding(index: index).wrappedValue)) %")
+                                        .font(Theme.mono(11.5)).frame(width: 40, alignment: .trailing)
+                                }
+                            }
+                            LabeledField("Treatments", note: "comma-separated", width: 320) {
+                                TextField("", text: state.experimentTreatmentsBinding(index: index))
+                            }
+                            Spacer(minLength: 0)
                         }
                         Text("The app creates the experiment and never starts it. Apple allows 3 treatments.")
                             .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
@@ -111,32 +121,40 @@ struct MarketingTab: View {
         return Section_("In-app events", icon: "calendar", tint: Theme.pink) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            TextField("Key",
-                                      text: state.appEventBinding(index: index, badge: false))
-                                .frame(width: 150)
-                            TextField("Badge, for example BADGE_LIVE_EVENT",
-                                      text: state.appEventBinding(index: index, badge: true))
+                    VStack(alignment: .leading, spacing: 8) {
+                        FieldRow {
+                            LabeledField("Key", width: 170) {
+                                TextField("", text: state.appEventBinding(index: index,
+                                                                          badge: false))
+                            }
+                            LabeledField("Badge", width: 300) {
+                                ChoiceField(value: state.appEventBinding(index: index, badge: true),
+                                            choices: StoreValues.eventBadges,
+                                            emptyLabel: "No badge")
+                            }
+                            Spacer(minLength: 0)
                             Button(role: .destructive) {
                                 state.removeAppEvent(at: index)
                             } label: { Image(systemName: "trash") }
                         }
-                        TextField("Name, \(state.locale)  ·  30 characters",
-                                  text: state.appEventTextBinding(index: index,
-                                                                  locale: state.locale,
-                                                                  field: .name)
-                                      .limited(to: MarketingLimits.appEventName))
-                        TextField("Short description  ·  50 characters",
-                                  text: state.appEventTextBinding(index: index,
-                                                                  locale: state.locale,
-                                                                  field: .shortDescription)
-                                      .limited(to: MarketingLimits.appEventShortDescription))
-                        TextField("Long description  ·  120 characters",
-                                  text: state.appEventTextBinding(index: index,
-                                                                  locale: state.locale,
-                                                                  field: .longDescription)
-                                      .limited(to: MarketingLimits.appEventLongDescription))
+                        FieldRow {
+                            LabeledField("Name, \(state.locale)", note: "30", width: 260) {
+                                TextField("", text: state.appEventTextBinding(
+                                    index: index, locale: state.locale, field: .name)
+                                    .limited(to: MarketingLimits.appEventName))
+                            }
+                            LabeledField("Short description", note: "50", width: 340) {
+                                TextField("", text: state.appEventTextBinding(
+                                    index: index, locale: state.locale, field: .shortDescription)
+                                    .limited(to: MarketingLimits.appEventShortDescription))
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        LabeledField("Long description", note: "120", width: 620) {
+                            TextField("", text: state.appEventTextBinding(
+                                index: index, locale: state.locale, field: .longDescription)
+                                .limited(to: MarketingLimits.appEventLongDescription))
+                        }
                     }.storePanel()
                 }
                 Button("Add an in-app event") { state.addAppEvent() }
@@ -154,14 +172,20 @@ struct MarketingTab: View {
                     .frame(height: 110)
                     .scrollContentBackground(.hidden)
                     .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
-                HStack {
-                    TextField("Territories, comma-separated. Empty means every territory.",
-                              text: state.eulaTerritoriesBinding)
-                        .disabled(state.eulaTextBinding.wrappedValue.isEmpty)
-                    Text("\(state.eulaTextBinding.wrappedValue.count) / 10000")
-                        .font(Theme.mono(11))
-                        .foregroundStyle(state.eulaTextBinding.wrappedValue.count > 10_000
-                                         ? Theme.red : Theme.text3)
+                FieldRow {
+                    LabeledField("Territories") {
+                        MultiChoiceField(text: state.eulaTerritoriesBinding,
+                                         choices: StoreValues.appleTerritories,
+                                         emptyLabel: "Every territory")
+                            .disabled(state.eulaTextBinding.wrappedValue.isEmpty)
+                    }
+                    LabeledField("Length", width: 90) {
+                        Text("\(state.eulaTextBinding.wrappedValue.count) / 10000")
+                            .font(Theme.mono(11))
+                            .foregroundStyle(state.eulaTextBinding.wrappedValue.count > 10_000
+                                             ? Theme.red : Theme.text3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
                 Text("An empty agreement leaves the Apple standard licence in place.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
@@ -206,8 +230,7 @@ struct MarketingTab: View {
             VStack(alignment: .leading, spacing: 7) {
                 TextField("Name", text: state.nominationBinding(.name))
                 Picker("Type", selection: state.nominationBinding(.type)) {
-                    ForEach(["APP_LAUNCH", "APP_ENHANCEMENTS", "IN_APP_EVENT",
-                             "NEW_CONTENT"], id: \.self) { Text($0).tag($0) }
+                    ForEach(StoreValues.nominationTypes) { Text($0.label).tag($0.value) }
                 }.labelsHidden()
                 TextField("Description", text: state.nominationBinding(.description),
                           axis: .vertical)
@@ -221,9 +244,8 @@ struct MarketingTab: View {
     private var accessibility: some View {
         Section_("Accessibility declaration", icon: "figure.wave", tint: Theme.orange) {
             VStack(alignment: .leading, spacing: 5) {
-                ForEach(AppState.accessibilityFeatures, id: \.self) { feature in
-                    Toggle(feature.split(separator: "_").map(\.capitalized).joined(separator: " "),
-                           isOn: state.accessibilityBinding(feature))
+                ForEach(StoreValues.accessibilityFeatures) { feature in
+                    Toggle(feature.label, isOn: state.accessibilityBinding(feature.value))
                         .font(.system(size: 11.5))
                 }
                 Text("The declaration is written as a draft.")
@@ -237,7 +259,7 @@ struct MarketingTab: View {
             VStack(alignment: .leading, spacing: 7) {
                 Picker("Action", selection: state.appClipActionBinding) {
                     Text("None").tag("")
-                    ForEach(["OPEN", "VIEW", "PLAY"], id: \.self) { Text($0).tag($0) }
+                    ForEach(StoreValues.appClipActions) { Text($0.label).tag($0.value) }
                 }.labelsHidden()
                 TextField("Subtitle, \(state.locale)",
                           text: state.appClipSubtitleBinding(locale: state.locale))

@@ -9,32 +9,53 @@ import SwiftUI
 struct AndroidArtifactsSection: View {
     @Environment(AppState.self) private var state
 
-    private static let fileFields: [AppState.ArtifactField] = [
-        .apk, .mappingFile, .nativeSymbols, .expansionMain, .expansionPatch, .deviceTierConfig,
+    /// The three a normal Android release names.
+    private static let common: [AppState.ArtifactField] = [
+        .apk, .mappingFile, .nativeSymbols,
     ]
+
+    /// The three that only an APK release or a device-tier build ever needs.
+    ///
+    /// A bundle carries its own assets, so the two expansion files apply to an
+    /// APK alone, and most apps ship neither. Six boxes on first sight said
+    /// they were all part of the job.
+    private static let rare: [AppState.ArtifactField] = [
+        .expansionMain, .expansionPatch, .deviceTierConfig,
+    ]
+
+    /// Open when one of them holds a value. A path folded out of sight is a
+    /// path nobody can find again.
+    @State private var showRare = false
 
     var body: some View {
         Section_("Android artifacts", icon: "shippingbox.fill", tint: Theme.playGreen) {
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(Self.fileFields, id: \.self) { field in
-                    HStack(spacing: 10) {
-                        Text(field.label)
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
-                            .frame(width: 150, alignment: .leading)
-                        TextField("Path, relative to the manifest",
-                                  text: state.artifactBinding(field))
-                            .frame(maxWidth: 340)
-                        Button("Choose…") { chooseFile(field) }
-                            .controlSize(.small)
-                        Text(field.hint)
-                            .font(.system(size: 11)).foregroundStyle(Theme.text3)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
+                ForEach(Self.common, id: \.self) { field in
+                    pathRow(field)
                 }
+                DisclosureGroup("Expansion files and device tiers", isExpanded: $showRare) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Self.rare, id: \.self) { field in
+                            pathRow(field)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                .font(.system(size: 12))
                 externalApk
             }
             .storePanel()
+            .onAppear { showRare = Self.rare.contains { !state.artifactBinding($0).wrappedValue.isEmpty } }
+        }
+    }
+
+    private func pathRow(_ field: AppState.ArtifactField) -> some View {
+        let binding = state.artifactBinding(field)
+        return LabeledField(field.label, note: field.hint) {
+            PathField(path: binding,
+                      problem: state.missingFileNote(for: binding.wrappedValue)) {
+                chooseFile(field)
+            }
         }
     }
 
@@ -96,37 +117,28 @@ struct GoogleTracksSection: View {
     var body: some View {
         Section_("Google tracks and rollout", icon: "chart.line.uptrend.xyaxis", tint: Theme.playBlue) {
             VStack(alignment: .leading, spacing: 11) {
-                HStack(spacing: 10) {
-                    LabeledContent("Release track") {
-                        TextField("production", text: state.googlePrimaryTrackBinding)
-                            .frame(width: 150)
-                    }
-                    Text("The one track that the Release tab sends.")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
-                    Spacer(minLength: 0)
+                LabeledField("Release track") {
+                    ChoiceField(value: state.googlePrimaryTrackBinding,
+                                choices: StoreValues.googleTracks,
+                                emptyLabel: "Pick a track", allowsNone: false)
                 }
-                HStack(spacing: 10) {
-                    LabeledContent("Write these tracks") {
-                        TextField("internal, production", text: state.googleTracksBinding)
-                            .frame(width: 260)
-                    }
-                    Text("One edit reaches them all. Empty means the release track alone.")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
-                    Spacer(minLength: 0)
+                LabeledField("Write these tracks") {
+                    MultiChoiceField(text: state.googleTracksBinding,
+                                     choices: StoreValues.googleTracks,
+                                     emptyLabel: "The release track alone")
                 }
-                Divider().overlay(Theme.sep)
-                HStack(spacing: 10) {
-                    LabeledContent("Countries") {
-                        TextField("US, DE, BR", text: state.googleCountriesBinding)
-                            .frame(width: 260)
-                    }
-                    Toggle("Include the rest of the world",
-                           isOn: state.googleRestOfWorldBinding)
-                        .disabled(state.googleCountriesBinding.wrappedValue.isEmpty)
-                    Spacer(minLength: 0)
-                }
-                Text("An empty country list reaches every country. Two-letter uppercase codes.")
+                Text("The release track is the one the Release tab sends. One edit reaches every track you write.")
                     .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Divider().overlay(Theme.sep)
+                LabeledField("Countries") {
+                    MultiChoiceField(text: state.googleCountriesBinding,
+                                     choices: StoreValues.googleCountries,
+                                     emptyLabel: "Every country")
+                }
+                Toggle("Include the rest of the world", isOn: state.googleRestOfWorldBinding)
+                    .disabled(state.googleCountriesBinding.wrappedValue.isEmpty)
+                    .font(.system(size: 12))
             }
             .storePanel()
         }

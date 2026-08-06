@@ -245,7 +245,7 @@ struct ReleaseTab: View {
                 : "You can halt a staged rollout only. A completed rollout cannot be halted."
         }
         if !state.applied {
-            return "Blocked: no draft exists yet. Run an apply on the Submit tab first."
+            return "Blocked: no draft exists yet. Run an apply on the Summary tab first."
         }
         if let first = blockers.first {
             return "Blocked: \(first.title.lowercased()) is not done. Finish it in the console, then press Re-check."
@@ -280,6 +280,13 @@ private struct ChecklistRow: View {
         return HStack(alignment: .top, spacing: 10) {
             // Only an Unknown row takes a hand-made mark. No API can read it,
             // so the developer is the only source.
+            //
+            // The other rows keep an empty column, and an empty column is a
+            // rule you cannot see: two rows side by side, one tickable and one
+            // not, with nothing to say why. They now carry the reason. A tick
+            // box on an API-read row would be worse than missing — it would
+            // let the developer mark a step done that the store says is not,
+            // on the one screen in the app that may never overstate a state.
             Group {
                 if row.state == .unknown {
                     let marked = state.consoleMarks.contains(row.id)
@@ -290,7 +297,7 @@ private struct ChecklistRow: View {
                             .fill(marked ? Theme.accent : .clear)
                             .frame(width: 14, height: 14)
                             .overlay(RoundedRectangle(cornerRadius: 3)
-                                .strokeBorder(Theme.sep, lineWidth: 1))
+                                .strokeBorder(Theme.controlEdge, lineWidth: 1))
                             .overlay(Text(marked ? "✓" : "")
                                 .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
                             .contentShape(.rect)
@@ -299,7 +306,12 @@ private struct ChecklistRow: View {
                     .accessibilityLabel(row.title)
                     .accessibilityValue(marked ? "Confirmed" : "Not confirmed")
                 } else {
-                    Color.clear.frame(width: 14, height: 14)
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.text3)
+                        .frame(width: 14, height: 14)
+                        .help("The store reports this one. There is nothing to tick.")
+                        .accessibilityLabel("Read from the store")
                 }
             }
             .frame(width: 15)

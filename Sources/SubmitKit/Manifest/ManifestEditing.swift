@@ -164,15 +164,31 @@ public extension Manifest {
         self.media = media
     }
 
-    /// Moves one file inside its bucket. The list order is the order the
-    /// stores show, so the developer needs it and no other model does.
+    /// Moves one file inside its bucket, one place at a time.
+    ///
+    /// The list order is the order the stores show, so the developer needs it
+    /// and no other model does.
     mutating func moveMediaPath(_ path: String, by offset: Int, locale: String,
                                 deviceClass: DeviceClass, previews: Bool = false) {
-        var values = mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+        let values = mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
         guard let index = values.firstIndex(of: path) else { return }
-        let target = index + offset
-        guard values.indices.contains(target) else { return }
-        values.swapAt(index, target)
+        moveMediaPath(path, to: index + offset, locale: locale,
+                      deviceClass: deviceClass, previews: previews)
+    }
+
+    /// Moves one file to a place in its bucket.
+    ///
+    /// A remove and an insert, not a swap. Over one place the two are the same
+    /// thing, which is why the arrow buttons never showed the difference; a
+    /// drag from the first tile to the fifth is where a swap stops being a
+    /// reorder and starts being two files trading places.
+    mutating func moveMediaPath(_ path: String, to target: Int, locale: String,
+                                deviceClass: DeviceClass, previews: Bool = false) {
+        var values = mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+        guard let index = values.firstIndex(of: path),
+              values.indices.contains(target), index != target else { return }
+        values.remove(at: index)
+        values.insert(path, at: target)
 
         var media = self.media ?? Media()
         if previews {

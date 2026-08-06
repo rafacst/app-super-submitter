@@ -53,12 +53,11 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case marketing
     case reviewInfo
     case plan
-    case submit
     case release
-    // Managing. These read a live app and act on it one button at a time.
-    case reviews
-    case analytics
-    case health
+    // Managing. One tab that reads a live app and acts on it one button at
+    // a time. It was three, and the three together held six sentences and
+    // five buttons: three destinations for one question.
+    case liveApp
 
     var id: Int { rawValue }
 
@@ -72,11 +71,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .marketing: "Marketing"
         case .reviewInfo: "Review info"
         case .plan: "Summary"
-        case .submit: "Submit"
         case .release: "Release"
-        case .reviews: "Reviews"
-        case .analytics: "Analytics"
-        case .health: "App health"
+        case .liveApp: "Live app"
         }
     }
 
@@ -84,7 +80,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var modes: Set<Mode> {
         switch self {
         case .stores: [.publishing, .managing]
-        case .build, .money, .reviewInfo, .plan, .submit, .release: [.publishing]
+        case .build, .money, .reviewInfo, .plan, .release: [.publishing]
         // What the listing says and what it shows are the two things a
         // manager changes most, and Managing had nowhere to show them: an
         // imported app filled these tabs and the mode that imported it could
@@ -93,7 +89,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // Marketing edits a live listing, so it belongs to the manager. The
         // publishing plan still writes it when the manifest holds it, so an
         // import loses nothing.
-        case .marketing, .reviews, .analytics, .health: [.managing]
+        case .marketing, .liveApp: [.managing]
         }
     }
 
@@ -113,40 +109,23 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .marketing: selected ? "megaphone.fill" : "megaphone"
         case .reviewInfo: selected ? "checkmark.square.fill" : "checkmark.square"
         case .plan: selected ? "text.bubble.fill" : "text.bubble"
-        case .submit: selected ? "square.and.arrow.up.fill" : "square.and.arrow.up"
         case .release: selected ? "airplane.path.dotted" : "airplane"
-        case .reviews: selected ? "star.bubble.fill" : "star.bubble"
-        case .analytics: selected ? "chart.xyaxis.line" : "chart.line.uptrend.xyaxis"
-        case .health: selected ? "cross.case.fill" : "cross.case"
+        case .liveApp: selected ? "waveform.path.ecg.rectangle.fill" : "waveform.path.ecg.rectangle"
         }
     }
 
     /// The colour of the tab in the sidebar.
     ///
-    /// It carries no meaning, the way the four extra hues in `Theme` carry
-    /// none: a column of thirteen identical grey icons is one shape repeated,
-    /// and a colour per tab is thirteen places you can find by eye.
+    /// One accent, not thirteen. A colour per tab was meant to make the column
+    /// thirteen findable places, but the shape already does that: each row has
+    /// its own glyph and its own word. What the colours actually did was
+    /// override the accent the user chose in System Settings, thirteen times,
+    /// and spend the whole palette on decoration — so when one row genuinely
+    /// had something to say, there was no colour left to say it in.
     ///
-    /// Release is the exception and it is red on purpose. Red says
-    /// irreversible everywhere else in the app, and Release is the one tab
-    /// that is.
-    var tint: Color {
-        switch self {
-        case .stores: Theme.accent
-        case .build: Theme.purple
-        case .details: Theme.teal
-        case .media: Theme.pink
-        case .money: Theme.green
-        case .marketing: Theme.orange
-        case .reviewInfo: Theme.teal
-        case .plan: Theme.accent
-        case .submit: Theme.orange
-        case .release: Theme.red
-        case .reviews: Theme.yellow
-        case .analytics: Theme.purple
-        case .health: Theme.pink
-        }
-    }
+    /// Release is the exception, and the only one. Red says irreversible
+    /// everywhere else in the app, and Release is the tab that is.
+    var tint: Color { self == .release ? Theme.red : Theme.accent }
 
     /// The question the tab answers. Spec section 16.3.
     var question: String {
@@ -159,24 +138,24 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .marketing: "How does the App Store sell it?"
         case .reviewInfo: "What does the reviewer need?"
         case .plan: "What changes, exactly?"
-        case .submit: "Do it."
         case .release: "Is it ready, and shall I send it?"
-        case .reviews: "What do the customers say, and what do I answer?"
-        case .analytics: "How is the shipped app doing?"
-        case .health: "Something is wrong with the live app. What can I do?"
+        case .liveApp: "What are the customers seeing, and what can I fix?"
         }
     }
 
-    /// The four zones of the app. The sidebar draws a divider between them,
+    /// The three zones of the app. The sidebar draws a divider between them,
     /// because the zone tells the user what a tab can do to a live store.
+    ///
+    /// There used to be a fourth, for the tab that wrote the drafts. Summary
+    /// reads and then writes, from one screen, so the read and the write are
+    /// one zone: you cannot reach the second half without passing the first.
     enum Zone: Int, CaseIterable {
-        case edits, reads, writes, releases
+        case edits, reads, releases
 
         var label: String {
             switch self {
             case .edits: "Edit the manifest"
-            case .reads: "Check"
-            case .writes: "Write the drafts"
+            case .reads: "Check, then write the drafts"
             case .releases: "Release"
             }
         }
@@ -186,8 +165,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         switch self {
         case .stores, .build, .details, .media, .money, .marketing, .reviewInfo: .edits
         case .plan: .reads
-        case .submit: .writes
-        case .release, .reviews, .analytics, .health: .releases
+        case .release, .liveApp: .releases
         }
     }
 
@@ -206,5 +184,5 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// Stores draws no rule of its own. The sidebar pins it to the foot,
     /// under everything, because one credential covers the whole account and
     /// the tab is a setting rather than step one.
-    var startsZone: Bool { self == .plan || self == .release || self == .reviews }
+    var startsZone: Bool { self == .plan || self == .release || self == .liveApp }
 }

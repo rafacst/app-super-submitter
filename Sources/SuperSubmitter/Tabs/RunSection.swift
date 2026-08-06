@@ -2,22 +2,24 @@ import Foundation
 import SubmitKit
 import SwiftUI
 
-/// Tab 8. The run. It writes drafts and it releases nothing.
-struct SubmitTab: View {
+/// The run, under the plan that produced it. It writes drafts and releases
+/// nothing.
+///
+/// This was a tab of its own, and before a plan existed it held one sentence
+/// that pointed at the Summary tab. That is a navigation step charging rent
+/// for a dead end: the plan and the run are one act, and the diff belongs in
+/// front of the developer while the writes go out.
+struct RunSection: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if state.runIndex < 0 {
-                readyToRun
-            } else {
-                stepList
-                if let failure = state.runFailure { failurePanel(failure) }
-                if let message = state.providerFailure { providerPanel(message) }
-                if uploading { uploadPanel }
-                logPanel
-                if state.runDone { finished }
-            }
+            stepList
+            if let failure = state.runFailure { failurePanel(failure) }
+            if let message = state.providerFailure { providerPanel(message) }
+            if uploading { uploadPanel }
+            logPanel
+            if state.runDone { finished }
         }
         .frame(maxWidth: 860, alignment: .leading)
     }
@@ -26,36 +28,6 @@ struct SubmitTab: View {
         guard state.runIndex >= 0, state.runIndex < state.runSteps.count,
               state.runFailure == nil, !state.runDone else { return false }
         return state.runSteps[state.runIndex].isUpload
-    }
-
-    // MARK: - Before
-
-    private var readyToRun: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(state.plan == nil ? "No plan yet." : "Ready to run.")
-                .font(.system(size: 15, weight: .semibold))
-            Text(readyLine)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.text2)
-                .lineSpacing(4)
-                .frame(maxWidth: 520, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-            QuietButton(title: "Review the plan first") { state.selectedTab = .plan }
-        }
-    }
-
-    private var readyLine: String {
-        guard let plan = state.plan else {
-            return "Open the Summary tab. It reads both stores and lists every change before this tab writes one."
-        }
-        let systems = plan.systems.map { system -> String in
-            switch system {
-            case .apple: "App Store"
-            case .google: "Google Play"
-            case .provider: state.provider == .adapty ? "Adapty" : "RevenueCat"
-            }
-        }
-        return "\(plan.writeCount) writes and \(plan.uploadCount) uploads, across \(systems.joined(separator: ", ")). The run ends with a draft in each store. It sends nothing to review."
     }
 
     // MARK: - During
@@ -285,15 +257,17 @@ struct SubmitTab: View {
                 .font(.system(size: 17, weight: .semibold))
                 .kerning(-0.17)
             Text(state.dryRun
-                 ? "Every request above was built and logged. No store received one. Turn the dry run off on the Summary tab to write the drafts."
+                 ? "Every request above was built and logged. No store received one. Turn the dry run off in the bar at the top to write the drafts."
                  : "Nothing went to review. Nothing reached a customer. Both drafts are visible in the two consoles.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .frame(maxWidth: 560, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Button { state.selectedTab = state.dryRun ? .plan : .release } label: {
-                Text(state.dryRun ? "Back to Summary" : "Go to Release")
+            // A dry run leaves the developer where they started, so the way
+            // back is the plan itself and not another tab.
+            Button { state.dryRun ? state.dismissRun() : (state.selectedTab = .release) } label: {
+                Text(state.dryRun ? "Back to the plan" : "Go to Release")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 15)

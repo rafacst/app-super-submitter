@@ -13,12 +13,27 @@ enum Theme {
     static let field = Color(light: 0xFFFFFF, dark: 0x2C2C30)
 
     // Text, from the loudest to the quietest.
+    ///
+    /// Every tier clears 4.5 to 1 against the worst surface it ever lands on,
+    /// which is `sunken` in light and `field` in dark, not the page. The old
+    /// `text3` was 2.9 to 1 in light and 3.6 to 1 in dark, and it carried the
+    /// placeholders, the counters, and every "Apple allows 35 pages" note, so
+    /// the quietest tier was the one nobody could read. The other two moved
+    /// with it, to keep three steps that are still three steps apart.
     static let text = Color(light: 0x1D1D1F, dark: 0xF1F1F3)
-    static let text2 = Color(light: 0x6B6B70, dark: 0x9A9AA1)
-    static let text3 = Color(light: 0x96969B, dark: 0x75757C)
+    static let text2 = Color(light: 0x5C5C63, dark: 0xAEAEB6)
+    static let text3 = Color(light: 0x6E6E78, dark: 0x9696A0)
 
     static let sep = Color(light: .black.opacity(0.10), dark: .white.opacity(0.12))
     static let sep2 = Color(light: .black.opacity(0.055), dark: .white.opacity(0.07))
+
+    /// The edge of something you can click or type into.
+    ///
+    /// WCAG 1.4.11 asks 3 to 1 of the boundary that tells you a control is a
+    /// control. `sep` is 1.25 to 1 in light and 1.56 to 1 in dark: right for a
+    /// card, invisible on a text field. It stays a hairline, because the rule
+    /// is about contrast and not about thickness.
+    static let controlEdge = Color(light: 0x86868C, dark: 0x7C7C82)
 
     static let accent = Color(light: 0x0A6FD8, dark: 0x4D9BF7)
     static let accentText = Color.white
@@ -277,7 +292,7 @@ struct QuietButton: View {
                 .padding(.vertical, 4)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                    .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
         }
         .buttonStyle(.plain)
     }
@@ -292,7 +307,9 @@ struct SmallToggle: View {
             withAnimation(.easeOut(duration: 0.12)) { isOn.toggle() }
         } label: {
             ZStack(alignment: isOn ? .trailing : .leading) {
-                Capsule().fill(isOn ? Theme.accent : Theme.sep)
+                // The off track is the state, so it has to be visible against
+                // the bar behind it. `sep` reads as nothing there.
+                Capsule().fill(isOn ? Theme.accent : Theme.controlEdge)
                 Circle()
                     .fill(.white)
                     .frame(width: 16, height: 16)

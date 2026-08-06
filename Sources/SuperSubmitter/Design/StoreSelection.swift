@@ -71,21 +71,26 @@ private struct StoreSelectionCard: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 17)
             .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+            // Selection wears the selection colour, not the brand colour.
+            //
+            // The card used to fill and outline itself with `store.tint`,
+            // which is black for Apple and green for Google. Two cards in the
+            // same state then looked like two different states, and the green
+            // one read as "connected" while the panel under it still said Not
+            // connected. Green means a good outcome everywhere else in the app,
+            // so it may not also mean "this one is the Android one".
+            //
+            // The logo keeps the brand. That is identity, and identity is what
+            // a logo is for.
             .background {
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(LinearGradient(
-                        colors: selected
-                            ? [store.tint.opacity(0.14), Theme.raised]
-                            : [Theme.raised, Theme.raised],
-                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(selected ? Theme.accent.opacity(0.10) : Theme.raised)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(selected ? store.tint.opacity(0.85) : Theme.sep,
+                    .strokeBorder(selected ? Theme.accent : Theme.controlEdge,
                                   lineWidth: selected ? 1.6 : Theme.hairline)
             }
-            .shadow(color: selected ? store.tint.opacity(0.10) : .clear,
-                    radius: 12, y: 4)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

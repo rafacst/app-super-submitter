@@ -191,21 +191,44 @@ private struct CredentialCard<Content: View>: View {
     let test: () -> Void
     @ViewBuilder let content: Content
 
+    private var connectionSymbol: String {
+        if status.isConnected { return "checkmark.circle.fill" }
+        if status.isFailed { return "exclamationmark.triangle.fill" }
+        return status == .testing ? "clock.fill" : "circle.dashed"
+    }
+
+    private var connectionWord: String {
+        if status.isConnected { return "Connected" }
+        if status.isFailed { return "The store refused it" }
+        return status == .testing ? "Testing" : "Not connected"
+    }
+
+    /// Yellow and not red for a refusal. Nothing was written, so nothing has to
+    /// be taken back, and red says irreversible everywhere in this app.
+    private var connectionColour: Color {
+        if status.isConnected { return Theme.green }
+        if status.isFailed || status == .testing { return Theme.yellow }
+        return Theme.text2
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 StoreMark(store: store, size: 18)
                 Text("\(store.storeName) credential").font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 6)
+                // Four states, four words, four glyphs. A refused key used to
+                // draw the same grey "Not connected" as a key nobody has tried
+                // yet, so the one state that needs the developer to act looked
+                // like the state they had not reached.
                 HStack(spacing: 5) {
-                    Image(systemName: status.isConnected ? "checkmark.circle.fill"
-                                    : status == .testing ? "clock.fill" : "circle.dashed")
-                        .font(.system(size: 11))
-                    Text(status.isConnected ? "Connected" : status == .testing ? "Testing" : "Not connected")
-                        .font(.system(size: 11.5))
-                        .fixedSize()
+                    Image(systemName: connectionSymbol).font(.system(size: 11))
+                    Text(connectionWord).font(.system(size: 11.5)).fixedSize()
                 }
-                .foregroundStyle(status.isConnected ? Theme.green : status == .testing ? Theme.yellow : Theme.text2)
+                .foregroundStyle(connectionColour)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(store.storeName) credential")
+                .accessibilityValue(connectionWord)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 13)

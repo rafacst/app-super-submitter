@@ -12,10 +12,9 @@ struct ListingDeclarations: View {
 
     var body: some View {
         @Bindable var state = state
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 18) {
             categories
             declarations
-            consoleSteps
         }
         .sheet(isPresented: $state.showAgeRating) { AgeRatingSheet() }
         .sheet(isPresented: $state.showDataSafety) { DataSafetySheet() }
@@ -25,11 +24,13 @@ struct ListingDeclarations: View {
         Section_("Categories", icon: "square.grid.2x2.fill", tint: Theme.purple) {
             VStack(alignment: .leading, spacing: 9) {
                 if state.stores.contains(.apple) {
-                    HStack {
-                        TextField("Apple primary category",
-                                  text: state.reviewBinding(.applePrimaryCategory))
-                        TextField("Apple secondary category",
-                                  text: state.reviewBinding(.appleSecondaryCategory))
+                    LabeledField("Primary", note: "Apple") {
+                        ChoiceField(value: state.reviewBinding(.applePrimaryCategory),
+                                    choices: StoreValues.appleCategories, emptyLabel: "Pick a category")
+                    }
+                    LabeledField("Secondary", note: "Apple, optional") {
+                        ChoiceField(value: state.reviewBinding(.appleSecondaryCategory),
+                                    choices: StoreValues.appleCategories, emptyLabel: "None")
                     }
                 }
             }.storePanel()
@@ -49,28 +50,35 @@ struct ListingDeclarations: View {
                 }
                 Divider()
                 Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
+                    .font(.system(size: 12))
                     .padding(.horizontal, 14).padding(.vertical, 11)
                 Divider()
-                HStack {
-                    Text("Kids age band")
-                    TextField("Optional Apple age band",
-                              text: state.reviewMetadataBinding("kidsAgeBand"))
+                VStack(alignment: .leading, spacing: 9) {
+                    LabeledField("Kids age band", note: "Apple, optional") {
+                        ChoiceField(value: state.reviewMetadataBinding("kidsAgeBand"),
+                                    choices: StoreValues.kidsAgeBands, emptyLabel: "None")
+                    }
+                    LabeledField("Review attachments", note: "comma-separated") {
+                        TextField("paths", text: state.reviewMetadataBinding("attachments"))
+                    }
                 }
-                .padding(.horizontal, 14).padding(.vertical, 9)
-                Divider()
-                HStack {
-                    Text("Review attachments")
-                    TextField("Paths, comma-separated",
-                              text: state.reviewMetadataBinding("attachments"))
-                }
-                .padding(.horizontal, 14).padding(.vertical, 9)
+                .padding(.horizontal, 14).padding(.vertical, 11)
             }.storePanel(padding: 0)
         }
     }
+}
 
-    /// The Console-only rows that this tab owns, from the **one** list that
-    /// tab 9 also reads. A row is never done in one place and open in the
-    /// other. Spec section 16.6.
+/// The Console-only rows that the Details tab owns, from the **one** list that
+/// tab 9 also reads. A row is never done in one place and open in the other.
+/// Spec section 16.6.
+///
+/// It is a wide list of rows, so it stays in the main column while the small
+/// fields above it moved beside the preview.
+struct ConsoleStepsPanel: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View { consoleSteps }
+
     private var consoleSteps: some View {
         Section_("Finish in the console", icon: "arrow.up.forward.square.fill",
                  tint: Theme.yellow) {

@@ -254,14 +254,24 @@ public enum Validator {
         let manifest = input.manifest
         var result: [Finding] = []
 
-        for (path, store) in [(Planner.applePath(manifest), Store.apple),
-                              (manifest.release?.build?.android, Store.google)] {
-            guard input.stores.contains(store), let path, !path.isEmpty else { continue }
+        // Each named build on its own line. This used to ask
+        // `Planner.applePath`, which answers `ios ?? macos`, so a manifest that
+        // named both hid a broken `.pkg` behind a good `.ipa` and the run met
+        // it instead. The Build tab reports each path at its own box, and the
+        // two can only agree if the plan counts them the same way.
+        let builds: [(path: String?, id: String, place: String, store: Store)] = [
+            (manifest.release?.build?.ios, "ios", "iOS", .apple),
+            (manifest.release?.build?.macos, "macos", "Mac", .apple),
+            (manifest.release?.build?.android, "android", "Android", .google),
+        ]
+        for build in builds {
+            guard input.stores.contains(build.store),
+                  let path = build.path, !path.isEmpty else { continue }
             if Planner.resolve(path, root: input.root) == nil {
                 result.append(Finding(
-                    id: "build.missing.\(store.rawValue)", severity: .error,
+                    id: "build.missing.\(build.id)", severity: .error,
                     message: "The manifest names the build \(path) and the file does not exist.",
-                    location: "Build · \(store == .apple ? "iOS" : "Android")", fix: .build))
+                    location: "Build · \(build.place)", fix: .build))
             }
         }
         result += googleArtifacts(input)

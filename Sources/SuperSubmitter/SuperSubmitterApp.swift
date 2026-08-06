@@ -69,6 +69,18 @@ struct SuperSubmitterApp: App {
                 }
                 .disabled(state.linkedApps.isEmpty)
             }
+            // The app owns the stack, so the menu drives it directly. The
+            // field editor keeps its own, and the standard item would reach
+            // that one instead: every field writes `store.yaml` as it is
+            // typed, so the manifest stack is the one a developer means.
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { state.undoEdit() }
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!state.canUndoEdit)
+                Button("Redo") { state.redoEdit() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+                    .disabled(!state.canRedoEdit)
+            }
             // Every edit writes `store.yaml` as the user types, so this repeats
             // a write that already happened. It exists because a Mac user
             // presses Command-S to be sure, and the shell then stamps the time.

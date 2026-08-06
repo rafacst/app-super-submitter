@@ -58,18 +58,25 @@ struct Sidebar: View {
             ModeSwitch().padding(.horizontal, 8).padding(.bottom, 10)
 
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(Tab.tabs(in: state.mode).filter { $0 != .stores }) { tab in
-                    // A rule before tab 7 and before tab 9. It marks where
-                    // the app stops editing a file and starts touching a
-                    // store.
-                    if tab.startsZone {
-                        Color.clear.frame(height: 6)
-                        Hairline().padding(.horizontal, 8)
-                        Color.clear.frame(height: 6)
+                // Every one of these edits an app, so with no app open there
+                // is nothing for them to edit. They used to show greyed, which
+                // reads as nine places you have not earned yet rather than
+                // nine places that do not apply. Stores and Settings stay:
+                // one key covers the whole account, so both work with no app.
+                if !state.showsEntryScreen {
+                    ForEach(Tab.tabs(in: state.mode).filter { $0 != .stores }) { tab in
+                        // A rule before tab 7 and before tab 9. It marks where
+                        // the app stops editing a file and starts touching a
+                        // store.
+                        if tab.startsZone {
+                            Color.clear.frame(height: 6)
+                            Hairline().padding(.horizontal, 8)
+                            Color.clear.frame(height: 6)
+                        }
+                        TabRow(tab: tab)
                     }
-                    TabRow(tab: tab)
+                    Color.clear.frame(height: 6)
                 }
-                Color.clear.frame(height: 6)
                 SettingsRow()
             }
             .padding(.horizontal, 8)
@@ -148,6 +155,15 @@ private struct TabRow: View {
 
     private var selected: Bool { state.selectedTab == tab }
 
+    /// Quiet until you are standing on it.
+    ///
+    /// Release keeps its red at all times. The warning is the whole point, and
+    /// a warning you only see once you have arrived is not a warning.
+    private var iconColour: Color {
+        if tab == .release { return Theme.red }
+        return selected ? tab.tint : Theme.text2
+    }
+
     var body: some View {
         Button {
             state.selectedTab = tab
@@ -155,9 +171,7 @@ private struct TabRow: View {
             HStack(spacing: 9) {
                 Image(systemName: tab.symbol(selected: selected))
                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
-                    // Always its own colour, so the column reads as thirteen
-                    // places and not one shape repeated.
-                    .foregroundStyle(tab.tint)
+                    .foregroundStyle(iconColour)
                     .frame(width: 20)
                 Text(tab.title)
                     .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
@@ -167,9 +181,8 @@ private struct TabRow: View {
                     BadgeView(count: badge.count, severity: badge.severity, size: 16)
                 }
             }
-            // The row wears the colour of its tab, as a wash rather than a
-            // solid. Thirteen solid fills would each need their own readable
-            // text colour, and the lighter ones cannot carry white at all.
+            // A wash rather than a solid fill, so the label keeps the text
+            // colour it already reads well in.
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(selected ? tab.tint.opacity(0.16) : .clear,
@@ -259,7 +272,7 @@ struct ModeSwitch: View {
         .padding(2)
         .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
     }
 }
 

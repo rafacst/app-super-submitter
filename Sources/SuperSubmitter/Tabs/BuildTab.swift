@@ -48,7 +48,7 @@ struct BuildTab: View {
         .background(Theme.sunken)
         .clipShape(RoundedRectangle(cornerRadius: 7))
         .overlay(RoundedRectangle(cornerRadius: 7)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
     }
 
     private var importSection: some View {
@@ -72,9 +72,14 @@ struct BuildTab: View {
                     versionWarning(mismatch)
                 }
             }
+            // Side by side. Both answer "what goes into the Google edit", and
+            // stacked they left the right half of a 980 point tab empty.
             if state.stores.contains(.google) {
-                AndroidArtifactsSection()
-                GoogleTracksSection()
+                HStack(alignment: .top, spacing: 14) {
+                    AndroidArtifactsSection()
+                    GoogleTracksSection().frame(width: 330)
+                }
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -87,21 +92,21 @@ struct BuildTab: View {
                     title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
                     prompt: ".ipa · drop here or",
                     extensions: ["ipa"], reading: state.readingPackages.contains(.ipa),
-                    error: state.packageErrors[.ipa],
+                    error: state.packageErrors[.ipa] ?? state.missingBuildNote(.ipa),
                     choose: { state.chooseBuildFiles(allowedExtensions: ["ipa"]) },
                     accept: state.importPackages)
                 PackageDropWell(
                     title: state.packages[.pkg]?.url.lastPathComponent ?? "Mac App Store package",
                     prompt: ".pkg · drop here or",
                     extensions: ["pkg"], reading: state.readingPackages.contains(.pkg),
-                    error: state.packageErrors[.pkg],
+                    error: state.packageErrors[.pkg] ?? state.missingBuildNote(.pkg),
                     choose: { state.chooseBuildFiles(allowedExtensions: ["pkg"]) },
                     accept: state.importPackages)
                 PackageDropWell(
                     title: state.packages[.aab]?.url.lastPathComponent ?? "Android package",
                     prompt: ".aab · drop here or",
                     extensions: ["aab"], reading: state.readingPackages.contains(.aab),
-                    error: state.packageErrors[.aab],
+                    error: state.packageErrors[.aab] ?? state.missingBuildNote(.aab),
                     choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
                     accept: state.importPackages)
             }
@@ -307,7 +312,7 @@ private struct PackageDropWell: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(targeted ? Theme.field : Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(targeted ? Theme.accent : Theme.sep,
+            .strokeBorder(targeted ? Theme.accent : Theme.controlEdge,
                           style: StrokeStyle(lineWidth: targeted ? 1.5 : 1, dash: [3, 3])))
         .dropDestination(for: URL.self) { urls, _ in
             let accepted = urls.filter { extensions.contains($0.pathExtension.lowercased()) }
@@ -383,7 +388,7 @@ private struct PickerLabel: View {
         .padding(.horizontal, 9).padding(.vertical, 6)
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
     }
 }
 
