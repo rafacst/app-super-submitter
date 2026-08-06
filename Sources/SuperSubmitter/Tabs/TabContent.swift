@@ -29,11 +29,8 @@ struct TabContent: View {
         case .marketing: MarketingTab()
         case .reviewInfo: ReviewInfoTab()
         case .plan: PlanTab()
-        case .submit: SubmitTab()
         case .release: ReleaseTab()
-        case .reviews: ReviewsTab()
-        case .analytics: AnalyticsTab()
-        case .health: HealthTab()
+        case .liveApp: LiveAppTab()
         }
     }
 }

@@ -32,13 +32,23 @@ struct MoneyTab: View {
         @Bindable var state = state
         return Section_("Base price", icon: "dollarsign.circle.fill", tint: Theme.green) {
             VStack(alignment: .leading, spacing: 9) {
-                HStack {
-                    TextField("Amount", text: $state.priceAmount).frame(width: 90)
-                    TextField("Currency", text: $state.priceCurrency).frame(width: 80)
-                    TextField("Territory", text: $state.priceTerritory).frame(width: 90)
-                    Text("Other territories are converted by the stores.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                FieldRow {
+                    LabeledField("Amount", width: 90) {
+                        TextField("0.00", text: $state.priceAmount)
+                    }
+                    LabeledField("Currency") {
+                        ChoiceField(value: $state.priceCurrency,
+                                    choices: StoreValues.currencies,
+                                    emptyLabel: "Pick a currency", allowsNone: false)
+                    }
                 }
+                LabeledField("Base territory") {
+                    ChoiceField(value: $state.priceTerritory,
+                                choices: StoreValues.appleTerritories,
+                                emptyLabel: "Pick a territory")
+                }
+                Text("Other territories are converted by the stores.")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 Toggle("Convert the base price for every Google region",
                        isOn: state.autoConvertPricesBinding)
                     .disabled(!state.stores.contains(.google))
@@ -82,8 +92,11 @@ struct MoneyTab: View {
     private var availabilitySection: some View {
         Section_("Availability", icon: "globe", tint: Theme.teal) {
             VStack(alignment: .leading, spacing: 10) {
-                TextField("App Store territory codes (comma-separated)",
-                          text: state.appTerritoriesBinding)
+                LabeledField("App Store territories") {
+                    MultiChoiceField(text: state.appTerritoriesBinding,
+                                     choices: StoreValues.appleTerritories,
+                                     emptyLabel: "Every territory Apple sells in")
+                }
                 if state.stores.contains(.apple) {
                     Link("Edit App Store countries ↗",
                          destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
@@ -105,46 +118,67 @@ struct MoneyTab: View {
         return Section_("In-app purchases", icon: "cart.fill", tint: Theme.accent) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            TextField("Product ID", text: state.purchaseBinding(index: index, field: .id))
-                            Picker("Kind", selection: state.purchaseKindBinding(index: index)) {
-                                ForEach(Manifest.Purchase.Kind.allCases, id: \.self) {
-                                    Text($0.rawValue.replacingOccurrences(of: "_", with: " ")).tag($0)
-                                }
-                            }.labelsHidden().frame(width: 150)
+                    VStack(alignment: .leading, spacing: 8) {
+                        FieldRow {
+                            LabeledField("Product id", width: 380) {
+                                TextField("", text: state.purchaseBinding(index: index, field: .id))
+                            }
+                            LabeledField("Kind", width: 150) {
+                                Picker("", selection: state.purchaseKindBinding(index: index)) {
+                                    Text("Consumable").tag(Manifest.Purchase.Kind.consumable)
+                                    Text("Non-consumable").tag(Manifest.Purchase.Kind.nonConsumable)
+                                    Text("Non-renewing").tag(Manifest.Purchase.Kind.nonRenewing)
+                                }.labelsHidden()
+                            }
+                            Spacer(minLength: 0)
                             Button(role: .destructive) { state.removePurchase(at: index) } label: {
                                 Image(systemName: "trash")
                             }
                         }
-                        HStack {
-                            TextField("Name", text: state.purchaseBinding(index: index, field: .name))
-                            TextField("Amount", text: state.purchaseBinding(index: index, field: .amount)).frame(width: 80)
-                            TextField("Currency", text: state.purchaseBinding(index: index, field: .currency)).frame(width: 75)
-                            TextField("Entitlements (comma-separated)",
-                                      text: state.purchaseBinding(index: index, field: .entitlement))
+                        FieldRow {
+                            LabeledField("Name") {
+                                TextField("", text: state.purchaseBinding(index: index, field: .name))
+                            }
+                            LabeledField("Amount", width: 90) {
+                                TextField("0.00", text: state.purchaseBinding(index: index, field: .amount))
+                            }
+                            LabeledField("Currency", width: 175) {
+                                ChoiceField(value: state.purchaseBinding(index: index, field: .currency),
+                                            choices: StoreValues.currencies, emptyLabel: "Pick a currency", allowsNone: false)
+                            }
+                            LabeledField("Entitlements", note: "comma-separated", width: 230) {
+                                TextField("", text: state.purchaseBinding(index: index, field: .entitlement))
+                            }
                         }
                         catalogRow(target: .purchase(index),
                                    active: state.purchaseActiveBinding(index: index),
                                    activeLabel: "On sale")
-                        HStack {
-                            TextField("Review screenshot path",
-                                      text: state.purchaseMetadataBinding(index: index,
-                                                                          key: "screenshot"))
-                            TextField("App Store territories",
-                                      text: state.purchaseMetadataBinding(index: index,
-                                                                          key: "territories"))
+                        FieldRow {
+                            LabeledField("Review screenshot", width: 260) {
+                                TextField("path", text: state.purchaseMetadataBinding(index: index,
+                                                                                      key: "screenshot"))
+                            }
+                            LabeledField("Apple-hosted content", width: 260) {
+                                TextField("path", text: state.purchaseMetadataBinding(index: index,
+                                                                                      key: "content"))
+                            }
+                            LabeledField("App Store territories") {
+                                MultiChoiceField(
+                                    text: state.purchaseMetadataBinding(index: index,
+                                                                        key: "territories"),
+                                    choices: StoreValues.appleTerritories,
+                                    emptyLabel: "Every territory")
+                            }
                         }
-                        TextField("Apple-hosted content package path",
-                                  text: state.purchaseMetadataBinding(index: index,
-                                                                      key: "content"))
-                        HStack {
-                            TextField("Localized name",
-                                      text: state.purchaseMetadataBinding(index: index,
-                                                                          key: "localeName"))
-                            TextField("Localized description",
-                                      text: state.purchaseMetadataBinding(index: index,
-                                                                          key: "localeDescription"))
+                        FieldRow {
+                            LabeledField("Localized name", width: 260) {
+                                TextField("", text: state.purchaseMetadataBinding(index: index,
+                                                                                  key: "localeName"))
+                            }
+                            LabeledField("Localized description") {
+                                TextField("", text: state.purchaseMetadataBinding(index: index,
+                                                                                  key: "localeDescription"))
+                            }
                         }
                         HStack {
                             Toggle("Apple-hosted content",
@@ -167,29 +201,51 @@ struct MoneyTab: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { groupIndex, group in
                     VStack(alignment: .leading, spacing: 9) {
-                        HStack {
-                            TextField("Group ID", text: state.subscriptionGroupBinding(index: groupIndex, name: false))
-                            TextField("Group name", text: state.subscriptionGroupBinding(index: groupIndex, name: true))
+                        FieldRow {
+                            LabeledField("Group id", width: 300) {
+                                TextField("", text: state.subscriptionGroupBinding(index: groupIndex, name: false))
+                            }
+                            LabeledField("Group name", width: 300) {
+                                TextField("", text: state.subscriptionGroupBinding(index: groupIndex, name: true))
+                            }
+                            Spacer(minLength: 0)
                             Button(role: .destructive) { state.removeSubscriptionGroup(at: groupIndex) } label: {
                                 Image(systemName: "trash")
                             }
                         }
                         gracePeriodRow(groupIndex: groupIndex)
                         ForEach(Array(group.plans.enumerated()), id: \.offset) { planIndex, _ in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    TextField("Plan ID", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .id))
-                                    TextField("Duration", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .duration)).frame(width: 75)
-                                    TextField("Base plan ID", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .basePlanID)).frame(width: 120)
+                            VStack(alignment: .leading, spacing: 7) {
+                                FieldRow {
+                                    LabeledField("Plan id") {
+                                        TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .id))
+                                    }
+                                    LabeledField("Duration", width: 130) {
+                                        ChoiceField(value: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .duration),
+                                                    choices: StoreValues.subscriptionDurations,
+                                                    emptyLabel: "Pick a period", allowsNone: false)
+                                    }
+                                    LabeledField("Base plan id", note: "Google", width: 130) {
+                                        TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .basePlanID))
+                                    }
                                     Button(role: .destructive) { state.removePlan(groupIndex: groupIndex, planIndex: planIndex) } label: {
                                         Image(systemName: "minus.circle")
                                     }
                                 }
-                                HStack {
-                                    TextField("Amount", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .amount)).frame(width: 80)
-                                    TextField("Currency", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .currency)).frame(width: 75)
-                                    TextField("Entitlements", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .entitlement))
-                                    TextField("Package", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .packageKey)).frame(width: 100)
+                                FieldRow {
+                                    LabeledField("Amount", width: 90) {
+                                        TextField("0.00", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .amount))
+                                    }
+                                    LabeledField("Currency", width: 175) {
+                                        ChoiceField(value: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .currency),
+                                                    choices: StoreValues.currencies, emptyLabel: "Pick a currency", allowsNone: false)
+                                    }
+                                    LabeledField("Entitlements", note: "comma-separated") {
+                                        TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .entitlement))
+                                    }
+                                    LabeledField("Package", note: "RevenueCat", width: 130) {
+                                        TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .packageKey))
+                                    }
                                 }
                                 catalogRow(
                                     target: .plan(group: groupIndex, plan: planIndex),
@@ -212,15 +268,21 @@ struct MoneyTab: View {
     /// App Store keeps them in App Store Connect.
     private func catalogRow(target: OfferTarget, active: Binding<Bool>,
                             activeLabel: String) -> some View {
-        HStack(spacing: 10) {
-            Toggle(activeLabel, isOn: active)
-                .disabled(!state.stores.contains(.google))
-            TextField("Tax category", text: state.taxBinding(target, withdrawal: false))
-                .frame(width: 190)
-            TextField("Withdrawal right", text: state.taxBinding(target, withdrawal: true))
-                .frame(width: 210)
-            Text("Google only")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+        FieldRow {
+            LabeledField(" ", width: 130) {
+                Toggle(activeLabel, isOn: active)
+                    .disabled(!state.stores.contains(.google))
+            }
+            LabeledField("Tax category", note: "Google", width: 240) {
+                ChoiceField(value: state.taxBinding(target, withdrawal: false),
+                            choices: StoreValues.taxCategories,
+                            emptyLabel: "The standard rate")
+            }
+            LabeledField("Withdrawal right", note: "Google", width: 310) {
+                ChoiceField(value: state.taxBinding(target, withdrawal: true),
+                            choices: StoreValues.withdrawalRights,
+                            emptyLabel: "Not declared")
+            }
             Spacer(minLength: 0)
         }
     }
@@ -275,15 +337,23 @@ struct MoneyTab: View {
             Section_(state.provider == .adapty ? "Paywalls" : "Offerings", icon: "rectangle.on.rectangle", tint: Theme.yellow) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array((state.manifest.offerings ?? []).enumerated()), id: \.offset) { index, _ in
-                        VStack(alignment: .leading) {
-                            HStack {
-                                TextField("Key", text: state.offeringBinding(index: index, field: "key"))
-                                TextField("Name", text: state.offeringBinding(index: index, field: "name"))
+                        VStack(alignment: .leading, spacing: 7) {
+                            FieldRow {
+                                LabeledField("Key") {
+                                    TextField("", text: state.offeringBinding(index: index, field: "key"))
+                                }
+                                LabeledField("Name") {
+                                    TextField("", text: state.offeringBinding(index: index, field: "name"))
+                                }
                                 Button(role: .destructive) { state.removeOffering(at: index) } label: { Image(systemName: "trash") }
                             }
-                            HStack {
-                                TextField("Product IDs, comma-separated", text: state.offeringBinding(index: index, field: "products"))
-                                Toggle("Current", isOn: state.offeringCurrentBinding(index: index))
+                            FieldRow {
+                                LabeledField("Product ids", note: "comma-separated") {
+                                    TextField("", text: state.offeringBinding(index: index, field: "products"))
+                                }
+                                LabeledField(" ", width: 90) {
+                                    Toggle("Current", isOn: state.offeringCurrentBinding(index: index))
+                                }
                             }
                         }
                     }

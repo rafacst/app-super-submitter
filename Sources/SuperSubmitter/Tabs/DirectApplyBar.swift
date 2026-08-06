@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The one button a Managing tab uses to write what it edits.
 ///
-/// Publishing sends the same rows through the Summary and the Submit tabs,
-/// with the whole diff in front of them. A manager who fixed one typo wants
+/// Publishing sends the same rows through the Summary tab, with the whole
+/// diff in front of them. A manager who fixed one typo wants
 /// one button, so this is that button. Every row lands in a draft or an
 /// unstarted state, and none of them reaches a customer until somebody
 /// publishes it in the store console.

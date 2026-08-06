@@ -1,30 +1,22 @@
+import SubmitKit
 import SwiftUI
 
 struct AddLocaleSheet: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
     @State private var code = ""
-    @FocusState private var codeFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Add a locale")
+            Text("Add a language")
                 .font(.system(size: 15, weight: .semibold))
-            Text("Use the manifest locale code. Super Submitter maps it to each store's code when they differ.")
+            Text("Pick the language of the listing. Super Submitter writes the code each store wants.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
 
-            TextField("en-US", text: $code)
-                .textFieldStyle(.plain)
-                .font(Theme.mono(13))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 7)
-                .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-                .focused($codeFocused)
-                .onSubmit(add)
+            ChoiceField(value: $code, choices: StoreValues.listingLocales,
+                        emptyLabel: "Pick a language", allowsNone: false)
 
             HStack(spacing: 9) {
                 Spacer()
@@ -38,7 +30,6 @@ struct AddLocaleSheet: View {
         .padding(22)
         .frame(width: 390)
         .background(Theme.content)
-        .onAppear { codeFocused = true }
     }
 
     private func add() {

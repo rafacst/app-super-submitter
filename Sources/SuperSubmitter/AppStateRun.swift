@@ -252,9 +252,23 @@ extension AppState {
         return !plan.isBlocked && unacknowledgedWarnings == 0 && !isRunning
     }
 
-    // MARK: - Tab 8. The run
+    // MARK: - The run, under the plan
 
     var isRunning: Bool { runIndex >= 0 && !runDone && runFailure == nil }
+
+    /// True while the Summary tab shows the run instead of the diff.
+    var showsRun: Bool { runIndex >= 0 }
+
+    /// Puts the plan back in view once a run has finished.
+    ///
+    /// It clears the view and not the result. `resetRunState` throws the plan
+    /// away too, which would make the way back from a dry run a second read of
+    /// both stores for a diff that has not changed.
+    func dismissRun() {
+        guard runDone else { return }
+        runIndex = -1
+        runDone = false
+    }
 
     var runSteps: [PlanStep] { plan?.steps ?? [] }
 
@@ -358,10 +372,16 @@ extension AppState {
             "is_dry_run": dryRun
         ])
         refreshDraftStatuses()
-        // The tab moves to tab 9 by itself when the run ends. Spec 16.3.
+        // The tab moves on by itself when the run ends. Spec 16.3.
+        //
+        // Only after a real apply. A dry run wrote nothing, so there is no
+        // draft to release and the developer is still reading the log; the
+        // guard used to be "am I on the Submit tab", which was true for a dry
+        // run too, so a dry run threw the reader onto Release after 1.4
+        // seconds and the button underneath said "Back to Summary".
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(1_400))
-            guard let self, runDone, selectedTab == .submit else { return }
+            guard let self, runDone, !dryRun, selectedTab == .plan else { return }
             selectedTab = .release
         }
     }

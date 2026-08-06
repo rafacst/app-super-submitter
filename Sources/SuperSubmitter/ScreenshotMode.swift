@@ -147,11 +147,28 @@ enum ScreenshotMode {
             state.showOnboarding = false
         case "onboarding":
             state.showOnboarding = true
+        // The sheets. Each opens over the tab the app already landed on, so
+        // none of them needs a tab of its own.
+        case "settings":
+            state.showSettings = true
+        case "import":
+            state.showExistingAppImport = true
+        case "paywall":
+            state.paywall = .settings
         default:
             state.showOnboarding = false
-            if let tab = Tab.allCases.first(where: { $0.title.lowercased() == screen }) {
-                state.selectedTab = tab
+            // The script names a tab by a slug, and a title holds spaces:
+            // "review-info" is "Review info". Letters alone match both.
+            let wanted = letters(screen)
+            guard let tab = Tab.allCases.first(where: { letters($0.title) == wanted }) else {
+                // A name that matches nothing used to leave the app on the
+                // tab it opened with. The script then wrote that picture
+                // under the name of the screen it asked for, and nothing
+                // said so. "health" was one: the tab is "App health".
+                print("UNKNOWN_SCREEN \(screen)")
+                exit(1)
             }
+            state.selectedTab = tab
         }
         #endif
     }
@@ -192,6 +209,10 @@ enum ScreenshotMode {
         print("CAPTURE_RECT \(Int(frame.minX)),\(Int(top)),\(Int(frame.width)),\(Int(frame.height))")
         fflush(stdout)
         #endif
+    }
+
+    private static func letters(_ text: String) -> String {
+        text.filter(\.isLetter).lowercased()
     }
 
     private static func value(for flag: String) -> String? {

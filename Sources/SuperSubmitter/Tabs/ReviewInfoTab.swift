@@ -26,12 +26,22 @@ struct ReviewInfoTab: View {
     private var reviewContact: some View {
         Section_("Review contact", icon: "person.crop.circle.fill", tint: Theme.accent) {
             VStack(alignment: .leading, spacing: 9) {
-                HStack {
-                    TextField("First name", text: state.reviewBinding(.firstName))
-                    TextField("Last name", text: state.reviewBinding(.lastName))
+                FieldRow {
+                    LabeledField("First name") {
+                        TextField("", text: state.reviewBinding(.firstName))
+                    }
+                    LabeledField("Last name") {
+                        TextField("", text: state.reviewBinding(.lastName))
+                    }
                 }
-                TextField("Email", text: state.reviewBinding(.email))
-                TextField("Phone", text: state.reviewBinding(.phone))
+                FieldRow {
+                    LabeledField("Email") {
+                        TextField("", text: state.reviewBinding(.email))
+                    }
+                    LabeledField("Phone", width: 150) {
+                        TextField("", text: state.reviewBinding(.phone))
+                    }
+                }
                 Text("App Store only. Google Play has no equivalent fields.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)

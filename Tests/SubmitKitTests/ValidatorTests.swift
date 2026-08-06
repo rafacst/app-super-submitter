@@ -93,6 +93,27 @@ private func has(_ list: [Finding], _ id: String) -> Bool {
     #expect(has(list, "build.number"))
 }
 
+/// The gap: the rule asked `Planner.applePath`, which answers `ios ?? macos`.
+/// A manifest that named both hid a broken `.pkg` behind a good `.ipa`, so the
+/// plan passed and the run met the missing file instead.
+@Test func aMissingMacBuildIsReportedEvenWhenTheiOSBuildIsThere() throws {
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("both-builds-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    try Data("ipa".utf8).write(to: folder.appendingPathComponent("a.ipa"))
+
+    var manifest = base()
+    manifest.release?.build = Manifest.Release.Build(ios: "a.ipa", macos: "gone.pkg")
+
+    let list = Validator.findings(Planner.Input(
+        manifest: manifest, actual: ActualState(), stores: [.apple, .google], root: folder))
+    #expect(!has(list, "build.missing.ios"))
+    let mac = try #require(list.first { $0.id == "build.missing.macos" })
+    #expect(mac.severity == .error)
+    #expect(mac.location == "Build · Mac")
+}
+
 @Test func aBundleIdentifierMismatchIsAnError() {
     let manifest = base()
     var package = AppPackage(kind: .ipa, url: URL(fileURLWithPath: "/tmp/a.ipa"))

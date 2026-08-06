@@ -5,10 +5,17 @@ import SwiftUI
 /// product, and it is the one screen that can refuse to continue.
 struct PlanTab: View {
     @Environment(AppState.self) private var state
+    /// Holds the question open while the developer answers it. See applyRow.
+    @State private var confirmingApply = false
 
     var body: some View {
         Group {
-            if state.planReading {
+            // The run replaces the diff on the same tab. Pressing Apply used
+            // to move the developer to a tab of its own, which put a
+            // navigation step between the decision and its consequence.
+            if state.showsRun {
+                RunSection()
+            } else if state.planReading {
                 reading
             } else if let plan = state.plan {
                 if plan.isEmpty && plan.findings.isEmpty {
@@ -143,12 +150,19 @@ struct PlanTab: View {
 
     // MARK: - The diff
 
+    /// The diff first.
+    ///
+    /// It is the reason to use this product: no other tool shows a developer
+    /// the exact rows before they reach a store. It used to sit under an error
+    /// card, a bar of three counters, and a list of findings, which is to say
+    /// at the bottom of a scroll. The counters describe the diff, so they now
+    /// read after it, and the findings sit against the button they block.
     private func theDiff(_ plan: PlanResult) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             if let planError = state.planError { readFailure(planError) }
+            columns(plan)
             counters(plan)
             if !plan.findings.isEmpty { validations(plan) }
-            columns(plan)
             applyRow(plan)
         }
     }
@@ -322,8 +336,11 @@ struct PlanTab: View {
             Button {
                 guard state.dryRun || state.requirePaid(.storeWrite, .apply) else { return }
                 guard state.canApply else { return }
-                state.selectedTab = .submit
-                state.startRun()
+                // A dry run sends nothing, so it asks nothing. A real apply is
+                // the moment the app first touches a live store, and it is the
+                // only place in Publishing where that happens.
+                guard !state.dryRun else { return runNow() }
+                confirmingApply = true
             } label: {
                 Text(state.dryRun ? "Dry run" : "Apply")
                     .font(.system(size: 14, weight: .semibold))
@@ -344,6 +361,21 @@ struct PlanTab: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
+        .confirmationDialog("Write to \(state.storeListText)?",
+                            isPresented: $confirmingApply, titleVisibility: .visible) {
+            Button("Write the drafts") { runNow() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(confirmLine(plan))
+        }
+    }
+
+    private func runNow() { state.startRun() }
+
+    private func confirmLine(_ plan: PlanResult) -> String {
+        "\(plan.writeCount) writes and \(plan.uploadCount) uploads reach \(state.storeListText) now."
+            + "\n\nEach one lands in a draft. Nothing goes to review, and nothing reaches a"
+            + " customer, until you send it yourself on the Release tab."
     }
 
     /// One line, and never a second one. The counters, the warning rows, and
@@ -373,7 +405,12 @@ private struct Counter: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(value).font(.system(size: 17, weight: .semibold)).kerning(-0.34)
+            Text(value)
+                .font(.system(size: 17, weight: .semibold)).kerning(-0.34)
+                // The three counters sit in a row and each read moves them.
+                // Proportional digits made the labels underneath shuffle.
+                .monospacedDigit()
+                .contentTransition(.numericText())
             Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
         }
     }
