@@ -78,7 +78,10 @@ private struct AppleCredentialPanel: View {
                         return true
                     })
 
-                EditableField(label: "Key id", value: $state.appleKeyID, prompt: "Key ID",
+                // "Key ID" in both places. Apple spells it that way in App
+                // Store Connect, and the label and its own placeholder
+                // disagreeing reads as two different fields.
+                EditableField(label: "Key ID", value: $state.appleKeyID, prompt: "Key ID",
                               limit: AppleCredential.keyIDLength)
                     .onChange(of: state.appleKeyID) { state.appleCredentialFieldsChanged() }
                     .fieldAnchor("stores.appleKeyID")
@@ -252,7 +255,18 @@ private struct CredentialCard<Content: View>: View {
                 if guideOpen { GuideBox(guide: guide) }
 
                 VStack(alignment: .leading, spacing: 7) {
-                    QuietButton(title: status == .testing ? "Testing…" : "Test connection", action: test)
+                    // Prominent, and below the fields rather than after the
+                    // paragraph. Testing the key is the reason this card
+                    // exists — until it passes, nothing else in the app can
+                    // reach a store — and it was a quiet button sitting under
+                    // forty words of Keychain policy, which made the policy
+                    // look like the point and the action like a footnote.
+                    // Prominent until it passes. A connected store has nothing
+                    // left to ask for, so the button steps back down.
+                    let connected = if case .connected = status { true } else { false }
+                    QuietButton(title: status == .testing ? "Testing…" : "Test connection",
+                                glass: true, prominent: !connected,
+                                action: test)
                         .disabled(status == .testing)
                     Text(keychainNote).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)

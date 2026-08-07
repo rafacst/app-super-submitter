@@ -108,33 +108,52 @@ struct ReleaseTab: View {
         .storePanel(padding: 12, horizontal: 15)
     }
 
+    /// Three columns while they fit, and a wrapping grid when they do not.
+    ///
+    /// The cards hold 5, 7 and 2 rows here, and every row is a title over a
+    /// reason over a link, so at 900 points three columns crush their text
+    /// into towers before anything wraps.
+    ///
+    /// An adaptive grid and not `ViewThatFits`. The cards are `maxWidth:
+    /// .infinity` so they can share a wide window equally, which makes their
+    /// ideal width unbounded, which makes `ViewThatFits` decide the row never
+    /// fits and take the fallback at every size. The grid asks the same
+    /// question — how many 300 point columns go in this width — without
+    /// needing an ideal width to compare.
+    ///
+    /// `alignment: .top` on the item, or a short card floats to the middle of
+    /// the row's height and the three tops no longer line up.
     private var checklist: some View {
-        HStack(alignment: .top, spacing: 14) {
-            ForEach(cards, id: \.name) { card in
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        SystemMark(name: card.name)
-                        Text(card.name).font(.system(size: 12.5, weight: .semibold))
-                        Spacer(minLength: 8)
-                        Text(verbatim: "\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
-                            .font(.system(size: 11)).foregroundStyle(Theme.text2)
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14,
+                                     alignment: .top)],
+                  alignment: .leading, spacing: 14) {
+            ForEach(cards, id: \.name) { card in checklistCard(card) }
+        }
+    }
 
-                    ForEach(card.rows) { row in
-                        Hairline(color: Theme.sep2)
-                        ChecklistRow(row: row)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    private func checklistCard(_ card: (name: String, rows: [ConsoleRow])) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                SystemMark(name: card.name)
+                Text(card.name).font(.system(size: 12.5, weight: .semibold))
+                Spacer(minLength: 8)
+                Text(verbatim: "\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
+                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            ForEach(card.rows) { row in
+                Hairline(color: Theme.sep2)
+                ChecklistRow(row: row)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     // MARK: - The status
@@ -170,6 +189,10 @@ struct ReleaseTab: View {
 
     // MARK: - The two buttons
 
+    /// The anchor the header button scrolls to. `ContentHeader` sets it as a
+    /// `jumpTarget`, the same way the field search reaches a field.
+    static let sendAnchor = "release.send"
+
     private var sendToReview: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 11) {
@@ -191,6 +214,7 @@ struct ReleaseTab: View {
                 }
             }
         }
+        .fieldAnchor(Self.sendAnchor)
     }
 
     private func column(_ store: Store) -> some View {
@@ -348,6 +372,19 @@ private struct ChecklistRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+}
+
+extension AppState {
+    /// Whether the Release tab still has a send to offer.
+    ///
+    /// The header reads this. The two send buttons sit under the checklist and
+    /// the two status cards, which is the order the work happens in and worth
+    /// keeping — but it also puts the one action the tab exists for below the
+    /// fold on every window this app has been drawn in. A developer could read
+    /// the whole screen and never learn the buttons were there.
+    var hasPendingRelease: Bool {
+        stores.contains { $0 == .apple ? !appleReleased : !googleReleased }
     }
 }
 

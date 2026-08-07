@@ -50,7 +50,17 @@ public struct ActualState: Sendable, Equatable {
         /// checksums, so the editing tabs can show the live media for free.
         public var screenshotURLs: [String: [URL]] = [:]
         public var previewURLs: [String: [URL]] = [:]
+        /// The highest build number inside **this version's train**, never
+        /// across the whole app. Apple counts a build number against the
+        /// marketing version it belongs to, and a new train may start at one.
         public var highestBuildNumber: Int?
+        /// The processed build that App Store Connect already holds for this
+        /// version, and that no version holds yet.
+        ///
+        /// Build from Project uploads with `xcodebuild -exportArchive`, so a
+        /// binary reaches Apple without this app's own upload step. The plan
+        /// still has to attach it, and this is what it attaches.
+        public var buildIdForVersion: String?
         public var attachedBuildId: String?
         public var buildUsesNonExemptEncryption: Bool?
         public var reviewDetailId: String?

@@ -23,6 +23,7 @@ public struct StateReader: Sendable {
                     appID: apple.appId,
                     basePrice: manifest.pricing?.base,
                     versionName: manifest.release?.versionName,
+                    platform: apple.platforms.first?.rawValue,
                     purchaseIds: (manifest.purchases ?? []).map(\.id),
                     subscriptionIds: (manifest.subscriptions ?? [])
                         .flatMap { $0.plans.map(\.id) },
@@ -58,9 +59,12 @@ public struct StateReader: Sendable {
     ///     localization, no price, and no territory, and the plan compares all
     ///     three.
     ///   - subscriptionIds: the same, for the subscription plans.
+    ///   - platform: `IOS` or `MAC_OS`. An app that ships both holds two build
+    ///     trains under one version string, and only one of them is this run's.
     public func readApple(appID: String,
                           basePrice: Price? = nil,
                           versionName: String? = nil,
+                          platform: String? = nil,
                           purchaseIds: [String] = [],
                           subscriptionIds: [String] = [],
                           groupNames: [String] = []) async throws -> ActualState.Apple {
@@ -247,11 +251,31 @@ public struct StateReader: Sendable {
             }
         }
 
+        // `include=preReleaseVersion` carries the marketing version of every
+        // build in the same payload, so the train each build belongs to costs
+        // no extra request.
         let builds = JSON(data: try await api.apple(
-            "GET", "/v1/builds?filter%5Bapp%5D=\(appID)&limit=200").data)
-        result.highestBuildNumber = builds["data"].array
+            "GET", "/v1/builds?filter%5Bapp%5D=\(appID)"
+                + "&include=preReleaseVersion&limit=200").data)
+        let trains = Self.appleTrains(builds, platform: platform)
+        // Only the builds of the version this run writes to. A number below
+        // another train is no conflict: Apple lets a new train start at one,
+        // and a comparison across trains blocked an upload Apple accepts.
+        let sameTrain = versionName.map { wanted in
+            builds["data"].array.filter { build in
+                build["relationships"]["preReleaseVersion"]["data"]["id"].string
+                    .flatMap { trains[$0] } == wanted
+            }
+        } ?? []
+        result.highestBuildNumber = sameTrain
             .compactMap { $0["attributes"]["version"].int }
             .max()
+        // A build Apple is still processing is not one it lets a version hold,
+        // so it stays out and the next read picks it up.
+        let processed = sameTrain
+            .filter { $0["attributes"]["processingState"].string == "VALID" }
+            .max { ($0["attributes"]["version"].int ?? 0) < ($1["attributes"]["version"].int ?? 0) }
+        result.buildIdForVersion = processed?["id"].string
         if let buildID = result.attachedBuildId,
            let build = builds["data"].array.first(where: { $0["id"].string == buildID }) {
             result.buildUsesNonExemptEncryption = build["attributes"]["usesNonExemptEncryption"].bool
@@ -477,6 +501,25 @@ public struct StateReader: Sendable {
             guard target[key] == nil else { continue }
             target[key, default: []].append(asset.url)
         }
+    }
+
+    /// The marketing version of every build train, keyed by the
+    /// `preReleaseVersions` id that a build points at.
+    ///
+    /// A train that reports another platform is dropped, because an app that
+    /// ships iOS and macOS carries two trains under one version string and
+    /// only one of them belongs to this run.
+    static func appleTrains(_ builds: JSON, platform: String?) -> [String: String] {
+        builds["included"].array
+            .filter { $0["type"].string == "preReleaseVersions" }
+            .reduce(into: [:]) { result, item in
+                guard let id = item["id"].string,
+                      let version = item["attributes"]["version"].string else { return }
+                guard platform == nil
+                    || item["attributes"]["platform"].string == nil
+                    || item["attributes"]["platform"].string == platform else { return }
+                result[id] = version
+            }
     }
 
     /// The words of one `appStoreVersionLocalizations` record.

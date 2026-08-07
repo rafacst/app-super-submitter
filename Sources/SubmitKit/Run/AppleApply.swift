@@ -391,15 +391,28 @@ extension Runner {
         guard appleBuildID != nil else { throw RunError.missingBuild }
     }
 
+    /// The build this run may write to.
+    ///
+    /// The one it just uploaded comes first. Then the one App Store Connect
+    /// already holds for this version, which is how a Build from Project
+    /// upload reaches these steps. The attached one is the last answer,
+    /// because a second apply finds it there and nothing else.
+    ///
+    /// `// ponytail: one lookup, three callers. Three copies drifted the day
+    /// // the upload stopped being the only way in.`
+    var appleTargetBuildID: String? {
+        appleBuildID ?? actual.apple?.buildIdForVersion ?? actual.apple?.attachedBuildId
+    }
+
     func appleAttachBuild() async throws {
         guard let versionID = appleVersionID else { throw RunError.missingVersion }
-        guard let buildID = appleBuildID else { return }
+        guard let buildID = appleTargetBuildID else { return }
         try await api.apple("PATCH", "/v1/appStoreVersions/\(versionID)/relationships/build",
                             body: ["data": ["type": "builds", "id": buildID]])
     }
 
     func appleBuildCompliance() async throws {
-        guard let buildID = appleBuildID ?? actual.apple?.attachedBuildId,
+        guard let buildID = appleTargetBuildID,
               let value = manifest.review?.usesNonExemptEncryption else { return }
         try await api.apple("PATCH", "/v1/builds/\(buildID)", body: [
             "data": ["type": "builds", "id": buildID,
@@ -469,7 +482,7 @@ extension Runner {
         }
 
         // The declaration only means something once a build carries it.
-        if let buildID = appleBuildID ?? actual.apple?.attachedBuildId {
+        if let buildID = appleTargetBuildID {
             try await api.apple(
                 "POST", "/v1/appEncryptionDeclarations/\(declarationID)/relationships/builds",
                 body: ["data": [["type": "builds", "id": buildID]]])

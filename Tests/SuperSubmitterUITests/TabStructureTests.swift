@@ -44,12 +44,25 @@ import Testing
 
     #expect(publishing.intersection(managing) == [.stores, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
-    #expect(Tab.tabs(in: .managing).map(\.title)
-        == ["Stores", "Details", "Media", "Marketing", "Live app"])
+    #expect(Tab.tabs(in: .managing).map { $0.title(in: .managing) }
+        == ["Stores", "Live listing", "Live media", "Marketing", "Live app"])
     // Nothing that builds, plans, writes, or releases reaches a manager.
     #expect(managing.isDisjoint(with: [.build, .money, .reviewInfo, .plan, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.
     #expect(Tab.allCases.allSatisfy { !$0.modes.isEmpty })
+}
+
+/// Two rows of one sidebar may never read the same.
+///
+/// Details and Media belong to both modes, so the plain `title` repeats inside
+/// Managing. The shell draws `title(in:)` for that reason, and a tab added to
+/// a second mode later would repeat again with nothing to catch it.
+@Test func noModeShowsTwoTabsUnderOneName() {
+    for mode in Mode.allCases {
+        let names = Tab.tabs(in: mode).map { $0.title(in: mode) }
+        #expect(Set(names).count == names.count,
+                "\(mode.title) repeats a tab name in \(names).")
+    }
 }
 
 /// Choosing a tab of the other mode switches the shell, so the content and the

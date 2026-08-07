@@ -81,8 +81,17 @@ struct ConsoleStepsPanel: View {
 
     var body: some View { consoleSteps }
 
+    /// The listing half of the Release checklist, beside the listing.
+    ///
+    /// The same rows also appear on Release, and that is on purpose: Release
+    /// is the complete pre-flight list and may not be missing any of them.
+    /// What was not on purpose was that the two lists carried different names
+    /// — "Finish in the console" here, "steps" there — so one list read as two
+    /// lists, and a developer could tick a row here and meet what looks like
+    /// an untouched copy of it two tabs later. One name, and a line that says
+    /// outright this is part of the other one.
     private var consoleSteps: some View {
-        Section_("Finish in the console", icon: "arrow.up.forward.square.fill",
+        Section_("Console steps", icon: "arrow.up.forward.square.fill",
                  tint: Theme.yellow) {
             VStack(spacing: 0) {
                 let rows = state.consoleRows.filter(\.onEditingTab)
@@ -94,6 +103,14 @@ struct ConsoleStepsPanel: View {
                     }
                     .padding(.horizontal, 14).padding(.vertical, 11)
                 } else {
+                    HStack(spacing: 8) {
+                        Text(verbatim: "The \(rows.count) of the \(state.consoleRows.count) console steps that belong to the listing.")
+                            .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        Spacer(minLength: 8)
+                        QuietButton(title: "See them all") { state.selectedTab = .release }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    Divider()
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         if index > 0 { Divider() }
                         ConsoleChecklistRow(row: row)

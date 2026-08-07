@@ -147,16 +147,29 @@ public enum Planner {
         steps += mediaSteps(input, store: .apple)
 
         // 7 and 8. The build.
-        if let path = applePath(manifest), let file = resolve(path, root: input.root) {
-            let bytes = fileSize(file)
+        //
+        // The two steps are decided apart. A build reaches Apple by this app's
+        // own upload, or by Build from Project, which uploads inside
+        // `xcodebuild -exportArchive`. The second route names no file, and
+        // gating the attach on one left the version empty and the release
+        // refused.
+        let namedBuild = applePath(manifest).flatMap { path in
+            resolve(path, root: input.root).map { (path: path, file: $0) }
+        }
+        if let named = namedBuild {
+            let bytes = fileSize(named.file)
             steps.append(PlanStep(
                 id: "apple.build", system: .apple, kind: .add,
-                summary: "build \(file.lastPathComponent)  ·  \(bytesText(bytes))",
-                title: "Upload the build \(file.lastPathComponent)",
+                summary: "build \(named.file.lastPathComponent)  ·  \(bytesText(bytes))",
+                title: "Upload the build \(named.file.lastPathComponent)",
                 requests: [RequestSketch("POST", "/v1/buildUploads"),
                            RequestSketch("POST", "/v1/buildUploadFiles")],
-                operation: .appleBuildUpload(path: path, bytes: bytes),
+                operation: .appleBuildUpload(path: named.path, bytes: bytes),
                 uploadCount: 1, uploadBytes: bytes))
+        }
+        let uploadedBuild = actual?.buildIdForVersion
+        if namedBuild != nil
+            || (uploadedBuild != nil && uploadedBuild != actual?.attachedBuildId) {
             steps.append(PlanStep(
                 id: "apple.attachBuild", system: .apple, kind: .change,
                 summary: "attach the build to \(versionName)",

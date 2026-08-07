@@ -285,11 +285,25 @@ public enum Validator {
                     message: "The build bundle id \(identifier) does not match \(bundleID).",
                     location: "Build · iOS", fix: .build))
             }
-            if let highest = input.actual.apple?.highestBuildNumber,
-               let current = package.buildNumber.flatMap(Int.init), current <= highest {
+            // The comparison stays inside one version train, which is where
+            // Apple counts a build number. Across trains it blocked the normal
+            // restart at one that a new marketing version is allowed.
+            //
+            // The version names the train, so without one there is nothing to
+            // compare against and the rule below cannot run. The apply reaches
+            // the same wall later and says only "no version", so this names it
+            // here, next to the field that fixes it.
+            let train = manifest.release?.versionName ?? ""
+            if train.isEmpty {
+                result.append(Finding(
+                    id: "build.noVersionName", severity: .error,
+                    message: "The manifest names a build and no version. App Store Connect counts a build number inside its version, so it needs both.",
+                    location: "Build · Version", fix: .build))
+            } else if let highest = input.actual.apple?.highestBuildNumber,
+                      let current = package.buildNumber.flatMap(Int.init), current <= highest {
                 result.append(Finding(
                     id: "build.number", severity: .error,
-                    message: "The build number \(current) is not greater than \(highest) in App Store Connect.",
+                    message: "The build number \(current) is not greater than \(highest), which App Store Connect already holds for version \(train).",
                     location: "Build · iOS", fix: .build))
             }
             if let versionName = manifest.release?.versionName, !versionName.isEmpty,

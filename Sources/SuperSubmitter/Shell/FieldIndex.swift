@@ -31,7 +31,7 @@ enum FieldIndex {
     /// purchase is a bug rather than a jump target.
     static let all: [FieldEntry] = [
         // MARK: Stores
-        .init(id: "stores.appleKeyID", label: "Key id", tab: .stores,
+        .init(id: "stores.appleKeyID", label: "Key ID", tab: .stores,
               keywords: ["p8", "credential", "app store connect", "api key"]),
         .init(id: "stores.appleIssuerID", label: "Issuer id", tab: .stores,
               keywords: ["uuid", "credential", "app store connect"]),

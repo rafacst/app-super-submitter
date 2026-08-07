@@ -24,7 +24,16 @@ enum Theme {
     static let text2 = Color(light: 0x5C5C63, dark: 0xAEAEB6)
     static let text3 = Color(light: 0x6E6E78, dark: 0x9696A0)
 
-    static let sep = Color(light: .black.opacity(0.10), dark: .white.opacity(0.12))
+    /// The edge of a card.
+    ///
+    /// Heavier in dark than the light value mirrors, and it has to be. A card
+    /// is `raised` on `content`, which is 1.12 to 1 in dark — the two tones
+    /// are four percent of luminance apart, so the fill carries none of the
+    /// elevation and the whole boundary rests on this line. At 0.12 the line
+    /// measured 1.63 to 1 against the page and the cards on the Build tab had
+    /// no visible edges at all. Dark mode has no shadow to fall back on, which
+    /// is why the HIG asks for the border there and not in light.
+    static let sep = Color(light: .black.opacity(0.10), dark: .white.opacity(0.22))
     static let sep2 = Color(light: .black.opacity(0.055), dark: .white.opacity(0.07))
 
     /// The edge of something you can click or type into.
@@ -48,10 +57,18 @@ enum Theme {
     static let purpleFill = Color(light: 0x6A35C9, dark: 0x6A44C4)
 
     /// Red says irreversible, and nothing else in the app may use it.
-    static let red = Color(light: 0xC9302A, dark: 0xFF5C50)
+    ///
+    /// Green and yellow are darker than the hue a status word wants, and the
+    /// reason is the pill. Every other use of these two lands on `content` or
+    /// `raised`, where the old values cleared 4.5 to 1 easily. A status pill
+    /// puts the word on `greenBg` or `yellowBg` instead, which is the same hue
+    /// at a tenth, so it lifts the floor and takes the ratio down with it:
+    /// "Done" measured 4.23 to 1 and "Needed" 4.38 to 1 on the Release tab.
+    /// The pill is where these two are read most, so the pill sets the value.
+    static let red = Color(light: 0xC42A24, dark: 0xFF7A6E)
     static let redFill = Color(light: 0xC9302A, dark: 0xC9362D)
-    static let green = Color(light: 0x1C7F3C, dark: 0x42C463)
-    static let yellow = Color(light: 0x9A6100, dark: 0xE2A336)
+    static let green = Color(light: 0x16702F, dark: 0x42C463)
+    static let yellow = Color(light: 0x8A5800, dark: 0xE2A336)
 
     /// Four more hues, so a tab of nine sections is nine pictures and not one
     /// blue wall. They carry no meaning of their own.
@@ -68,12 +85,14 @@ enum Theme {
     static let playYellow = Color(hex: 0xFBBC04)
     static let playRed = Color(hex: 0xEA4335)
 
-    static let greenBg = Color(light: Color(hex: 0x1C7F3C).opacity(0.10),
+    /// The same hue at a tenth. It follows the tint above, so a pill only ever
+    /// mixes one green with one green.
+    static let greenBg = Color(light: Color(hex: 0x16702F).opacity(0.10),
                                dark: Color(hex: 0x42C463).opacity(0.14))
-    static let yellowBg = Color(light: Color(hex: 0x9A6100).opacity(0.10),
+    static let yellowBg = Color(light: Color(hex: 0x8A5800).opacity(0.10),
                                 dark: Color(hex: 0xE2A336).opacity(0.15))
-    static let redBg = Color(light: Color(hex: 0xC9302A).opacity(0.09),
-                             dark: Color(hex: 0xFF5C50).opacity(0.14))
+    static let redBg = Color(light: Color(hex: 0xC42A24).opacity(0.09),
+                             dark: Color(hex: 0xFF7A6E).opacity(0.14))
 
     static let mono = Font.system(size: 11, design: .monospaced)
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
@@ -247,8 +266,37 @@ extension View {
     }
 
     /// One group of header controls, merged into a single lozenge on macOS 26.
-    func glassCluster(spacing: CGFloat = 7) -> some View {
-        modifier(GlassCluster(spacing: spacing))
+    ///
+    /// `morphOn` is the state that decides which controls the cluster holds.
+    /// The container can only morph one shape into another if something tells
+    /// it a change is coming, and a `ViewBuilder` closure carries no identity
+    /// to watch, so the caller names the value.
+    func glassCluster<V: Equatable>(spacing: CGFloat = 7,
+                                    morphOn value: V) -> some View {
+        modifier(GlassCluster(spacing: spacing, token: value))
+    }
+
+    /// Lets content dissolve under the band instead of sliding beneath a hard
+    /// edge.
+    ///
+    /// The band is glass, so it already refracts what passes below it. Without
+    /// the edge effect the first line of a scroll meets that glass at a hard
+    /// boundary and reads as a line cut in half. This is the other half of the
+    /// same material and belongs with it.
+    func softScrollEdge() -> some View {
+        modifier(SoftScrollEdge())
+    }
+
+    /// A floating surface that is not a form: a palette, a popover, a
+    /// heads-up panel.
+    ///
+    /// Deliberately not applied to the sheets that hold dense fields. Glass
+    /// under body copy is a legibility regression, which is the rule the panel
+    /// and the band already follow. A command palette is the case the material
+    /// was made for: a small thing over the top of the work, whose whole job
+    /// is to feel like it is hovering there rather than replacing the screen.
+    func floatingSurface(cornerRadius: CGFloat = 14) -> some View {
+        modifier(FloatingSurface(cornerRadius: cornerRadius))
     }
 }
 
@@ -301,14 +349,56 @@ private struct HeaderSurface: ViewModifier {
 
 /// The container alone. The caller keeps its own `HStack`, so the fallback is
 /// exactly the row this app already drew and nothing moves on macOS 14.
-private struct GlassCluster: ViewModifier {
+///
+/// The container is what lets two neighbouring glass shapes merge into one
+/// lozenge and, when one of them appears or leaves, morph rather than pop. The
+/// header gains and loses controls constantly — a spinner while a re-check
+/// runs, the send action once a release is pending, the read button whenever a
+/// read has not failed — so this is where the material earns its keep.
+private struct GlassCluster<Token: Equatable>: ViewModifier {
     let spacing: CGFloat
+    let token: Token
 
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             GlassEffectContainer(spacing: spacing) { content }
+                // The morph is the point. Without it the lozenge jumps to its
+                // new width on the frame a control appears, which is the one
+                // thing this material is meant not to do.
+                .animation(.smooth(duration: 0.28), value: token)
         } else {
             content
+        }
+    }
+}
+
+private struct SoftScrollEdge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
+        }
+    }
+}
+
+private struct FloatingSurface: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .background {
+                    // Clear, so the glass below is what shows through. A fill
+                    // here would be a second surface under the material and
+                    // the refraction would have nothing to refract.
+                    Color.clear.glassEffect(.regular,
+                                            in: .rect(cornerRadius: cornerRadius))
+                }
+        } else {
+            content
+                .background(Theme.content)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         }
     }
 }
@@ -382,14 +472,27 @@ struct WarningNote: View {
 struct QuietButton: View {
     let title: String
     var glass = false
+    /// The one button of a cluster that is the reason the screen exists.
+    ///
+    /// A header cluster puts every control at one weight, which is right while
+    /// they are all errands. It stops being right the moment one of them is
+    /// the answer to the question in the tab's own subtitle: three buttons at
+    /// one weight say the tab has three equal errands and no answer.
+    var prominent = false
     var action: () -> Void = {}
 
     var body: some View {
         if #available(macOS 26.0, *), glass {
             // The style draws the capsule, so the label carries no fill and
             // no border of its own. Two chromes on one button is a double edge.
-            Button(action: action) { Text(title).font(.system(size: 12)) }
-                .buttonStyle(.glass)
+            Button(action: action) {
+                Text(title).font(.system(size: 12, weight: prominent ? .semibold : .regular))
+            }
+            .buttonStyle(prominent ? AnyButtonStyle(.glassProminent) : AnyButtonStyle(.glass))
+            // Only the prominent one takes a tint. Plain glass reads the tint
+            // as a fill, so tinting both would paint the whole cluster accent
+            // and lose the very distinction this flag exists to make.
+            .tint(prominent ? Theme.accent : nil)
         } else {
             Button(action: action) { flatLabel }
                 .buttonStyle(.plain)
@@ -398,14 +501,32 @@ struct QuietButton: View {
 
     private var flatLabel: some View {
         Text(title)
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.text)
+            .font(.system(size: 12, weight: prominent ? .semibold : .regular))
+            .foregroundStyle(prominent ? Theme.accentText : Theme.text)
             .padding(.horizontal, 11)
             .padding(.vertical, 4)
-            .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
+            .background(prominent ? Theme.accent : Theme.field,
+                        in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+                .strokeBorder(prominent ? Theme.accent : Theme.controlEdge,
+                              lineWidth: Theme.hairline))
     }
+}
+
+/// Erases a button style, so one `Button` can take either of two.
+///
+/// `.buttonStyle(a ? x : y)` does not compile: the two styles are different
+/// types, and the modifier is generic over one. Branching on the whole
+/// `Button` instead would give the two branches different identities, and
+/// SwiftUI would rebuild the button rather than restyle it.
+struct AnyButtonStyle: PrimitiveButtonStyle {
+    private let make: (Configuration) -> AnyView
+
+    init<S: PrimitiveButtonStyle>(_ style: S) {
+        make = { AnyView(Button($0).buttonStyle(style)) }
+    }
+
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
 }
 
 /// The one prominent action on a screen: the apply on Summary.
