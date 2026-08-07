@@ -33,12 +33,19 @@ struct PlanTab: View {
             // The app never skips the plan. Without it, the app writes to a
             // live listing on a guess.
             //
-            // Opening the tab is the whole request. It used to read only when
-            // no plan existed at all, so a developer who edited a field and
-            // came back read a diff against the stores as they were an hour
-            // ago. A read writes nothing and costs nothing, and a stale plan
-            // is the one thing this screen may not show.
-            guard !state.planReading, !state.stores.isEmpty else { return }
+            // The read happens once, and after that only when the developer
+            // asks. Reading on every visit meant that leaving to check one
+            // field and coming back cost a full pass over both stores, and
+            // the diff the developer was reading vanished behind a spinner
+            // while it happened.
+            //
+            // A plan older than the manifest stays impossible, which is what
+            // made this safe to change: every edit calls `invalidatePlan`, so
+            // a plan on screen was always read after the last edit. What it
+            // can lag is the store itself, so the read time sits on the
+            // screen and "Read the stores again" is in the header.
+            guard !state.planReading, !state.stores.isEmpty, state.plan == nil
+            else { return }
             await state.readStores()
         }
     }
