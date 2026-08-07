@@ -65,12 +65,29 @@ struct OnboardingPanel: View {
 
             Spacer(minLength: 12)
 
-            // The rail. Six segments, one per screen, filled up to the current.
+            // The rail. Six segments, one per screen, filled up to the
+            // current, and each one a way back to its screen.
+            //
+            // It is the only indicator now. The panel carried three at once —
+            // this rail, a row of dots at the foot beside Next, and the words
+            // "STEP 1 OF 5" — for a flow six screens long. The dots were the
+            // only one that did anything, so the rail took their job and the
+            // dots went. The words stay: they are the only one of the three
+            // that names the number rather than draws it.
             HStack(spacing: 4) {
                 ForEach(0..<6, id: \.self) { index in
-                    Capsule()
-                        .fill(index <= step ? Self.tints[index] : Theme.sep)
-                        .frame(width: index == step ? 26 : 14, height: 3)
+                    Button { move(to: index) } label: {
+                        Capsule()
+                            .fill(index <= step ? Self.tints[index] : Theme.sep)
+                            .frame(width: index == step ? 26 : 14, height: 3)
+                            // The hit area is the segment plus the space
+                            // around it. A 3 point target is not a target.
+                            .padding(.vertical, 9)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(index == 5 ? "Promise" : "Step \(index + 1)")
+                    .accessibilityAddTraits(index == step ? .isSelected : [])
                 }
             }
 
@@ -198,20 +215,8 @@ struct OnboardingPanel: View {
             }
             .frame(width: 156, alignment: .leading)
 
-            Spacer()
-            HStack(spacing: 7) {
-                ForEach(0..<6, id: \.self) { index in
-                    Button { move(to: index) } label: {
-                        Capsule()
-                            .fill(index == step ? Self.tints[index] : Theme.sep)
-                            .frame(width: index == step ? 20 : 6, height: 6)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(index == 5 ? "Promise" : "Step \(index + 1)")
-                    .accessibilityAddTraits(index == step ? .isSelected : [])
-                }
-            }
+            // The dots that stood here moved into the rail at the top. See it
+            // for why.
             Spacer()
 
             HStack {

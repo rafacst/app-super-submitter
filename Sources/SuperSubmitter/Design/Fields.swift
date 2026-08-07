@@ -266,19 +266,39 @@ struct LabeledField<Content: View>: View {
         self.content = content()
     }
 
+    /// A note long enough to be a sentence goes under the control instead of
+    /// beside the label.
+    ///
+    /// Both kinds were on the label line. "comma-separated" belongs there: it
+    /// qualifies the label and reads as part of it. "Optional. A bundle and an
+    /// APK may go into one edit." does not — it is help, it is longer than the
+    /// label it follows, and on a row of three fields it pushed the labels out
+    /// of their column so there was no column left to scan.
+    private var noteIsHelp: Bool { (note?.count ?? 0) > 24 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
                 Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
-                if let note {
+                if let note, !noteIsHelp {
                     Text(note).font(.system(size: 10)).foregroundStyle(Theme.text3)
                 }
             }
             content.frame(minHeight: 22)
+            if let note, noteIsHelp {
+                Text(note)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(width: width)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         .fieldAnchor(anchor)
+        // The note is help for the field, so a reader meets it while it is on
+        // the field rather than as a stray line after it.
+        .accessibilityElement(children: .contain)
+        .accessibilityHint(noteIsHelp ? (note ?? "") : "")
     }
 }
 

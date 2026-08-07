@@ -292,7 +292,17 @@ final class AppState {
     // Tab 7. The plan.
     var plan: PlanResult?
     var planReading = false
-    var planError: String?
+    /// The stores that refused the read, one entry each.
+    ///
+    /// A list and not one joined string. Three stores failing put three
+    /// sentences in one banner, and two of them opened with the same twelve
+    /// words, so the block read as a paragraph rather than as three problems
+    /// with three fixes.
+    var planReadFailures: [String] = []
+
+    var planError: String? {
+        planReadFailures.isEmpty ? nil : planReadFailures.joined(separator: "\n")
+    }
     var dryRun = true
     var acknowledged: Set<String> = []
 
@@ -1631,7 +1641,7 @@ final class AppState {
         actualState = ActualState()
         consoleRows = []
         consoleMarks = []
-        planError = nil
+        planReadFailures = []
         planReading = false
         acknowledged = []
         stepStates = []

@@ -284,10 +284,20 @@ private struct MediaTile: View {
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text2)
                     .monospacedDigit()
             }
-            Text(stores.sorted { $0.rawValue < $1.rawValue }.map {
-                $0 == .apple ? "App Store" : "Google Play"
-            }.joined(separator: " · "))
-                .font(.system(size: 10)).foregroundStyle(Theme.text3).lineLimit(1)
+            // The logos, not the words. A tile is 112 points wide and the two
+            // names are "App Store · Google Play", so the line truncated to
+            // "App Store · Google Pl…" — losing the exact fact the row is
+            // there to carry, on the tiles that go to both stores. Two marks
+            // fit, say the same thing, and read at a glance down a grid.
+            HStack(spacing: 4) {
+                ForEach(stores.sorted { $0.rawValue < $1.rawValue }) { store in
+                    StoreMark(store: store, size: 11)
+                }
+            }
+            .frame(height: 13, alignment: .leading)
+            .accessibilityElement()
+            .accessibilityLabel(stores.sorted { $0.rawValue < $1.rawValue }
+                .map(\.storeName).joined(separator: " and "))
             // The list order is the order that both stores show, so the tile
             // carries the two moves next to the removal.
             // WCAG 2.5.2 asks 24 by 24. A mini button is about 22 by 16, and

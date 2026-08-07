@@ -92,21 +92,24 @@ struct BuildTab: View {
                     title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
                     prompt: ".ipa · drop here or",
                     extensions: ["ipa"], reading: state.readingPackages.contains(.ipa),
-                    error: state.packageErrors[.ipa] ?? state.missingBuildNote(.ipa),
+                    error: state.packageErrors[.ipa],
+                    note: state.missingBuildNote(.ipa),
                     choose: { state.chooseBuildFiles(allowedExtensions: ["ipa"]) },
                     accept: state.importPackages)
                 PackageDropWell(
                     title: state.packages[.pkg]?.url.lastPathComponent ?? "Mac App Store package",
                     prompt: ".pkg · drop here or",
                     extensions: ["pkg"], reading: state.readingPackages.contains(.pkg),
-                    error: state.packageErrors[.pkg] ?? state.missingBuildNote(.pkg),
+                    error: state.packageErrors[.pkg],
+                    note: state.missingBuildNote(.pkg),
                     choose: { state.chooseBuildFiles(allowedExtensions: ["pkg"]) },
                     accept: state.importPackages)
                 PackageDropWell(
                     title: state.packages[.aab]?.url.lastPathComponent ?? "Android package",
                     prompt: ".aab · drop here or",
                     extensions: ["aab"], reading: state.readingPackages.contains(.aab),
-                    error: state.packageErrors[.aab] ?? state.missingBuildNote(.aab),
+                    error: state.packageErrors[.aab],
+                    note: state.missingBuildNote(.aab),
                     choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
                     accept: state.importPackages)
             }
@@ -276,7 +279,16 @@ private struct PackageDropWell: View {
     let prompt: String
     let extensions: Set<String>
     let reading: Bool
+    /// A package that was dropped and could not be read. This is a fault.
     let error: String?
+    /// The manifest names a path and nothing sits there yet.
+    ///
+    /// Its own channel, and it has to be. This is the state every app is in
+    /// before its first build, so all three wells carried it, in red, on the
+    /// first launch: three faults reported for a developer who had done
+    /// nothing wrong. Red is what the app says when a drop failed, and it
+    /// only keeps that meaning while the ordinary case is quiet.
+    var note: String?
     let choose: () -> Void
     let accept: ([URL]) -> Void
     @State private var targeted = false
@@ -304,6 +316,9 @@ private struct PackageDropWell: View {
             }
             if let error {
                 Text(error).font(.system(size: 10.5)).foregroundStyle(Theme.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let note {
+                Text(note).font(.system(size: 10.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

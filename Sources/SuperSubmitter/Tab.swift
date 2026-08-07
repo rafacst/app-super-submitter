@@ -61,6 +61,24 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     var id: Int { rawValue }
 
+    /// The name of the tab in the mode that is showing it.
+    ///
+    /// Details and Media are the two tabs that appear in both modes, and they
+    /// show different things in each: the publisher edits the version that has
+    /// not shipped, the manager edits the listing the customers are reading
+    /// now. Under one word each, the two are one row apart with nothing to
+    /// tell them apart, and the sidebar cannot say which one you are standing
+    /// on. The manager's copies say which listing they touch, which also puts
+    /// them in the same voice as Live app, the tab beside them.
+    func title(in mode: Mode) -> String {
+        switch (self, mode) {
+        case (.details, .managing): "Live listing"
+        case (.media, .managing): "Live media"
+        default: title
+        }
+    }
+
+    /// The publishing name. `title(in:)` is the one the shell draws.
     var title: String {
         switch self {
         case .stores: "Stores"

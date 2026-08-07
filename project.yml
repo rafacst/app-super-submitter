@@ -161,6 +161,16 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+      configs:
+        Debug:
+          # This bundle loads inside the app, and the app enables the hardened
+          # runtime. Library validation then refuses any code that carries
+          # another team's signature, and an unsigned bundle carries none. So
+          # the whole suite failed to load with "different Team IDs" and every
+          # test in it silently never ran. These three match the host exactly.
+          CODE_SIGN_IDENTITY: Developer ID Application
+          CODE_SIGN_STYLE: Manual
+          DEVELOPMENT_TEAM: 88BXH8KNVZ
 schemes:
   SuperSubmitter:
     build:

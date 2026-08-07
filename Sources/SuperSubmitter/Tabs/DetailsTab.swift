@@ -82,13 +82,23 @@ struct DetailsTab: View {
                 if let tag { Tag(tag) }
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
-                if let limit {
+                // Quiet until the budget is worth watching.
+                //
+                // "191 / 4000" is not information — it is a number that will
+                // never matter, printed over every field on the tab, in the
+                // same size and colour as the label it sits beside. The
+                // counter now appears at half the budget, warns at four
+                // fifths, and turns red over it, so a counter on screen means
+                // the limit is in play.
+                if let limit, Double(value.count) / Double(limit) > 0.5 {
+                    let nearLimit = Double(value.count) / Double(limit) > 0.8
                     // A character budget is a count of characters, not a
                     // quantity, so it takes no thousands separator: the 4000
                     // character description limit read as "4.000".
                     Text(verbatim: "\(value.count) / \(limit)")
                         .font(.system(size: 11, weight: overLimit ? .semibold : .regular))
-                        .foregroundStyle(overLimit ? Theme.red : Theme.text2)
+                        .foregroundStyle(overLimit ? Theme.red
+                                         : nearLimit ? Theme.yellow : Theme.text2)
                         // The count changes on every key, so the digits have
                         // to hold their column or the label jitters as you type.
                         .monospacedDigit()
@@ -97,12 +107,21 @@ struct DetailsTab: View {
                 }
             }
             if multiline {
-                TextEditor(text: state.listingBinding(field).limited(to: limit))
+                // Grows with the text, from three lines to sixteen, and
+                // scrolls past that. A `TextEditor` cannot size to its
+                // content, so it took a floor of 90 points whatever it held:
+                // "Faster scanning and a new dark theme." is 37 characters and
+                // it was drawn in a box the height of six lines, twice on this
+                // tab. The ceiling is what the fixed height was protecting —
+                // the tab is inside a scroll view, and a description that runs
+                // to a page must not push the fields under it off the window.
+                TextField("", text: state.listingBinding(field).limited(to: limit),
+                          axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(3...16)
                     .font(.system(size: 13))
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .frame(minHeight: 90)
+                    .padding(7)
                     .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(overLimit ? Theme.red : Theme.sep,
@@ -198,12 +217,26 @@ struct DetailsTab: View {
                                              overriddenIn: overrides),
                multiline: title == "What is new", anchor: anchor)
         if state.stores.contains(.google) {
-            Toggle("Use different text for Google Play", isOn: state.googleOverrideBinding(google))
-                .font(.system(size: 11.5))
-            if state.manifest.hasGoogleOverride(locale: state.locale, field: google) {
-                editor("Google Play \(title.lowercased())", field: google,
-                       limit: title == "Subtitle" ? 80 : 500, multiline: title == "What is new",
-                       tag: "Google only")
+            // The toggle and the field it reveals belong to the field above
+            // them, and they used to be its siblings: three top-level rows in
+            // a column of top-level rows, with only the word "Google Play" in
+            // the child's label to say which parent it belonged to. The rule
+            // and the indent say it instead, so the label no longer has to
+            // repeat the parent's name and the tag can carry the store.
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use different text for Google Play",
+                       isOn: state.googleOverrideBinding(google))
+                    .font(.system(size: 11.5))
+                if state.manifest.hasGoogleOverride(locale: state.locale, field: google) {
+                    editor(title, field: google,
+                           limit: title == "Subtitle" ? 80 : 500,
+                           multiline: title == "What is new",
+                           tag: "Google only")
+                }
+            }
+            .padding(.leading, 11)
+            .overlay(alignment: .leading) {
+                Rectangle().fill(Theme.sep).frame(width: Theme.hairline)
             }
         }
     }

@@ -161,7 +161,7 @@ struct PlanTab: View {
     /// read after it, and the findings sit against the button they block.
     private func theDiff(_ plan: PlanResult) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            if let planError = state.planError { readFailure(planError) }
+            if !state.planReadFailures.isEmpty { readFailure(state.planReadFailures) }
             columns(plan)
             counters(plan)
             if !plan.findings.isEmpty { validations(plan) }
@@ -173,18 +173,39 @@ struct PlanTab: View {
     /// the banner adds no sentence of its own. "A store could not be read"
     /// in front of "App Store: …" reads as two stores to anyone who
     /// connected one.
-    private func readFailure(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            StatePill(text: "Read failed", foreground: Theme.red, background: Theme.redBg)
-            Text(message)
-                .font(.system(size: 12))
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            QuietButton(title: "Read again") { Task { await state.readStores() } }
+    ///
+    /// One row per store. Joined into a paragraph, two failures repeated the
+    /// same twelve words — "Check the key file, the key id, and the issuer id
+    /// on the Stores tab" — and the reader had to find the second sentence
+    /// inside the first. The pill says the state once, at the top, because it
+    /// is the same state for every row.
+    private func readFailure(_ messages: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 11) {
+                StatePill(text: "Read failed", foreground: Theme.red, background: Theme.redBg)
+                Spacer(minLength: 8)
+                QuietButton(title: "Read again") { Task { await state.readStores() } }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 11)
+
+            ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
+                if index > 0 { Hairline(color: Theme.red.opacity(0.3)) }
+                HStack(alignment: .top, spacing: 9) {
+                    Text(message)
+                        .font(.system(size: 12))
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    // The fix for every one of these is the same tab, and the
+                    // message already names it. A row that says where to go
+                    // and does not go there makes the reader do the walk.
+                    QuietButton(title: "Open Stores") { state.selectedTab = .stores }
+                }
+                .padding(.horizontal, 15)
+                .padding(.vertical, 10)
+            }
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
@@ -252,46 +273,60 @@ struct PlanTab: View {
 
     /// Apple on the left, Google in the middle, the provider on the right.
     /// The order never changes anywhere in the app.
+    /// Three columns while they fit, and a wrapping grid when they do not.
+    ///
+    /// Every line here is monospaced, so a column that gets too narrow does
+    /// not reflow gracefully — it wraps mid-identifier and the diff stops
+    /// reading as a diff. The grid keeps 320 points under every column and
+    /// wraps rather than squeeze.
+    ///
+    /// `alignment: .top` on the item, or a short column floats to the middle
+    /// of the row and the three headers no longer line up. See the Release
+    /// checklist for why this is a grid and not `ViewThatFits`.
     private func columns(_ plan: PlanResult) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            ForEach(plan.systems, id: \.self) { system in
-                let steps = plan.steps(for: system)
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        mark(for: system)
-                        Text(name(for: system)).font(.system(size: 12.5, weight: .semibold))
-                        Spacer(minLength: 8)
-                        Text(summary(steps)).font(.system(size: 11)).foregroundStyle(Theme.text2)
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14,
+                                     alignment: .top)],
+                  alignment: .leading, spacing: 14) {
+            ForEach(plan.systems, id: \.self) { system in column(plan, system) }
+        }
+    }
+
+    private func column(_ plan: PlanResult, _ system: PlanSystem) -> some View {
+        let steps = plan.steps(for: system)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                mark(for: system)
+                Text(name(for: system)).font(.system(size: 12.5, weight: .semibold))
+                Spacer(minLength: 8)
+                Text(summary(steps)).font(.system(size: 11)).foregroundStyle(Theme.text2)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(steps) { step in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(step.kind.rawValue)
+                            .font(Theme.mono(11.5, weight: .bold))
+                            .foregroundStyle(color(step.kind))
+                            .frame(width: 9, alignment: .leading)
+                        Text(step.summary)
+                            .font(Theme.mono(11.5))
+                            .foregroundStyle(color(step.kind))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(steps) { step in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(step.kind.rawValue)
-                                    .font(Theme.mono(11.5, weight: .bold))
-                                    .foregroundStyle(color(step.kind))
-                                    .frame(width: 9, alignment: .leading)
-                                Text(step.summary)
-                                    .font(Theme.mono(11.5))
-                                    .foregroundStyle(color(step.kind))
-                                    .lineSpacing(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 4)
-                        }
-                    }
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
             }
+            .padding(.vertical, 5)
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     /// The logo of the column. The provider has none, so it takes a glyph.

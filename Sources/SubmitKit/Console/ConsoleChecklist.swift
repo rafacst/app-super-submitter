@@ -66,17 +66,29 @@ public enum ConsoleChecklist {
         var result: [ConsoleRow] = []
 
         // A new version needs a new binary. Nothing inherits a build.
+        //
+        // Only an attached build closes this row. A named file and an uploaded
+        // build are both one apply short of the thing Apple checks, and this
+        // row holds the release button. It read them as done, so the button
+        // opened on a version that held no build and Apple refused the
+        // submission.
         let namedBuild = manifest.release?.build?.ios ?? manifest.release?.build?.macos ?? ""
-        let hasBuild = !namedBuild.isEmpty || apple?.attachedBuildId != nil
+        let attached = apple?.attachedBuildId != nil
+        let reason: String
+        if attached {
+            reason = "Confirmed: a build is attached."
+        } else if apple?.buildIdForVersion != nil {
+            reason = "A build is uploaded and no version holds it. Run the apply to attach it."
+        } else if !namedBuild.isEmpty {
+            reason = "The manifest names \(namedBuild). Run the apply to upload and attach it."
+        } else {
+            reason = "An update needs a build. Build one on the Build tab, or attach one in App Store Connect."
+        }
         result.append(ConsoleRow(
             id: "apple.updateBuild", system: "App Store", title: "A build for this version",
-            reason: hasBuild
-                ? (apple?.attachedBuildId != nil
-                    ? "Confirmed: a build is attached."
-                    : "The manifest names \(namedBuild).")
-                : "An update needs a build. Name one on the Build tab, or attach one in App Store Connect.",
+            reason: reason,
             link: "\(base)/ios/version/inflight",
-            state: hasBuild ? .done : .needed))
+            state: attached ? .done : .needed))
 
         // Apple asks the export compliance question once per build, and it
         // refuses the submission until the build carries an answer.

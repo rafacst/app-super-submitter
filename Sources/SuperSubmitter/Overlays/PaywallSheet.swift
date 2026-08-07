@@ -40,6 +40,7 @@ struct PaywallSheet: View {
             }
             plans
 
+            if !plansUnavailable {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     TextField("Promotion code", text: $state.promotionCode)
@@ -61,11 +62,14 @@ struct PaywallSheet: View {
                     WarningNote(message)
                 }
             }
+            }
 
             if state.billingOperation == .confirming { confirming }
             // A disabled button with nothing beside it reads as a broken
-            // button. This says which of the three doors is shut.
-            if let blocked = checkoutBlocked { WarningNote(blocked) }
+            // button. This says which of the three doors is shut. It stays
+            // quiet while no plan loaded at all, because the block there is
+            // not a door the reader can open and the error above says so.
+            if !plansUnavailable, let blocked = checkoutBlocked { WarningNote(blocked) }
 
             HStack(spacing: 9) {
                 if state.accountEmail != nil {
@@ -85,19 +89,21 @@ struct PaywallSheet: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
 
-                Button {
-                    Task { await state.startCheckout() }
-                } label: {
-                    Text(state.billingOperation == .openingCheckout
-                         ? "Opening checkout…" : "Continue to secure checkout")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7)
-                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
+                if !plansUnavailable {
+                    Button {
+                        Task { await state.startCheckout() }
+                    } label: {
+                        Text(state.billingOperation == .openingCheckout
+                             ? "Opening checkout…" : "Continue to secure checkout")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(state.billingOperation != .idle || checkoutBlocked != nil)
                 }
-                .buttonStyle(.plain)
-                .disabled(state.billingOperation != .idle || checkoutBlocked != nil)
             }
             .padding(.top, 2)
 
@@ -175,11 +181,33 @@ struct PaywallSheet: View {
             } else if state.billingOperation == .loadingPlans {
                 HStack(spacing: 8) { Spinner(); Text("Fetching the plans…").font(.system(size: 12)) }
             } else {
-                Text("The plans could not be loaded. Check your connection and open this again.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.text2)
+                // An error state, with the one thing to do about it. It used
+                // to say "open this again", which asks the reader to close a
+                // sheet and find their way back to it, and it left the promo
+                // field and the checkout button on screen underneath — a
+                // checkout flow with nothing to buy.
+                HStack(spacing: 9) {
+                    Text("The plans could not be loaded. Check your connection.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    QuietButton(title: "Try again") {
+                        Task { await state.loadBillingPlans() }
+                    }
+                }
             }
         }
+    }
+
+    /// True while there is nothing on sale to reach.
+    ///
+    /// Distinct from `checkoutBlocked`, which explains a shut door that could
+    /// open once the reader signs in or picks another plan. This one means
+    /// there is no door: the controls that lead to it come off the screen
+    /// rather than sit there disabled.
+    private var plansUnavailable: Bool {
+        state.billingPlans == nil && state.billingOperation != .loadingPlans
     }
 
     private func planRow(_ plan: BillingPlan, currency: String) -> some View {

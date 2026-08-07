@@ -76,20 +76,29 @@ struct ReviewInfoTab: View {
         }
     }
 
-    /// A fixed height, not a minimum.
+    /// A range, not a fixed height.
     ///
     /// The reviewer notes run to a page and a half on a real app, and the tab
-    /// is inside a scroll view, so a growing editor pushed everything below it
-    /// past the bottom of the window. A fixed box scrolls its own text and the
-    /// tab stays the size of the window.
-    private static let notesHeight: CGFloat = 420
-
+    /// is inside a scroll view, so a freely growing editor pushed everything
+    /// below it past the bottom of the window. The answer was a fixed 420
+    /// point box that scrolled its own text — which held the tab still, and
+    /// also drew 420 points of empty field around "No login is necessary.
+    /// Open the app and scan the sample receipt.", the whole content of this
+    /// tab for most apps.
+    ///
+    /// A ceiling does the same job as a fixed height. The box grows with the
+    /// text, stops at roughly where 420 points was, and scrolls beyond it, so
+    /// the long note is still held and the short one no longer costs a
+    /// screenful.
     private var reviewNotes: some View {
         Section_("Notes for the reviewer", icon: "note.text", tint: Theme.teal,
                  anchor: "review.notes") {
-            TextEditor(text: state.reviewBinding(.notes))
-                .font(.system(size: 12.5)).scrollContentBackground(.hidden)
-                .padding(7).frame(height: Self.notesHeight)
+            TextField("", text: state.reviewBinding(.notes), axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(4...22)
+                .font(.system(size: 12.5))
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
