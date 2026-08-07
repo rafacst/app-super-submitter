@@ -85,6 +85,7 @@
 		5BB3EED42330645D14C4A588 /* StatusReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29104E1FA3BB399C3F6D6180 /* StatusReader.swift */; };
 		5D2BA12F88D7562DBBF950BB /* Redaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE871FE21655B5878BD19A1 /* Redaction.swift */; };
 		5D3969DAC2D6E8C4A65C85D3 /* BuildFlowRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF116D2CBC71AB75AA21129C /* BuildFlowRun.swift */; };
+		5E22E1A57FEDE55EA8C12B91 /* TrafficLightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF90C2B263AF24966D206E9 /* TrafficLightTests.swift */; };
 		61410815C5F8D4261E355306 /* AppStateExistingImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBD6FED9F592D6DC5898FB2 /* AppStateExistingImport.swift */; };
 		61D137CE5F8D28EDAD2B28B0 /* AppleApply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5113C7F49B355D564BB9796B /* AppleApply.swift */; };
 		6218146ED95885FB74E44A8C /* AppleActionsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B31BB11B6B6883A59E3B6AE /* AppleActionsClient.swift */; };
@@ -330,6 +331,7 @@
 		3F094BC499C29B3BB6F89CE8 /* AppleSubscriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSubscriptions.swift; sourceTree = "<group>"; };
 		3F175E8E3D846C06DCFC63DF /* AccessController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessController.swift; sourceTree = "<group>"; };
 		3F2853A99A435ED2F8BA57BA /* AppStateAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateAccess.swift; sourceTree = "<group>"; };
+		3FF90C2B263AF24966D206E9 /* TrafficLightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrafficLightTests.swift; sourceTree = "<group>"; };
 		4041BBC96E546A5C3B189D36 /* ConsoleChecklist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleChecklist.swift; sourceTree = "<group>"; };
 		425AF414536E2877618D5BBF /* ManifestEditingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestEditingTests.swift; sourceTree = "<group>"; };
 		440EA0A518B9A796B8CBA130 /* StoreCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCoverageTests.swift; sourceTree = "<group>"; };
@@ -592,6 +594,7 @@
 				F0960B7810CA5CB49A344629 /* StoreCredentialScopeTests.swift */,
 				1078FF3E049104204DA90EFF /* StoreSnapshotTests.swift */,
 				48B7D7160F37672B80B343B9 /* TabStructureTests.swift */,
+				3FF90C2B263AF24966D206E9 /* TrafficLightTests.swift */,
 				D13E0662DA10F7885A1CAA99 /* UndoTests.swift */,
 			);
 			path = SuperSubmitterUITests;
@@ -1331,6 +1334,7 @@
 				091905EDA85E9AB5395D1812 /* StoreCredentialScopeTests.swift in Sources */,
 				8E42713758764C12892142D6 /* StoreSnapshotTests.swift in Sources */,
 				1CAA1EE5153F2DB7276E8451 /* TabStructureTests.swift in Sources */,
+				5E22E1A57FEDE55EA8C12B91 /* TrafficLightTests.swift in Sources */,
 				E83842B121B6E2FB2634F149 /* UndoTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
