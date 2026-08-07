@@ -58,6 +58,10 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     // a time. It was three, and the three together held six sentences and
     // five buttons: three destinations for one question.
     case liveApp
+    // The person, not the app. It was a section of the Settings panel, four
+    // clicks from the paywall and behind a sheet, so the one screen that says
+    // what the account costs and what it covers was the hardest to find.
+    case account
 
     var id: Int { rawValue }
 
@@ -91,6 +95,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .plan: "Summary"
         case .release: "Release"
         case .liveApp: "Live app"
+        case .account: "Account"
         }
     }
 
@@ -108,6 +113,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // publishing plan still writes it when the manifest holds it, so an
         // import loses nothing.
         case .marketing, .liveApp: [.managing]
+        // The account covers every app on the machine, so it belongs to both
+        // jobs the same way the store credentials do.
+        case .account: [.publishing, .managing]
         }
     }
 
@@ -129,6 +137,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .plan: selected ? "text.bubble.fill" : "text.bubble"
         case .release: selected ? "airplane.path.dotted" : "airplane"
         case .liveApp: selected ? "waveform.path.ecg.rectangle.fill" : "waveform.path.ecg.rectangle"
+        case .account: selected ? "person.crop.circle.fill" : "person.crop.circle"
         }
     }
 
@@ -165,6 +174,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .plan: "What changes, exactly?"
         case .release: "Is it ready, and shall I send it?"
         case .liveApp: "What are the customers seeing, and what can I fix?"
+        case .account: "Who am I, and what does my plan cover?"
         }
     }
 
@@ -188,7 +198,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     var zone: Zone {
         switch self {
-        case .stores, .build, .details, .media, .money, .marketing, .reviewInfo: .edits
+        case .stores, .account, .build, .details, .media, .money, .marketing,
+             .reviewInfo: .edits
         case .plan: .reads
         case .release, .liveApp: .releases
         }
@@ -210,4 +221,17 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// under everything, because one credential covers the whole account and
     /// the tab is a setting rather than step one.
     var startsZone: Bool { self == .plan || self == .release || self == .liveApp }
+
+    /// Whether the tab works with no app open.
+    ///
+    /// Account does. It answers who you are and what you have paid for, and
+    /// both are true before the first folder is linked. Every other tab edits
+    /// or reads one app, so without one there is nothing on it.
+    var standsAlone: Bool { self == .account }
+
+    /// The two tabs the sidebar pins to its foot, in the order it draws them.
+    ///
+    /// Neither is a step of the work. One says who you are, the other says
+    /// which store accounts you use, and both answer once and stay answered.
+    static let footer: [Tab] = [.account, .stores]
 }

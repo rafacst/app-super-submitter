@@ -27,6 +27,15 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $state.showSettings,
                onDismiss: { state.openPendingPaywall() }) { SettingsPanel() }
+        .sheet(isPresented: $state.showAbout) { AboutPanel() }
+        // The sign-in sheet has two doors: the Account tab, which is part of
+        // the window, and the paywall, which is itself a sheet. The paywall
+        // presents its own copy, because a sheet cannot open a sibling sheet
+        // over itself. So this one stands down while the paywall is up, and
+        // the two presenters can never fire on the same flag.
+        .sheet(isPresented: Binding(
+            get: { state.showAccount && state.paywall == nil },
+            set: { state.showAccount = $0 })) { AccountSheet() }
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
             OnboardingPanel()
         }

@@ -22,7 +22,7 @@ import Testing
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
         "Stores", "Build", "Details", "Media", "Monetization",
-        "Review info", "Summary", "Release",
+        "Review info", "Summary", "Release", "Account",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.release.zone == .releases)
@@ -42,10 +42,10 @@ import Testing
     let publishing = Set(Tab.tabs(in: .publishing))
     let managing = Set(Tab.tabs(in: .managing))
 
-    #expect(publishing.intersection(managing) == [.stores, .details, .media])
+    #expect(publishing.intersection(managing) == [.stores, .account, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
     #expect(Tab.tabs(in: .managing).map { $0.title(in: .managing) }
-        == ["Stores", "Live listing", "Live media", "Marketing", "Live app"])
+        == ["Stores", "Live listing", "Live media", "Marketing", "Live app", "Account"])
     // Nothing that builds, plans, writes, or releases reaches a manager.
     #expect(managing.isDisjoint(with: [.build, .money, .reviewInfo, .plan, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.
@@ -115,4 +115,36 @@ import Testing
     #expect(price.amount == Decimal(string: "4.99"))
     #expect(price.currency == "USD")
     #expect(state.moneyError == nil)
+}
+
+/// The sidebar pins these two under the work and draws every other tab above
+/// them. A tab added to `footer` and not to a mode, or the other way round,
+/// leaves a row the sidebar draws twice or not at all.
+@Test func theFooterTabsBelongToEveryMode() {
+    for tab in Tab.footer {
+        #expect(tab.modes == Set(Mode.allCases), "\(tab.title) is missing from a mode.")
+    }
+}
+
+/// Account answers who you are and what you have paid for, and both are true
+/// before the first folder is linked. Sending a developer to "pick an app"
+/// before they can sign in is a door that leads back to the door.
+@MainActor
+@Test func theAccountTabOpensWithNoAppLinked() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    #expect(state.manifestURL == nil)
+    #expect(state.hasNoOpenApp)
+
+    state.selectedTab = .account
+    #expect(!state.showsEntryScreen, "The Account tab must survive the entry screen.")
+
+    state.selectedTab = .build
+    #expect(state.showsEntryScreen, "Every other tab needs an app.")
+}
+
+/// About and Settings open panels, not tabs, so neither may take a tab's
+/// place in the enum and become a tenth step of the work.
+@Test func theAboutRowIsNotATab() {
+    #expect(!Tab.allCases.map(\.title).contains("About"))
 }

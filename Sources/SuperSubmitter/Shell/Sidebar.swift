@@ -63,8 +63,9 @@ struct Sidebar: View {
                 // reads as nine places you have not earned yet rather than
                 // nine places that do not apply. Stores and Settings stay:
                 // one key covers the whole account, so both work with no app.
-                if !state.showsEntryScreen {
-                    ForEach(Tab.tabs(in: state.mode).filter { $0 != .stores }) { tab in
+                if !state.hasNoOpenApp {
+                    ForEach(Tab.tabs(in: state.mode)
+                        .filter { !Tab.footer.contains($0) }) { tab in
                         // A rule before tab 7 and before tab 9. It marks where
                         // the app stops editing a file and starts touching a
                         // store.
@@ -84,13 +85,20 @@ struct Sidebar: View {
 
             Spacer(minLength: 0)
 
-            // Stores sits at the foot of the sidebar and not at the head of
-            // the work. One credential covers every app on the account, so the
-            // tab answers "who am I" once and then stays out of the way. The
-            // steps above it are the ones a release actually walks through.
-            TabRow(tab: .stores)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+            // Account and Stores sit at the foot and not at the head of the
+            // work. One account and one set of credentials cover every app, so
+            // the two answer "who am I" and "which stores" once and then stay
+            // out of the way. The steps above them are the ones a release
+            // actually walks through.
+            //
+            // About sits under both, in the quiet weight the Settings row
+            // uses. It is the only row here that opens no tab.
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(Tab.footer) { TabRow(tab: $0) }
+                AboutRow()
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
 
             if state.manifestURL != nil {
                 Hairline().padding(.horizontal, 12)
@@ -193,7 +201,10 @@ private struct TabRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(state.manifestURL == nil)
+        // Account works with no app open. It says who you are and what you
+        // have paid for, and a developer signs in before there is anything to
+        // sign in for.
+        .disabled(state.manifestURL == nil && !tab.standsAlone)
         .accessibilityLabel(tab.title(in: state.mode))
         // The button's label hides the pills from the reader, and the two of
         // them are told apart by hue alone, so the count has to be said.
@@ -206,14 +217,42 @@ private struct SettingsRow: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        Button {
-            state.showSettings = true
-        } label: {
+        QuietSidebarRow(
+            symbol: state.showSettings ? "gearshape.2.fill" : "gearshape.2",
+            title: "Settings…") { state.showSettings = true }
+    }
+}
+
+/// What the app is, who makes it, and how to reach a person.
+///
+/// It opens a panel rather than a tab. Nine tabs are the work; this is the
+/// label on the tin, and a row of the work that changes nothing about an app
+/// would be the only one of its kind.
+private struct AboutRow: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        QuietSidebarRow(symbol: state.showAbout ? "info.circle.fill" : "info.circle",
+                        title: "About") { state.showAbout = true }
+    }
+}
+
+/// A sidebar row that opens a panel instead of a tab.
+///
+/// It carries no tint and no selected fill on purpose. A tab row says where
+/// you are standing, and neither of these is somewhere you stand.
+private struct QuietSidebarRow: View {
+    let symbol: String
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
             HStack(spacing: 9) {
-                Image(systemName: state.showSettings ? "gearshape.2.fill" : "gearshape.2")
+                Image(systemName: symbol)
                     .font(.system(size: 15))
                     .frame(width: 20)
-                Text("Settings…").font(.system(size: 13.5))
+                Text(title).font(.system(size: 13.5))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Theme.text2)
@@ -222,7 +261,7 @@ private struct SettingsRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
+        .accessibilityLabel(title.replacingOccurrences(of: "…", with: ""))
     }
 }
 

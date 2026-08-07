@@ -25,7 +25,7 @@ struct SettingsPanel: View {
     var body: some View {
         @Bindable var state = state
         VStack(spacing: 0) {
-            header
+            PanelTitleBar(title: "Settings") { dismiss() }
             tabStrip
             Hairline()
             // A fixed height, so the panel can never grow past the window and
@@ -46,26 +46,6 @@ struct SettingsPanel: View {
         .onChange(of: state.revenueCatAPIKey) { _, _ in state.revenueCatKeyChanged() }
         .onChange(of: state.revenueCatProjectID) { _, _ in state.updateRevenueCatProject() }
         .sheet(isPresented: $state.showAccount) { AccountSheet() }
-    }
-
-    private var header: some View {
-        ZStack {
-            Text("Settings").font(.system(size: 13, weight: .semibold))
-            HStack(spacing: 8) {
-                Button { dismiss() } label: {
-                    Circle().fill(Color(hex: 0xFF5F57)).frame(width: 12, height: 12)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close Settings")
-                Circle().fill(Theme.sep).frame(width: 12, height: 12)
-                Circle().fill(Theme.sep).frame(width: 12, height: 12)
-                Spacer()
-            }
-            .padding(.horizontal, 13)
-        }
-        .frame(height: 44)
-        .background(Theme.raised)
     }
 
     /// One row of sections across the top, the way a Mac settings window
@@ -104,69 +84,9 @@ struct SettingsPanel: View {
         switch section {
         case .workspace: workspace
         case .files: files
-        case .account: account
         case .provider: provider
-        case .about: about
         }
     }
-
-    /// What the app is, who makes it, and the update door.
-    ///
-    /// The update check lives here rather than in Workspace, because it is
-    /// about this copy of the app and not about the work in it.
-    private var about: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 72, height: 72)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(Self.appName)
-                        .font(.system(size: 19, weight: .semibold))
-                        .kerning(-0.2)
-                    Text("Version \(Self.version) (\(Self.build))")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.text2)
-                        .textSelection(.enabled)
-                    Text(Self.copyright)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.text3)
-                        .padding(.top, 3)
-                }
-                Spacer(minLength: 0)
-            }
-
-            Text("Super Submitter prepares an iOS, macOS, and Android app for the App Store and for Google Play from one file and one action. It leaves every store as a draft, so the last irreversible step stays yours.")
-                .font(.system(size: 12.5))
-                .foregroundStyle(Theme.text2)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Hairline()
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 7) {
-                    QuietButton(title: "Check for updates") { Updater.check() }
-                    Link("Releases ↗", destination: Self.releases)
-                        .font(.system(size: 12))
-                }
-                Note("Checks the latest signed deployment published in the GitHub repository.")
-            }
-        }
-    }
-
-    private static let releases =
-        URL(string: "https://github.com/rafacst/super-submitter-app/releases")!
-
-    /// Read from the bundle, so the panel can never disagree with the build.
-    private static func plist(_ key: String) -> String {
-        Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "unknown"
-    }
-
-    private static var appName: String { plist("CFBundleDisplayName") }
-    private static var version: String { plist("CFBundleShortVersionString") }
-    private static var build: String { plist("CFBundleVersion") }
-    private static var copyright: String { plist("NSHumanReadableCopyright") }
 
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -242,50 +162,6 @@ struct SettingsPanel: View {
                             state.pruneBuildStorage()
                         }
                     }
-                }
-            }
-        }
-    }
-
-    private var account: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            SettingRow("Account", alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(state.accountEmail ?? state.entitlement.email ?? "Not signed in")
-                        .font(.system(size: 12.5))
-                        .frame(width: Self.controlWidth, alignment: .leading)
-                    Text("\(state.planLabel) · \(state.entitlementLabel)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.text2)
-                        .lineSpacing(3)
-                        .frame(width: Self.controlWidth, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 7) {
-                        if state.accountEmail == nil {
-                            QuietButton(title: "Sign in or create account") { state.openAccount() }
-                        } else if state.isPaid {
-                            QuietButton(title: "Manage billing") {
-                                Task { await state.openBillingPortal() }
-                            }
-                        } else {
-                            QuietButton(title: "See plans") { state.openPaywall(.settings) }
-                        }
-                        if state.accountEmail != nil {
-                            QuietButton(title: "Restore access") {
-                                Task { await state.restoreAccess() }
-                            }
-                        }
-                        if state.accountEmail != nil {
-                            QuietButton(title: "Sign out") { state.signOutOfBilling() }
-                        }
-                    }
-                    if let message = state.billingMessage {
-                        WarningNote(message, width: Self.controlWidth)
-                    }
-                    if !state.accountServiceReady {
-                        WarningNote(AppState.noAccountService, width: Self.controlWidth)
-                    }
-                    Note("Signing out returns Super Submitter to free access. It deletes no app, no store.yaml, no build, and no store key.")
                 }
             }
         }
@@ -385,8 +261,14 @@ struct SettingsPanel: View {
 }
 
 /// The sections, as the tabs across the top of the panel.
+/// Three sections, and every one of them is something you change.
+///
+/// Account and About left. Neither was a setting: one is the plan and the
+/// prices, which now has a tab of its own beside Stores, and the other is the
+/// label on the tin, which the sidebar opens at its foot. Both were buried two
+/// levels down, behind a sheet and under a tab strip.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case workspace, files, account, provider, about
+    case workspace, files, provider
 
     var id: String { rawValue }
 
@@ -394,9 +276,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .workspace: "Workspace"
         case .files: "Files"
-        case .account: "Account"
         case .provider: "Provider"
-        case .about: "About"
         }
     }
 
@@ -404,9 +284,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .workspace: "macwindow"
         case .files: "folder"
-        case .account: "person.crop.circle"
         case .provider: "creditcard"
-        case .about: "info.circle"
         }
     }
 }
