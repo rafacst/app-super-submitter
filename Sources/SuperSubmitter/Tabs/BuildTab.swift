@@ -15,12 +15,6 @@ struct BuildTab: View {
             } else {
                 importSection
             }
-            StoreDiagnosticsPanel()
-            if state.stores.contains(.apple) { XcodeCloudPanel() }
-            // A lapsed certificate reads as a failed build, so it belongs
-            // beside the build and not on a tab of its own.
-            if state.stores.contains(.apple) { SigningIdentitiesPanel() }
-            if state.stores.contains(.google) { InternalSharingPanel() }
         }
         .frame(maxWidth: 980, alignment: .leading)
     }
@@ -467,5 +461,33 @@ private struct WarningLine: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.red, lineWidth: 1))
+    }
+}
+
+/// What the build reads but does not decide: the stores' own diagnostics, the
+/// workflows on Xcode Cloud, the identities that sign, and the internal share.
+///
+/// All four sat under the build itself, in one 980 point column, so the tab
+/// ran four screens deep and the preflight ended above four boxes that answer
+/// a different question. None of them is a step of a build, and none is
+/// edited: they are reference, which is what an inspector is for.
+struct BuildInspector: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                StoreDiagnosticsPanel()
+                if state.stores.contains(.apple) { XcodeCloudPanel() }
+                // A lapsed certificate reads as a failed build, so it belongs
+                // beside the build and not on a tab of its own.
+                if state.stores.contains(.apple) { SigningIdentitiesPanel() }
+                if state.stores.contains(.google) { InternalSharingPanel() }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.sunken)
     }
 }
