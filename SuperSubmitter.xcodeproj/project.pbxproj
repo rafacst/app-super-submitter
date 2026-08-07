@@ -151,7 +151,6 @@
 		B62E106ADF359BEA077FADDB /* StoreConnectionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F22E680C8C11A97942B4057D /* StoreConnectionClient.swift */; };
 		B67BA79BC0F7F125C4078730 /* ReleaseTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC097DCA30B2597397FCC4A8 /* ReleaseTab.swift */; };
 		B69AA211EC7342E24F49B592 /* BuildStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E478E4DC53EB86AD9227D47 /* BuildStorage.swift */; };
-		B9BB56A47EA6D52104C84279 /* PaywallSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7143FF8A19B411378403696 /* PaywallSheet.swift */; };
 		BA2DD41E7277D265CFFD1F72 /* AppleCatalogClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A635A3AFE93A076F712DF77 /* AppleCatalogClient.swift */; };
 		BAD1B5516B9F9D81FCA2EC27 /* ReleaseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F4F3378A0BEE186A462E629 /* ReleaseSheet.swift */; };
 		BB68827901D56AB194F7B551 /* Planner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D618A3822B48A5F3E8028ADE /* Planner.swift */; };
@@ -190,6 +189,7 @@
 		E69097C498FD20F8742C42AC /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E3BB00DDBA70D1521D8CC0 /* DemoData.swift */; };
 		E83842B121B6E2FB2634F149 /* UndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D13E0662DA10F7885A1CAA99 /* UndoTests.swift */; };
 		E87F3026CA9AC136AD93E44A /* XcodeCloudPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98AD0829DC97ED0C890FEF3E /* XcodeCloudPanel.swift */; };
+		E91E115FCE656D8D70C07E47 /* SignInPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F505B093A03899389FA208 /* SignInPanel.swift */; };
 		EAA558832C6FAAE3CCCF1BE3 /* Runner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC3602DC179AF46821363E1A /* Runner.swift */; };
 		EDA31D2E2B772008211D8038 /* AppIdentifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3276A5C17728BD7A3592892D /* AppIdentifiers.swift */; };
 		EE68E039BD15D8D0C260A9D7 /* ExistingAppImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149E97C967CC8966ED2C29DB /* ExistingAppImport.swift */; };
@@ -205,7 +205,6 @@
 		FAC7D4EC0745F35E909A8F0A /* PlanStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220A6E0FD20FA397139568C1 /* PlanStep.swift */; };
 		FAF804DE2D9D05F6EB014D58 /* ProtoManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D33E2834F78C9B6DF4C98CB /* ProtoManifest.swift */; };
 		FB7F57877611E186A8058525 /* GoogleActionsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281FA294F1C5C5D34164D838 /* GoogleActionsClient.swift */; };
-		FC29717038FF034D6C418A45 /* AccountSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC18C71568E4B9875F7A38AA /* AccountSheet.swift */; };
 		FCA2F3D95DF8B67FBDEC8561 /* ManifestFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F487A6A33C04D956210C7B /* ManifestFile.swift */; };
 		FCAD049B51F10F0C25DA08F3 /* AppleTestFlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9991048BBA83F9E9DC9F2AB2 /* AppleTestFlight.swift */; };
 		FCD2FEF74C0E1C1EBC8816F7 /* AndroidArtifactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 485C733B823964B46B2EBAEB /* AndroidArtifactsSection.swift */; };
@@ -410,6 +409,7 @@
 		A97EFE644B997062A23FCEFB /* SigningIdentitiesPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SigningIdentitiesPanel.swift; sourceTree = "<group>"; };
 		AB517435315135FE658F195A /* AppStateUndo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateUndo.swift; sourceTree = "<group>"; };
 		AEE48EB35019BAEE0BE9A646 /* StoreAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreAPI.swift; sourceTree = "<group>"; };
+		B1F505B093A03899389FA208 /* SignInPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInPanel.swift; sourceTree = "<group>"; };
 		B222798FBF3DC0E4B6D9DCE6 /* VitalsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitalsPanel.swift; sourceTree = "<group>"; };
 		B250B0D5FEBCFE87793711BE /* LicensingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensingClient.swift; sourceTree = "<group>"; };
 		B41DF84B54D31B54FACFEA4F /* AppStateCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateCatalog.swift; sourceTree = "<group>"; };
@@ -451,7 +451,6 @@
 		E98609C735D2D89183A0887B /* ListingDeclarations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingDeclarations.swift; sourceTree = "<group>"; };
 		E9A1913387574636BF5B1062 /* AppStateGoogleActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateGoogleActions.swift; sourceTree = "<group>"; };
 		EA20D03CFA77AF800B818FB1 /* PlayMarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayMarkTests.swift; sourceTree = "<group>"; };
-		EC18C71568E4B9875F7A38AA /* AccountSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSheet.swift; sourceTree = "<group>"; };
 		EC4609C1C1DC4FF0D6E8A6FA /* StateReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateReader.swift; sourceTree = "<group>"; };
 		ECCA4138B5E91EB580C3D18D /* TabContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabContent.swift; sourceTree = "<group>"; };
 		EF0A0977E65259C92FCF8E96 /* OfferCodeValueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferCodeValueTests.swift; sourceTree = "<group>"; };
@@ -463,7 +462,6 @@
 		F4BAF13B0751D289FC8D2D5D /* AppleIncludeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncludeTests.swift; sourceTree = "<group>"; };
 		F54480749BF84668C7766C7E /* ProviderConnectionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderConnectionClient.swift; sourceTree = "<group>"; };
 		F6E1B5C011E3DC54A2ED2F08 /* BuildFromProjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildFromProjectView.swift; sourceTree = "<group>"; };
-		F7143FF8A19B411378403696 /* PaywallSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallSheet.swift; sourceTree = "<group>"; };
 		FAF3B7E72801E00B4455AC46 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		FAF4FCFC4A59055B1BA4CDA8 /* ActualState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualState.swift; sourceTree = "<group>"; };
 		FB55B4C53BDCF96EEBBA3656 /* StorePathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePathTests.swift; sourceTree = "<group>"; };
@@ -604,16 +602,15 @@
 			isa = PBXGroup;
 			children = (
 				76655B9C069739CCC95BB105 /* AboutPanel.swift */,
-				EC18C71568E4B9875F7A38AA /* AccountSheet.swift */,
 				16D8E1D137C2851EFBC3872F /* AddLocaleSheet.swift */,
 				2A36C4DB016021EBF8FC5FAA /* ExistingAppImportSheet.swift */,
 				0733B4B07D6706F0C49920E0 /* FieldSearchSheet.swift */,
 				5B843901D2B0B6BADB67B316 /* MenuBarPopover.swift */,
 				5205CFBC837A5CED79239DED /* OAuthSession.swift */,
 				2D79543711F7C6E1462DED4B /* OnboardingPanel.swift */,
-				F7143FF8A19B411378403696 /* PaywallSheet.swift */,
 				5F4F3378A0BEE186A462E629 /* ReleaseSheet.swift */,
 				C41BC3684D9EAD02C78DA986 /* SettingsPanel.swift */,
+				B1F505B093A03899389FA208 /* SignInPanel.swift */,
 			);
 			path = Overlays;
 			sourceTree = "<group>";
@@ -1032,7 +1029,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 				};
 			};
@@ -1239,7 +1236,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0F16CE9D012154E3C8165AF9 /* AboutPanel.swift in Sources */,
-				FC29717038FF034D6C418A45 /* AccountSheet.swift in Sources */,
 				4EBBC25881835CF57DA996C1 /* AccountTab.swift in Sources */,
 				D0B52861B91905FC906B6DB9 /* AddLocaleSheet.swift in Sources */,
 				FCD2FEF74C0E1C1EBC8816F7 /* AndroidArtifactsSection.swift in Sources */,
@@ -1281,7 +1277,6 @@
 				6E74D3D32C9A461D540A0F36 /* OAuthSession.swift in Sources */,
 				070C12160F7B462D28E18B81 /* OfferEditor.swift in Sources */,
 				F82ADF7D6568471646AD461D /* OnboardingPanel.swift in Sources */,
-				B9BB56A47EA6D52104C84279 /* PaywallSheet.swift in Sources */,
 				30691A3DA2AEAA507A299B09 /* PlanTab.swift in Sources */,
 				7BAC8763E43C84592CEA6BAF /* PostHogClient.swift in Sources */,
 				BAD1B5516B9F9D81FCA2EC27 /* ReleaseSheet.swift in Sources */,
@@ -1294,6 +1289,7 @@
 				370945E281759186BDDD4064 /* SearchKeywordsPanel.swift in Sources */,
 				2DE34F786B0F293D3A365470 /* SettingsPanel.swift in Sources */,
 				787090BDBED28F6E8D8675AB /* Sidebar.swift in Sources */,
+				E91E115FCE656D8D70C07E47 /* SignInPanel.swift in Sources */,
 				3DE9015765DD9F13ED6B96E7 /* SigningIdentitiesPanel.swift in Sources */,
 				04232A1F8E5CBB7994D3E498 /* StoreDiagnosticsPanel.swift in Sources */,
 				E51772E36D69CABFEC47E053 /* StoreMark.swift in Sources */,
@@ -1415,6 +1411,7 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1525,9 +1522,11 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -1542,6 +1541,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
@@ -1557,6 +1557,7 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1621,9 +1622,11 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -1645,6 +1648,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
