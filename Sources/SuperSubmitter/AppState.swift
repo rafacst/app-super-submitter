@@ -372,7 +372,15 @@ final class AppState {
         // and does not open the first app of the list.
         let last = defaults.string(forKey: lastOpenAppKey)
         let index = linkedApps.firstIndex { $0.id.uuidString == last } ?? 0
-        if !linkedApps.isEmpty { activateLinkedApp(at: index) }
+        if !linkedApps.isEmpty {
+            activateLinkedApp(at: index)
+        } else {
+            // A launch with no app still holds the two store keys, and the
+            // Stores tab is reachable without one. Without this line a
+            // developer who removed their last app was asked for the .p8 again
+            // by an app that had it the whole time.
+            loadCredentials()
+        }
     }
 
     var appRows: [AppSummary] {
@@ -567,6 +575,12 @@ final class AppState {
         linkedApps.remove(at: index)
         persistLinkedApps()
         guard !linkedApps.isEmpty else {
+            // The two store keys stay. They belong to the team and the
+            // developer account, not to the app that happened to enter them,
+            // and only "Forget" on the Stores tab removes one. This clears the
+            // RevenueCat key and the reviewer account, which do describe one
+            // app, and reloads the two that do not.
+            loadCredentials()
             manifest = Manifest()
             manifestURL = nil
             resetUndo()
@@ -1668,29 +1682,42 @@ final class AppState {
     /// developer who saw that on the app they had just added read it as "enter
     /// your key again". The status now falls only when the credential itself
     /// changes, which is the one thing that can invalidate it.
+    /// The two store keys load whether an app is open or not.
+    ///
+    /// This used to return at the door when no app was linked, and the whole
+    /// bug lived in that one line. Removing the last app left the fields empty,
+    /// so "Update existing apps" asked for the `.p8` again on the next screen,
+    /// and a developer who had entered it once was asked for it a second time
+    /// by an app that still held it in the Keychain the whole time. The keys
+    /// were never deleted. They were simply never read back.
+    ///
+    /// Only the two per-app credentials need an app. They describe one app, so
+    /// with none open they are cleared rather than left showing the last one's.
     func loadCredentials() {
-        guard let credentialAccount else { return }
         do {
             let appleWas = [appleKeyID, appleIssuerID, applePrivateKeyPEM]
             let googleWas = googleCredential?.clientEmail ?? ""
 
-            let apple = try storeCredential(AppleCredential.self, kind: .apple,
-                                            savedUnder: credentialAccount)
+            let apple = try storeCredential(AppleCredential.self, kind: .apple)
             appleKeyID = apple?.keyID ?? ""
             appleIssuerID = apple?.issuerID ?? ""
             applePrivateKeyPEM = apple?.privateKeyPEM ?? ""
             appleCredentialFileName = apple?.fileName ?? ""
 
-            let google = try storeCredential(GoogleServiceAccount.self, kind: .google,
-                                             savedUnder: credentialAccount)
+            let google = try storeCredential(GoogleServiceAccount.self, kind: .google)
             googleCredential = google
             googleCredentialFileName = google?.fileName ?? ""
             googleAccountEmail = google?.clientEmail ?? ""
-            let revenueCat = try KeychainCredentials.load(
-                RevenueCatCredential.self, kind: .revenueCat, account: credentialAccount)
+
+            let revenueCat = try credentialAccount.flatMap {
+                try KeychainCredentials.load(RevenueCatCredential.self,
+                                             kind: .revenueCat, account: $0)
+            }
             revenueCatAPIKey = revenueCat?.apiKey ?? ""
-            let reviewer = try KeychainCredentials.load(
-                ReviewerCredential.self, kind: .reviewAccount, account: credentialAccount)
+            let reviewer = try credentialAccount.flatMap {
+                try KeychainCredentials.load(ReviewerCredential.self,
+                                             kind: .reviewAccount, account: $0)
+            }
             reviewerUsername = reviewer?.username ?? ""
             reviewerPassword = reviewer?.password ?? ""
 
@@ -1753,13 +1780,23 @@ final class AppState {
     /// Reads a store credential, and adopts the copy an earlier version of the
     /// app saved under one app. The old item stays where it is, because a
     /// deleted `.p8` is gone: App Store Connect offers the file once.
-    private func storeCredential<T: Codable>(_ type: T.Type, kind: CredentialKind,
-                                             savedUnder app: String) throws -> T? {
+    /// One of the two store keys, from the account copy that outlives every
+    /// app, or from the copy an older build filed under the app that entered
+    /// it.
+    ///
+    /// A key found under an app is promoted to the account, so it is found
+    /// once and then belongs to the machine. That promotion is also what saves
+    /// it from a removal: an app record is deleted with its id, and a key filed
+    /// under that id would be orphaned in the Keychain with nothing left able
+    /// to name it.
+    private func storeCredential<T: Codable>(_ type: T.Type,
+                                             kind: CredentialKind) throws -> T? {
         if let shared = try KeychainCredentials.load(type, kind: kind,
                                                     account: storeAccount) {
             return shared
         }
-        guard let own = try KeychainCredentials.load(type, kind: kind,
+        guard let app = credentialAccount,
+              let own = try KeychainCredentials.load(type, kind: kind,
                                                      account: app) else { return nil }
         try KeychainCredentials.save(own, kind: kind, account: storeAccount)
         return own
