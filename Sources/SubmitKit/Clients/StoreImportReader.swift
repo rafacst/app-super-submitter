@@ -27,7 +27,20 @@ public struct StoreImportReader: Sendable {
 
     // MARK: - The App Store
 
-    public func apple(appID: String) async throws -> ImportedStoreListing {
+    /// - Parameter platform: `IOS`, `MAC_OS`, `TV_OS`, or `VISION_OS`. An app
+    ///   that ships on more than one holds a version train per platform under
+    ///   one app id, and `/v1/apps/{id}/appStoreVersions` returns all of them
+    ///   mixed together.
+    ///
+    ///   Nothing filtered them, so this walked every platform's versions as one
+    ///   list and took whichever record won on state and version string. The
+    ///   version number, the text, and the media could each come from a
+    ///   different platform, and for a Mac app whose iOS train carried no
+    ///   screenshots that meant a full listing with an empty Media tab and no
+    ///   failure to explain it. Nil keeps every version, which is right for an
+    ///   app that ships on one platform.
+    public func apple(appID: String, platform: String? = nil) async throws
+        -> ImportedStoreListing {
         var result = ImportedStoreListing()
         var failures: [String] = []
 
@@ -68,8 +81,9 @@ public struct StoreImportReader: Sendable {
             }
         }
 
-        let versions = JSON(data: try await api.apple(
+        let allVersions = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
+        let versions = Self.applePlatformVersions(allVersions, platform: platform)
         let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
                                   "REJECTED", "METADATA_REJECTED"])
         // The same set `StateReader` calls released. A version pulled from
@@ -94,7 +108,7 @@ public struct StoreImportReader: Sendable {
         // tab, an empty Media tab, no failure to explain either, and a version
         // number below the one on sale.
         func highest(_ states: Set<String>) -> JSON? {
-            versions["data"].array
+            versions
                 .filter { states.contains(state($0)) }
                 .max { Validator.isVersion($1["attributes"]["versionString"].string ?? "",
                                             above: $0["attributes"]["versionString"].string ?? "") }
@@ -103,7 +117,7 @@ public struct StoreImportReader: Sendable {
         let liveVersion = highest(releasedStates)
         // The editable version decides the number the developer is about to
         // submit, so it still leads.
-        let version = editableVersion ?? liveVersion ?? versions["data"].array.first
+        let version = editableVersion ?? liveVersion ?? versions.first
         if let version, let versionID = version["id"].string {
             result.versionName = version["attributes"]["versionString"].string
             result.appleReleaseType = version["attributes"]["releaseType"].string
@@ -388,6 +402,26 @@ public struct StoreImportReader: Sendable {
                 + "/appPreviewSets?include=appPreviews&limit=50").data)
         return Self.appleAssets(payload, locale: locale, setKey: "appPreviewSet",
                                 itemType: "appPreviews", kindKey: "previewType")
+    }
+
+    /// The versions of one platform, out of a payload that holds every
+    /// platform the app ships on.
+    ///
+    /// A version with no platform attribute is kept. Apple has always sent one
+    /// here, and dropping a record because a field is missing would lose the
+    /// whole listing rather than narrow it.
+    public static func applePlatformVersions(_ payload: JSON,
+                                             platform: String?) -> [JSON] {
+        let all = payload["data"].array
+        guard let platform else { return all }
+        let matching = all.filter {
+            let value = $0["attributes"]["platform"].string
+            return value == nil || value == platform
+        }
+        // An app id with no version on this platform yet is a real state, and
+        // narrowing to nothing is the honest answer: the alternative is to
+        // import another platform's listing under this one's name.
+        return matching
     }
 
     /// Apple serves a screenshot as a template with `{w}`, `{h}`, and `{f}`
