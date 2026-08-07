@@ -81,10 +81,12 @@ private struct AppleCredentialPanel: View {
                 EditableField(label: "Key id", value: $state.appleKeyID, prompt: "Key ID",
                               limit: AppleCredential.keyIDLength)
                     .onChange(of: state.appleKeyID) { state.appleCredentialFieldsChanged() }
+                    .fieldAnchor("stores.appleKeyID")
                 EditableField(label: "Issuer id", value: $state.appleIssuerID,
                               prompt: "Issuer UUID",
                               limit: AppleCredential.issuerIDLength)
                     .onChange(of: state.appleIssuerID) { state.appleCredentialFieldsChanged() }
+                    .fieldAnchor("stores.appleIssuerID")
             }
         }
         .fileImporter(isPresented: $importerOpen,

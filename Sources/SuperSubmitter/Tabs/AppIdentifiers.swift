@@ -16,7 +16,8 @@ struct AppIdentifiers: View {
 
     var body: some View {
         @Bindable var state = state
-        Section_("This app in the stores", icon: "number", tint: Theme.accent) {
+        Section_("This app in the stores", icon: "number", tint: Theme.accent,
+                 anchor: "build.identifiers") {
             VStack(alignment: .leading, spacing: 12) {
                 Text("The store decides these, not you. An import fills them in. The credential that reaches them lives on the Stores tab and covers every app on the account.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text2)

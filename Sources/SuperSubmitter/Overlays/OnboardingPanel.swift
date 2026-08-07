@@ -83,7 +83,10 @@ struct OnboardingPanel: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 22)
-        .frame(height: Theme.headerHeight)
+        // Its own number, not `Theme.headerHeight`. That band grew to carry a
+        // screen title over a question; this one carries six dots and a Skip,
+        // and it borrowed the height rather than the job.
+        .frame(height: 52)
     }
 
     // MARK: - A step
@@ -395,7 +398,7 @@ private struct BuildScene: View {
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Theme.text2)
                                     .frame(width: 118, alignment: .leading)
-                                Text("Read from package").font(Theme.mono(11))
+                                Text("From the package").font(Theme.mono(11))
                                 Spacer(minLength: 0)
                             }
                             .padding(.horizontal, 14)
@@ -671,7 +674,7 @@ private struct MoneyScene: View {
                     Divider().overlay(Theme.sep2)
                     ResolveRow(icon: "globe", tint: Theme.playBlue,
                                label: "Google base region",
-                               state: phase >= 3 ? .done("Read from the store") : .waiting)
+                               state: phase >= 3 ? .done("From the store") : .waiting)
                 }
                 .padding(.horizontal, 13)
                 .padding(.vertical, 12)

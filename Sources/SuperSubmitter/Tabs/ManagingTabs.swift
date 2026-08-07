@@ -42,6 +42,11 @@ struct LiveAppTab: View {
                 }
             }
         }
+        // Only the empty state capped itself, so the six panels below ran the
+        // whole window: a sentence about a crash rate reached about 1500
+        // points on a wide screen, which is roughly three times a readable
+        // line. The cap is the tab's, so every panel inherits it.
+        .frame(maxWidth: 980, alignment: .leading)
     }
 }
 

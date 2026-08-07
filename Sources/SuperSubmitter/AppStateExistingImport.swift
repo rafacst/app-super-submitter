@@ -149,7 +149,7 @@ extension AppState {
 
     /// Takes everything one import read, not only its words.
     ///
-    /// "Read current listings" used to call `mergeAppleImport` and stop, so
+    /// "Fetch the current listings" used to call `mergeAppleImport` and stop, so
     /// every screenshot the store had just handed over was thrown away: no
     /// file on disk, no path in `store.yaml`, and nothing behind the Media
     /// tab. The wizard already did this; the button beside it did not.
@@ -161,7 +161,7 @@ extension AppState {
         storeSnapshot.merge(imported, store: store)
         // `// ponytail: a copy across the downloads, because an observed
         // // property cannot go inout over an await. An edit made while the
-        // // files come down is lost. The button reads "Reading…" for that
+        // // files come down is lost. The button reads "Fetching…" for that
         // // whole window, so nothing is aimed at the form.`
         var working = manifest
         let failures = await materializeImportedAssets(

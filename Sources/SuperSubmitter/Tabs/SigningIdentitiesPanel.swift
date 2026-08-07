@@ -26,7 +26,7 @@ struct SigningIdentitiesPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Reading…" : "Read the identities") { load() }
+                    QuietButton(title: busy ? "Fetching…" : "Fetch the identities") { load() }
                         .disabled(busy)
                 }
 

@@ -24,7 +24,7 @@ struct StoreDiagnosticsPanel: View {
                     Text("Inspect generated artifacts and store reference data without changing a draft.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                     Spacer()
-                    QuietButton(title: loading ? "Reading…" : "Read diagnostics") { load() }
+                    QuietButton(title: loading ? "Fetching…" : "Fetch diagnostics") { load() }
                         .disabled(loading)
                 }
 
