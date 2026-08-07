@@ -6,6 +6,35 @@ public enum ListingTextField: String, Codable, Sendable, CaseIterable {
     case googleShortDescription, googleWhatsNew, googleVideo
 }
 
+public extension ListingTextField {
+    /// The name a developer reads, in the words the store itself uses.
+    ///
+    /// The Summary tab used to print Apple's own JSON keys: `promotionalText`,
+    /// `whatsNew`, `supportUrl`, `privacyPolicyUrl`. That tab is the last
+    /// screen before the app writes to a live store, so it is the one screen
+    /// that may not be written in the API's vocabulary. The Details tab
+    /// already labels the same fields; this is that label, in one place both
+    /// can read.
+    var label: String {
+        switch self {
+        case .name: "Name"
+        case .subtitle: "Subtitle"
+        case .description: "Description"
+        case .whatsNew: "What is new"
+        case .keywords: "Keywords"
+        case .promotionalText: "Promotional text"
+        case .supportURL: "Support URL"
+        case .marketingURL: "Marketing URL"
+        case .privacyPolicyURL: "Privacy policy URL"
+        case .privacyPolicyText: "Privacy policy text"
+        case .privacyChoicesURL: "Privacy choices URL"
+        case .googleShortDescription: "Short description"
+        case .googleWhatsNew: "Release notes"
+        case .googleVideo: "YouTube video"
+        }
+    }
+}
+
 public enum ReviewTextField: String, Sendable, CaseIterable {
     case firstName, lastName, email, phone, notes
     case applePrimaryCategory, appleSecondaryCategory
