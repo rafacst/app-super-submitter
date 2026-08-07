@@ -208,6 +208,13 @@ final class AppState {
     var selectedPlan = "annual"
     var promotionCode = ""
     var promotionPreview: PromotionPreview?
+    /// Why the discount code did not take, under the field that holds it.
+    ///
+    /// Its own value and not `billingMessage`. That one is drawn inside the
+    /// identity card at the top of the tab, and the code field is most of a
+    /// screen below it, so a refused code wrote its reason somewhere the person
+    /// who typed it was not looking. The Apply button read as a dead button.
+    var promotionMessage: String?
     /// The address the Supabase account is signed in with.
     var accountEmail: String?
     /// Whether the sign-in form is open beside the Account tab.

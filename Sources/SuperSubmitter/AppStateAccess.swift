@@ -274,10 +274,17 @@ extension AppState {
     /// Asks the server what the code is worth for the selected plan. A local
     /// check would be a guess: Stripe holds every restriction.
     func validatePromotionCode() async {
+        promotionMessage = nil
         guard let code = trimmedPromotionCode else { promotionPreview = nil; return }
-        guard let config = LicensingConfig.current,
-              let bearer = try? await accountToken() else {
-            billingMessage = AccessError.signedOut.errorDescription
+        guard let config = LicensingConfig.current else {
+            promotionMessage = AccessError.licensingNotConfigured.errorDescription
+            return
+        }
+        // Two different failures wrote one sentence. A missing service address
+        // is a build fault, and a missing token means signed out, and the field
+        // reported "signed out" for both.
+        guard let bearer = try? await accountToken(), !bearer.isEmpty else {
+            promotionMessage = AccessError.signedOut.errorDescription
             return
         }
         billingOperation = .validatingCode
@@ -287,12 +294,32 @@ extension AppState {
             promotionPreview = try await HTTPLicensingClient(base: config.baseURL)
                 .validate(promotionCode: code, plan: selectedPlan, idToken: bearer)
             if promotionPreview?.valid == false {
-                billingMessage = "This code is invalid, expired, or not available for the selected plan."
+                promotionMessage = promotionPreview?.message
+                    ?? "This code is not valid for the \(Self.name(selectedPlan)) plan."
             }
         } catch {
             promotionPreview = nil
-            billingMessage = (error as? AccessError)?.errorDescription
-                ?? "This code is invalid, expired, or not available for the selected plan."
+            // The service's own words when it gave any, because it is the only
+            // party that knows why. `malformedEntitlement` is the exception: it
+            // is this client failing to read the answer, and its sentence talks
+            // about signing in again, which is not the fault and not the fix.
+            promotionMessage = switch error as? AccessError {
+            case .malformedEntitlement:
+                "The service answered in a form this build did not understand. Report it as a bug."
+            case .some(let known): known.errorDescription
+            case nil: error.localizedDescription
+            }
+        }
+    }
+
+    /// The plan name a person reads. `AccountTab` holds the same map for its
+    /// rows, and this is the message half.
+    static func name(_ plan: String) -> String {
+        switch plan {
+        case "monthly": "monthly"
+        case "annual": "annual"
+        case "lifetime": "lifetime"
+        default: plan
         }
     }
 
@@ -302,6 +329,7 @@ extension AppState {
         guard plan != selectedPlan else { return }
         selectedPlan = plan
         promotionPreview = nil
+        promotionMessage = nil
         billingMessage = nil
     }
 

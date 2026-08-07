@@ -168,7 +168,12 @@ public struct HTTPLicensingClient: LicensingClient {
 /// server-side failure it does not recognise.
 private struct ServiceError: Decodable {
     let code: String
-    let message: String
+    /// Optional, because the service is allowed to send `"message": null` and
+    /// does on at least one route. It was required, so a null collapsed the
+    /// whole decode and threw away the `code` with it: an invalid promotion
+    /// code came back as "The service answered with status 400" rather than as
+    /// the reason the service actually gave.
+    let message: String?
 
     static func decode(_ data: Data, status: Int) -> AccessError {
         guard let body = try? JSONDecoder().decode(ServiceError.self, from: data) else {
@@ -178,7 +183,35 @@ private struct ServiceError: Decodable {
         case "authentication_required": return .signedOut
         case "entitlement_expired": return .entitlementExpired
         case "entitlement_refresh_required": return .refreshRequired
-        default: return .server(code: body.code, message: body.message)
+        default:
+            return .server(code: body.code,
+                           message: body.message ?? Self.wording(for: body.code))
+        }
+    }
+
+    /// A sentence for a code the service sent with no message of its own.
+    ///
+    /// The list is the one `licensing-service-prompt.md` says the client should
+    /// expect. It never invents a reason: it says what the code the service
+    /// chose already means.
+    private static func wording(for code: String) -> String {
+        switch code {
+        case "promotion_code_invalid":
+            "This code is not valid for the selected plan."
+        case "plan_unavailable":
+            "This plan is not on sale."
+        case "already_subscribed":
+            "This account already has a subscription. Open Manage billing to change it."
+        case "checkout_pending":
+            "A checkout is already open for this plan. Finish it in the browser, or wait a moment and try again."
+        case "environment_mismatch":
+            "This code belongs to the other Stripe environment. A test-mode code does not exist in live mode."
+        case "billing_service_unavailable":
+            "Stripe could not be reached. Nothing was charged. Try again in a moment."
+        case "rate_limited":
+            "Too many attempts. Wait a moment and try again."
+        default:
+            "The service refused the request: \(code)."
         }
     }
 }
