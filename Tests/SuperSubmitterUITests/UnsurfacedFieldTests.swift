@@ -131,6 +131,12 @@ struct UnsurfacedFieldTests {
         let target = OfferTarget.purchase(0)
         state.addOffer(to: target)
 
+        // Google creates every offer as a draft, so the default reads false
+        // rather than inheriting the "on sale" default a purchase has.
+        #expect(!state.offerActiveBinding(target, index: 0).wrappedValue)
+        state.offerActiveBinding(target, index: 0).wrappedValue = true
+        #expect(state.offers(for: target).first?.active == true)
+
         let field = state.offerCodesBinding(target, index: 0, field: .custom)
         field.wrappedValue = "launch=500, PRESS"
         let codes = try #require(state.offers(for: target).first?.codes?.custom)
@@ -153,19 +159,5 @@ struct UnsurfacedFieldTests {
         state.offerCodesBinding(target, index: 0, field: .oneTimeUse).wrappedValue = ""
         state.offerCodesBinding(target, index: 0, field: .expiresOn).wrappedValue = ""
         #expect(state.offers(for: target).first?.codes == nil)
-    }
-
-    @Test func anOfferIsOffSaleUntilItIsSwitchedOn() throws {
-        let (state, folder) = try workspace()
-        defer { try? FileManager.default.removeItem(at: folder) }
-        state.manifest.purchases = [.init(id: "pro", kind: .nonConsumable)]
-        let target = OfferTarget.purchase(0)
-        state.addOffer(to: target)
-
-        // Google creates every offer as a draft, so the default has to read
-        // false rather than inherit the "on sale" default a purchase has.
-        #expect(!state.offerActiveBinding(target, index: 0).wrappedValue)
-        state.offerActiveBinding(target, index: 0).wrappedValue = true
-        #expect(state.offers(for: target).first?.active == true)
     }
 }

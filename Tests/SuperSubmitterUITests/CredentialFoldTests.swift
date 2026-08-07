@@ -17,19 +17,13 @@ struct CredentialFoldTests {
                  storeAccount: "test-\(UUID().uuidString)")
     }
 
-    @Test func anUnconnectedCardIsOpenAndAConnectedOneIsNot() {
+    /// Only a connection folds a card. The refusal case is the one that stops
+    /// the fold from being a trap: a card that stayed shut on a failure would
+    /// hide the only controls that fix it.
+    @Test func theFoldFollowsTheConnection() {
         let state = newState()
         #expect(state.credentialDetailsOpen(.apple))
 
-        state.appleConnection = .connected("App Store Connect answered.")
-        #expect(!state.credentialDetailsOpen(.apple))
-    }
-
-    /// The one that stops the fold from being a trap. A refused key needs the
-    /// fields, and a card that stayed shut on a failure would hide the only
-    /// controls that fix it.
-    @Test func aRefusedKeyKeepsItsFieldsInReach() {
-        let state = newState()
         state.appleConnection = .connected("App Store Connect answered.")
         #expect(!state.credentialDetailsOpen(.apple))
 
@@ -48,32 +42,11 @@ struct CredentialFoldTests {
         #expect(state.credentialDetailsOpen(.apple))
     }
 
-    @Test func theTwoStoresFoldApart() {
-        let state = newState()
-        state.appleConnection = .connected("App Store Connect answered.")
-        #expect(!state.credentialDetailsOpen(.apple))
-        #expect(state.credentialDetailsOpen(.google))
-    }
-
-    /// `FieldIndex` sends ⌘F at two fields that now live inside the fold.
-    /// Scrolling to an anchor in a collapsed card lands on nothing, silently,
-    /// which is the one failure the index exists to prevent.
+    /// `FieldIndex` sends ⌘F at fields that now live inside the fold. Scrolling
+    /// to an anchor in a collapsed card lands on nothing, silently, which is the
+    /// one failure the index exists to prevent. The loop is what keeps an
+    /// anchor added later from quietly becoming unreachable.
     @Test func theFieldSearchOpensTheCardItLandsIn() {
-        let state = newState()
-        state.appleConnection = .connected("App Store Connect answered.")
-        state.googleConnection = .connected("Google answered.")
-
-        state.revealCredentialDetails(forAnchor: "stores.appleKeyID")
-        #expect(state.credentialDetailsOpen(.apple))
-        #expect(!state.credentialDetailsOpen(.google))
-
-        // Every anchor in the index that reaches this tab has to route to the
-        // right card, and nothing else may open one.
-        state.revealCredentialDetails(forAnchor: "details.name")
-        #expect(!state.credentialDetailsOpen(.google))
-    }
-
-    @Test func everyStoresAnchorInTheIndexReachesACard() {
         for entry in FieldIndex.all where entry.id.hasPrefix("stores.") {
             let state = newState()
             state.appleConnection = .connected("App Store Connect answered.")
@@ -82,5 +55,14 @@ struct CredentialFoldTests {
             #expect(state.credentialOpen.values.contains(true),
                     "\(entry.id) opens no credential card")
         }
+        // The right card, and only when the anchor belongs to this tab.
+        let state = newState()
+        state.appleConnection = .connected("App Store Connect answered.")
+        state.googleConnection = .connected("Google answered.")
+        state.revealCredentialDetails(forAnchor: "stores.appleKeyID")
+        #expect(state.credentialDetailsOpen(.apple))
+        #expect(!state.credentialDetailsOpen(.google))
+        state.revealCredentialDetails(forAnchor: "details.name")
+        #expect(!state.credentialDetailsOpen(.google))
     }
 }
