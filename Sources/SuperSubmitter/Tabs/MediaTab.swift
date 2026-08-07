@@ -30,6 +30,7 @@ struct MediaTab: View {
                 mediaGroup(name, device: device)
             }
             videoSection
+            if state.stores.contains(.google) { googleGraphics }
         }
         // The one tab that never capped itself. Without this the group header
         // stretches to the window, which put "Choose images…" about 1400
@@ -159,6 +160,34 @@ struct MediaTab: View {
             .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
+        }
+    }
+
+    /// The two files Google asks for beside the screenshots.
+    ///
+    /// They are paths and not tiles, for the reason the Android artifacts are:
+    /// each one is a single file with an exact size that something else
+    /// produced, and a drop grid of one is a grid pretending to be a field.
+    private var googleGraphics: some View {
+        Section_("Google graphics", icon: "app.badge.fill", tint: Theme.playGreen,
+                 anchor: "media.googleGraphics") {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(AppState.GoogleGraphic.allCases, id: \.self) { graphic in
+                    let binding = state.googleGraphicBinding(graphic)
+                    LabeledField(graphic.label, note: graphic.note) {
+                        PathField(path: binding,
+                                  problem: state.missingFileNote(for: binding.wrappedValue)) {
+                            guard let url = state.chooseOneFile(
+                                allowedExtensions: graphic.extensions) else { return }
+                            binding.wrappedValue = state.relativePath(for: url)
+                        }
+                    }
+                }
+                Text("Google Play refuses a listing without both. The App Store needs neither: it reads the icon out of the build.")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .storePanel()
         }
     }
 

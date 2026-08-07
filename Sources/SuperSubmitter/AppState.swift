@@ -1088,6 +1088,56 @@ final class AppState {
         manifest.mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
     }
 
+    /// The two graphics Google asks for and Apple does not.
+    ///
+    /// The App Store reads its icon out of the build. Google Play refuses a
+    /// listing without both of these, the planner has always uploaded them and
+    /// the validator has always checked their exact sizes, and until now the
+    /// only thing that ever wrote them was an import of a listing that already
+    /// had them. A first Play submission had nowhere to name either file.
+    enum GoogleGraphic: CaseIterable {
+        case icon, featureGraphic
+
+        var label: String {
+            switch self {
+            case .icon: "App icon"
+            case .featureGraphic: "Feature graphic"
+            }
+        }
+
+        var note: String {
+            switch self {
+            case .icon: "512 by 512, PNG"
+            case .featureGraphic: "1024 by 500"
+            }
+        }
+
+        var extensions: [String] {
+            switch self {
+            case .icon: ["png"]
+            case .featureGraphic: ["png", "jpg", "jpeg"]
+            }
+        }
+    }
+
+    func googleGraphicBinding(_ graphic: GoogleGraphic) -> Binding<String> {
+        Binding(get: {
+            switch graphic {
+            case .icon: self.manifest.media?.icon ?? ""
+            case .featureGraphic: self.manifest.media?.featureGraphic ?? ""
+            }
+        }, set: { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            let stored: String? = trimmed.isEmpty ? nil : trimmed
+            if self.manifest.media == nil { self.manifest.media = Manifest.Media() }
+            switch graphic {
+            case .icon: self.manifest.media?.icon = stored
+            case .featureGraphic: self.manifest.media?.featureGraphic = stored
+            }
+            self.saveManifestReportingErrors()
+        })
+    }
+
     /// A media path against the manifest's own folder. `Planner.resolve` is
     /// the same rule for the run, and this one answers even when the file is
     /// gone, because a tile still names a screenshot that moved.
@@ -1591,6 +1641,95 @@ final class AppState {
             self.manifest.review = review
             self.saveManifestReportingErrors()
         })
+    }
+
+    // MARK: - The export compliance declaration
+
+    /// The paperwork that the encryption toggle above creates the need for.
+    ///
+    /// `usesNonExemptEncryption` answers Apple's yes or no question on the
+    /// build. An app that answers yes and claims no exemption also owes Apple
+    /// this declaration, and sometimes a CCATS or ERN document with it.
+    /// `AppleApply.appleEncryptionDeclaration` has always sent the whole block
+    /// and no field ever wrote one, so the toggle created an obligation the app
+    /// gave you no way to meet.
+    var hasEncryptionDeclaration: Bool { manifest.review?.encryption != nil }
+
+    func addEncryptionDeclaration() {
+        guard manifest.review?.encryption == nil else { return }
+        editEncryption { _ in }
+    }
+
+    func removeEncryptionDeclaration() {
+        var review = manifest.review ?? Manifest.Review()
+        review.encryption = nil
+        manifest.review = review
+        saveManifestReportingErrors()
+    }
+
+    enum EncryptionFlag: CaseIterable {
+        case exempt, proprietary, thirdParty, french
+
+        var label: String {
+            switch self {
+            case .exempt: "The app qualifies for an exemption"
+            case .proprietary: "It contains proprietary cryptography"
+            case .thirdParty: "It contains third-party cryptography"
+            case .french: "It is available on the French App Store"
+            }
+        }
+    }
+
+    func encryptionFlagBinding(_ flag: EncryptionFlag) -> Binding<Bool> {
+        Binding(get: {
+            let block = self.manifest.review?.encryption
+            return switch flag {
+            case .exempt: block?.exempt ?? false
+            case .proprietary: block?.containsProprietaryCryptography ?? false
+            case .thirdParty: block?.containsThirdPartyCryptography ?? false
+            case .french: block?.availableOnFrenchStore ?? false
+            }
+        }, set: { value in
+            self.editEncryption { block in
+                switch flag {
+                case .exempt: block.exempt = value
+                case .proprietary: block.containsProprietaryCryptography = value
+                case .thirdParty: block.containsThirdPartyCryptography = value
+                case .french: block.availableOnFrenchStore = value
+                }
+            }
+        })
+    }
+
+    enum EncryptionTextField { case codeValue, documentPath }
+
+    func encryptionTextBinding(_ field: EncryptionTextField) -> Binding<String> {
+        Binding(get: {
+            let block = self.manifest.review?.encryption
+            return switch field {
+            case .codeValue: block?.codeValue ?? ""
+            case .documentPath: block?.documentPath ?? ""
+            }
+        }, set: { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            let stored: String? = trimmed.isEmpty ? nil : trimmed
+            self.editEncryption { block in
+                switch field {
+                case .codeValue: block.codeValue = stored
+                case .documentPath: block.documentPath = stored
+                }
+            }
+        })
+    }
+
+    /// One writer, so a toggle that fires before the block exists creates it.
+    private func editEncryption(_ edit: (inout Manifest.Encryption) -> Void) {
+        var review = manifest.review ?? Manifest.Review()
+        var block = review.encryption ?? Manifest.Encryption()
+        edit(&block)
+        review.encryption = block
+        manifest.review = review
+        saveManifestReportingErrors()
     }
 
     func reviewMetadataBinding(_ key: String) -> Binding<String> {
