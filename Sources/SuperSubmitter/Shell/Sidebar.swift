@@ -357,12 +357,17 @@ struct SavedChip: View {
             }
             .contentShape(.rect)
         }
-        .onChange(of: state.lastSavedAt) { _, _ in
+        // `task(id:)` and not `onChange`, because this has to be cancelled.
+        // `onChange` started a three second timer per save and cancelled
+        // none of them, so a burst of saves left a queue of them and each
+        // one turned the tick off at its own three second mark while later
+        // saves turned it back on. It read as a blink.
+        .task(id: state.lastSavedAt) {
+            guard state.lastSavedAt != nil else { return }
             withAnimation(.smooth(duration: 0.2)) { recentlySaved = true }
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                withAnimation(.smooth(duration: 0.4)) { recentlySaved = false }
-            }
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.4)) { recentlySaved = false }
         }
         .buttonStyle(.plain)
         .help("Every change is written as you type. Click to show store.yaml in the Finder.")
