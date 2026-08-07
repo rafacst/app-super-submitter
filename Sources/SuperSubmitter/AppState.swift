@@ -208,6 +208,13 @@ final class AppState {
     var selectedPlan = "annual"
     var promotionCode = ""
     var promotionPreview: PromotionPreview?
+    /// Why this Mac could not verify the document the service sent.
+    ///
+    /// Only the failures that mean "this build cannot read a real answer", never
+    /// "the account has not paid" and never "the network is down". It is the one
+    /// state where the app shows Free and the card may already have been
+    /// charged, so it is never silent.
+    var entitlementProblem: String?
     /// Why the discount code did not take, under the field that holds it.
     ///
     /// Its own value and not `billingMessage`. That one is drawn inside the

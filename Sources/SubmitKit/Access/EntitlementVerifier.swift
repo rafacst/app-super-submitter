@@ -53,7 +53,22 @@ public struct EntitlementVerifier: Sendable {
             throw AccessError.invalidSignature
         }
 
-        let entitlement = try LicensingJSON.decoder.decode(Entitlement.self, from: payload)
+        // Wrapped, because a `DecodingError` escaping here is invisible.
+        //
+        // `status`, `plan`, and every entry of `capabilities` decode into string
+        // enums, so one value this build does not know throws a `DecodingError`
+        // rather than an `AccessError`. That error then walks past every handler
+        // in the app, all of which switch on `AccessError`, and the account
+        // silently reads as free. A new plan name on the service, or a capability
+        // spelled the other way, would take a paying customer's access away with
+        // nothing on screen and nothing to report. It is a malformed document,
+        // which is what this case is for.
+        let entitlement: Entitlement
+        do {
+            entitlement = try LicensingJSON.decoder.decode(Entitlement.self, from: payload)
+        } catch {
+            throw AccessError.malformedEntitlement
+        }
         guard entitlement.version == 1 else { throw AccessError.unsupportedVersion }
         guard entitlement.issuedAt <= date.addingTimeInterval(skew) else {
             throw AccessError.clockMismatch
@@ -111,6 +126,26 @@ public enum AccessError: Error, LocalizedError, Equatable {
             "This build of Super Submitter carries no licensing configuration. Report it as a build problem."
         case .server(_, let message):
             message
+        }
+    }
+
+    /// Whether this is the build failing to read a document rather than the
+    /// service saying no.
+    ///
+    /// The two look identical from the outside and they are opposites. A
+    /// refusal means the account has not paid. One of these means the account
+    /// may well have paid and this Mac cannot prove it, which silently returns
+    /// a paying customer to free access. It has to be said out loud, and there
+    /// is no point retrying it: a signing key does not become right on the
+    /// fourth poll.
+    public var isVerificationFailure: Bool {
+        switch self {
+        case .invalidSignature, .malformedEntitlement, .unknownSigningKey,
+             .unsupportedVersion, .subjectMismatch, .clockMismatch,
+             .configurationInvalid, .licensingNotConfigured:
+            true
+        default:
+            false
         }
     }
 
