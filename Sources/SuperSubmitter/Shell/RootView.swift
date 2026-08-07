@@ -113,6 +113,11 @@ private struct ContentArea: View {
             .onChange(of: state.jumpTarget) { _, target in
                 guard let target else { return }
                 state.jumpTarget = nil
+                // A connected store folds its credential away, and the two key
+                // fields are in the fold. Scrolling to an anchor inside a
+                // collapsed card lands on nothing, silently, which is the one
+                // failure `FieldIndex` exists to prevent.
+                state.revealCredentialDetails(forAnchor: target)
                 // One turn of the loop, so the new tab has drawn and the
                 // anchor exists. Scrolling into a tab that has not rendered
                 // does nothing, silently.

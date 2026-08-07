@@ -225,6 +225,9 @@ final class AppState {
     // Tab 1.
     var appleGuideOpen = false
     var googleGuideOpen = false
+    /// Whether a credential card shows its fields, for the developer who said
+    /// so by hand. A store that is missing here follows its own connection.
+    var credentialOpen: [Store: Bool] = [:]
     var appleKeyID = ""
     var appleIssuerID = ""
     var appleCredentialFileName = ""
@@ -2065,6 +2068,40 @@ final class AppState {
         switch store {
         case .apple: !applePrivateKeyPEM.isEmpty
         case .google: googleCredential != nil
+        }
+    }
+
+    /// Whether the credential card shows its fields.
+    ///
+    /// A connected store closes itself. The key is entered once, it covers
+    /// every app on the account, and after that the card is four controls
+    /// nobody touches again sitting above the store the developer came here to
+    /// pick. A store that is not connected stays open, because entering the key
+    /// is the whole job of the tab and it may not be behind a click.
+    ///
+    /// The dictionary is the override and not the state: a developer who opened
+    /// a connected card keeps it open, and one who closed a card that later
+    /// fails still meets the fields when the failure needs them.
+    func credentialDetailsOpen(_ store: Store) -> Bool {
+        if let chosen = credentialOpen[store] { return chosen }
+        return !connection(for: store).isConnected
+    }
+
+    func toggleCredentialDetails(_ store: Store) {
+        credentialOpen[store] = !credentialDetailsOpen(store)
+    }
+
+    /// Opens the card that holds a field, so the search can reach one that a
+    /// connected store has folded away. `FieldIndex` names two of them.
+    func revealCredentialDetails(forAnchor anchor: String) {
+        guard anchor.hasPrefix("stores.") else { return }
+        credentialOpen[anchor.contains("google") ? .google : .apple] = true
+    }
+
+    func connection(for store: Store) -> ConnectionStatus {
+        switch store {
+        case .apple: appleConnection
+        case .google: googleConnection
         }
     }
 

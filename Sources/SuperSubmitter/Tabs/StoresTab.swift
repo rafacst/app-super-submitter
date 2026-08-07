@@ -60,6 +60,7 @@ private struct AppleCredentialPanel: View {
             store: .apple,
             status: state.appleConnection,
             keychainNote: "One key for the whole App Store Connect account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
+            summary: state.appleKeyID,
             guideOpen: state.appleGuideOpen,
             toggleGuide: { state.appleGuideOpen.toggle() },
             guide: guide,
@@ -123,6 +124,7 @@ private struct GoogleCredentialPanel: View {
             store: .google,
             status: state.googleConnection,
             keychainNote: "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
+            summary: state.googleAccountEmail,
             guideOpen: state.googleGuideOpen,
             toggleGuide: { state.googleGuideOpen.toggle() },
             guide: guide,
@@ -187,9 +189,14 @@ private struct GuideContent {
 }
 
 private struct CredentialCard<Content: View>: View {
+    @Environment(AppState.self) private var state
     let store: Store
     let status: ConnectionStatus
     let keychainNote: String
+    /// What the card says about itself while it is folded away: the key id, or
+    /// the service account address. It is the answer to "connected as what",
+    /// which is the only question a connected card still has to answer.
+    let summary: String
     let guideOpen: Bool
     let toggleGuide: () -> Void
     let guide: GuideContent
@@ -216,11 +223,107 @@ private struct CredentialCard<Content: View>: View {
         return Theme.text2
     }
 
+    /// The whole card below the header. It folds away once the store is
+    /// connected, because the key is entered once and covers every app on the
+    /// account: after the connection passes, the fields are four controls
+    /// nobody touches again, sitting above the store picker they pushed down.
+    private var open: Bool { state.credentialDetailsOpen(store) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            header
+
+            if open {
+                VStack(alignment: .leading, spacing: 12) {
+                    content
+
+                    Button(action: toggleGuide) {
+                        HStack(spacing: 6) {
+                            Text(guideOpen ? "▼" : "▶").font(.system(size: 8))
+                            Text("Where do I get this?").font(.system(size: 12))
+                        }
+                        .foregroundStyle(Theme.accent)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(guideOpen ? "Expanded" : "Collapsed")
+
+                    if guideOpen { GuideBox(guide: guide) }
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        // Prominent, and below the fields rather than after the
+                        // paragraph. Connecting is the reason this card exists,
+                        // until it succeeds nothing else in the app can reach a
+                        // store, and it was a quiet button sitting under forty
+                        // words of Keychain policy, which made the policy look
+                        // like the point and the action like a footnote.
+                        // Prominent until it passes. A connected store has
+                        // nothing left to ask for, so the button steps down.
+                        //
+                        // "Test connection" named the smaller half of what it
+                        // did. The button saves the key to the Keychain and then
+                        // calls the store with it, so a pass is a connection and
+                        // not a rehearsal of one. A developer reading "test"
+                        // reasonably waits for a Connect button that never was.
+                        let connected = if case .connected = status { true } else { false }
+                        let title = switch status {
+                        case .connecting: "Connecting…"
+                        case .connected: "Reconnect"
+                        default: "Connect to the store"
+                        }
+                        QuietButton(title: title, glass: true, prominent: !connected,
+                                    action: connect)
+                            .disabled(status == .connecting)
+                        Text(keychainNote).font(.system(size: 11.5))
+                            .foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if case .failed(let message) = status {
+                            WarningNote(message)
+                        } else if case .connected(let message) = status {
+                            Text(message).font(.system(size: 11.5))
+                                .foregroundStyle(Theme.green)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .animation(.snappy(duration: 0.18), value: open)
+    }
+
+    /// The row that stays whatever the card is doing, and the control that
+    /// folds it.
+    ///
+    /// The whole row is the hit target rather than a lone chevron: this is a
+    /// disclosure, and macOS gives a disclosure its title bar. The status keeps
+    /// its four words, because they are the reason to open the card at all.
+    private var header: some View {
+        Button { state.toggleCredentialDetails(store) } label: {
             HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Theme.text3)
+                    .rotationEffect(.degrees(open ? 90 : 0))
                 StoreMark(store: store, size: 18)
-                Text("\(store.storeName) credential").font(.system(size: 13, weight: .semibold))
+                Text("\(store.storeName) credential")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                // What the fold hides. A folded card that says only
+                // "Connected" cannot answer "as which account", which is the
+                // one thing a second developer on the machine has to check.
+                if !open, !summary.isEmpty {
+                    Text(summary)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.text2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 Spacer(minLength: 6)
                 // Four states, four words, four glyphs. A refused key used to
                 // draw the same grey "Not connected" as a key nobody has tried
@@ -231,70 +334,15 @@ private struct CredentialCard<Content: View>: View {
                     Text(connectionWord).font(.system(size: 11.5)).fixedSize()
                 }
                 .foregroundStyle(connectionColour)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(store.storeName) credential")
-                .accessibilityValue(connectionWord)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
-
-            VStack(alignment: .leading, spacing: 12) {
-                content
-
-                Button(action: toggleGuide) {
-                    HStack(spacing: 6) {
-                        Text(guideOpen ? "▼" : "▶").font(.system(size: 8))
-                        Text("Where do I get this?").font(.system(size: 12))
-                    }
-                    .foregroundStyle(Theme.accent)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityValue(guideOpen ? "Expanded" : "Collapsed")
-
-                if guideOpen { GuideBox(guide: guide) }
-
-                VStack(alignment: .leading, spacing: 7) {
-                    // Prominent, and below the fields rather than after the
-                    // paragraph. Connecting is the reason this card exists —
-                    // until it succeeds, nothing else in the app can reach a
-                    // store — and it was a quiet button sitting under forty
-                    // words of Keychain policy, which made the policy look like
-                    // the point and the action like a footnote. Prominent until
-                    // it passes. A connected store has nothing left to ask for,
-                    // so the button steps back down.
-                    //
-                    // "Test connection" named the smaller half of what it did.
-                    // The button saves the key to the Keychain and then calls
-                    // the store with it, so a pass is a connection and not a
-                    // rehearsal of one. A developer reading "test" reasonably
-                    // waits for the real Connect button that never existed.
-                    let connected = if case .connected = status { true } else { false }
-                    let title = switch status {
-                    case .connecting: "Connecting…"
-                    case .connected: "Reconnect"
-                    default: "Connect to the store"
-                    }
-                    QuietButton(title: title, glass: true, prominent: !connected,
-                                action: connect)
-                        .disabled(status == .connecting)
-                    Text(keychainNote).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if case .failed(let message) = status {
-                        WarningNote(message)
-                    } else if case .connected(let message) = status {
-                        Text(message).font(.system(size: 11.5)).foregroundStyle(Theme.green)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
+            .contentShape(.rect)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(store.storeName) credential")
+        .accessibilityValue(open ? "\(connectionWord), expanded" : "\(connectionWord), collapsed")
+        .accessibilityHint(open ? "Hide the credential" : "Show the credential")
     }
 }
 
