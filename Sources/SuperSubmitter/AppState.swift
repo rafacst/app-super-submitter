@@ -1028,6 +1028,35 @@ final class AppState {
         saveManifestReportingErrors()
     }
 
+    /// The number this submission carries.
+    ///
+    /// It arrived from a package and from an import, and from nowhere else:
+    /// no tab took one. An update with no build attached yet therefore kept
+    /// whatever the import had read, the Summary said "Version 1.2 is not
+    /// above 1.4", and its Fix button opened a tab with no version on it.
+    var releaseVersionBinding: Binding<String> {
+        Binding(
+            get: { self.manifest.release?.versionName ?? "" },
+            set: {
+                self.manifest.setReleaseVersionName($0)
+                self.saveManifestReportingErrors()
+            })
+    }
+
+    /// What the App Store shows customers, once a read has said so.
+    var liveAppleVersion: String? { actualState.apple?.liveVersionString }
+
+    /// The smallest number that clears the one on sale. Apple refuses a
+    /// version that does not climb, and the last component is the one a fix
+    /// usually moves.
+    var nextAppleVersion: String? {
+        guard let live = liveAppleVersion else { return nil }
+        var parts = live.split(separator: ".").map { Int($0) ?? 0 }
+        guard !parts.isEmpty else { return nil }
+        parts[parts.count - 1] += 1
+        return parts.map(String.init).joined(separator: ".")
+    }
+
     // MARK: - Listing details
 
     func listingBinding(_ field: ListingTextField, locale code: String? = nil) -> Binding<String> {

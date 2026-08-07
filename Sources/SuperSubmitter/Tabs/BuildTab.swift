@@ -8,6 +8,7 @@ struct BuildTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            versionSection
             source
             if state.showBuildFromProject {
                 BuildFromProjectView()
@@ -22,6 +23,45 @@ struct BuildTab: View {
             if state.stores.contains(.google) { InternalSharingPanel() }
         }
         .frame(maxWidth: 980, alignment: .leading)
+    }
+
+    /// The number this submission carries, and the only place that takes one.
+    ///
+    /// It used to arrive from a package or from an import and from nowhere
+    /// else. An update with no build attached kept whatever the import read,
+    /// and the Summary's "Version 1.2 is not above 1.4, which is live on the
+    /// App Store" sent the developer to this tab, which showed a version and
+    /// never took one. Its own error had no fix on the tab it named.
+    private var versionSection: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Version").font(.system(size: 12.5, weight: .semibold))
+                TextField("1.0", text: state.releaseVersionBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 96)
+                    .monospacedDigit()
+                if let live = state.liveAppleVersion {
+                    Text(verbatim: "\(live) is live on the App Store")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 8)
+                // Only when it would change something. A button offering the
+                // number already in the field is a button that does nothing.
+                if let next = state.nextAppleVersion,
+                   next != state.manifest.release?.versionName {
+                    QuietButton(title: "Use \(next)") { state.useReleaseVersion(next) }
+                }
+            }
+            Text("Apple refuses a version that does not climb past the one on sale. A package you import fills this in while it is empty.")
+                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 15).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     /// Two ways to get a build: run the project, or import a package that
