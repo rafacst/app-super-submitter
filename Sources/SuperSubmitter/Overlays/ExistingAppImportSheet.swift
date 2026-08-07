@@ -28,6 +28,10 @@ struct ExistingAppImportSheet: View {
         }
         .frame(width: 900, height: 720)
         .background(Theme.content)
+        // The keys the app already holds. Without this the sheet asked for
+        // them on every import, one line under the sentence that promises it
+        // asks once.
+        .onAppear { model.seedCredentials(from: state) }
     }
 
     private var header: some View {
