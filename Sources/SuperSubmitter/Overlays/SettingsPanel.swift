@@ -45,7 +45,6 @@ struct SettingsPanel: View {
         .onExitCommand { dismiss() }
         .onChange(of: state.revenueCatAPIKey) { _, _ in state.revenueCatKeyChanged() }
         .onChange(of: state.revenueCatProjectID) { _, _ in state.updateRevenueCatProject() }
-        .sheet(isPresented: $state.showAccount) { AccountSheet() }
     }
 
     /// One row of sections across the top, the way a Mac settings window
@@ -202,11 +201,15 @@ struct SettingsPanel: View {
         return VStack(alignment: .leading, spacing: 8) {
             SecureField("Secret v2 API key", text: $state.revenueCatAPIKey)
             TextField("Project ID", text: $state.revenueCatProjectID)
-            HStack(spacing: 7) {
-                QuietButton(title: "Test connection") { state.testRevenueCatConnection() }
-                    .disabled(state.revenueCatAPIKey.isEmpty || state.revenueCatProjectID.isEmpty)
-                connectionRow(state.revenueCatConnection)
-            }
+            // The status sits under the button and not beside it. It carries
+            // the full control width, which is also the width of this whole
+            // column, so an HStack gave it every point and squeezed the button
+            // to a bar: a tall empty rectangle with the words floating clear of
+            // it. Adapty already stacked them, which is why only this one
+            // looked broken.
+            QuietButton(title: "Test connection") { state.testRevenueCatConnection() }
+                .disabled(state.revenueCatAPIKey.isEmpty || state.revenueCatProjectID.isEmpty)
+            connectionRow(state.revenueCatConnection)
             Note("The key is stored only in the macOS Keychain. It never reaches store.yaml.")
             Link("Create a RevenueCat account ↗",
                  destination: URL(string: "https://app.revenuecat.com/signup")!)

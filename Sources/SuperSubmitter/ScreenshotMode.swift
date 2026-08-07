@@ -165,7 +165,8 @@ enum ScreenshotMode {
         case "import":
             state.showExistingAppImport = true
         case "paywall":
-            state.paywall = .settings
+            state.paywallReason = .settings
+            state.selectedTab = .account
         case "field-search":
             state.showFieldSearch = true
         // Proves the other half of ⌘F: that an anchor is on a real view and

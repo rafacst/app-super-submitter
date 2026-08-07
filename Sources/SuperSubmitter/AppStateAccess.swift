@@ -72,7 +72,7 @@ extension AppState {
         accountEmailInput = accountEmail ?? ""
         accountPassword = ""
         accountMessage = accountServiceReady ? nil : Self.noAccountService
-        showAccount = true
+        showSignIn = true
     }
 
     static let noAccountService =
@@ -112,7 +112,7 @@ extension AppState {
             entitlement = .free(at: Date())
             await refreshEntitlement()
             accountPassword = ""
-            showAccount = false
+            showSignIn = false
         } catch {
             accountMessage = error.localizedDescription
         }
@@ -141,7 +141,7 @@ extension AppState {
             entitlement = .free(at: Date())
             await refreshEntitlement()
             accountPassword = ""
-            showAccount = false
+            showSignIn = false
         } catch {
             accountMessage = error.localizedDescription
         }
@@ -170,7 +170,7 @@ extension AppState {
                 entitlement = .free(at: Date())
                 await refreshEntitlement()
                 accountMessage = nil
-                showAccount = false
+                showSignIn = false
                 errorMessage = "Your email address is confirmed. You are signed in as \(accountEmail ?? "")."
             } catch {
                 accountMessage = error.localizedDescription
@@ -209,32 +209,24 @@ extension AppState {
         return false
     }
 
+    /// Takes the developer to the one screen that sells, and says what sent
+    /// them.
+    ///
+    /// It was a sheet, and a sheet is why this needed a queue: the shell hosts
+    /// one at a time, Settings is one, so asking from inside Settings set a
+    /// trigger, presented nothing, and "See plans" looked dead. It closed
+    /// Settings and waited for the dismissal callback to open the real thing.
+    ///
+    /// The Account tab is part of the window, so none of that is left. It is
+    /// reachable from anywhere, including with no app linked, and it carries
+    /// the plans, the promotion code, and the checkout button itself. A gate
+    /// now moves you to it and writes the reason at the top.
     func openPaywall(_ trigger: PaywallTrigger) {
         billingMessage = nil
         PostHogSDK.shared.capture("paywall_shown", properties: ["trigger": trigger.rawValue])
-        // The shell hosts one sheet at a time, and Settings is a sheet. Asking
-        // for the paywall from inside it set the trigger and presented
-        // nothing, so "See plans" looked dead. Settings closes first, and its
-        // own dismissal opens the paywall. No timer: the callback is the
-        // moment the shell is free.
-        guard !showSettings else {
-            pendingPaywall = trigger
-            showSettings = false
-            return
-        }
-        present(trigger)
-    }
-
-    /// Opens the paywall that Settings had to close for. RootView calls this
-    /// when the Settings sheet finishes dismissing.
-    func openPendingPaywall() {
-        guard let trigger = pendingPaywall else { return }
-        pendingPaywall = nil
-        present(trigger)
-    }
-
-    private func present(_ trigger: PaywallTrigger) {
-        paywall = trigger
+        paywallReason = trigger
+        showSettings = false
+        selectedTab = .account
         Task { await loadBillingPlans() }
     }
 
@@ -385,7 +377,7 @@ extension AppState {
                 if fresh.isPaid {
                     billingOperation = .idle
                     billingMessage = nil
-                    paywall = nil
+                    paywallReason = nil
                     defaults.removeObject(forKey: checkoutDefaultsKey())
                     PostHogSDK.shared.capture("checkout_confirmed",
                                               properties: ["plan": selectedPlan])
@@ -412,7 +404,7 @@ extension AppState {
             entitlement = try await controller.refresh()
             billingMessage = entitlement.isPaid ? nil : "No paid access was found for this account."
             if entitlement.isPaid {
-                paywall = nil
+                paywallReason = nil
                 PostHogSDK.shared.capture("entitlement_restored")
             }
         } catch {

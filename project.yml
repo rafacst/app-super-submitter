@@ -4,6 +4,18 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  # Stamps LastUpgradeCheck. XcodeGen leaves it empty, so Xcode read the
+  # project as older than itself and offered "Update to recommended settings"
+  # after every regeneration. Raise this when you move to a newer Xcode.
+  xcodeVersion: "26.6"
+# The settings Xcode recommends, set here so it stops asking. Two of its
+# recommendations are refused on purpose and are named where they apply:
+# CODE_SIGN_IDENTITY and ENABLE_USER_SCRIPT_SANDBOXING.
+settings:
+  base:
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    SWIFT_EMIT_LOC_STRINGS: YES
 packages:
   Yams:
     url: https://github.com/jpsim/Yams.git
@@ -29,6 +41,9 @@ targets:
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: 6.0
+        # Xcode recommends this for every target that defines a clang module,
+        # and this is the only one that does.
+        ENABLE_MODULE_VERIFIER: YES
   SuperSubmitter:
     type: application
     platform: macOS
@@ -117,6 +132,10 @@ targets:
       configs:
         Debug:
           LICENSING_BASE_URL: https://super-submitter-test.rafacst.me
+          # Xcode offers to "switch to development signing" here on every
+          # regeneration. Refuse it. It rewrites this line to Apple
+          # Development, and the whole reason for Developer ID is below.
+          #
           # Signed, not ad-hoc. The file Keychain ties each item to the
           # signature of the binary that wrote it, and an ad-hoc signature is
           # the build's own hash, so every rebuild asked for the login
