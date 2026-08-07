@@ -12,15 +12,15 @@ struct LinkedAppRecord: Codable, Identifiable, Equatable {
 }
 
 enum ConnectionStatus: Equatable {
-    case notTested
-    case testing
+    case notConnected
+    case connecting
     case connected(String)
     case failed(String)
 
     var label: String {
         switch self {
-        case .notTested: "Not tested"
-        case .testing: "Testing…"
+        case .notConnected: "Not connected"
+        case .connecting: "Connecting…"
         case .connected(let message): message
         case .failed(let message): message
         }
@@ -230,10 +230,10 @@ final class AppState {
     var googlePackageName = ""
     var googleCredentialFileName = ""
     var googleAccountEmail = ""
-    var appleConnection: ConnectionStatus = .notTested
-    var googleConnection: ConnectionStatus = .notTested
+    var appleConnection: ConnectionStatus = .notConnected
+    var googleConnection: ConnectionStatus = .notConnected
     var remoteAppleApps: [RemoteStoreApp] = []
-    var listingImportStatus: ConnectionStatus = .notTested
+    var listingImportStatus: ConnectionStatus = .notConnected
 
     // Tab 2.
     /// Build from Project. upload-spec section 10.
@@ -273,8 +273,8 @@ final class AppState {
     var provider: Manifest.Provider = .none
     var revenueCatAPIKey = ""
     var revenueCatProjectID = ""
-    var revenueCatConnection: ConnectionStatus = .notTested
-    var adaptyConnection: ConnectionStatus = .notTested
+    var revenueCatConnection: ConnectionStatus = .notConnected
+    var adaptyConnection: ConnectionStatus = .notConnected
     var priceAmount = ""
     var priceCurrency = ""
     var priceTerritory = ""
@@ -743,7 +743,7 @@ final class AppState {
                 appleKeyID = keyID
             }
             try persistAppleCredential()
-            appleConnection = .notTested
+            appleConnection = .notConnected
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -760,7 +760,7 @@ final class AppState {
             googleCredential = credential
             googleCredentialFileName = url.lastPathComponent
             googleAccountEmail = credential.clientEmail
-            googleConnection = .notTested
+            googleConnection = .notConnected
         } catch {
             errorMessage = "That service-account file could not be imported. \(error.localizedDescription)"
         }
@@ -770,10 +770,12 @@ final class AppState {
         guard !applePrivateKeyPEM.isEmpty else { return }
         do { try persistAppleCredential() }
         catch { errorMessage = error.localizedDescription }
-        appleConnection = .notTested
+        appleConnection = .notConnected
     }
 
-    func testAppleConnection() {
+    /// Saves the key, then calls App Store Connect with it. The button that
+    /// runs this says Connect, and both halves are why.
+    func connectAppleStore() {
         guard !applePrivateKeyPEM.isEmpty else {
             appleConnection = .failed("Choose the .p8 private key first.")
             return
@@ -786,7 +788,7 @@ final class AppState {
                                          privateKeyPEM: applePrivateKeyPEM,
                                          fileName: appleCredentialFileName)
         let generation = stateGeneration
-        appleConnection = .testing
+        appleConnection = .connecting
         Task {
             do {
                 try KeychainCredentials.save(credential, kind: .apple,
@@ -803,14 +805,21 @@ final class AppState {
         }
     }
 
-    func testGoogleConnection() {
+    /// Saves the service account, then calls Google with it.
+    ///
+    /// The save was only on the import before, which was true but not obvious
+    /// from a button that now says Connect. Saving here as well costs one
+    /// Keychain write and makes the label mean exactly what it says.
+    func connectGoogleStore() {
         guard let credential = googleCredential else {
             googleConnection = .failed("Choose the service-account JSON first.")
             return
         }
-        googleConnection = .testing
+        googleConnection = .connecting
         Task {
             do {
+                try KeychainCredentials.save(credential, kind: .google,
+                                             account: storeAccount)
                 let message = try await StoreConnectionClient().testGoogle(
                     credential: credential, packageName: googlePackageName)
                 googleConnection = .connected(message)
@@ -841,7 +850,7 @@ final class AppState {
             keyID: appleKeyID, issuerID: appleIssuerID,
             privateKeyPEM: applePrivateKeyPEM, fileName: appleCredentialFileName)
         let googleCredential = googleCredential
-        listingImportStatus = .testing
+        listingImportStatus = .connecting
         Task {
             do {
                 let client = StoreConnectionClient()
@@ -1139,12 +1148,12 @@ final class AppState {
             try KeychainCredentials.save(RevenueCatCredential(apiKey: revenueCatAPIKey),
                                          kind: .revenueCat,
                                          account: try requireCredentialAccount())
-            revenueCatConnection = .notTested
+            revenueCatConnection = .notConnected
         } catch { errorMessage = error.localizedDescription }
     }
 
     func testRevenueCatConnection() {
-        revenueCatConnection = .testing
+        revenueCatConnection = .connecting
         Task {
             do {
                 revenueCatKeyChanged()
@@ -1156,7 +1165,7 @@ final class AppState {
     }
 
     func checkAdapty() {
-        adaptyConnection = .testing
+        adaptyConnection = .connecting
         Task {
             do {
                 let message = try await Task.detached { try AdaptyCLIClient().status() }.value
@@ -1744,12 +1753,12 @@ final class AppState {
             reviewerPassword = reviewer?.password ?? ""
 
             if appleWas != [appleKeyID, appleIssuerID, applePrivateKeyPEM] {
-                appleConnection = .notTested
+                appleConnection = .notConnected
                 // The visible apps came from the key that just went away.
                 remoteAppleApps = []
             }
             if googleWas != (googleCredential?.clientEmail ?? "") {
-                googleConnection = .notTested
+                googleConnection = .notConnected
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -1774,7 +1783,7 @@ final class AppState {
                 appleIssuerID = ""
                 applePrivateKeyPEM = ""
                 appleCredentialFileName = ""
-                appleConnection = .notTested
+                appleConnection = .notConnected
                 remoteAppleApps = []
             case .google:
                 try KeychainCredentials.delete(kind: .google, account: storeAccount)
@@ -1784,7 +1793,7 @@ final class AppState {
                 googleCredential = nil
                 googleCredentialFileName = ""
                 googleAccountEmail = ""
-                googleConnection = .notTested
+                googleConnection = .notConnected
             }
         } catch {
             errorMessage = error.localizedDescription

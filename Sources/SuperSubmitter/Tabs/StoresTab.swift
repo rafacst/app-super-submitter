@@ -63,7 +63,7 @@ private struct AppleCredentialPanel: View {
             guideOpen: state.appleGuideOpen,
             toggleGuide: { state.appleGuideOpen.toggle() },
             guide: guide,
-            test: state.testAppleConnection
+            connect: state.connectAppleStore
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 FileWell(
@@ -126,7 +126,7 @@ private struct GoogleCredentialPanel: View {
             guideOpen: state.googleGuideOpen,
             toggleGuide: { state.googleGuideOpen.toggle() },
             guide: guide,
-            test: state.testGoogleConnection
+            connect: state.connectGoogleStore
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 FileWell(
@@ -193,26 +193,26 @@ private struct CredentialCard<Content: View>: View {
     let guideOpen: Bool
     let toggleGuide: () -> Void
     let guide: GuideContent
-    let test: () -> Void
+    let connect: () -> Void
     @ViewBuilder let content: Content
 
     private var connectionSymbol: String {
         if status.isConnected { return "checkmark.circle.fill" }
         if status.isFailed { return "exclamationmark.triangle.fill" }
-        return status == .testing ? "clock.fill" : "circle.dashed"
+        return status == .connecting ? "clock.fill" : "circle.dashed"
     }
 
     private var connectionWord: String {
         if status.isConnected { return "Connected" }
         if status.isFailed { return "The store refused it" }
-        return status == .testing ? "Testing" : "Not connected"
+        return status == .connecting ? "Connecting" : "Not connected"
     }
 
     /// Yellow and not red for a refusal. Nothing was written, so nothing has to
     /// be taken back, and red says irreversible everywhere in this app.
     private var connectionColour: Color {
         if status.isConnected { return Theme.green }
-        if status.isFailed || status == .testing { return Theme.yellow }
+        if status.isFailed || status == .connecting { return Theme.yellow }
         return Theme.text2
     }
 
@@ -256,18 +256,28 @@ private struct CredentialCard<Content: View>: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     // Prominent, and below the fields rather than after the
-                    // paragraph. Testing the key is the reason this card
-                    // exists — until it passes, nothing else in the app can
-                    // reach a store — and it was a quiet button sitting under
-                    // forty words of Keychain policy, which made the policy
-                    // look like the point and the action like a footnote.
-                    // Prominent until it passes. A connected store has nothing
-                    // left to ask for, so the button steps back down.
+                    // paragraph. Connecting is the reason this card exists —
+                    // until it succeeds, nothing else in the app can reach a
+                    // store — and it was a quiet button sitting under forty
+                    // words of Keychain policy, which made the policy look like
+                    // the point and the action like a footnote. Prominent until
+                    // it passes. A connected store has nothing left to ask for,
+                    // so the button steps back down.
+                    //
+                    // "Test connection" named the smaller half of what it did.
+                    // The button saves the key to the Keychain and then calls
+                    // the store with it, so a pass is a connection and not a
+                    // rehearsal of one. A developer reading "test" reasonably
+                    // waits for the real Connect button that never existed.
                     let connected = if case .connected = status { true } else { false }
-                    QuietButton(title: status == .testing ? "Testing…" : "Test connection",
-                                glass: true, prominent: !connected,
-                                action: test)
-                        .disabled(status == .testing)
+                    let title = switch status {
+                    case .connecting: "Connecting…"
+                    case .connected: "Reconnect"
+                    default: "Connect to the store"
+                    }
+                    QuietButton(title: title, glass: true, prominent: !connected,
+                                action: connect)
+                        .disabled(status == .connecting)
                     Text(keychainNote).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     if case .failed(let message) = status {
