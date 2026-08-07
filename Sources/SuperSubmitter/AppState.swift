@@ -135,6 +135,12 @@ final class AppState {
     }
     var selectedTab: Tab = .stores {
         didSet {
+            guard selectedTab != oldValue else { return }
+            // Picking a tab answers the entry screen: you asked for the two
+            // doors and then chose a third thing instead. Without this,
+            // pressing "Add app" and changing your mind left the flag set, and
+            // the entry screen covered every footer tab you went to next.
+            if selectedTab.standsAlone { showEntryScreen = false }
             // A tab names its own mode. Anything that jumps to one, such as
             // the import landing on Build, switches the shell rather than
             // showing a tab the sidebar hides.
@@ -188,9 +194,11 @@ final class AppState {
     @ObservationIgnored var accessController: AccessController?
     @ObservationIgnored var authController: SupabaseAuth?
     var entitlement = Entitlement.free(at: .distantPast)
-    var paywall: PaywallTrigger?
-    /// A paywall that waits for the Settings sheet to close. See openPaywall.
-    var pendingPaywall: PaywallTrigger?
+    /// What sent the developer to the Account tab, or nil if they walked
+    /// there themselves. It is the line at the top of that tab and nothing
+    /// else: the plans, the code, and the checkout live on the tab whether a
+    /// gate opened it or not.
+    var paywallReason: PaywallTrigger?
     var billingPlans: BillingPlans?
     var billingOperation: BillingOperation = .idle
     var billingMessage: String?
@@ -199,7 +207,12 @@ final class AppState {
     var promotionPreview: PromotionPreview?
     /// The address the Supabase account is signed in with.
     var accountEmail: String?
-    var showAccount = false
+    /// Whether the sign-in form is open beside the Account tab.
+    ///
+    /// A panel on the right, not a sheet. It was a sheet over a sheet: the
+    /// paywall presented it, so a developer signing in from there had two
+    /// modal layers between them and the plan they were trying to buy.
+    var showSignIn = false
     var accountCreating = false
     var accountEmailInput = ""
     var accountPassword = ""
@@ -520,11 +533,20 @@ final class AppState {
     /// a sidebar offering nine per-app tabs beside a screen that says "pick an
     /// app" offers nine places that cannot work.
     ///
-    /// Account is the exception, and the only one. It is about the person and
-    /// the plan, not about an app, and signing in is the first thing a
-    /// developer does. Sending them to "pick an app" first is a door that
-    /// leads back to the door.
-    var showsEntryScreen: Bool { hasNoOpenApp && !selectedTab.standsAlone }
+    /// `showEntryScreen` is the developer asking for it, and it always wins.
+    /// Without that first line "Add app" did nothing at all while a footer tab
+    /// was open: it set the flag, the flag lost to the exception below, and the
+    /// pane kept drawing Stores. Entering a credential leaves you on Stores, so
+    /// that was the state almost everyone was in when they went to add an app.
+    ///
+    /// The exception below is only for the implicit case, no app linked.
+    /// Account and Stores stand on their own there: neither is about an app,
+    /// and sending someone to "pick an app" before they can sign in or enter a
+    /// key is a door that leads back to the door.
+    var showsEntryScreen: Bool {
+        if showEntryScreen { return true }
+        return manifestURL == nil && !selectedTab.standsAlone
+    }
 
     /// Whether the shell shows the armed-write strip.
     ///

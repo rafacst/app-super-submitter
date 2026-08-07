@@ -2,49 +2,67 @@ import Foundation
 import Testing
 @testable import SuperSubmitter
 
-/// The shell hosts one sheet at a time. Settings is a sheet, so asking for the
-/// paywall from inside it used to set the trigger while nothing presented, and
-/// "See plans" did nothing at all.
+/// The paywall was a sheet, and the shell hosts one sheet at a time. Settings
+/// is a sheet, so asking for the paywall from inside it set a trigger,
+/// presented nothing, and "See plans" did nothing at all. The fix was a queue:
+/// close Settings, wait for the dismissal callback, then present.
+///
+/// None of that is left. The Account tab is part of the window, it is reachable
+/// from anywhere including with no app linked, and it carries the plans, the
+/// discount code, and the checkout button itself. A gate moves you to it and
+/// writes the reason at the top.
 @MainActor
-@Test func seePlansFromSettingsWaitsForSettingsToClose() {
-    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!)
-    state.showSettings = true
-
-    state.openPaywall(.settings)
-
-    // Nothing presents yet, and Settings is on its way out.
-    #expect(state.paywall == nil)
-    #expect(state.showSettings == false)
-    #expect(state.pendingPaywall == .settings)
-
-    // RootView calls this when the Settings sheet finishes dismissing.
-    state.openPendingPaywall()
-
-    #expect(state.paywall == .settings)
-    #expect(state.pendingPaywall == nil)
+private func state() -> AppState {
+    AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+             storeAccount: "test-\(UUID().uuidString)")
 }
 
 @MainActor
-@Test func aPaywallFromATabPresentsWithNoDetour() {
-    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+@Test func aGateSendsYouToTheAccountTabAndSaysWhy() {
+    let app = state()
+    app.openPaywall(.apply)
 
-    state.openPaywall(.apply)
-
-    #expect(state.paywall == .apply)
-    #expect(state.pendingPaywall == nil)
+    #expect(app.selectedTab == .account)
+    #expect(app.paywallReason == .apply)
 }
 
-/// Without this the trigger would fire again on the next Settings close, and
-/// the paywall would reappear over whatever the user moved on to.
+/// The detour Settings needed is gone: nothing waits, because nothing is
+/// modal. Settings closes and the tab is already there behind it.
 @MainActor
-@Test func closingSettingsAgainDoesNotReopenTheSamePaywall() {
-    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!)
-    state.showSettings = true
-    state.openPaywall(.settings)
-    state.openPendingPaywall()
-    state.paywall = nil
+@Test func aGateFromInsideSettingsNeedsNoQueue() {
+    let app = state()
+    app.showSettings = true
 
-    state.openPendingPaywall()
+    app.openPaywall(.settings)
 
-    #expect(state.paywall == nil)
+    #expect(app.showSettings == false)
+    #expect(app.selectedTab == .account)
+    #expect(app.paywallReason == .settings)
+}
+
+/// The reason is a line on a tab, so it has to be dismissable without leaving
+/// the tab. The plans stay either way.
+@MainActor
+@Test func theReasonClearsAndTheTabStays() {
+    let app = state()
+    app.openPaywall(.upload)
+
+    app.paywallReason = nil
+
+    #expect(app.selectedTab == .account)
+}
+
+/// A gate that is satisfied moves nobody and writes no reason.
+///
+/// A Debug build with no licensing service configured allows every capability
+/// and says so on stderr, which is exactly the satisfied case. The Release
+/// build refuses at the boundary instead.
+@MainActor
+@Test func aSatisfiedGateDoesNotSendYouAnywhere() {
+    let app = state()
+    app.selectedTab = .build
+
+    #expect(app.requirePaid(.storeWrite, .apply))
+    #expect(app.selectedTab == .build)
+    #expect(app.paywallReason == nil)
 }

@@ -37,10 +37,16 @@ struct AboutPanel: View {
             ScrollView {
                 content
                     .padding(.horizontal, 26)
-                    .padding(.vertical, 22)
+                    .padding(.top, 24)
+                    // The last line sat against the bottom edge, because the
+                    // content is taller than the frame and a scroll view gives
+                    // its last row no room of its own. The panel is taller too,
+                    // so the support address is in the frame rather than one
+                    // scroll below it.
+                    .padding(.bottom, 30)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 400)
+            .frame(height: 470)
             .background(Theme.content)
         }
         .frame(width: 480)

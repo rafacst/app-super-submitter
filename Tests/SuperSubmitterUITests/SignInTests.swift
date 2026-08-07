@@ -27,13 +27,19 @@ private func source(_ relativePath: String) throws -> String {
             "The ASWebAuthenticationSession handler must not inherit the main actor.")
 }
 
-/// `showAccount` has two presenters now: the shell, for the Account tab, and
-/// the paywall, which is itself a sheet and cannot open a sibling over itself.
-/// Both firing on one flag is two sheets for one request, and on macOS that
-/// shows neither. The shell's copy stands down while a paywall is up.
-@Test func onlyOnePresenterCanOpenTheSignInSheet() throws {
-    let shell = try source("Sources/SuperSubmitter/Shell/RootView.swift")
+/// Sign in is a panel beside the Account tab, not a sheet. It was a sheet, and
+/// the paywall presented one too, so signing in on the way to a purchase put
+/// two modal layers between the developer and the plan they were buying.
+@MainActor
+@Test func signingInOpensBesideTheAccountTabAndNotOverIt() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    #expect(!state.showSignIn)
 
-    #expect(shell.contains("state.showAccount && state.paywall == nil"),
-            "The shell must not present the sign-in sheet while the paywall is up.")
+    state.openAccount()
+
+    #expect(state.showSignIn)
+    let shell = try! source("Sources/SuperSubmitter/Shell/RootView.swift")
+    #expect(!shell.contains("showSignIn"),
+            "The shell must not present sign in as a sheet.")
 }

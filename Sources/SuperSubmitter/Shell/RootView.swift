@@ -25,23 +25,13 @@ struct RootView: View {
         // Without this the panel starts below the traffic lights instead of
         // carrying them, and the shell reads as a bar above a panel.
         .ignoresSafeArea(.container, edges: .top)
-        .sheet(isPresented: $state.showSettings,
-               onDismiss: { state.openPendingPaywall() }) { SettingsPanel() }
+        .sheet(isPresented: $state.showSettings) { SettingsPanel() }
         .sheet(isPresented: $state.showAbout) { AboutPanel() }
-        // The sign-in sheet has two doors: the Account tab, which is part of
-        // the window, and the paywall, which is itself a sheet. The paywall
-        // presents its own copy, because a sheet cannot open a sibling sheet
-        // over itself. So this one stands down while the paywall is up, and
-        // the two presenters can never fire on the same flag.
-        .sheet(isPresented: Binding(
-            get: { state.showAccount && state.paywall == nil },
-            set: { state.showAccount = $0 })) { AccountSheet() }
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
             OnboardingPanel()
         }
         .sheet(isPresented: $state.showExistingAppImport) { ExistingAppImportSheet() }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
-        .sheet(item: $state.paywall) { trigger in PaywallSheet(trigger: trigger) }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
         .sheet(isPresented: $state.showFieldSearch) { FieldSearchSheet() }
         .confirmationDialog("Remove \(state.removalName) from Super Submitter?",
