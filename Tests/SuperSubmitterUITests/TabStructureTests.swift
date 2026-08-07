@@ -148,3 +148,38 @@ import Testing
 @Test func theAboutRowIsNotATab() {
     #expect(!Tab.allCases.map(\.title).contains("About"))
 }
+
+/// A universal app holds a version train per platform under one app id, each
+/// with its own numbers, text, and screenshots. Nothing chose between them:
+/// the import wrote the platforms in `allCases` order and every read took
+/// `.first`, so a developer publishing the Mac build silently got the iOS
+/// train and an empty Media tab.
+@MainActor
+@Test func choosingThePlatformPutsItAtTheHeadOfTheList() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    state.manifest.setAppleApp(appID: "6790568884", bundleID: "com.example.app",
+                               platforms: [.ios, .macOS])
+
+    #expect(state.applePlatform == .ios)
+    #expect(state.appleplatformChoices == [.ios, .macOS])
+
+    state.applePlatform = .macOS
+
+    #expect(state.applePlatform == .macOS)
+    // Both stay, so switching back needs no re-import.
+    #expect(state.manifest.apps.apple?.platforms == [.macOS, .ios])
+    // The picture was read against the other train.
+    #expect(state.storeSnapshot.isEmpty)
+}
+
+/// One platform is no choice, so the picker stays off the screen.
+@MainActor
+@Test func oneplatformOffersNoPicker() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    state.manifest.setAppleApp(appID: "1", bundleID: "com.example.app", platforms: [.macOS])
+
+    #expect(state.appleplatformChoices.isEmpty)
+    #expect(state.applePlatform == .macOS)
+}

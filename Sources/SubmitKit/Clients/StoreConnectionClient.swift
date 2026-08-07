@@ -282,10 +282,10 @@ public struct StoreConnectionClient: Sendable {
         }
     }
 
-    public func importApple(appID: String,
-                            credential: AppleCredential) async throws -> ImportedStoreListing {
+    public func importApple(appID: String, credential: AppleCredential,
+                            platform: String? = nil) async throws -> ImportedStoreListing {
         try await StoreImportReader(credentials: StoreCredentials(apple: credential),
-                                    session: session).apple(appID: appID)
+                                    session: session).apple(appID: appID, platform: platform)
     }
 
     /// Android Publisher has no endpoint that lists every app available to a

@@ -722,6 +722,38 @@ final class AppState {
         saveManifestReportingErrors()
     }
 
+    /// Which platform's listing this app is. It leads `platforms`, and
+    /// everything that reads a version reads that first entry.
+    ///
+    /// An app on iOS and macOS holds a version train per platform under one
+    /// app id, with its own numbers, its own text, and its own screenshots.
+    /// Nothing chose between them: the import wrote the platforms it found in
+    /// `Platform.allCases` order and every read took `.first`, so a universal
+    /// app silently got its iOS train and a developer publishing the Mac one
+    /// saw an empty Media tab with nothing to explain it.
+    var applePlatform: Manifest.Platform {
+        get { manifest.apps.apple?.platforms.first ?? .ios }
+        set {
+            guard let apple = manifest.apps.apple else { return }
+            var platforms = apple.platforms.filter { $0 != newValue }
+            platforms.insert(newValue, at: 0)
+            manifest.setAppleApp(appID: apple.appId, bundleID: apple.bundleId,
+                                 platforms: platforms)
+            saveManifestReportingErrors()
+            // The snapshot and the plan were read against the other train.
+            storeSnapshot = StoreSnapshot()
+            storeSnapshot.save(toRoot: manifestRoot)
+            invalidatePlan()
+        }
+    }
+
+    /// The platforms this app ships on, when there is more than one to choose
+    /// between. One platform needs no picker.
+    var appleplatformChoices: [Manifest.Platform] {
+        let platforms = manifest.apps.apple?.platforms ?? []
+        return platforms.count > 1 ? Manifest.Platform.allCases.filter(platforms.contains) : []
+    }
+
     func updateGoogleAppFields() {
         guard stores.contains(.google) else { return }
         manifest.setGoogleApp(packageName: googlePackageName.trimmingCharacters(in: .whitespacesAndNewlines))

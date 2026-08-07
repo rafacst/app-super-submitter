@@ -40,8 +40,11 @@ extension AppState {
                     importedManifest.setAppleApp(appID: candidate.remoteID,
                                                  bundleID: candidate.identifier,
                                                  platforms: platforms)
+                    // One platform's listing, not a mix of two. See
+                    // `StoreImportReader.apple(appID:platform:)`.
                     let listing = try await client.importApple(
-                        appID: candidate.remoteID, credential: appleCredential)
+                        appID: candidate.remoteID, credential: appleCredential,
+                        platform: platforms.first?.rawValue)
                     importedManifest.setAppleApp(
                         appID: candidate.remoteID,
                         bundleID: listing.bundleID ?? candidate.identifier,
