@@ -165,9 +165,9 @@ struct BuildTab: View {
 
             HStack(alignment: .top, spacing: 10) {
                 QuietButton(
-                    title: state.listingImportStatus == .testing ? "Fetching…" : "Fetch the current listings",
+                    title: state.listingImportStatus == .connecting ? "Fetching…" : "Fetch the current listings",
                     action: state.importExistingListing)
-                    .disabled(state.listingImportStatus == .testing)
+                    .disabled(state.listingImportStatus == .connecting)
                 switch state.listingImportStatus {
                 case .connected(let message):
                     Text(message).foregroundStyle(Theme.green)
