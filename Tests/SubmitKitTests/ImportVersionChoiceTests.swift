@@ -133,3 +133,47 @@ struct ImportVersionChoiceTests {
     // The draft's own desktop set is the one that survives, not the live copy.
     #expect(draft.assets.filter { $0.kind == "APP_DESKTOP" }.count == 1)
 }
+
+/// An app that ships on iOS and macOS holds a version train per platform under
+/// one app id, and `/v1/apps/{id}/appStoreVersions` returns both mixed.
+///
+/// Nothing filtered them. So the editable version, the live version, and the
+/// media could each come from a different platform, and DeckDeckDeck imported
+/// as version 1.2 of its iOS train with a full Details tab and an empty Media
+/// tab, because the screenshots live on the macOS train. Every read succeeded,
+/// so nothing reported anything.
+@Suite
+struct PlatformVersionTests {
+    private let payload = JSON(data: Data("""
+    {"data":[
+      {"id":"ios-12","attributes":{"versionString":"1.2","platform":"IOS",
+        "appVersionState":"READY_FOR_SALE"}},
+      {"id":"mac-14","attributes":{"versionString":"1.4","platform":"MAC_OS",
+        "appVersionState":"READY_FOR_SALE"}},
+      {"id":"mac-15","attributes":{"versionString":"1.5","platform":"MAC_OS",
+        "appVersionState":"PREPARE_FOR_SUBMISSION"}}
+     ]}
+    """.utf8))
+
+    @Test func onlyOnePlatformsVersionsComeBack() {
+        let mac = StoreImportReader.applePlatformVersions(payload, platform: "MAC_OS")
+        #expect(mac.map { $0["id"].string } == ["mac-14", "mac-15"])
+
+        let ios = StoreImportReader.applePlatformVersions(payload, platform: "IOS")
+        #expect(ios.map { $0["id"].string } == ["ios-12"])
+    }
+
+    /// An app on one platform names none, and every version is its own.
+    @Test func noPlatformKeepsEveryVersion() {
+        #expect(StoreImportReader.applePlatformVersions(payload, platform: nil).count == 3)
+    }
+
+    /// Dropping a record because Apple omitted a field would lose the listing
+    /// rather than narrow it.
+    @Test func aVersionWithNoPlatformIsKept() {
+        let quiet = JSON(data: Data("""
+        {"data":[{"id":"old","attributes":{"versionString":"1.0"}}]}
+        """.utf8))
+        #expect(StoreImportReader.applePlatformVersions(quiet, platform: "MAC_OS").count == 1)
+    }
+}

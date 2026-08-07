@@ -108,19 +108,25 @@ public struct StateReader: Sendable {
             result.ageRatingDeclarationId = ageRating["data"]["id"].string
         }
 
-        let versions = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
+        // One platform's versions. An app that ships on iOS and macOS holds a
+        // train per platform under one app id, and this endpoint returns them
+        // mixed. Reading them as one list let the editable version, the live
+        // version, and the media each come from a different platform.
+        let versions = StoreImportReader.applePlatformVersions(
+            JSON(data: try await api.apple(
+                "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data),
+            platform: platform)
         let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
                                   "REJECTED", "METADATA_REJECTED"])
         func versionState(_ version: JSON) -> String {
             version["attributes"]["appVersionState"].string
                 ?? version["attributes"]["appStoreState"].string ?? ""
         }
-        let editableVersion = versions["data"].array.first {
+        let editableVersion = versions.first {
             editableStates.contains(versionState($0))
         }
         let namedVersion = versionName.flatMap { wanted in
-            versions["data"].array.first {
+            versions.first {
                 $0["attributes"]["versionString"].string == wanted
             }
         }
@@ -138,7 +144,7 @@ public struct StateReader: Sendable {
         // The highest, not the first. App Store Connect fixes no order here,
         // and comparing against an older release would let a lower version
         // through.
-        let liveVersion = versions["data"].array
+        let liveVersion = versions
             .filter { releasedStates.contains(versionState($0)) }
             .max { Validator.isVersion($1["attributes"]["versionString"].string ?? "",
                                         above: $0["attributes"]["versionString"].string ?? "") }

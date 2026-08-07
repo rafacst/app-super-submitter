@@ -30,6 +30,28 @@ struct AppIdentifiers: View {
                     IdentifierField(label: "Bundle id", value: $state.appleBundleID,
                                     prompt: "Reverse-DNS bundle identifier")
                         .onChange(of: state.appleBundleID) { state.updateAppleAppFields() }
+                    // A universal app has a version train per platform, each
+                    // with its own numbers, text, and screenshots. This says
+                    // which one every read here means. It shows only when there
+                    // is a choice to make.
+                    if state.appleplatformChoices.count > 1 {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Picker("Platform", selection: Binding(
+                                get: { state.applePlatform },
+                                set: { state.applePlatform = $0 })) {
+                                ForEach(state.appleplatformChoices, id: \.self) {
+                                    Text($0.shortName).tag($0)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .frame(width: 240)
+                            Text("This app ships on more than one platform. The App Store keeps a separate version, listing, and set of screenshots for each one.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     // The apps the tested credential can see. It fills both
                     // fields above, so it belongs beside them and not beside
                     // the key that produced the list.
