@@ -130,6 +130,35 @@ final class ExistingAppImportModel {
         return groups.count == 1 ? groups[0].folderName : nil
     }
 
+    /// Fills the form from the keys the app already holds.
+    ///
+    /// The sheet says "You enter these once", and then asked for them again on
+    /// every import, because this model started empty and never looked. The
+    /// keys were in the Keychain the whole time: one App Store Connect key
+    /// covers the team and one Play service account covers the developer
+    /// account, which is the sentence the sheet opens with.
+    ///
+    /// The store is ticked only when its credential is complete, so a partly
+    /// entered key selects nothing and the developer still chooses where the
+    /// app lives. Anything typed into this sheet already wins, so re-opening a
+    /// half-filled form does not overwrite it.
+    func seedCredentials(from state: AppState) {
+        if appleKeyID.isEmpty, appleIssuerID.isEmpty, applePrivateKey.isEmpty {
+            appleKeyID = state.appleKeyID
+            appleIssuerID = state.appleIssuerID
+            applePrivateKey = state.applePrivateKeyPEM
+            appleFileName = state.appleCredentialFileName
+            if !appleKeyID.isEmpty, !appleIssuerID.isEmpty, !applePrivateKey.isEmpty {
+                stores.insert(.apple)
+            }
+        }
+        if googleCredential == nil, let google = state.googleCredential {
+            googleCredential = google
+            googleFileName = state.googleCredentialFileName
+            stores.insert(.google)
+        }
+    }
+
     var canDiscover: Bool {
         let appleReady = !stores.contains(.apple)
             || (!appleKeyID.isEmpty && !appleIssuerID.isEmpty && !applePrivateKey.isEmpty)
