@@ -115,6 +115,11 @@ enum ScreenshotMode {
     }
 
     /// Forces the appearance, so the script leaves the system setting alone.
+    ///
+    /// `@MainActor` because `NSApp` is. `pinsAppearance` above it stays
+    /// nonisolated on purpose: that one only reads the launch arguments, and
+    /// `Appearance.applyStored` asks it from wherever it happens to be.
+    @MainActor
     static func applyAppearance() {
         #if DEBUG
         switch value(for: "--appearance") {
