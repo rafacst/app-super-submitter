@@ -93,7 +93,7 @@ extension AppState {
         }
         // A publisher lands on the build they are about to send. A manager has
         // nothing to build, so they land on the reviews of the live app.
-        selectedTab = mode == .managing ? .reviews : .build
+        selectedTab = mode == .managing ? .liveApp : .build
         if !skipped.isEmpty {
             errorMessage = "The apps were imported. These parts stayed empty:\n"
                 + skipped.map { "· \($0)" }.joined(separator: "\n")

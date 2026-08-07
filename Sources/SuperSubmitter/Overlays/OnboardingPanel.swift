@@ -333,7 +333,12 @@ private struct StoreConnectCard: View {
                     .foregroundStyle(on ? Theme.green : Theme.text3)
             }
             Spacer(minLength: 0)
-            FauxToggle(on: on)
+            // The same mark the Stores tab draws. This card is a picture of
+            // that tab, and it used to draw a switch instead, so the first
+            // thing the app taught was a control the app does not have.
+            Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(on ? Theme.accent : Theme.text3)
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 11)
@@ -459,7 +464,10 @@ private struct DetailsScene: View {
 
                 Reveal(on: phase >= 4, rise: 6) {
                     HStack(spacing: 9) {
-                        FauxToggle(on: phase >= 4, tint: Theme.teal)
+                        // A tick box, because the Details tab uses a tick box.
+                        Image(systemName: phase >= 4 ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 14))
+                            .foregroundStyle(phase >= 4 ? Theme.accent : Theme.text3)
                         Text("Different text for Google")
                             .font(.system(size: 11.5, weight: .medium))
                         Spacer(minLength: 0)
@@ -762,23 +770,6 @@ private struct MirrorPill<Content: View>: View {
 }
 
 // MARK: - The small parts
-
-/// The switch, as the tabs draw it, with no binding behind it.
-private struct FauxToggle: View {
-    let on: Bool
-    var tint: Color = Theme.accent
-
-    var body: some View {
-        ZStack(alignment: on ? .trailing : .leading) {
-            Capsule().fill(on ? tint : Theme.sep)
-            Circle()
-                .fill(.white)
-                .frame(width: 15, height: 15)
-                .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
-        }
-        .frame(width: 32, height: 19)
-    }
-}
 
 private struct ChipField: View {
     let text: String

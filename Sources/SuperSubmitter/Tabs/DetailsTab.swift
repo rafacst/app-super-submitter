@@ -8,8 +8,8 @@ struct DetailsTab: View {
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
-                // Publishing sends this tab through the Summary and the
-                // Submit tabs. Managing has neither, so it writes here.
+                // Publishing sends this tab through the Summary tab, which
+                // plans and then writes. Managing has none, so it writes here.
                 if state.mode == .managing { DirectApplyBar(target: .listing) }
                 editor("Name", field: .name,
                        limit: BindingLimits.binding(for: .name, stores: state.stores))
@@ -44,14 +44,10 @@ struct DetailsTab: View {
                     editor("Privacy choices URL", field: .privacyChoicesURL,
                            tag: "Apple only")
                 }
-                // What the listing says about itself, what it declares, and
-                // the parts of it no API will write. They asked "what does
-                // the reviewer need?" on a tab that answers "what does the
-                // listing say?".
-                // Which app this is, in each store. It came off the credential
-                // card, where a per-app id sat inside an account-wide key.
-                if !state.stores.isEmpty { AppIdentifiers().padding(.top, 6) }
-                ListingDeclarations().padding(.top, 6)
+                // The parts of the listing that no API will write. It is a
+                // wide list of rows, so it stays in this column while the
+                // short fields sit beside the preview.
+                ConsoleStepsPanel().padding(.top, 6)
                 // Apple's own keyword resource, beside the Keywords field it
                 // is so easily mistaken for.
                 if state.stores.contains(.apple) {
@@ -60,8 +56,6 @@ struct DetailsTab: View {
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            preview
         }
     }
 
@@ -82,9 +76,17 @@ struct DetailsTab: View {
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
                 if let limit {
-                    Text("\(value.count) / \(limit)")
+                    // A character budget is a count of characters, not a
+                    // quantity, so it takes no thousands separator: the 4000
+                    // character description limit read as "4.000".
+                    Text(verbatim: "\(value.count) / \(limit)")
                         .font(.system(size: 11, weight: overLimit ? .semibold : .regular))
                         .foregroundStyle(overLimit ? Theme.red : Theme.text2)
+                        // The count changes on every key, so the digits have
+                        // to hold their column or the label jitters as you type.
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .accessibilityLabel("\(value.count) of \(limit) characters")
                 }
             }
             if multiline {
@@ -194,12 +196,24 @@ struct DetailsTab: View {
         }
     }
 
-    private var preview: some View {
+}
+
+/// The listing as each store will show it.
+///
+/// A view of its own, and not a property on `DetailsTab`. A property has to be
+/// reached through an instance, and an instance built by hand outside the view
+/// tree carries no environment, so reading `state` from it traps at the first
+/// draw. The inspector needs this beside the editor, so it has to be a node
+/// the tree can install.
+private struct StoreReceivesPreview: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
         let name = state.manifest.listingText(locale: state.locale, field: .name)
         let subtitle = state.manifest.listingText(locale: state.locale, field: .subtitle)
         let description = state.manifest.listingText(locale: state.locale, field: .description)
         let googleSubtitle = state.manifest.hasGoogleOverride(locale: state.locale,
-                                                               field: .googleShortDescription)
+                                                             field: .googleShortDescription)
             ? state.manifest.listingText(locale: state.locale, field: .googleShortDescription)
             : subtitle
         return VStack(alignment: .leading, spacing: 14) {
@@ -214,9 +228,36 @@ struct DetailsTab: View {
                 StoreTextPreview(store: .google, locale: state.locale, name: name,
                                  subtitle: googleSubtitle, description: description)
             }
-            Spacer(minLength: 0)
         }
-        .padding(18).frame(width: 300, alignment: .leading).background(Theme.sunken)
+    }
+}
+
+/// What the listing looks like, and the values the store decides.
+///
+/// It was a fixed 340 point column welded to the right of the tab. Nothing in
+/// it is prose the developer writes, so it was reference material taking a
+/// third of the width away from the writing, and there was no way to put it
+/// away. The shell now shows it as an inspector, which is the container macOS
+/// has for exactly this: reference beside a document, hidden on a toggle.
+struct DetailsInspector: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                StoreReceivesPreview()
+                // The ids and the declarations are fields, not reference, but
+                // they answer "which app is this" and not "what does the
+                // listing say". A box for `GAMES` has no business being 900
+                // points wide between two paragraphs of listing text.
+                if !state.stores.isEmpty { AppIdentifiers() }
+                ListingDeclarations()
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.sunken)
     }
 }
 

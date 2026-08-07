@@ -18,8 +18,8 @@ struct MediaTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            // Publishing sends this tab through the Summary and the Submit
-            // tabs. Managing has neither, so it writes here.
+            // Publishing sends this tab through the Summary tab, which
+            // plans and then writes. Managing has none, so it writes here.
             if state.mode == .managing { DirectApplyBar(target: .media) }
             if let error = state.mediaError { WarningNote(error) }
             ForEach(groups, id: \.1) { name, device in
@@ -53,6 +53,15 @@ struct MediaTab: View {
                                       state.moveMedia(path, by: offset, deviceClass: device)
                                   }) {
                             state.removeMedia(path, deviceClass: device)
+                        }
+                        // Drag to reorder. The payload is the manifest path, so
+                        // a tile dragged out of the window carries text and
+                        // never a promise of a file the app would have to write.
+                        .draggable(path)
+                        .dropDestination(for: String.self) { dropped, _ in
+                            guard let moved = dropped.first else { return false }
+                            state.moveMedia(moved, before: path, deviceClass: device)
+                            return true
                         }
                     }
                     MediaDropTile(title: "Drop images\nor choose files") {
@@ -256,8 +265,13 @@ private struct MediaTile: View {
             }
             Text(url.lastPathComponent).font(.system(size: 10.5)).lineLimit(1)
             if let info {
-                Text("\(info.width) × \(info.height)")
+                // Verbatim, so the numbers stay numbers. `Text("\(int)")` goes
+                // through LocalizedStringKey, which groups by locale, and a
+                // 1242 by 2208 screenshot came out as "1.242 × 2.208". No
+                // locale writes a resolution with a thousands separator.
+                Text(verbatim: "\(info.width) × \(info.height)")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text2)
+                    .monospacedDigit()
             }
             Text(stores.sorted { $0.rawValue < $1.rawValue }.map {
                 $0 == .apple ? "App Store" : "Google Play"
@@ -265,18 +279,47 @@ private struct MediaTile: View {
                 .font(.system(size: 10)).foregroundStyle(Theme.text3).lineLimit(1)
             // The list order is the order that both stores show, so the tile
             // carries the two moves next to the removal.
+            // WCAG 2.5.2 asks 24 by 24. A mini button is about 22 by 16, and
+            // these are the controls that reorder what both stores show.
             HStack(spacing: 4) {
-                Button("←") { move(-1) }
-                    .controlSize(.mini)
-                    .disabled(!canMoveEarlier)
-                    .accessibilityLabel("Move earlier")
-                Button("→") { move(1) }
-                    .controlSize(.mini)
-                    .disabled(!canMoveLater)
-                    .accessibilityLabel("Move later")
-                Button("Remove", action: remove).controlSize(.mini)
+                TileButton(symbol: "arrow.left", label: "Move earlier",
+                           enabled: canMoveEarlier) { move(-1) }
+                TileButton(symbol: "arrow.right", label: "Move later",
+                           enabled: canMoveLater) { move(1) }
+                TileButton(symbol: "trash", label: "Remove", enabled: true,
+                           tint: Theme.red, action: remove)
             }
         }.frame(width: 112, alignment: .leading)
+    }
+}
+
+/// One square control under a tile, at the size a pointer can actually hit.
+///
+/// The three used to be mini push buttons about 22 by 16 points, which is
+/// under the 24 by 24 that WCAG 2.5.2 asks and under what a trackpad hits
+/// first time.
+private struct TileButton: View {
+    let symbol: String
+    let label: String
+    let enabled: Bool
+    var tint: Color = Theme.text2
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(enabled ? tint : Theme.text3)
+                .frame(width: 24, height: 24)
+                .background(Theme.field, in: RoundedRectangle(cornerRadius: 5))
+                .overlay(RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+        .help(label)
     }
 }
 
@@ -292,7 +335,7 @@ private struct MediaDropTile: View {
         }
         .buttonStyle(.plain)
         .overlay(RoundedRectangle(cornerRadius: 6)
-            .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            .strokeBorder(Theme.controlEdge, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
     }
 }
 

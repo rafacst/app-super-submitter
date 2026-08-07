@@ -13,47 +13,63 @@ struct OfferEditor: View {
         VStack(alignment: .leading, spacing: 7) {
             ForEach(Array(offers.enumerated()), id: \.offset) { index, offer in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        TextField("Offer ID",
-                                  text: state.offerBinding(target, index: index, field: .id))
-                            .frame(width: 130)
-                        Picker("Kind", selection: state.offerKindBinding(target, index: index)) {
-                            Text("Free trial").tag(Manifest.Offer.Kind.freeTrial)
-                            Text("Introductory price").tag(Manifest.Offer.Kind.introPrice)
-                            Text("Offer code").tag(Manifest.Offer.Kind.offerCode)
+                    FieldRow {
+                        LabeledField("Offer id", width: 200) {
+                            TextField("", text: state.offerBinding(target, index: index,
+                                                                   field: .id))
                         }
-                        .labelsHidden().frame(width: 155)
-                        Picker("Eligibility",
-                               selection: state.offerEligibilityBinding(target, index: index)) {
-                            Text("New").tag(Manifest.Offer.Eligibility.new)
-                            Text("Existing").tag(Manifest.Offer.Eligibility.existing)
-                            Text("Win back").tag(Manifest.Offer.Eligibility.winBack)
+                        LabeledField("Kind", width: 175) {
+                            Picker("", selection: state.offerKindBinding(target, index: index)) {
+                                Text("Free trial").tag(Manifest.Offer.Kind.freeTrial)
+                                Text("Introductory price").tag(Manifest.Offer.Kind.introPrice)
+                                Text("Offer code").tag(Manifest.Offer.Kind.offerCode)
+                            }.labelsHidden()
                         }
-                        .labelsHidden().frame(width: 110)
+                        LabeledField("Who gets it", width: 130) {
+                            Picker("", selection: state.offerEligibilityBinding(target,
+                                                                                index: index)) {
+                                Text("New").tag(Manifest.Offer.Eligibility.new)
+                                Text("Existing").tag(Manifest.Offer.Eligibility.existing)
+                                Text("Win back").tag(Manifest.Offer.Eligibility.winBack)
+                            }.labelsHidden()
+                        }
+                        Spacer(minLength: 0)
                         Button(role: .destructive) {
                             state.removeOffer(at: index, from: target)
                         } label: {
                             Image(systemName: "minus.circle")
                         }
                     }
-                    HStack {
-                        TextField("Duration",
-                                  text: state.offerBinding(target, index: index, field: .duration))
-                            .frame(width: 80)
-                        if offer.kind != .freeTrial {
-                            TextField("Amount",
-                                      text: state.offerBinding(target, index: index, field: .amount))
-                                .frame(width: 80)
-                            TextField("Currency",
-                                      text: state.offerBinding(target, index: index,
-                                                               field: .currency))
-                                .frame(width: 75)
+                    FieldRow {
+                        LabeledField("Duration", width: 130) {
+                            ChoiceField(value: state.offerBinding(target, index: index,
+                                                                  field: .duration),
+                                        choices: StoreValues.offerDurations, emptyLabel: "No trial period")
                         }
-                        TextField("Periods",
-                                  text: state.offerBinding(target, index: index, field: .periods))
-                            .frame(width: 70)
-                        TextField("Regions, comma-separated",
-                                  text: state.offerBinding(target, index: index, field: .regions))
+                        if offer.kind != .freeTrial {
+                            LabeledField("Amount", width: 90) {
+                                TextField("0.00", text: state.offerBinding(target, index: index,
+                                                                           field: .amount))
+                            }
+                            LabeledField("Currency", width: 175) {
+                                ChoiceField(value: state.offerBinding(target, index: index,
+                                                                      field: .currency),
+                                            choices: StoreValues.currencies, emptyLabel: "Pick a currency", allowsNone: false)
+                            }
+                        }
+                        LabeledField("Periods", width: 80) {
+                            TextField("1", text: state.offerBinding(target, index: index,
+                                                                    field: .periods))
+                        }
+                        // Only Google reads them. `GoogleCatalog` turns them
+                        // into `regionalConfigs`, so they are Play countries
+                        // and not App Store territories.
+                        LabeledField("Regions", note: "Google") {
+                            MultiChoiceField(text: state.offerBinding(target, index: index,
+                                                                      field: .regions),
+                                             choices: StoreValues.googleCountries,
+                                             emptyLabel: "Every region")
+                        }
                     }
                     if let hint = hint(for: offer) {
                         Text(hint).font(.system(size: 10.5)).foregroundStyle(Theme.text3)

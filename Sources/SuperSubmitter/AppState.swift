@@ -82,6 +82,18 @@ final class AppState {
     var manifestURL: URL?
     var linkedApps: [LinkedAppRecord] = []
     var errorMessage: String?
+
+    // Undo. See AppStateUndo.swift.
+    /// The stack for `store.yaml`. The app owns it rather than the window,
+    /// because every field writes the manifest as it is typed, so the manifest
+    /// stack *is* the typing stack and Command-Z has to reach it.
+    @ObservationIgnored let undoManager = UndoManager()
+    /// The manifest as it stood before the edit now being saved.
+    @ObservationIgnored var undoBaseline = Manifest()
+    @ObservationIgnored var lastUndoRegistration: Date?
+    /// `UndoManager` is not observable, so the menu reads these instead.
+    var canUndoEdit = false
+    var canRedoEdit = false
     /// When the app last wrote `store.yaml`. Every edit writes the file, so
     /// the shell shows this and the user knows the work is on disk.
     var lastSavedAt: Date?
@@ -305,6 +317,13 @@ final class AppState {
     init(defaults: UserDefaults = .standard, storeAccount: String = "store-credentials") {
         self.defaults = defaults
         self.storeAccount = storeAccount
+        // Each level holds a whole manifest. Fifty covers a work session and
+        // caps what a long day of edits can retain.
+        undoManager.levelsOfUndo = 50
+        // The app decides what one step is, by the pause between edits. Event
+        // grouping would decide it instead, and it would put two mutations
+        // made by one action into one step and two keystrokes into two.
+        undoManager.groupsByEvent = false
         if let data = defaults.data(forKey: linkedAppsDefaultsKey),
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
@@ -332,8 +351,11 @@ final class AppState {
                 id: record.id,
                 name: record.name,
                 initials: Self.initials(for: record.name),
-                icon: loaded?.media?.icon.map {
-                    url.deletingLastPathComponent().appendingPathComponent($0)
+                // The same rule as the run and as the Media tab: relative to
+                // the manifest, absolute when it says so, and nil when the
+                // file is gone. The row then draws the initials.
+                icon: loaded?.media?.icon.flatMap {
+                    Planner.resolve($0, root: url.deletingLastPathComponent())
                 },
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
                 apple: health(.apple, manifest: loaded, selected: selected),
@@ -401,6 +423,8 @@ final class AppState {
     func saveYAML(_ block: ManifestBlock) {
         do {
             manifest = try ManifestFile.apply(yamlText, block: block, to: manifest)
+            // The raw side edits the same file, so it takes the same step back.
+            registerManifestUndo()
             try save()
             syncStoreFieldsFromManifest()
             syncEditingStateFromManifest()
@@ -431,6 +455,30 @@ final class AppState {
         if manifest.apps.apple != nil { result.insert(.apple) }
         if manifest.apps.google != nil { result.insert(.google) }
         return result
+    }
+
+    /// The stores this app goes to, as words.
+    var storeListText: String {
+        let names = stores.sorted { $0.rawValue < $1.rawValue }.map(\.storeName)
+        guard !names.isEmpty else { return "the stores" }
+        guard names.count > 1 else { return names[0] }
+        return names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+    }
+
+    /// Whether the content pane is showing the two doors instead of a tab.
+    ///
+    /// The shell branched on this expression in three places and each one
+    /// wrote it again. The header, the pane, and the sidebar have to agree:
+    /// a sidebar offering nine per-app tabs beside a screen that says "pick an
+    /// app" offers nine places that cannot work.
+    var showsEntryScreen: Bool { manifestURL == nil || showEntryScreen }
+
+    /// Whether the shell shows the armed-write strip.
+    ///
+    /// Publishing alone. A Managing tab writes on its own button, which asks
+    /// first every time and never reads the dry run.
+    var showsLiveWriteWarning: Bool {
+        mode == .publishing && manifestURL != nil && !dryRun && !stores.isEmpty
     }
 
     var locales: [String] {
@@ -476,6 +524,7 @@ final class AppState {
         guard !linkedApps.isEmpty else {
             manifest = Manifest()
             manifestURL = nil
+            resetUndo()
             selectedAppIndex = 0
             selectedTab = .stores
             locale = ""
@@ -727,6 +776,9 @@ final class AppState {
                     manifest.mergeGoogleImport(imported)
                     await adopt(imported, store: .google)
                 }
+                // An import rewrites the listing wholesale, so it is the edit
+                // a developer most often wants back.
+                registerManifestUndo()
                 try save()
                 storeSnapshot.save(toRoot: manifestURL?.deletingLastPathComponent())
                 locale = manifest.listing?.defaultLocale ?? locale
@@ -806,6 +858,32 @@ final class AppState {
         return String(path.dropFirst(root.count + 1))
     }
 
+    /// The note a path field shows, or nil while the path is good or empty.
+    ///
+    /// `Planner.resolve` is the rule the Validator already runs for the
+    /// Summary tab, so the field and the plan can never disagree. It ran only
+    /// there, which put the fault three tabs away from the box that caused it.
+    func missingFileNote(for path: String) -> String? {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard Planner.resolve(trimmed, root: manifestRoot) == nil else { return nil }
+        return "No file sits at this path."
+    }
+
+    /// The same check for a build the manifest names but no longer has.
+    ///
+    /// The well shows the file a drop read this session. A build named by an
+    /// earlier session and since moved left the well looking empty and healthy.
+    func missingBuildNote(_ kind: AppPackage.Kind) -> String? {
+        let path: String? = switch kind {
+        case .ipa: manifest.release?.build?.ios
+        case .pkg: manifest.release?.build?.macos
+        case .aab: manifest.release?.build?.android
+        }
+        guard let path, !path.isEmpty, missingFileNote(for: path) != nil else { return nil }
+        return "The manifest names \(path), and no file sits there."
+    }
+
     func useReleaseVersion(_ version: String) {
         manifest.setReleaseVersionName(version)
         saveManifestReportingErrors()
@@ -842,10 +920,19 @@ final class AppState {
         manifest.mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
     }
 
+    /// A media path against the manifest's own folder. `Planner.resolve` is
+    /// the same rule for the run, and this one answers even when the file is
+    /// gone, because a tile still names a screenshot that moved.
+    ///
+    /// The test reads the path, not the URL. `URL(fileURLWithPath:)` resolves
+    /// a relative path against the working directory of the process, so the
+    /// URL is absolute either way and asking it "are you absolute" answered
+    /// yes for every path. Every relative path, which is what the app itself
+    /// writes, then pointed at the working directory and the tile drew an
+    /// empty box.
     func mediaURL(for path: String) -> URL {
-        let url = URL(fileURLWithPath: path)
-        if url.path.hasPrefix("/") { return url }
-        return manifestURL?.deletingLastPathComponent().appendingPathComponent(path) ?? url
+        guard !path.hasPrefix("/") else { return URL(fileURLWithPath: path) }
+        return manifestRoot?.appendingPathComponent(path) ?? URL(fileURLWithPath: path)
     }
 
     func imageInfo(for path: String) -> ImageAssetInfo? {
@@ -920,6 +1007,20 @@ final class AppState {
     func moveMedia(_ path: String, by offset: Int, deviceClass: Manifest.DeviceClass,
                    previews: Bool = false) {
         manifest.moveMediaPath(path, by: offset, locale: locale, deviceClass: deviceClass,
+                               previews: previews)
+        saveManifestReportingErrors()
+    }
+
+    /// Drops one screenshot onto the place another one holds.
+    ///
+    /// The tiles sit in a horizontal row and not a `List`, so there is no
+    /// `onMove` to inherit. The two arrow buttons stay: they are the keyboard
+    /// route, and Full Keyboard Access cannot drag.
+    func moveMedia(_ path: String, before other: String,
+                   deviceClass: Manifest.DeviceClass, previews: Bool = false) {
+        let paths = mediaPaths(deviceClass: deviceClass, previews: previews)
+        guard path != other, let target = paths.firstIndex(of: other) else { return }
+        manifest.moveMediaPath(path, to: target, locale: locale, deviceClass: deviceClass,
                                previews: previews)
         saveManifestReportingErrors()
     }
@@ -1397,6 +1498,9 @@ final class AppState {
     func load(from url: URL) throws {
         manifest = try ManifestFile.load(from: url)
         manifestURL = url
+        // The stack holds whole manifests, so it cannot cross an app. See
+        // resetUndo.
+        resetUndo()
         syncStoreFieldsFromManifest()
         syncEditingStateFromManifest()
     }
@@ -1624,13 +1728,13 @@ final class AppState {
         try KeychainCredentials.save(credential, kind: .apple, account: storeAccount)
     }
 
-    private func syncStoreFieldsFromManifest() {
+    func syncStoreFieldsFromManifest() {
         appleAppID = manifest.apps.apple?.appId ?? ""
         appleBundleID = manifest.apps.apple?.bundleId ?? ""
         googlePackageName = manifest.apps.google?.packageName ?? ""
     }
 
-    private func syncEditingStateFromManifest() {
+    func syncEditingStateFromManifest() {
         provider = manifest.monetization?.provider ?? .none
         revenueCatProjectID = manifest.monetization?.revenuecat?.projectId ?? ""
         priceAmount = manifest.pricing.map { "\($0.base.amount)" } ?? ""
@@ -1641,7 +1745,12 @@ final class AppState {
         offerPriceInputs = [:]
     }
 
+    /// The one funnel every manifest edit ends at.
+    ///
+    /// The undo is registered here and nowhere else, so a tab that edits a
+    /// field does not know undo exists and a tab written later inherits it.
     func saveManifestReportingErrors() {
+        registerManifestUndo()
         do {
             try save()
             invalidatePlan()

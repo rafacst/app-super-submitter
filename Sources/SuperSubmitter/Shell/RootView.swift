@@ -65,24 +65,93 @@ struct RootView: View {
 /// The content column: the header, then the tab.
 private struct ContentArea: View {
     @Environment(AppState.self) private var state
+    /// True once the tab has content passing under the header.
+    ///
+    /// The band used to draw a rule at all times, so a tab of two sentences
+    /// carried the same divider as a tab of forty fields. The rule now says
+    /// what a rule is for: there is more above.
+    @State private var scrolled = false
+    /// Whether the Details inspector is showing. It outlives a relaunch, the
+    /// way every inspector on the Mac does.
+    @AppStorage("detailsInspector") private var detailsInspectorOpen = true
 
     var body: some View {
         VStack(spacing: 0) {
-            ContentHeader()
-            Hairline()
-            if state.manifestURL == nil || state.showEntryScreen {
+            ContentHeader(scrolled: scrolled)
+            if state.showsLiveWriteWarning { LiveWriteBar(); Hairline() }
+            if state.showsEntryScreen {
                 EmptyAppView()
             } else {
-                ScrollView {
-                    TabContent(tab: state.selectedTab)
-                        .padding(20)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .background(Theme.content)
+                tabScroll
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
+        // A new tab starts at the top, so the rule starts off.
+        .onChange(of: state.selectedTab) { scrolled = false }
+    }
+
+    @ViewBuilder
+    private var tabScroll: some View {
+        let scroll = ScrollView {
+            TabContent(tab: state.selectedTab)
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.content)
+        // Outside the ScrollView on purpose: an inspector inside one scrolls
+        // away with the content it is meant to sit beside.
+        .inspector(isPresented: Binding(
+            get: { state.selectedTab == .details && detailsInspectorOpen },
+            set: { detailsInspectorOpen = $0 })) {
+            DetailsInspector()
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
+        }
+
+        // macOS 14 keeps the rule on at all times. There is no way to read the
+        // offset there without an NSScrollView of our own, and a permanent
+        // hairline is the state the app already shipped.
+        if #available(macOS 15.0, *) {
+            scroll.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y > 2
+            } action: { _, isScrolled in
+                guard scrolled != isScrolled else { return }
+                withAnimation(.easeOut(duration: 0.14)) { scrolled = isScrolled }
+            }
+        } else {
+            scroll.onAppear { scrolled = true }
+        }
+    }
+}
+
+/// The strip that says a store write is armed.
+///
+/// The switch that arms it sits on the Summary tab, and its consequence
+/// reaches every tab, so the state has to be readable from every tab. A
+/// developer could reach Submit without ever having seen the switch.
+///
+/// Yellow and not red. The apply writes drafts, and red says irreversible in
+/// this app, which the Release tab owns alone.
+private struct LiveWriteBar: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
+            Text("The dry run is off. An apply writes to \(state.storeListText).")
+                .font(.system(size: 11.5, weight: .medium))
+            Spacer(minLength: 8)
+            Button("Turn the dry run on") { state.dryRun = true }
+                .buttonStyle(.plain)
+                .font(.system(size: 11.5, weight: .semibold))
+                .underline()
+        }
+        .foregroundStyle(Theme.yellow)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.yellowBg)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -139,6 +208,22 @@ private struct EmptyAppView: View {
             }
             .frame(maxWidth: state.mode == .publishing ? 760 : 380)
             .padding(.top, 32)
+
+            // What the app cannot do, before the developer invests a folder in
+            // it and not after. Some store steps have no API at all, and the
+            // old flow revealed that on the Release tab, at the end, once
+            // every in-app step was already finished.
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "info.circle").font(.system(size: 11))
+                Text("Some store steps have no API. Super Submitter writes every draft it can, then lists the ones you finish in the store console yourself.")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+            }
+            .font(.system(size: 11.5))
+            .foregroundStyle(Theme.text2)
+            .frame(maxWidth: 560, alignment: .leading)
+            .padding(.top, 26)
+            .accessibilityElement(children: .combine)
 
             // The entry screen offers the doors that start work. Opening a
             // store.yaml continues work that already exists, so it lives in
@@ -208,21 +293,25 @@ private struct EntryModeCard: View {
 private struct ContentHeader: View {
     @Environment(AppState.self) private var state
     @AppStorage("showYAMLToggle") private var yamlToggleVisible = false
+    @AppStorage("detailsInspector") private var detailsInspectorOpen = true
+    /// Whether content is passing underneath. See ContentArea.
+    let scrolled: Bool
 
     var body: some View {
         @Bindable var state = state
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(state.manifestURL == nil ? "Welcome" : state.selectedTab.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .kerning(-0.14)
-                Text(state.manifestURL == nil
-                     ? (state.mode == .publishing
-                        ? "Which app do you want to send to the stores?"
-                        : "Which app do you want to look after?")
-                     : state.selectedTab.question)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text2)
+        HStack(spacing: 10) {
+            // The entry screen carries its own headline, in the size a
+            // headline wants. The band used to carry a second one over it, so
+            // one screen asked the same question twice in two voices.
+            if !state.showsEntryScreen {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(state.selectedTab.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .kerning(-0.14)
+                    Text(state.selectedTab.question)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.text2)
+                }
             }
             Spacer(minLength: 8)
 
@@ -249,16 +338,36 @@ private struct ContentHeader: View {
             }
 
             if state.manifestURL != nil { switch state.selectedTab {
-            case .details, .media:
+            case .details:
+                HeaderCluster { LocalePicker() }
+                HeaderCluster {
+                    Button { detailsInspectorOpen.toggle() } label: {
+                        Image(systemName: "sidebar.trailing")
+                            .font(.system(size: 13))
+                            .foregroundStyle(detailsInspectorOpen ? Theme.accent : Theme.text2)
+                            .frame(width: 24, height: 24)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("What each store receives")
+                    .accessibilityValue(detailsInspectorOpen ? "Showing" : "Hidden")
+                    .help("Show or hide what each store receives")
+                }
+            case .media:
                 LocalePicker()
             case .plan:
-                HStack(spacing: 7) {
+                // Two clusters, not one row of five things. Reading the stores
+                // and arming a write are different jobs, and the gap between
+                // the groups says so faster than the labels do.
+                HeaderCluster {
                     // No spinner here. The tab body already says "Reading both
                     // stores" beside one, and two spinners for one read read
                     // as two reads.
                     QuietButton(title: "Read the stores again") {
                         Task { await state.readStores() }
                     }
+                }
+                HeaderCluster {
                     Text("Dry run").font(.system(size: 12)).foregroundStyle(Theme.text2)
                     // Turning the dry run off is the moment an apply becomes a
                     // store write, so that is where the paywall belongs.
@@ -270,7 +379,7 @@ private struct ContentHeader: View {
                         }))
                 }
             case .release:
-                HStack(spacing: 7) {
+                HeaderCluster {
                     if state.rechecking { Spinner() }
                     QuietButton(title: "Copy as checklist") { state.copyChecklist() }
                     QuietButton(title: "Re-check") { Task { await state.recheck() } }
@@ -282,7 +391,24 @@ private struct ContentHeader: View {
         .padding(.leading, 20)
         .padding(.trailing, 18)
         .frame(height: Theme.headerHeight)
-        .background(Theme.raised)
+        // At rest the band is the page. It separates itself only while there
+        // is something above the fold to separate from.
+        .background(scrolled ? Theme.raised : Theme.content)
+        .overlay(alignment: .bottom) {
+            Hairline().opacity(scrolled ? 1 : 0)
+        }
+    }
+}
+
+/// One group of related controls in the header.
+///
+/// It is the spacing that groups them, the way a macOS toolbar groups items.
+/// A single run of five controls at one spacing reads as five equals.
+private struct HeaderCluster<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 7) { content }
     }
 }
 
@@ -311,21 +437,26 @@ private struct LocalePicker: View {
                     .accessibilityLabel(code)
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                Button { state.showAddLocale = true } label: {
-                    Text("+ Add")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.text2)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add a locale")
             }
             .background(Theme.sunken)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+
+            // Outside the group, and deliberately. Every segment inside it
+            // picks the language you are editing; this one opens a sheet. A
+            // command that sits among the choices reads as a fourth choice,
+            // and a segmented control with a live segment is a lie about state.
+            Button { state.showAddLocale = true } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.text2)
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add a language")
+            .help("Add a language")
         }
     }
 }
