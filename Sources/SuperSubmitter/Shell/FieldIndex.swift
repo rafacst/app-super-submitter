@@ -47,6 +47,14 @@ enum FieldIndex {
               keywords: ["track", "production", "rollout"]),
         .init(id: "build.countries", label: "Countries", tab: .build,
               keywords: ["regions", "rollout", "google"]),
+        .init(id: "build.googleTesters", label: "Track testers", tab: .build,
+              keywords: ["google groups", "closed track", "alpha", "beta"]),
+        .init(id: "build.testFlight", label: "TestFlight", tab: .build,
+              keywords: ["beta", "testers", "groups", "public link", "apple"]),
+        .init(id: "build.whatToTest", label: "What to Test", tab: .build,
+              keywords: ["beta notes", "testflight", "release notes", "apple"]),
+        .init(id: "build.testFlightPage", label: "TestFlight page", tab: .build,
+              keywords: ["feedback email", "beta", "apple"]),
 
         // MARK: Details
         .init(id: "details.name", label: "Name", tab: .details,
@@ -86,6 +94,8 @@ enum FieldIndex {
         // MARK: Media
         .init(id: "media.video", label: "YouTube URL", tab: .media,
               keywords: ["video", "trailer", "google", "promo"]),
+        .init(id: "media.googleGraphics", label: "Google graphics", tab: .media,
+              keywords: ["icon", "feature graphic", "512", "1024", "play"]),
 
         // MARK: Monetization
         .init(id: "money.basePrice", label: "Base price", tab: .money,

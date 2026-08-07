@@ -15,6 +15,11 @@ struct BuildTab: View {
             } else {
                 importSection
             }
+            // Who gets the build, whichever way it was made. It sits outside
+            // the two sources on purpose: a tester group belongs to the app,
+            // and it does not stop existing because you switched to the
+            // project builder.
+            if state.stores.contains(.apple) { TestFlightSection() }
         }
         .frame(maxWidth: 980, alignment: .leading)
     }

@@ -131,7 +131,15 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
       configs:
         Debug:
-          LICENSING_BASE_URL: https://super-submitter-test.rafacst.me
+          # Debug used to point at super-submitter-test.rafacst.me, and that
+          # service answers /v1/billing/plans with `available: false` on all
+          # three plans. The Account tab then disables every plan row and shuts
+          # the checkout button, so a Debug build could never buy anything and
+          # the whole subscription flow was untestable. Debug now uses the same
+          # live service as Release, which is the flow worth testing. To point
+          # a build back at a test service, export LICENSING_BASE_URL in the
+          # environment: LicensingConfig reads it before the Info.plist.
+          #
           # Xcode offers to "switch to development signing" here on every
           # regeneration. Refuse it. It rewrites this line to Apple
           # Development, and the whole reason for Developer ID is below.

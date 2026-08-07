@@ -305,6 +305,77 @@ extension AppState {
                 })
     }
 
+    /// Whether the offer is on sale.
+    ///
+    /// Google creates every offer in the draft state, so an offer without this
+    /// reaches no customer at all. The App Store reads it on an offer code
+    /// alone, where false stops new redemptions and keeps every subscription
+    /// that already used one.
+    func offerActiveBinding(_ target: OfferTarget, index: Int) -> Binding<Bool> {
+        Binding(get: { self.offers(for: target)[safe: index]?.active ?? false },
+                set: { value in
+                    var list = self.offers(for: target)
+                    guard list.indices.contains(index) else { return }
+                    list[index].active = value
+                    self.setOffers(list, for: target)
+                    self.saveManifestReportingErrors()
+                })
+    }
+
+    /// The redeemable codes of an offer code.
+    ///
+    /// Apple creates the offer and no code, so an offer code without this block
+    /// reaches nobody. `AppleOfferCodes` has always written it and the editor
+    /// never asked for it, which made "Offer code" a kind you could pick and
+    /// could not finish.
+    ///
+    /// Google generates its promotion codes in the Play Console, so nothing
+    /// here reaches Google.
+    enum OfferCodeField { case custom, oneTimeUse, expiresOn }
+
+    func offerCodesBinding(_ target: OfferTarget, index: Int,
+                           field: OfferCodeField) -> Binding<String> {
+        Binding(get: {
+            let codes = self.offers(for: target)[safe: index]?.codes
+            return switch field {
+            case .custom:
+                (codes?.custom ?? [:]).sorted { $0.key < $1.key }
+                    .map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+            case .oneTimeUse: codes?.oneTimeUse.map(String.init) ?? ""
+            case .expiresOn: codes?.expiresOn ?? ""
+            }
+        }, set: { value in
+            var list = self.offers(for: target)
+            guard list.indices.contains(index) else { return }
+            var codes = list[index].codes ?? Manifest.Offer.Codes()
+            switch field {
+            case .custom:
+                // `LAUNCH=500, PRESS=25`. The number is how many redemptions
+                // Apple allows for that one code, and a code with no number
+                // works once.
+                var custom: [String: Int] = [:]
+                for entry in Self.splitList(value) {
+                    let parts = entry.split(separator: "=", maxSplits: 1)
+                    let code = parts[0].trimmingCharacters(in: .whitespaces).uppercased()
+                    guard !code.isEmpty else { continue }
+                    custom[code] = parts.count == 2
+                        ? Int(parts[1].trimmingCharacters(in: .whitespaces)) ?? 1 : 1
+                }
+                codes.custom = custom.isEmpty ? nil : custom
+            case .oneTimeUse:
+                codes.oneTimeUse = Int(value.trimmingCharacters(in: .whitespaces))
+            case .expiresOn:
+                let trimmed = value.trimmingCharacters(in: .whitespaces)
+                codes.expiresOn = trimmed.isEmpty ? nil : trimmed
+            }
+            let empty = codes.custom == nil && codes.oneTimeUse == nil
+                && codes.expiresOn == nil
+            list[index].codes = empty ? nil : codes
+            self.setOffers(list, for: target)
+            self.saveManifestReportingErrors()
+        })
+    }
+
     private func hasPlan(_ groupIndex: Int, _ planIndex: Int) -> Bool {
         manifest.subscriptions?[safe: groupIndex]?.plans.indices.contains(planIndex) == true
     }

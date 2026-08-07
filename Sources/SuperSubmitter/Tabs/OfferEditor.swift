@@ -71,6 +71,14 @@ struct OfferEditor: View {
                                              emptyLabel: "Every region")
                         }
                     }
+                    HStack(spacing: 10) {
+                        Toggle("On sale", isOn: state.offerActiveBinding(target, index: index))
+                            .font(.system(size: 11.5))
+                        Text("Google creates every offer as a draft, so an offer that is not on sale reaches nobody.")
+                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        Spacer(minLength: 0)
+                    }
+                    if offer.kind == .offerCode { codes(index: index) }
                     if let hint = hint(for: offer) {
                         Text(hint).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
                     }
@@ -80,6 +88,37 @@ struct OfferEditor: View {
             }
             Button("Add offer") { state.addOffer(to: target) }.controlSize(.small)
         }
+    }
+
+    /// The codes a customer actually types.
+    ///
+    /// Apple creates the offer and no code, so an offer code without this block
+    /// reaches nobody. It shows for that one kind, because the other four sell
+    /// as soon as the product is live and carry no code at all.
+    private func codes(index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            LabeledField("Custom codes", note: "CODE=redemptions, comma-separated") {
+                TextField("LAUNCH=500, PRESS=25",
+                          text: state.offerCodesBinding(target, index: index, field: .custom))
+            }
+            FieldRow {
+                LabeledField("One-time use codes", note: "Apple caps a batch at 25000",
+                             width: 260) {
+                    TextField("", text: state.offerCodesBinding(target, index: index,
+                                                                 field: .oneTimeUse))
+                }
+                LabeledField("Expires on", note: "YYYY-MM-DD", width: 160) {
+                    TextField("", text: state.offerCodesBinding(target, index: index,
+                                                                 field: .expiresOn))
+                }
+                Spacer(minLength: 0)
+            }
+            Text("A custom code is one string handed to everybody. A one-time use code works once, and Apple requires an expiry date for a batch of them. Google generates its promotion codes in the Play Console, so none of this reaches Google.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(8)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
     }
 
     /// Each kind lands on a different resource in each store. The line says
