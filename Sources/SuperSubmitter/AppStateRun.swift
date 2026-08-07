@@ -126,7 +126,7 @@ extension AppState {
         guard !planReading else { return }
         let generation = stateGeneration
         planReading = true
-        planError = nil
+        planReadFailures = []
         let manifest = self.manifest
         let stores = self.stores
         let provider = self.provider
@@ -150,7 +150,7 @@ extension AppState {
         storeSnapshot.merge(actual)
         storeSnapshot.save(toRoot: manifestRoot)
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actual, stores: stores)
-        planError = result.readFailures.isEmpty ? nil : result.readFailures.joined(separator: "\n")
+        planReadFailures = result.readFailures
         stepStates = Array(repeating: .pending, count: result.steps.count)
         stepMeta = Array(repeating: "", count: result.steps.count)
         refreshDraftStatuses()
@@ -188,18 +188,24 @@ extension AppState {
             : "Removed \(removed.count) run \(removed.count == 1 ? "folder" : "folders"). Every retained archive and App Bundle is untouched."
     }
 
-    /// Points `store.yaml` at the artifact that Build from Project produced,
-    /// so the existing Plan reads it. upload-spec section 13.
+    /// Carries what Build from Project produced into `store.yaml`, so the
+    /// existing Plan reads it. upload-spec section 13.
+    ///
+    /// Only Android names a file. Its artifact is the exact `.aab` that the
+    /// plan uploads. An Apple artifact is an `.xcarchive`, which is a folder
+    /// and not a package, and `xcodebuild -exportArchive` already sent the
+    /// binary to App Store Connect. A path here made the plan read that folder
+    /// as a package, so the apply failed on it and uploaded a build twice.
+    /// The store read finds the uploaded build instead, and the plan attaches
+    /// it.
     func adoptBuiltArtifact() {
         guard let candidate = buildFlow.candidate else { return }
         var release = manifest.release ?? Manifest.Release()
-        var build = release.build ?? Manifest.Release.Build()
-        switch candidate.platform {
-        case .ios: build.ios = candidate.artifactPath
-        case .macos: build.macos = candidate.artifactPath
-        case .android: build.android = candidate.artifactPath
+        if candidate.platform == .android {
+            var build = release.build ?? Manifest.Release.Build()
+            build.android = candidate.artifactPath
+            release.build = build
         }
-        release.build = build
         if release.versionName?.isEmpty != false {
             release.versionName = candidate.marketingVersion
         }

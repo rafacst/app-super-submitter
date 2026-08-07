@@ -159,44 +159,63 @@ struct MoneyTab: View {
                         catalogRow(target: .purchase(index),
                                    active: state.purchaseActiveBinding(index: index),
                                    activeLabel: "On sale")
-                        FieldRow {
-                            LabeledField("Review screenshot", width: 300) {
-                                purchasePath(index: index, key: "screenshot",
-                                             extensions: ["png", "jpg", "jpeg"])
+                        // The eight store-specific controls, behind one row.
+                        //
+                        // A purchase needs an id, a kind, a name and a price.
+                        // The rest are Apple's: a review screenshot, a hosted
+                        // content path, a territory list, two localized
+                        // strings and two flags. All twelve were open at all
+                        // times, so the four that every purchase needs sat in
+                        // a card of twelve, and the label columns of four
+                        // different `FieldRow` widths never lined up.
+                        //
+                        // `DisclosureGroup` is what the Build tab already uses
+                        // for the same job on the Android artifacts.
+                        DisclosureGroup("Store options") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                FieldRow {
+                                    LabeledField("Review screenshot", width: 300) {
+                                        purchasePath(index: index, key: "screenshot",
+                                                     extensions: ["png", "jpg", "jpeg"])
+                                    }
+                                    // "Hosted content path", not "Apple-hosted
+                                    // content". The toggle below declares THAT
+                                    // the content is hosted; this names the
+                                    // file. Two controls under one label made
+                                    // the pair unreadable.
+                                    LabeledField("Hosted content path", width: 300) {
+                                        purchasePath(index: index, key: "content",
+                                                     extensions: ["zip"])
+                                    }
+                                    LabeledField("App Store territories") {
+                                        MultiChoiceField(
+                                            text: state.purchaseMetadataBinding(index: index,
+                                                                                key: "territories"),
+                                            choices: StoreValues.appleTerritories,
+                                            emptyLabel: "Every territory")
+                                    }
+                                }
+                                FieldRow {
+                                    LabeledField("Localized name", width: 260) {
+                                        TextField("", text: state.purchaseMetadataBinding(index: index,
+                                                                                          key: "localeName"))
+                                    }
+                                    LabeledField("Localized description") {
+                                        TextField("", text: state.purchaseMetadataBinding(index: index,
+                                                                                          key: "localeDescription"))
+                                    }
+                                }
+                                HStack {
+                                    Toggle("Apple hosts this content",
+                                           isOn: state.purchaseFlagBinding(index: index, key: "content"))
+                                    Toggle("Promoted purchase",
+                                           isOn: state.purchaseFlagBinding(index: index, key: "promoted"))
+                                    Spacer()
+                                }
                             }
-                            // "Hosted content path", not "Apple-hosted content".
-                            // The toggle below declares THAT the content is
-                            // hosted; this names the file. Two controls under
-                            // one label made the pair unreadable.
-                            LabeledField("Hosted content path", width: 300) {
-                                purchasePath(index: index, key: "content",
-                                             extensions: ["zip"])
-                            }
-                            LabeledField("App Store territories") {
-                                MultiChoiceField(
-                                    text: state.purchaseMetadataBinding(index: index,
-                                                                        key: "territories"),
-                                    choices: StoreValues.appleTerritories,
-                                    emptyLabel: "Every territory")
-                            }
+                            .padding(.top, 8)
                         }
-                        FieldRow {
-                            LabeledField("Localized name", width: 260) {
-                                TextField("", text: state.purchaseMetadataBinding(index: index,
-                                                                                  key: "localeName"))
-                            }
-                            LabeledField("Localized description") {
-                                TextField("", text: state.purchaseMetadataBinding(index: index,
-                                                                                  key: "localeDescription"))
-                            }
-                        }
-                        HStack {
-                            Toggle("Apple hosts this content",
-                                   isOn: state.purchaseFlagBinding(index: index, key: "content"))
-                            Toggle("Promoted purchase",
-                                   isOn: state.purchaseFlagBinding(index: index, key: "promoted"))
-                            Spacer()
-                        }
+                        .font(.system(size: 11.5))
                         OfferEditor(target: .purchase(index))
                     }.storePanel()
                 }

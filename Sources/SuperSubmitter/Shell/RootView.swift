@@ -78,7 +78,12 @@ private struct ContentArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ContentHeader(scrolled: scrolled)
+            // No band on the entry screen. It carries no title, no question
+            // and no controls there, so it drew 64 points of empty glass over
+            // a screen whose whole job is one centred choice — and the traffic
+            // lights sit on the sidebar panel, not here, so nothing needs the
+            // room.
+            if !state.showsEntryScreen { ContentHeader(scrolled: scrolled) }
             if state.showsLiveWriteWarning { LiveWriteBar(); Hairline() }
             if state.showsEntryScreen {
                 EmptyAppView()
@@ -100,6 +105,10 @@ private struct ContentArea: View {
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // The band above is glass, so it refracts whatever passes under
+            // it. Without this the first line of the scroll meets that glass
+            // at a hard boundary and reads as a line cut in half.
+            .softScrollEdge()
             .onChange(of: state.jumpTarget) { _, target in
                 guard let target else { return }
                 state.jumpTarget = nil
@@ -272,6 +281,15 @@ private struct EntryModeCard: View {
     let detail: String
     let tint: Color
     let action: () -> Void
+    /// The tint belongs to the card while the pointer is on it, and not
+    /// before.
+    ///
+    /// Both cards drew a border in their own hue at rest, so the blue one read
+    /// as the chosen card on a screen where nothing is chosen yet — the same
+    /// signal the app uses for a selected sidebar row and a ticked store. At
+    /// rest they are two equal doors; the hover says which one you are about
+    /// to open.
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
@@ -295,10 +313,13 @@ private struct EntryModeCard: View {
                    alignment: .topLeading)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(tint.opacity(0.42), lineWidth: 1))
+                .strokeBorder(hovering ? tint.opacity(0.55) : Theme.sep,
+                              lineWidth: 1))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.smooth(duration: 0.18), value: hovering)
         .accessibilityHint(detail)
     }
 }
@@ -312,6 +333,14 @@ private struct ContentHeader: View {
     @AppStorage("detailsInspector") private var detailsInspectorOpen = true
     /// Whether content is passing underneath. See ContentArea.
     let scrolled: Bool
+    /// Whether the question that arms a store write is open.
+    ///
+    /// The switch used to arm on one click. The strip below the header says
+    /// the state afterwards, which is the right place for a state, but nothing
+    /// stood between the click and the consequence — and the consequence is
+    /// that the next apply stops being a rehearsal and starts writing to two
+    /// live stores.
+    @State private var armingLiveWrites = false
 
     var body: some View {
         @Bindable var state = state
@@ -321,7 +350,7 @@ private struct ContentHeader: View {
             // one screen asked the same question twice in two voices.
             if !state.showsEntryScreen {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(state.selectedTab.title)
+                    Text(state.selectedTab.title(in: state.mode))
                         .font(Theme.screenTitle)
                         .kerning(-0.21)
                     Text(state.selectedTab.question)
@@ -353,10 +382,37 @@ private struct ContentHeader: View {
                 .accessibilityValue(state.showYAML ? "On" : "Off")
             }
 
+            let shape = HeaderShape(tab: state.selectedTab, busy: state.rechecking,
+                                    readFailed: state.planError != nil,
+                                    pendingRelease: state.hasPendingRelease,
+                                    locales: state.locales.count)
+
+            // The palette, with a way in that is not the menu bar.
+            //
+            // It was reachable at Command-F and from Edit, and nowhere on the
+            // screen said so. It is the fastest thing in the app — it finds a
+            // field across nine tabs and scrolls to it — and a developer who
+            // never opens a menu never learns it exists. The shortcut sits in
+            // the tooltip, so the button teaches its own replacement.
+            if state.manifestURL != nil {
+                HeaderCluster(morphOn: shape) {
+                    Button { state.showFieldSearch = true } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.text2)
+                            .frame(width: 24, height: 24)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Find a field")
+                    .help("Find a field  ⌘F")
+                }
+            }
+
             if state.manifestURL != nil { switch state.selectedTab {
             case .details:
-                HeaderCluster { LocalePicker() }
-                HeaderCluster {
+                HeaderCluster(morphOn: shape) { LocalePicker() }
+                HeaderCluster(morphOn: shape) {
                     Button { detailsInspectorOpen.toggle() } label: {
                         Image(systemName: "sidebar.trailing")
                             .font(.system(size: 13))
@@ -380,7 +436,7 @@ private struct ContentHeader: View {
                 // two buttons for one action, one of them 900 points from the
                 // problem, is a choice the developer should not have to make.
                 if state.planError == nil {
-                    HeaderCluster {
+                    HeaderCluster(morphOn: shape) {
                         // No spinner here. The tab body already says "Reading
                         // both stores" beside one, and two spinners for one
                         // read read as two reads.
@@ -389,22 +445,36 @@ private struct ContentHeader: View {
                         }
                     }
                 }
-                HeaderCluster {
+                HeaderCluster(morphOn: shape) {
                     Text("Dry run").font(.system(size: 12)).foregroundStyle(Theme.text2)
                     // Turning the dry run off is the moment an apply becomes a
-                    // store write, so that is where the paywall belongs.
+                    // store write, so that is where the paywall belongs, and
+                    // where the question belongs. Turning it back on needs no
+                    // question: that direction only ever makes the app safer.
                     SmallToggle(isOn: Binding(
                         get: { state.dryRun },
                         set: { value in
                             guard value || state.requirePaid(.storeWrite, .apply) else { return }
-                            state.dryRun = value
+                            if value { state.dryRun = true } else { armingLiveWrites = true }
                         }))
                 }
             case .release:
-                HeaderCluster {
+                HeaderCluster(morphOn: shape) {
                     if state.rechecking { Spinner() }
                     QuietButton(title: "Copy as checklist", glass: true) { state.copyChecklist() }
                     QuietButton(title: "Re-check", glass: true) { Task { await state.recheck() } }
+                }
+                // The tab asks "shall I send it?" in its own subtitle, and the
+                // buttons that answer it sit below the fold. This says they
+                // exist and takes you to them; it sends nothing itself, because
+                // one button cannot stand for two stores and a send is the one
+                // action in this app that may never happen by surprise.
+                if state.hasPendingRelease {
+                    HeaderCluster(morphOn: shape) {
+                        QuietButton(title: "Send to review", glass: true, prominent: true) {
+                            state.jumpTarget = ReleaseTab.sendAnchor
+                        }
+                    }
                 }
             default:
                 EmptyView()
@@ -413,6 +483,13 @@ private struct ContentHeader: View {
         .padding(.leading, 20)
         .padding(.trailing, 18)
         .frame(height: Theme.headerHeight)
+        .confirmationDialog("Turn the dry run off?", isPresented: $armingLiveWrites,
+                            titleVisibility: .visible) {
+            Button("Turn it off", role: .destructive) { state.dryRun = false }
+            Button("Keep the dry run on", role: .cancel) {}
+        } message: {
+            Text("The next apply writes drafts to \(state.storeListText) instead of logging them. It writes drafts only: nothing reaches review until you send it on the Release tab.")
+        }
         // Below macOS 26 the band is the page at rest, and separates itself
         // only while there is something above the fold. On 26 the material
         // does that job. See HeaderSurface.
@@ -428,13 +505,33 @@ private struct ContentHeader: View {
 /// On macOS 26 the group is also a `GlassEffectContainer`, so neighbours merge
 /// into one lozenge instead of three. That is the same statement the spacing
 /// was already making, said in the material.
+///
+/// `morphOn` carries the state that decides which controls are in the group.
+/// The header changes its contents constantly — a spinner while a re-check
+/// runs, the send action once a release is pending, the read button whenever a
+/// read has not failed — and a lozenge that jumps to a new width on the frame
+/// a control appears is the one thing this material exists not to do.
 private struct HeaderCluster<Content: View>: View {
+    var morphOn: HeaderShape = HeaderShape()
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(spacing: 7) { content }
-            .glassCluster(spacing: 7)
+            .glassCluster(spacing: 7, morphOn: morphOn)
     }
+}
+
+/// Everything that changes which controls the header draws.
+///
+/// One value rather than four `animation(value:)` modifiers: the clusters
+/// re-form as a group, so they have to be told as a group or two of them
+/// animate on different clocks.
+private struct HeaderShape: Equatable {
+    var tab: Tab = .stores
+    var busy = false
+    var readFailed = false
+    var pendingRelease = false
+    var locales = 0
 }
 
 /// The language switch on tab 3 and tab 4.

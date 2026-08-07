@@ -37,8 +37,21 @@ struct FieldSearchSheet: View {
                 list
             }
         }
-        .frame(width: 460, height: 360)
-        .background(Theme.content)
+        // Sized to the answer, not to the worst case. It was 460 by 360
+        // whatever it held, so five results sat in a panel built for twelve
+        // and two thirds of it was empty.
+        //
+        // The empty state keeps a floor, because a palette that opens as a
+        // one-line strip and then jumps to full height on the first keystroke
+        // is worse than one that never moves.
+        .frame(width: 460)
+        .frame(minHeight: results.isEmpty ? 148 : 0)
+        .animation(.smooth(duration: 0.22), value: results.count)
+        // The one sheet in the app that takes glass. It is a small thing over
+        // the top of the work rather than a screen of fields, which is the
+        // case the material was made for. The dense sheets stay opaque: glass
+        // under body copy is a legibility regression.
+        .floatingSurface()
         // Escape closes it. The rows below take the arrows and Return, and
         // this catches the key whichever row holds the focus.
         .onKeyPress(.escape) { dismiss(); return .handled }

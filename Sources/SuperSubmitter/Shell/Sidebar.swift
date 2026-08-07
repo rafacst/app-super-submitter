@@ -173,7 +173,7 @@ private struct TabRow: View {
                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
                     .foregroundStyle(iconColour)
                     .frame(width: 20)
-                Text(tab.title)
+                Text(tab.title(in: state.mode))
                     .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? tab.tint : Theme.text)
                 Spacer(minLength: 0)
@@ -194,7 +194,7 @@ private struct TabRow: View {
         }
         .buttonStyle(.plain)
         .disabled(state.manifestURL == nil)
-        .accessibilityLabel(tab.title)
+        .accessibilityLabel(tab.title(in: state.mode))
         // The button's label hides the pills from the reader, and the two of
         // them are told apart by hue alone, so the count has to be said.
         .accessibilityValue(state.badge(for: tab)?.spoken ?? "")
@@ -288,6 +288,15 @@ struct ModeSwitch: View {
 /// a form that keeps nothing.
 struct SavedChip: View {
     @Environment(AppState.self) private var state
+    /// Whether a save happened recently enough to still be news.
+    ///
+    /// The green tick used to burn at all times. Reassurance that is always on
+    /// is reassurance nobody reads: it stops being the answer to "did that
+    /// save?" and becomes part of the furniture, and then the one moment it
+    /// matters looks exactly like every other moment. The tick now marks a
+    /// save and fades; the row itself stays, because it is also the way to
+    /// open the file.
+    @State private var recentlySaved = false
 
     private var line: String {
         guard let date = state.lastSavedAt else { return "Saved to store.yaml" }
@@ -297,9 +306,10 @@ struct SavedChip: View {
     var body: some View {
         Button { state.revealManifest() } label: {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: recentlySaved ? "checkmark.circle.fill" : "doc.text")
                     .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.green)
+                    .foregroundStyle(recentlySaved ? Theme.green : Theme.text3)
+                    .contentTransition(.symbolEffect(.replace))
                 Text(line)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.text2)
@@ -307,6 +317,13 @@ struct SavedChip: View {
                 Spacer(minLength: 0)
             }
             .contentShape(.rect)
+        }
+        .onChange(of: state.lastSavedAt) { _, _ in
+            withAnimation(.smooth(duration: 0.2)) { recentlySaved = true }
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                withAnimation(.smooth(duration: 0.4)) { recentlySaved = false }
+            }
         }
         .buttonStyle(.plain)
         .help("Every change is written as you type. Click to show store.yaml in the Finder.")
