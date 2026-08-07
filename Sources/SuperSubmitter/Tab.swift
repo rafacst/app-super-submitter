@@ -224,10 +224,20 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     /// Whether the tab works with no app open.
     ///
-    /// Account does. It answers who you are and what you have paid for, and
-    /// both are true before the first folder is linked. Every other tab edits
-    /// or reads one app, so without one there is nothing on it.
-    var standsAlone: Bool { self == .account }
+    /// The two footer tabs do. Account answers who you are and what you have
+    /// paid for. Stores holds one App Store Connect key for the whole team and
+    /// one Play service account for the whole developer account, so it is
+    /// answered once and covers every app, including the ones not added yet.
+    ///
+    /// Stores also has to be reachable with nothing linked, because "Forget"
+    /// lives there and it is the only way to remove a store key on purpose.
+    /// The sidebar already said both of these work with no app; the row was
+    /// greyed anyway, so the one screen that could undo a credential was shut
+    /// exactly when a developer went looking for it.
+    ///
+    /// Every other tab edits or reads one app, so without one there is nothing
+    /// on it.
+    var standsAlone: Bool { Tab.footer.contains(self) }
 
     /// The two tabs the sidebar pins to its foot, in the order it draws them.
     ///
