@@ -81,8 +81,26 @@ public struct StoreImportReader: Sendable {
             version["attributes"]["appVersionState"].string
                 ?? version["attributes"]["appStoreState"].string ?? ""
         }
-        let editableVersion = versions["data"].array.first { editableStates.contains(state($0)) }
-        let liveVersion = versions["data"].array.first { releasedStates.contains(state($0)) }
+        // The highest, not the first, which is the rule `StateReader` already
+        // follows. App Store Connect fixes no order here, and the first
+        // released record it happens to return can be an old one.
+        //
+        // Taking that one cost the whole media import and said nothing. The
+        // read picked version 1.2 while 1.4 was live, so `liveVersion` and
+        // `version` were the same record and the fill from the live version
+        // never ran. Apple keeps the screenshots on the current version and
+        // answers a superseded record with empty sets, so the text of 1.2 came
+        // through and none of its media did. The developer saw a full Details
+        // tab, an empty Media tab, no failure to explain either, and a version
+        // number below the one on sale.
+        func highest(_ states: Set<String>) -> JSON? {
+            versions["data"].array
+                .filter { states.contains(state($0)) }
+                .max { Validator.isVersion($1["attributes"]["versionString"].string ?? "",
+                                            above: $0["attributes"]["versionString"].string ?? "") }
+        }
+        let editableVersion = highest(editableStates)
+        let liveVersion = highest(releasedStates)
         // The editable version decides the number the developer is about to
         // submit, so it still leads.
         let version = editableVersion ?? liveVersion ?? versions["data"].array.first
@@ -286,9 +304,11 @@ public struct StoreImportReader: Sendable {
         ///
         /// Field by field, so a half-written draft keeps every word the
         /// developer typed and still gains the paragraphs they did not.
-        /// Media goes by locale: a locale with no screenshots on this version
-        /// shows the ones the store shows, and a locale that has its own set
-        /// keeps it whole rather than mixing two.
+        /// Media goes by bucket, not by locale. Apple keeps one screenshot set
+        /// per display type, so a draft that carries a desktop set is not a
+        /// draft that carries a phone set. Skipping the whole locale threw
+        /// away every live bucket the draft had not filled, and the tab then
+        /// showed one device class of a listing that has five.
         mutating func fill(from other: VersionContent) {
             for (code, source) in other.locales {
                 var target = locales[code] ?? .init()
@@ -300,8 +320,8 @@ public struct StoreImportReader: Sendable {
                 target.marketingURL = target.marketingURL.orFilled(source.marketingURL)
                 locales[code] = target
             }
-            let covered = Set(assets.map(\.locale))
-            assets += other.assets.filter { !covered.contains($0.locale) }
+            let covered = Set(assets.map { "\($0.locale)/\($0.kind)" })
+            assets += other.assets.filter { !covered.contains("\($0.locale)/\($0.kind)") }
         }
     }
 
