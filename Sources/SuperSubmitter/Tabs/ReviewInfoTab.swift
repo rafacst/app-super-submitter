@@ -24,7 +24,8 @@ struct ReviewInfoTab: View {
     }
 
     private var reviewContact: some View {
-        Section_("Review contact", icon: "person.crop.circle.fill", tint: Theme.accent) {
+        Section_("Review contact", icon: "person.crop.circle.fill", tint: Theme.accent,
+                 anchor: "review.contact") {
             VStack(alignment: .leading, spacing: 9) {
                 FieldRow {
                     LabeledField("First name") {
@@ -55,7 +56,8 @@ struct ReviewInfoTab: View {
 
     private var demoAccount: some View {
         @Bindable var state = state
-        return Section_("Demo account", icon: "key.fill", tint: Theme.orange) {
+        return Section_("Demo account", icon: "key.fill", tint: Theme.orange,
+                 anchor: "review.demoAccount") {
             VStack(alignment: .leading, spacing: 9) {
                 Toggle("The reviewer needs an account to sign in",
                        isOn: state.demoAccountRequiredBinding)
@@ -83,7 +85,8 @@ struct ReviewInfoTab: View {
     private static let notesHeight: CGFloat = 420
 
     private var reviewNotes: some View {
-        Section_("Notes for the reviewer", icon: "note.text", tint: Theme.teal) {
+        Section_("Notes for the reviewer", icon: "note.text", tint: Theme.teal,
+                 anchor: "review.notes") {
             TextEditor(text: state.reviewBinding(.notes))
                 .font(.system(size: 12.5)).scrollContentBackground(.hidden)
                 .padding(7).frame(height: Self.notesHeight)

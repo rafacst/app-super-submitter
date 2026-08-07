@@ -30,7 +30,8 @@ struct MoneyTab: View {
 
     private var priceSection: some View {
         @Bindable var state = state
-        return Section_("Base price", icon: "dollarsign.circle.fill", tint: Theme.green) {
+        return Section_("Base price", icon: "dollarsign.circle.fill", tint: Theme.green,
+                        anchor: "money.basePrice") {
             VStack(alignment: .leading, spacing: 9) {
                 FieldRow {
                     LabeledField("Amount", width: 90) {
@@ -42,7 +43,7 @@ struct MoneyTab: View {
                                     emptyLabel: "Pick a currency", allowsNone: false)
                     }
                 }
-                LabeledField("Base territory") {
+                LabeledField("Base territory", anchor: "money.baseTerritory") {
                     ChoiceField(value: $state.priceTerritory,
                                 choices: StoreValues.appleTerritories,
                                 emptyLabel: "Pick a territory")
@@ -90,9 +91,13 @@ struct MoneyTab: View {
     }
 
     private var availabilitySection: some View {
-        Section_("Availability", icon: "globe", tint: Theme.teal) {
+        Section_("Availability", icon: "globe", tint: Theme.teal,
+                 anchor: "money.availability") {
             VStack(alignment: .leading, spacing: 10) {
-                LabeledField("App Store territories") {
+                // The app's own territories. The identically labelled field on
+                // each purchase repeats down a list, so it carries no anchor.
+                LabeledField("App Store territories",
+                             anchor: "money.appStoreTerritories") {
                     MultiChoiceField(text: state.appTerritoriesBinding,
                                      choices: StoreValues.appleTerritories,
                                      emptyLabel: "Every territory Apple sells in")
@@ -115,7 +120,8 @@ struct MoneyTab: View {
 
     private var purchasesSection: some View {
         let purchases = state.manifest.purchases ?? []
-        return Section_("In-app purchases", icon: "cart.fill", tint: Theme.accent) {
+        return Section_("In-app purchases", icon: "cart.fill", tint: Theme.accent,
+                        anchor: "money.purchases") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
@@ -154,13 +160,17 @@ struct MoneyTab: View {
                                    active: state.purchaseActiveBinding(index: index),
                                    activeLabel: "On sale")
                         FieldRow {
-                            LabeledField("Review screenshot", width: 260) {
-                                TextField("path", text: state.purchaseMetadataBinding(index: index,
-                                                                                      key: "screenshot"))
+                            LabeledField("Review screenshot", width: 300) {
+                                purchasePath(index: index, key: "screenshot",
+                                             extensions: ["png", "jpg", "jpeg"])
                             }
-                            LabeledField("Apple-hosted content", width: 260) {
-                                TextField("path", text: state.purchaseMetadataBinding(index: index,
-                                                                                      key: "content"))
+                            // "Hosted content path", not "Apple-hosted content".
+                            // The toggle below declares THAT the content is
+                            // hosted; this names the file. Two controls under
+                            // one label made the pair unreadable.
+                            LabeledField("Hosted content path", width: 300) {
+                                purchasePath(index: index, key: "content",
+                                             extensions: ["zip"])
                             }
                             LabeledField("App Store territories") {
                                 MultiChoiceField(
@@ -181,7 +191,7 @@ struct MoneyTab: View {
                             }
                         }
                         HStack {
-                            Toggle("Apple-hosted content",
+                            Toggle("Apple hosts this content",
                                    isOn: state.purchaseFlagBinding(index: index, key: "content"))
                             Toggle("Promoted purchase",
                                    isOn: state.purchaseFlagBinding(index: index, key: "promoted"))
@@ -195,9 +205,26 @@ struct MoneyTab: View {
         }
     }
 
+    /// A path on a purchase, with the picker and the missing-file check every
+    /// other path box in the app already has.
+    ///
+    /// Both boxes were a bare `TextField` whose placeholder read `path`, so the
+    /// developer had to know the spelling and got no word back when the file
+    /// was not there. `AndroidArtifactsSection` set the pattern; this reuses it.
+    private func purchasePath(index: Int, key: String,
+                              extensions: [String]) -> some View {
+        let binding = state.purchaseMetadataBinding(index: index, key: key)
+        return PathField(path: binding,
+                         problem: state.missingFileNote(for: binding.wrappedValue)) {
+            guard let url = state.chooseOneFile(allowedExtensions: extensions) else { return }
+            binding.wrappedValue = state.relativePath(for: url)
+        }
+    }
+
     private var subscriptionsSection: some View {
         let groups = state.manifest.subscriptions ?? []
-        return Section_("Subscriptions", icon: "arrow.clockwise.circle.fill", tint: Theme.purple) {
+        return Section_("Subscriptions", icon: "arrow.clockwise.circle.fill", tint: Theme.purple,
+                        anchor: "money.subscriptions") {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { groupIndex, group in
                     VStack(alignment: .leading, spacing: 9) {
@@ -370,13 +397,18 @@ struct Section_<Content: View>: View {
     let title: String
     var icon: String?
     var tint: Color = Theme.accent
+    /// The `FieldIndex` id. A section is what the search jumps to when the
+    /// fields under it repeat, which is every list of purchases, plans,
+    /// offers, and pages.
+    var anchor: String?
     @ViewBuilder let content: Content
 
     init(_ title: String, icon: String? = nil, tint: Color = Theme.accent,
-         @ViewBuilder content: () -> Content) {
+         anchor: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.tint = tint
+        self.anchor = anchor
         self.content = content()
     }
 
@@ -384,11 +416,16 @@ struct Section_<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 if let icon { IconChip(symbol: icon, tint: tint, size: 21) }
-                Text(title).font(.system(size: 11, weight: .semibold)).textCase(.uppercase)
-                    .kerning(0.4)
+                // Sentence case, not ALL CAPS with kerning. Capitals cost
+                // scan speed, because a word set in them loses the shape the
+                // eye reads it by, and no macOS form heads its groups that
+                // way. One struct, so this reaches every tab.
+                Text(title).font(Theme.sectionHeader)
                     .foregroundStyle(icon == nil ? Theme.text3 : Theme.text2)
             }
             content
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fieldAnchor(anchor)
     }
 }

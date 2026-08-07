@@ -36,7 +36,8 @@ struct MarketingTab: View {
 
     private var customProductPages: some View {
         let pages = state.marketing.customProductPages ?? []
-        return Section_("Custom product pages", icon: "doc.on.doc.fill", tint: Theme.accent) {
+        return Section_("Custom product pages", icon: "doc.on.doc.fill", tint: Theme.accent,
+                        anchor: "marketing.customPages") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
@@ -73,7 +74,8 @@ struct MarketingTab: View {
 
     private var experiments: some View {
         let items = state.marketing.experiments ?? []
-        return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple) {
+        return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple,
+                        anchor: "marketing.experiments") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
@@ -118,7 +120,8 @@ struct MarketingTab: View {
 
     private var events: some View {
         let items = state.marketing.events ?? []
-        return Section_("In-app events", icon: "calendar", tint: Theme.pink) {
+        return Section_("In-app events", icon: "calendar", tint: Theme.pink,
+                        anchor: "marketing.events") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
@@ -165,7 +168,8 @@ struct MarketingTab: View {
     // MARK: - The licence agreement
 
     private var licenceAgreement: some View {
-        Section_("Licence agreement", icon: "doc.text.fill", tint: Theme.teal) {
+        Section_("Licence agreement", icon: "doc.text.fill", tint: Theme.teal,
+                 anchor: "marketing.eula") {
             VStack(alignment: .leading, spacing: 7) {
                 TextEditor(text: state.eulaTextBinding)
                     .font(.system(size: 12))
@@ -209,7 +213,8 @@ struct MarketingTab: View {
     }
 
     private var routingCoverage: some View {
-        Section_("Routing app coverage", icon: "map.fill", tint: Theme.green) {
+        Section_("Routing app coverage", icon: "map.fill", tint: Theme.green,
+                 anchor: "marketing.routing") {
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     TextField("assets/coverage.geojson", text: state.routingCoverageBinding)
@@ -226,7 +231,8 @@ struct MarketingTab: View {
     }
 
     private var nomination: some View {
-        Section_("Featuring nomination", icon: "star.fill", tint: Theme.yellow) {
+        Section_("Featuring nomination", icon: "star.fill", tint: Theme.yellow,
+                 anchor: "marketing.nomination") {
             VStack(alignment: .leading, spacing: 7) {
                 TextField("Name", text: state.nominationBinding(.name))
                 Picker("Type", selection: state.nominationBinding(.type)) {
@@ -242,7 +248,8 @@ struct MarketingTab: View {
     }
 
     private var accessibility: some View {
-        Section_("Accessibility declaration", icon: "figure.wave", tint: Theme.orange) {
+        Section_("Accessibility declaration", icon: "figure.wave", tint: Theme.orange,
+                 anchor: "marketing.accessibility") {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(StoreValues.accessibilityFeatures) { feature in
                     Toggle(feature.label, isOn: state.accessibilityBinding(feature.value))
@@ -255,7 +262,8 @@ struct MarketingTab: View {
     }
 
     private var appClip: some View {
-        Section_("App Clip default experience", icon: "bolt.fill", tint: Theme.accent) {
+        Section_("App Clip default experience", icon: "bolt.fill", tint: Theme.accent,
+                 anchor: "marketing.appClip") {
             VStack(alignment: .leading, spacing: 7) {
                 Picker("Action", selection: state.appClipActionBinding) {
                     Text("None").tag("")

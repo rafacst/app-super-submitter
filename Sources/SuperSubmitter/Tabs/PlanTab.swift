@@ -7,6 +7,8 @@ struct PlanTab: View {
     @Environment(AppState.self) private var state
     /// Holds the question open while the developer answers it. See applyRow.
     @State private var confirmingApply = false
+    /// Shut by default. See acknowledgedSummary.
+    @State private var showingAcknowledged = false
 
     var body: some View {
         Group {
@@ -218,7 +220,7 @@ struct PlanTab: View {
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(accent)
                 // Only the blocking case needs a sentence. Every warning row
-                // carries its own "I accept this", which says the rest.
+                // carries its own "Acknowledge", which says the rest.
                 if blocked {
                     Text("Fix the errors to unlock the apply.")
                         .font(.system(size: 11.5))
@@ -332,34 +334,29 @@ struct PlanTab: View {
         // run is free and never locks.
         let locked = !state.dryRun && !state.can(.storeWrite)
         let blocked = !locked && !state.canApply
-        return HStack(alignment: .center, spacing: 16) {
-            Button {
-                guard state.dryRun || state.requirePaid(.storeWrite, .apply) else { return }
-                guard state.canApply else { return }
-                // A dry run sends nothing, so it asks nothing. A real apply is
-                // the moment the app first touches a live store, and it is the
-                // only place in Publishing where that happens.
-                guard !state.dryRun else { return runNow() }
-                confirmingApply = true
-            } label: {
-                Text(state.dryRun ? "Dry run" : "Apply")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(blocked ? Theme.text3 : Theme.accentText)
-                    .padding(.horizontal, 26)
-                    .padding(.vertical, 11)
-                    .background(blocked ? Theme.sep2 : Theme.accent,
-                                in: RoundedRectangle(cornerRadius: 9))
-            }
-            .buttonStyle(.plain)
-            .disabled(blocked)
+        return VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .center, spacing: 16) {
+                ProminentButton(title: state.dryRun ? "Dry run" : "Apply",
+                                enabled: !blocked) {
+                    guard state.dryRun || state.requirePaid(.storeWrite, .apply) else { return }
+                    guard state.canApply else { return }
+                    // A dry run sends nothing, so it asks nothing. A real apply
+                    // is the moment the app first touches a live store, and it
+                    // is the only place in Publishing where that happens.
+                    guard !state.dryRun else { return runNow() }
+                    confirmingApply = true
+                }
+                .disabled(blocked)
 
-            Text(applyNote(plan))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.text2)
-                .lineSpacing(3)
-                .frame(maxWidth: 520, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+                Text(applyNote(plan))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.text2)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 520, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            acknowledgedSummary(plan)
         }
         .confirmationDialog("Write to \(state.storeListText)?",
                             isPresented: $confirmingApply, titleVisibility: .visible) {
@@ -367,6 +364,42 @@ struct PlanTab: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(confirmLine(plan))
+        }
+    }
+
+    /// What the developer waved through, beside the button that acts on it.
+    ///
+    /// The acknowledged set decided whether the apply could run and then said
+    /// nothing more, so the one moment it mattered, the moment before the
+    /// write, was the one moment nobody could review it. Folded shut by
+    /// default: the count is the answer, and the list is the detail.
+    @ViewBuilder
+    private func acknowledgedSummary(_ plan: PlanResult) -> some View {
+        let accepted = plan.warnings.filter { state.acknowledged.contains($0.id) }
+        if !accepted.isEmpty {
+            DisclosureGroup(isExpanded: $showingAcknowledged) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(accepted) { finding in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(finding.message)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(finding.location).foregroundStyle(Theme.text3)
+                        }
+                        .frame(maxWidth: 520, alignment: .leading)
+                    }
+                }
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.text2)
+                .padding(.top, 7)
+            } label: {
+                // Verbatim, so the count keeps its digits in every locale.
+                Text(verbatim: "\(accepted.count) \(accepted.count == 1 ? "warning" : "warnings") acknowledged")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.text2)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+            .frame(maxWidth: 560, alignment: .leading)
         }
     }
 
@@ -393,7 +426,7 @@ struct PlanTab: View {
         }
         if state.unacknowledgedWarnings > 0 {
             let count = state.unacknowledgedWarnings
-            return "Accept \(count == 1 ? "the warning" : "the \(count) warnings") to unlock the apply."
+            return "Acknowledge \(count == 1 ? "the warning" : "the \(count) warnings") to unlock the apply."
         }
         return "Writes a draft to each store. It sends nothing to review."
     }
@@ -449,12 +482,16 @@ private struct ValidationRow: View {
                                 .strokeBorder(Theme.sep, lineWidth: 1))
                             .overlay(Text(acked ? "✓" : "")
                                 .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
-                        Text("I accept this").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        // "Acknowledge", not "I accept this". The first person
+                        // and the word "accept" read as a consent form, and
+                        // this dismisses a warning. It is also the word the
+                        // state already uses: `acknowledged`.
+                        Text("Acknowledge").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                     }
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityValue(acked ? "Accepted" : "Not accepted")
+                .accessibilityValue(acked ? "Acknowledged" : "Not acknowledged")
             }
             QuietButton(title: "Fix on \(state.tab(for: finding.fix).title)") {
                 state.selectedTab = state.tab(for: finding.fix)

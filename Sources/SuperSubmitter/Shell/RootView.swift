@@ -34,6 +34,7 @@ struct RootView: View {
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
         .sheet(item: $state.paywall) { trigger in PaywallSheet(trigger: trigger) }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
+        .sheet(isPresented: $state.showFieldSearch) { FieldSearchSheet() }
         .confirmationDialog("Remove \(state.removalName) from Super Submitter?",
                             isPresented: Binding(
                                 get: { state.appPendingRemoval != nil },
@@ -93,10 +94,24 @@ private struct ContentArea: View {
 
     @ViewBuilder
     private var tabScroll: some View {
-        let scroll = ScrollView {
-            TabContent(tab: state.selectedTab)
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        let scroll = ScrollViewReader { proxy in
+            ScrollView {
+                TabContent(tab: state.selectedTab)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .onChange(of: state.jumpTarget) { _, target in
+                guard let target else { return }
+                state.jumpTarget = nil
+                // One turn of the loop, so the new tab has drawn and the
+                // anchor exists. Scrolling into a tab that has not rendered
+                // does nothing, silently.
+                Task { @MainActor in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(FieldAnchor(id: target), anchor: .top)
+                    }
+                }
+            }
         }
         .background(Theme.content)
         // Outside the ScrollView on purpose: an inspector inside one scrolls
@@ -288,8 +303,9 @@ private struct EntryModeCard: View {
     }
 }
 
-/// The 52 point bar above every tab. It carries the title, the one-line
-/// question, and the controls that belong to the tab on the right.
+/// The band above every tab. It carries the title, the one-line question, and
+/// the controls that belong to the tab on the right. `Theme.headerHeight` sets
+/// its height.
 private struct ContentHeader: View {
     @Environment(AppState.self) private var state
     @AppStorage("showYAMLToggle") private var yamlToggleVisible = false
@@ -306,10 +322,10 @@ private struct ContentHeader: View {
             if !state.showsEntryScreen {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(state.selectedTab.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .kerning(-0.14)
+                        .font(Theme.screenTitle)
+                        .kerning(-0.21)
                     Text(state.selectedTab.question)
-                        .font(.system(size: 11))
+                        .font(Theme.screenSubtitle)
                         .foregroundStyle(Theme.text2)
                 }
             }
@@ -359,12 +375,18 @@ private struct ContentHeader: View {
                 // Two clusters, not one row of five things. Reading the stores
                 // and arming a write are different jobs, and the gap between
                 // the groups says so faster than the labels do.
-                HeaderCluster {
-                    // No spinner here. The tab body already says "Reading both
-                    // stores" beside one, and two spinners for one read read
-                    // as two reads.
-                    QuietButton(title: "Read the stores again") {
-                        Task { await state.readStores() }
+                // Gone while the read has failed. The failure card carries its
+                // own "Read again" next to the message that explains it, and
+                // two buttons for one action, one of them 900 points from the
+                // problem, is a choice the developer should not have to make.
+                if state.planError == nil {
+                    HeaderCluster {
+                        // No spinner here. The tab body already says "Reading
+                        // both stores" beside one, and two spinners for one
+                        // read read as two reads.
+                        QuietButton(title: "Read the stores again", glass: true) {
+                            Task { await state.readStores() }
+                        }
                     }
                 }
                 HeaderCluster {
@@ -381,8 +403,8 @@ private struct ContentHeader: View {
             case .release:
                 HeaderCluster {
                     if state.rechecking { Spinner() }
-                    QuietButton(title: "Copy as checklist") { state.copyChecklist() }
-                    QuietButton(title: "Re-check") { Task { await state.recheck() } }
+                    QuietButton(title: "Copy as checklist", glass: true) { state.copyChecklist() }
+                    QuietButton(title: "Re-check", glass: true) { Task { await state.recheck() } }
                 }
             default:
                 EmptyView()
@@ -391,12 +413,10 @@ private struct ContentHeader: View {
         .padding(.leading, 20)
         .padding(.trailing, 18)
         .frame(height: Theme.headerHeight)
-        // At rest the band is the page. It separates itself only while there
-        // is something above the fold to separate from.
-        .background(scrolled ? Theme.raised : Theme.content)
-        .overlay(alignment: .bottom) {
-            Hairline().opacity(scrolled ? 1 : 0)
-        }
+        // Below macOS 26 the band is the page at rest, and separates itself
+        // only while there is something above the fold. On 26 the material
+        // does that job. See HeaderSurface.
+        .headerSurface(scrolled: scrolled)
     }
 }
 
@@ -404,11 +424,16 @@ private struct ContentHeader: View {
 ///
 /// It is the spacing that groups them, the way a macOS toolbar groups items.
 /// A single run of five controls at one spacing reads as five equals.
+///
+/// On macOS 26 the group is also a `GlassEffectContainer`, so neighbours merge
+/// into one lozenge instead of three. That is the same statement the spacing
+/// was already making, said in the material.
 private struct HeaderCluster<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(spacing: 7) { content }
+            .glassCluster(spacing: 7)
     }
 }
 

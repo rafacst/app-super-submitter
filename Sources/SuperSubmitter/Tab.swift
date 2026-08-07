@@ -130,11 +130,18 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// The question the tab answers. Spec section 16.3.
     var question: String {
         switch self {
-        case .stores: "Where does this app go, and who am I?"
+        // One question, not two. It asked "Where does this app go, and who am
+        // I?", and the two halves were unrelated: a destination and an
+        // identity. The tab holds one thing, the store accounts, and picking
+        // an account is what turns a store on.
+        case .stores: "Which store accounts do I use?"
         case .build: "What do I submit?"
         case .details: "What does the listing say?"
         case .media: "What does the listing show?"
-        case .money: "What does it cost, and what can I buy?"
+        // "what can I buy" put the developer in the customer's seat. Every
+        // other line here is the developer's own question, and the developer
+        // is the one selling.
+        case .money: "What does it cost, and what is for sale inside it?"
         case .marketing: "How does the App Store sell it?"
         case .reviewInfo: "What does the reviewer need?"
         case .plan: "What changes, exactly?"

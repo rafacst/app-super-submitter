@@ -12,42 +12,48 @@ struct DetailsTab: View {
                 // plans and then writes. Managing has none, so it writes here.
                 if state.mode == .managing { DirectApplyBar(target: .listing) }
                 editor("Name", field: .name,
-                       limit: BindingLimits.binding(for: .name, stores: state.stores))
+                       limit: BindingLimits.binding(for: .name, stores: state.stores),
+                       anchor: "details.name")
                 googleOverrideEditor("Subtitle", shared: .subtitle,
-                                     google: .googleShortDescription, bindingField: .subtitle)
+                                     google: .googleShortDescription, bindingField: .subtitle,
+                                     anchor: "details.subtitle")
                 editor("Description", field: .description,
                        limit: BindingLimits.binding(for: .description, stores: state.stores),
-                       multiline: true)
+                       multiline: true, anchor: "details.description")
                 googleOverrideEditor("What is new", shared: .whatsNew,
-                                     google: .googleWhatsNew, bindingField: .whatsNew)
+                                     google: .googleWhatsNew, bindingField: .whatsNew,
+                                     anchor: "details.whatsNew")
 
                 if state.stores.contains(.apple) {
                     editor("Keywords", field: .keywords,
                            limit: BindingLimits.binding(for: .keywords, stores: state.stores),
-                           tag: "Apple only")
+                           tag: "Apple only", anchor: "details.keywords")
                     editor("Promotional text", field: .promotionalText,
                            limit: BindingLimits.binding(for: .promotionalText, stores: state.stores),
-                           tag: "Apple only")
+                           tag: "Apple only", anchor: "details.promotionalText")
                 }
                 if state.stores.contains(.google) {
                     editor("Short description", field: .googleShortDescription, limit: 80,
-                           tag: "Google only")
+                           tag: "Google only", anchor: "details.googleShortDescription")
                 }
-                editor("Support URL", field: .supportURL)
+                editor("Support URL", field: .supportURL, anchor: "details.supportURL")
                 if state.stores.contains(.apple) {
-                    editor("Marketing URL", field: .marketingURL, tag: "Apple only")
+                    editor("Marketing URL", field: .marketingURL, tag: "Apple only",
+                           anchor: "details.marketingURL")
                 }
-                editor("Privacy policy URL", field: .privacyPolicyURL)
+                editor("Privacy policy URL", field: .privacyPolicyURL,
+                       anchor: "details.privacyPolicyURL")
                 if state.stores.contains(.apple) {
                     editor("Privacy policy text", field: .privacyPolicyText,
-                           multiline: true, tag: "Apple only")
+                           multiline: true, tag: "Apple only",
+                           anchor: "details.privacyPolicyText")
                     editor("Privacy choices URL", field: .privacyChoicesURL,
-                           tag: "Apple only")
+                           tag: "Apple only", anchor: "details.privacyChoicesURL")
                 }
                 // The parts of the listing that no API will write. It is a
                 // wide list of rows, so it stays in this column while the
                 // short fields sit beside the preview.
-                ConsoleStepsPanel().padding(.top, 6)
+                ConsoleStepsPanel().padding(.top, 6).fieldAnchor("details.console")
                 // Apple's own keyword resource, beside the Keywords field it
                 // is so easily mistaken for.
                 if state.stores.contains(.apple) {
@@ -61,7 +67,8 @@ struct DetailsTab: View {
 
     @ViewBuilder
     private func editor(_ title: String, field: ListingTextField, limit: Int? = nil,
-                        multiline: Bool = false, tag: String? = nil) -> some View {
+                        multiline: Bool = false, tag: String? = nil,
+                        anchor: String? = nil) -> some View {
         let value = state.manifest.listingText(locale: state.locale, field: field)
         let overLimit = limit.map { value.count > $0 } ?? false
         // Grey means "this is what the store already says". The developer
@@ -111,6 +118,7 @@ struct DetailsTab: View {
             }
             liveValues(field, live: live, current: value)
         }
+        .fieldAnchor(anchor)
     }
 
     /// What the stores hold for this field today, when it is not what the
@@ -178,13 +186,17 @@ struct DetailsTab: View {
     @ViewBuilder
     private func googleOverrideEditor(_ title: String, shared: ListingTextField,
                                       google: ListingTextField,
-                                      bindingField: ListingField) -> some View {
+                                      bindingField: ListingField,
+                                      anchor: String? = nil) -> some View {
         let overrides: Set<Store> = state.manifest.hasGoogleOverride(locale: state.locale, field: google)
             ? [.google] : []
+        // The anchor goes on the shared field. The Google override under it is
+        // the same field said twice, and a search for "subtitle" wants the box
+        // the developer types in first.
         editor(title, field: shared,
                limit: BindingLimits.binding(for: bindingField, stores: state.stores,
                                              overriddenIn: overrides),
-               multiline: title == "What is new")
+               multiline: title == "What is new", anchor: anchor)
         if state.stores.contains(.google) {
             Toggle("Use different text for Google Play", isOn: state.googleOverrideBinding(google))
                 .font(.system(size: 11.5))
@@ -218,7 +230,7 @@ private struct StoreReceivesPreview: View {
             : subtitle
         return VStack(alignment: .leading, spacing: 14) {
             Text("What each store receives")
-                .font(.system(size: 11, weight: .semibold)).textCase(.uppercase)
+                .font(Theme.sectionHeader)
                 .foregroundStyle(Theme.text3)
             if state.stores.contains(.apple) {
                 StoreTextPreview(store: .apple, locale: state.locale, name: name,

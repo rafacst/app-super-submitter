@@ -28,7 +28,8 @@ struct AndroidArtifactsSection: View {
     @State private var showRare = false
 
     var body: some View {
-        Section_("Android artifacts", icon: "shippingbox.fill", tint: Theme.playGreen) {
+        Section_("Android artifacts", icon: "shippingbox.fill", tint: Theme.playGreen,
+                 anchor: "build.androidArtifacts") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Self.common, id: \.self) { field in
                     pathRow(field)
@@ -115,9 +116,10 @@ struct GoogleTracksSection: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        Section_("Google tracks and rollout", icon: "chart.line.uptrend.xyaxis", tint: Theme.playBlue) {
+        Section_("Google tracks and rollout", icon: "chart.line.uptrend.xyaxis",
+                 tint: Theme.playBlue, anchor: "build.googleTracks") {
             VStack(alignment: .leading, spacing: 11) {
-                LabeledField("Release track") {
+                LabeledField("Release track", anchor: "build.releaseTrack") {
                     ChoiceField(value: state.googlePrimaryTrackBinding,
                                 choices: StoreValues.googleTracks,
                                 emptyLabel: "Pick a track", allowsNone: false)
@@ -131,7 +133,7 @@ struct GoogleTracksSection: View {
                     .font(.system(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Divider().overlay(Theme.sep)
-                LabeledField("Countries") {
+                LabeledField("Countries", anchor: "build.countries") {
                     MultiChoiceField(text: state.googleCountriesBinding,
                                      choices: StoreValues.googleCountries,
                                      emptyLabel: "Every country")

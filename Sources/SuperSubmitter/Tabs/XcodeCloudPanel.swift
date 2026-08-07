@@ -23,7 +23,7 @@ struct XcodeCloudPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Reading…" : "Read the workflows") { load() }
+                    QuietButton(title: busy ? "Fetching…" : "Fetch the workflows") { load() }
                         .disabled(busy || state.appleActionAppID == nil)
                 }
 

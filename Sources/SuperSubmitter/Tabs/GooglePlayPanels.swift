@@ -102,12 +102,12 @@ struct GeneratedAPKPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Reading…" : "Read the APKs") { load() }
+                    QuietButton(title: busy ? "Fetching…" : "Fetch the APKs") { load() }
                         .disabled(busy || state.googleLatestVersionCode == nil)
                 }
 
                 if state.googleLatestVersionCode == nil {
-                    Text("Read the stores on the Plan tab first, so this knows which version code to ask for.")
+                    Text("Read the stores on the Summary tab first, so this knows which version code to ask for.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 if let error { ErrorLine(text: error) }
@@ -170,7 +170,7 @@ struct GoogleReviewsPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Reading…" : "Read reviews") { load() }
+                    QuietButton(title: busy ? "Fetching…" : "Fetch reviews") { load() }
                         .disabled(busy || state.googleActionPackage == nil)
                 }
 
@@ -281,7 +281,7 @@ struct GoogleRecoveryPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Working…" : "Read recoveries") { load() }
+                    QuietButton(title: busy ? "Working…" : "Fetch recoveries") { load() }
                         .disabled(busy || state.googleActionPackage == nil)
                 }
 
