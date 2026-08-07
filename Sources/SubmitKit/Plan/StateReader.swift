@@ -183,18 +183,18 @@ public struct StateReader: Sendable {
                         let sets = JSON(data: try await api.apple(
                             "GET",
                             "/v1/appStoreVersionLocalizations/\(localizationID)/appScreenshotSets?include=appScreenshots&limit=50").data)
-                        var byBucket: [String: String] = [:]
-                        for entry in sets["data"].array {
-                            guard let type = entry["attributes"]["screenshotDisplayType"].string
-                            else { continue }
-                            byBucket[entry["id"].string ?? ""] = type
-                        }
+                        // The same two-way link the import reads. The item's
+                        // own back reference alone matched no set, so every
+                        // checksum was lost too and a re-run re-uploaded a
+                        // screenshot that was already on the store.
+                        let byItem = StoreImportReader.appleBuckets(
+                            sets, itemType: "appScreenshots",
+                            kindKey: "screenshotDisplayType")
                         for included in sets["included"].array
                         where included["type"].string == "appScreenshots" {
                             let checksum = included["attributes"]["sourceFileChecksum"].string
-                            let setID = included["relationships"]["appScreenshotSet"]["data"]["id"]
-                                .string ?? ""
-                            guard let type = byBucket[setID] else { continue }
+                            guard let id = included["id"].string,
+                                  let type = byItem[id] else { continue }
                             // The image URL rides along in the same payload.
                             if let url = StoreImportReader.imageURL(
                                 included["attributes"]["imageAsset"]) {
@@ -488,23 +488,28 @@ public struct StateReader: Sendable {
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
                 + "/appScreenshotSets?include=appScreenshots&limit=50") {
             fill(&result.screenshotURLs, locale: locale, with: StoreImportReader.appleAssets(
-                JSON(data: payload.data), locale: locale, setKey: "appScreenshotSet",
+                JSON(data: payload.data), locale: locale,
                 itemType: "appScreenshots", kindKey: "screenshotDisplayType"))
         }
         if let payload = try? await api.apple(
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
                 + "/appPreviewSets?include=appPreviews&limit=50") {
             fill(&result.previewURLs, locale: locale, with: StoreImportReader.appleAssets(
-                JSON(data: payload.data), locale: locale, setKey: "appPreviewSet",
+                JSON(data: payload.data), locale: locale,
                 itemType: "appPreviews", kindKey: "previewType"))
         }
     }
 
+    /// The bucket the draft already filled is the one to leave alone, and it
+    /// has to be read before this loop starts appending. Asking `target` per
+    /// asset made the first live screenshot of a bucket block the other four,
+    /// so a five shot set showed one shot.
     private static func fill(_ target: inout [String: [URL]], locale: String,
                              with assets: [ImportedStoreAsset]) {
+        let drafted = Set(target.keys)
         for asset in assets {
             let key = "\(locale)/\(asset.kind)"
-            guard target[key] == nil else { continue }
+            guard !drafted.contains(key) else { continue }
             target[key, default: []].append(asset.url)
         }
     }
@@ -549,15 +554,11 @@ public struct StateReader: Sendable {
 
     static func readPreviews(_ payload: JSON, locale: String,
                              into result: inout ActualState.Apple) {
-        var byBucket: [String: String] = [:]
-        for entry in payload["data"].array {
-            guard let type = entry["attributes"]["previewType"].string else { continue }
-            byBucket[entry["id"].string ?? ""] = type
-        }
+        let byItem = StoreImportReader.appleBuckets(
+            payload, itemType: "appPreviews", kindKey: "previewType")
         for included in payload["included"].array
         where included["type"].string == "appPreviews" {
-            let setID = included["relationships"]["appPreviewSet"]["data"]["id"].string ?? ""
-            guard let type = byBucket[setID] else { continue }
+            guard let id = included["id"].string, let type = byItem[id] else { continue }
             if let checksum = included["attributes"]["sourceFileChecksum"].string {
                 result.previewChecksums["\(locale)/\(type)", default: []].insert(checksum)
             }
