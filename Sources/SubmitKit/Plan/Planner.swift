@@ -57,14 +57,14 @@ public enum Planner {
             if current == nil {
                 steps.append(PlanStep(
                     id: "apple.version", system: .apple, kind: .add,
-                    summary: "version \(versionName) (PREPARE_FOR_SUBMISSION)",
+                    summary: "Create version \(versionName) as a draft nobody can see yet",
                     title: "Create the version \(versionName)",
                     requests: [RequestSketch("POST", "/v1/appStoreVersions")],
                     operation: .appleEnsureVersion(versionName)))
             } else if current != versionName {
                 steps.append(PlanStep(
                     id: "apple.version", system: .apple, kind: .change,
-                    summary: "version \(current ?? "") → \(versionName)",
+                    summary: "Renumber the draft from \(current ?? "") to \(versionName)",
                     title: "Set the version to \(versionName)",
                     requests: [RequestSketch("PATCH", "/v1/appStoreVersions/{id}")],
                     operation: .appleEnsureVersion(versionName)))
@@ -74,7 +74,7 @@ public enum Planner {
         if manifest.release?.apple?.releaseType != nil {
             steps.append(PlanStep(
                 id: "apple.versionAttributes", system: .apple, kind: .change,
-                summary: "releaseType \(manifest.release?.apple?.releaseType?.rawValue ?? "")",
+                summary: "When it goes on sale: \(Self.appleReleaseLabel(manifest))",
                 title: "Write the release type",
                 requests: [RequestSketch("PATCH", "/v1/appStoreVersions/{id}")],
                 operation: .appleVersionAttributes))
@@ -87,7 +87,7 @@ public enum Planner {
            primary != actual?.primaryCategory || secondary != (actual?.secondaryCategory ?? "") {
             steps.append(PlanStep(
                 id: "apple.categories", system: .apple, kind: .change,
-                summary: "categories \(([primary, secondary].filter { !$0.isEmpty }).joined(separator: ", "))",
+                summary: "Categories: \(([primary, secondary].filter { !$0.isEmpty }).joined(separator: ", "))",
                 title: "Write the app information",
                 requests: [RequestSketch("PATCH", "/v1/appInfos/{id}")],
                 operation: .appleCategories))
@@ -97,15 +97,15 @@ public enum Planner {
         for code in (manifest.listing?.locales.keys ?? [:].keys).sorted() {
             let info = actual?.infoLocales[code]
             var infoChanges: [String] = []
-            appendChange(&infoChanges, "name", manifest.listingText(locale: code, field: .name),
+            appendChange(&infoChanges, .name, manifest.listingText(locale: code, field: .name),
                          info?.name)
-            appendChange(&infoChanges, "subtitle",
+            appendChange(&infoChanges, .subtitle,
                          managedText(manifest, code, .subtitle), info?.subtitle)
-            appendChange(&infoChanges, "privacyPolicyUrl",
+            appendChange(&infoChanges, .privacyPolicyURL,
                          managedText(manifest, code, .privacyPolicyURL), info?.privacyPolicyUrl)
-            appendChange(&infoChanges, "privacyPolicyText",
+            appendChange(&infoChanges, .privacyPolicyText,
                          managedText(manifest, code, .privacyPolicyText), info?.privacyPolicyText)
-            appendChange(&infoChanges, "privacyChoicesUrl",
+            appendChange(&infoChanges, .privacyChoicesURL,
                          managedText(manifest, code, .privacyChoicesURL), info?.privacyChoicesUrl)
             if !infoChanges.isEmpty {
                 steps.append(PlanStep(
@@ -119,17 +119,17 @@ public enum Planner {
 
             let version = actual?.versionLocales[code]
             var versionChanges: [String] = []
-            appendChange(&versionChanges, "description",
+            appendChange(&versionChanges, .description,
                          managedText(manifest, code, .description), version?.description)
-            appendChange(&versionChanges, "whatsNew",
+            appendChange(&versionChanges, .whatsNew,
                          managedText(manifest, code, .whatsNew), version?.whatsNew)
-            appendChange(&versionChanges, "keywords",
+            appendChange(&versionChanges, .keywords,
                          managedText(manifest, code, .keywords), version?.keywords)
-            appendChange(&versionChanges, "promotionalText",
+            appendChange(&versionChanges, .promotionalText,
                          managedText(manifest, code, .promotionalText), version?.promotionalText)
-            appendChange(&versionChanges, "supportUrl",
+            appendChange(&versionChanges, .supportURL,
                          managedText(manifest, code, .supportURL), version?.supportUrl)
-            appendChange(&versionChanges, "marketingUrl",
+            appendChange(&versionChanges, .marketingURL,
                          managedText(manifest, code, .marketingURL), version?.marketingUrl)
             if !versionChanges.isEmpty {
                 steps.append(PlanStep(
@@ -172,7 +172,7 @@ public enum Planner {
             || (uploadedBuild != nil && uploadedBuild != actual?.attachedBuildId) {
             steps.append(PlanStep(
                 id: "apple.attachBuild", system: .apple, kind: .change,
-                summary: "attach the build to \(versionName)",
+                summary: "Attach the build to version \(versionName)",
                 title: "Attach the build to the version",
                 requests: [RequestSketch("PATCH",
                                          "/v1/appStoreVersions/{id}/relationships/build")],
@@ -182,7 +182,7 @@ public enum Planner {
            encryption != actual?.buildUsesNonExemptEncryption {
             steps.append(PlanStep(
                 id: "apple.buildCompliance", system: .apple, kind: .change,
-                summary: "export compliance declaration",
+                summary: "Export compliance declaration",
                 title: "Write the build export compliance declaration",
                 requests: [RequestSketch("PATCH", "/v1/builds/{id}")],
                 operation: .appleBuildCompliance))
@@ -231,7 +231,7 @@ public enum Planner {
             let answerCount = manifest.review?.ageRatingAnswers?.count ?? 0
             steps.append(PlanStep(
                 id: "apple.ageRating", system: .apple, kind: .change,
-                summary: "age rating  \(answerCount) answers",
+                summary: "Age rating: \(answerCount) \(answerCount == 1 ? "answer" : "answers")",
                 title: "Write the age rating answers",
                 requests: [RequestSketch("PATCH", "/v1/ageRatingDeclarations/{id}")],
                 operation: .appleAgeRating))
@@ -656,13 +656,13 @@ public enum Planner {
         for code in (manifest.listing?.locales.keys ?? [:].keys).sorted() {
             let listing = actual?.listings[code]
             var changes: [String] = []
-            appendChange(&changes, "title", manifest.listingText(locale: code, field: .name),
+            appendChange(&changes, .name, manifest.listingText(locale: code, field: .name),
                          listing?.title)
-            appendChange(&changes, "shortDescription", googleShortDescription(manifest, code),
+            appendChange(&changes, .googleShortDescription, googleShortDescription(manifest, code),
                          listing?.shortDescription)
-            appendChange(&changes, "fullDescription", managedText(manifest, code, .description),
+            appendChange(&changes, .description, managedText(manifest, code, .description),
                          listing?.fullDescription)
-            appendChange(&changes, "video", managedText(manifest, code, .googleVideo),
+            appendChange(&changes, .googleVideo, managedText(manifest, code, .googleVideo),
                          listing?.video)
             if !changes.isEmpty {
                 body.append(PlanStep(
@@ -1720,11 +1720,15 @@ public enum Planner {
 
     // MARK: - Small helpers
 
-    private static func appendChange(_ list: inout [String], _ name: String,
+    /// One changed field, named the way the developer names it.
+    ///
+    /// The count stays, because the length is what a store rejects a field
+    /// for, and "chars" became "characters" for the same reason the name did.
+    private static func appendChange(_ list: inout [String], _ field: ListingTextField,
                                      _ wanted: String, _ current: String?) {
         guard !wanted.isEmpty else { return }
         guard wanted != (current ?? "") else { return }
-        list.append("\(name) (\(wanted.count) chars)")
+        list.append("\(field.label) (\(wanted.count) characters)")
     }
 
     static func managedText(_ manifest: Manifest, _ code: String,
@@ -1781,6 +1785,22 @@ public enum Planner {
 
     private static func rows(_ count: Int) -> String {
         count == 1 ? "1 row" : "\(count) rows"
+    }
+
+    /// Apple's three release types, as the sentence each one means.
+    ///
+    /// `AFTER_APPROVAL`, `MANUAL`, and `SCHEDULED` are API constants. The
+    /// Summary tab is the screen a developer reads before they let the app
+    /// write to a live store, and a constant in shouting case tells them
+    /// nothing about what their customers will see or when.
+    static func appleReleaseLabel(_ manifest: Manifest) -> String {
+        switch manifest.release?.apple?.releaseType?.rawValue {
+        case "AFTER_APPROVAL": "as soon as Apple approves it"
+        case "MANUAL": "when you release it yourself"
+        case "SCHEDULED": "on the date you scheduled"
+        case let other?: other
+        case nil: "not set"
+        }
     }
 
     static func applePath(_ manifest: Manifest) -> String? {
