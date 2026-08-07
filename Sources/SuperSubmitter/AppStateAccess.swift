@@ -236,11 +236,29 @@ extension AppState {
         guard let controller = accessController else { return }
         // A failed refresh keeps the unexpired document, so the service being
         // down for an hour does not stop a paying developer mid-release.
-        if let fresh = try? await controller.refresh() {
-            entitlement = fresh
-        } else {
+        do {
+            entitlement = try await controller.refresh()
+            entitlementProblem = nil
+        } catch {
             entitlement = await controller.current
+            note(error)
         }
+    }
+
+    /// Records a refresh failure that the developer has to see.
+    ///
+    /// The whole `catch` used to be `try?`. A document this build cannot verify
+    /// then looked exactly like an account that has not paid: the tab said
+    /// "Free" and gave no reason, on a Mac whose card had already been charged.
+    /// Being offline and being signed out are ordinary and stay quiet; a
+    /// signature, a key, a subject, or a clock is this build failing to read a
+    /// real answer, and it is said out loud with its code so it is reportable.
+    private func note(_ error: any Error) {
+        guard let access = error as? AccessError, access.isVerificationFailure else {
+            entitlementProblem = nil
+            return
+        }
+        entitlementProblem = "\(access.errorDescription ?? "Your access could not be confirmed.") (\(access.code))"
     }
 
     func loadBillingPlans() async {
@@ -400,8 +418,10 @@ extension AppState {
         billingOperation = .confirming
         for delay in [2, 3, 5, 8, 12, 15, 15] {
             try? await Task.sleep(for: .seconds(delay))
-            if let fresh = try? await controller.refresh() {
+            do {
+                let fresh = try await controller.refresh()
                 entitlement = fresh
+                entitlementProblem = nil
                 if fresh.isPaid {
                     billingOperation = .idle
                     billingMessage = nil
@@ -411,10 +431,20 @@ extension AppState {
                                               properties: ["plan": selectedPlan])
                     return
                 }
+            } catch {
+                note(error)
+                // A key or a signature does not come right on the next poll,
+                // and sixty seconds of "still confirming" after a real payment
+                // is the worst way to say so. Stop and report it.
+                if entitlementProblem != nil {
+                    billingOperation = .idle
+                    billingMessage = nil
+                    return
+                }
             }
         }
         billingOperation = .idle
-        billingMessage = "Payment received; still confirming. Press Check again in a moment."
+        billingMessage = "Stripe took the payment and this account is still not entitled. Press Restore access, and report it if that does not open it."
     }
 
     /// Reconciles the account against Stripe on the server and returns the
