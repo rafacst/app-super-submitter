@@ -31,6 +31,7 @@ struct TabContent: View {
         case .plan: PlanTab()
         case .release: ReleaseTab()
         case .liveApp: LiveAppTab()
+        case .account: AccountTab()
         }
     }
 }

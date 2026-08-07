@@ -412,6 +412,51 @@ struct Hairline: View {
     }
 }
 
+/// The title bar of a panel that opens as a sheet.
+///
+/// A sheet has no title bar of its own, so this draws one: the title in the
+/// middle and the three lights on the left, where a Mac window keeps them.
+/// Only the red one does anything, because closing is the only thing a sheet
+/// can do. The other two are drawn in the separator grey rather than in yellow
+/// and green, so nothing offers a minimise that will not happen.
+///
+/// The geometry is the system's: 12 point lights, 8 points apart, 20 points in
+/// from the leading edge. Two panels drew this by hand and the second copy was
+/// already 7 points out from the first.
+///
+/// `// ponytail: one bar, two panels. A third sheet gets it for free.`
+struct PanelTitleBar: View {
+    let title: String
+    let close: () -> Void
+
+    static let height: CGFloat = 44
+
+    var body: some View {
+        ZStack {
+            Text(title).font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 8) {
+                Button(action: close) {
+                    Circle().fill(Color(hex: 0xFF5F57)).frame(width: 12, height: 12)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close \(title)")
+                Circle().fill(Theme.sep).frame(width: 12, height: 12)
+                Circle().fill(Theme.sep).frame(width: 12, height: 12)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 20)
+            .padding(.trailing, 13)
+            // The two dead lights are decoration. A reader that announced
+            // three buttons on a panel with one action would be describing a
+            // window this is not.
+            .accessibilityElement(children: .contain)
+        }
+        .frame(height: Self.height)
+        .background(Theme.raised)
+    }
+}
+
 /// The small state chip: `Done`, `Needed`, `Unknown`, `Not applicable`.
 struct StatePill: View {
     let text: String

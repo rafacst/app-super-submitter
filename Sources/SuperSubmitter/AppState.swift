@@ -147,6 +147,10 @@ final class AppState {
 
     /// Settings opens as a panel over the window, not as a second window.
     var showSettings = false
+    /// What the app is, who makes it, and how to reach a person. It sits at
+    /// the foot of the sidebar and under the app menu, the two places a Mac
+    /// user looks for it.
+    var showAbout = false
     var showOnboarding = false
     var showExistingAppImport = false
     /// Shows the entry screen over an app that is already open.
@@ -174,23 +178,6 @@ final class AppState {
     func jump(to entry: FieldEntry) {
         selectedTab = entry.tab
         jumpTarget = entry.id
-    }
-
-    /// Takes every sheet off the shell.
-    ///
-    /// AppKit refuses to quit an app that has a modal sheet on a window, and
-    /// Sparkle installs an update by quitting. "Check for updates" is inside
-    /// the Settings sheet, so the install waited for the user to close a
-    /// panel that nothing on the screen connected to the update. See Updater.
-    func closeEverySheet() {
-        showSettings = false
-        showOnboarding = false
-        showExistingAppImport = false
-        showAddLocale = false
-        showFieldSearch = false
-        releaseSheet = nil
-        paywall = nil
-        pendingPaywall = nil
     }
 
     // Paid access. Every gate reads `entitlement`; nothing keeps its own
@@ -512,13 +499,24 @@ final class AppState {
         return names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
     }
 
+    /// No app is open, or the developer asked for the entry screen over one.
+    ///
+    /// The sidebar reads this to decide whether the per-app tabs are worth
+    /// drawing at all.
+    var hasNoOpenApp: Bool { manifestURL == nil || showEntryScreen }
+
     /// Whether the content pane is showing the two doors instead of a tab.
     ///
     /// The shell branched on this expression in three places and each one
     /// wrote it again. The header, the pane, and the sidebar have to agree:
     /// a sidebar offering nine per-app tabs beside a screen that says "pick an
     /// app" offers nine places that cannot work.
-    var showsEntryScreen: Bool { manifestURL == nil || showEntryScreen }
+    ///
+    /// Account is the exception, and the only one. It is about the person and
+    /// the plan, not about an app, and signing in is the first thing a
+    /// developer does. Sending them to "pick an app" first is a door that
+    /// leads back to the door.
+    var showsEntryScreen: Bool { hasNoOpenApp && !selectedTab.standsAlone }
 
     /// Whether the shell shows the armed-write strip.
     ///
