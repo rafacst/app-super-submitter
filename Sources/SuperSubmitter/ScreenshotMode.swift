@@ -45,6 +45,17 @@ enum ScreenshotMode {
 
     static var isActive: Bool { screen != nil || isDemo }
 
+    /// What the ⌘F palette opens with, so the screenshot shows a result list
+    /// and not an empty box. Empty in every real launch.
+    @MainActor
+    static var fieldSearchQuery: String {
+        #if DEBUG
+        return screen == "field-search" ? "url" : ""
+        #else
+        return ""
+        #endif
+    }
+
     /// A throwaway suite while a screenshot runs, so the demo app never joins
     /// the linked apps of the developer running the script. The script deletes
     /// the file afterwards.
@@ -155,6 +166,16 @@ enum ScreenshotMode {
             state.showExistingAppImport = true
         case "paywall":
             state.paywall = .settings
+        case "field-search":
+            state.showFieldSearch = true
+        // Proves the other half of ⌘F: that an anchor is on a real view and
+        // the content column reaches it. `jumpTarget` is consumed by an
+        // `onChange`, so setting it here, before the window exists, would set
+        // a value nothing ever observed. The beat is what makes it a change.
+        case "field-jump":
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                state.jump(to: FieldIndex.all.first { $0.id == "details.privacyPolicyURL" }!)
+            }
         default:
             state.showOnboarding = false
             // The script names a tab by a slug, and a title holds spaces:

@@ -21,7 +21,8 @@ struct ListingDeclarations: View {
     }
 
     private var categories: some View {
-        Section_("Categories", icon: "square.grid.2x2.fill", tint: Theme.purple) {
+        Section_("Categories", icon: "square.grid.2x2.fill", tint: Theme.purple,
+                 anchor: "details.categories") {
             VStack(alignment: .leading, spacing: 9) {
                 if state.stores.contains(.apple) {
                     LabeledField("Primary", note: "Apple") {
@@ -38,7 +39,8 @@ struct ListingDeclarations: View {
     }
 
     private var declarations: some View {
-        Section_("Store declarations", icon: "checkmark.shield.fill", tint: Theme.green) {
+        Section_("Store declarations", icon: "checkmark.shield.fill", tint: Theme.green,
+                 anchor: "details.declarations") {
             VStack(spacing: 0) {
                 ActionRow(title: "Age rating", detail: "Answer the content questionnaire") {
                     state.showAgeRating = true

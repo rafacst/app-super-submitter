@@ -222,19 +222,47 @@ struct PathField: View {
     }
 }
 
+// MARK: - The jump targets
+
+/// Where the field search lands. `FieldIndex` holds the other half.
+///
+/// Its own type, and it has to be. A `ForEach` gives its rows an identity of
+/// their own, often a `String` product id, and `.id()` matches on the value
+/// **and** the type. A bare `String` anchor would answer to a row that happens
+/// to spell itself the same way, and the scroll would land on the wrong thing.
+struct FieldAnchor: Hashable {
+    let id: String
+}
+
+extension View {
+    /// Marks this view as the place `⌘F` scrolls to for `id`.
+    ///
+    /// Takes an optional, so a wrapper can pass its own `anchor` straight
+    /// through without every call site needing one.
+    @ViewBuilder
+    func fieldAnchor(_ id: String?) -> some View {
+        if let id { self.id(FieldAnchor(id: id)) } else { self }
+    }
+}
+
 /// One labelled control. The label sits over the field, so a row of three
 /// fields lines up whatever the label lengths are.
 struct LabeledField<Content: View>: View {
     let label: String
     var note: String?
     var width: CGFloat?
+    /// The `FieldIndex` id, on the fields the search can reach. Nil on a field
+    /// inside a `ForEach`: one id repeated down a list is not an anchor, it is
+    /// a duplicate identity. Those tabs anchor the section instead.
+    var anchor: String?
     @ViewBuilder let content: Content
 
     init(_ label: String, note: String? = nil, width: CGFloat? = nil,
-         @ViewBuilder content: () -> Content) {
+         anchor: String? = nil, @ViewBuilder content: () -> Content) {
         self.label = label
         self.note = note
         self.width = width
+        self.anchor = anchor
         self.content = content()
     }
 
@@ -250,6 +278,7 @@ struct LabeledField<Content: View>: View {
         }
         .frame(width: width)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+        .fieldAnchor(anchor)
     }
 }
 

@@ -178,7 +178,7 @@ private struct TabRow: View {
                     .foregroundStyle(selected ? tab.tint : Theme.text)
                 Spacer(minLength: 0)
                 if let badge = state.badge(for: tab) {
-                    BadgeView(count: badge.count, severity: badge.severity, size: 16)
+                    BadgeView(badge: badge, size: 16)
                 }
             }
             // A wash rather than a solid fill, so the label keeps the text
@@ -195,6 +195,9 @@ private struct TabRow: View {
         .buttonStyle(.plain)
         .disabled(state.manifestURL == nil)
         .accessibilityLabel(tab.title)
+        // The button's label hides the pills from the reader, and the two of
+        // them are told apart by hue alone, so the count has to be said.
+        .accessibilityValue(state.badge(for: tab)?.spoken ?? "")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -381,16 +384,30 @@ struct HealthChip: View {
     }
 }
 
-/// The count on a tab row. It keeps its severity colour whether the row is
-/// selected or not: the row is a wash now, not a solid fill, so there is
-/// nothing to invert against.
+/// The counts on a tab row: what blocks the apply, then what does not.
+///
+/// Two pills and not one number. The errors come first because they are the
+/// ones that stop the work, and a tab with only warnings draws the yellow pill
+/// alone, so red still never appears where there is no error.
+///
+/// Each pill keeps its severity colour whether the row is selected or not: the
+/// row is a wash now, not a solid fill, so there is nothing to invert against.
 struct BadgeView: View {
-    let count: Int
-    let severity: Severity
+    let badge: TabBadge
     var size: CGFloat
 
     var body: some View {
-        Text("\(count)")
+        HStack(spacing: 3) {
+            if badge.errors > 0 { pill(badge.errors, .error) }
+            if badge.warnings > 0 { pill(badge.warnings, .warning) }
+        }
+        .help(badge.spoken)
+    }
+
+    private func pill(_ count: Int, _ severity: Severity) -> some View {
+        // Verbatim, so a locale that groups thousands cannot turn a count
+        // into "1.242". See the Details counter for the same reason.
+        Text(verbatim: "\(count)")
             .font(.system(size: size * 0.65, weight: .semibold))
             .foregroundStyle(severity.color)
             .padding(.horizontal, 4)

@@ -162,7 +162,7 @@ struct BuildTab: View {
 
             HStack(alignment: .top, spacing: 10) {
                 QuietButton(
-                    title: state.listingImportStatus == .testing ? "Reading…" : "Read current listings",
+                    title: state.listingImportStatus == .testing ? "Fetching…" : "Fetch the current listings",
                     action: state.importExistingListing)
                     .disabled(state.listingImportStatus == .testing)
                 switch state.listingImportStatus {
@@ -213,7 +213,7 @@ struct BuildTab: View {
     private var filledLine: some View {
         let count = sortedPackages.reduce(0) { $0 + $1.filledFieldCount }
         return HStack(spacing: 14) {
-            Text("Read \(count) build fields and saved their manifest values.")
+            Text("Inspected \(count) build fields and saved their manifest values.")
                 .font(.system(size: 12.5))
             QuietButton(title: "Open Details") { state.selectedTab = .details }
             Spacer(minLength: 0)
@@ -290,7 +290,7 @@ private struct PackageDropWell: View {
                         .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
                     .frame(width: 26, height: 32)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(reading ? "Reading \(title)…" : title)
+                    Text(reading ? "Inspecting \(title)…" : title)
                         .font(.system(size: 12, weight: .medium))
                     HStack(spacing: 3) {
                         Text(prompt).foregroundStyle(Theme.text2)

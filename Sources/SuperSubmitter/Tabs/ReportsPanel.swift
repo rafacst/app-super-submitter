@@ -57,7 +57,7 @@ struct ReportsPanel: View {
                 .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
-            QuietButton(title: busy ? "Reading…" : "Read the feeds") { load() }
+            QuietButton(title: busy ? "Fetching…" : "Fetch the feeds") { load() }
                 .disabled(busy || state.appleActionAppID == nil)
         }
 
@@ -130,7 +130,7 @@ struct ReportsPanel: View {
                 }
                 .labelsHidden()
                 .frame(width: 110)
-                QuietButton(title: busy ? "Reading…" : "Read the report") { loadSales() }
+                QuietButton(title: busy ? "Fetching…" : "Fetch the report") { loadSales() }
                     .disabled(busy)
                 Spacer(minLength: 0)
             }
@@ -203,7 +203,7 @@ struct ReportsPanel: View {
                                                             reportDate: nil)
                 salesRows = AppleReportsClient.preview(text)
                 if salesRows.isEmpty { salesNote = "The report came back empty." }
-            } catch let ConnectionError.http(404, _) {
+            } catch ConnectionError.http(404, _) {
                 salesNote = "Apple holds no \(frequency.lowercased()) report for that period yet. The newest one appears a day after the period closes."
             } catch {
                 salesNote = error.localizedDescription

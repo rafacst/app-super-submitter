@@ -32,14 +32,15 @@ struct SearchKeywordsPanel: View {
     }
 
     var body: some View {
-        Section_("Search keywords", icon: "magnifyingglass", tint: Theme.teal) {
+        Section_("Search keywords", icon: "magnifyingglass", tint: Theme.teal,
+                 anchor: "details.searchKeywords") {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Send one search term to one custom product page. A customer who searches a linked word reaches that page instead of the default one. The words come from the Keywords field of your latest approved version, and Apple publishes no way to add one.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Reading…" : "Read the keywords") { load() }
+                    QuietButton(title: busy ? "Fetching…" : "Fetch the keywords") { load() }
                         .disabled(busy || state.appleActionAppID == nil)
                 }
 

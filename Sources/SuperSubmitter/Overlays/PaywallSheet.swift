@@ -173,7 +173,7 @@ struct PaywallSheet: View {
                     }
                 }
             } else if state.billingOperation == .loadingPlans {
-                HStack(spacing: 8) { Spinner(); Text("Reading the plans…").font(.system(size: 12)) }
+                HStack(spacing: 8) { Spinner(); Text("Fetching the plans…").font(.system(size: 12)) }
             } else {
                 Text("The plans could not be loaded. Check your connection and open this again.")
                     .font(.system(size: 12))

@@ -62,6 +62,27 @@ enum Severity {
     var background: Color { self == .error ? Theme.redBg : Theme.yellowBg }
 }
 
+/// What a tab has open, split by whether it blocks the apply.
+///
+/// One count in one colour said two different things at once: a tab holding
+/// 1 error and 5 warnings drew a red 6, and six blockers is not what that
+/// tab held. An error stops the apply and a warning asks to be acknowledged,
+/// so the two never belonged in one number.
+struct TabBadge {
+    var errors = 0
+    var warnings = 0
+
+    /// The two pills differ by hue alone on screen, and colour is not a
+    /// distinction on its own (WCAG 1.4.1). This is what the row reads out
+    /// and what the tooltip says.
+    var spoken: String {
+        [errors > 0 ? "\(errors) \(errors == 1 ? "error" : "errors")" : nil,
+         warnings > 0 ? "\(warnings) \(warnings == 1 ? "warning" : "warnings")" : nil]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
+}
+
 @Observable
 @MainActor
 final class AppState {
@@ -139,6 +160,21 @@ final class AppState {
     var appPendingRemoval: Int?
     var releaseSheet: Store?
     var showAddLocale = false
+    /// The ⌘F palette. See FieldSearchSheet and FieldIndex.
+    var showFieldSearch = false
+    /// The `FieldAnchor` id the content column should scroll to, set together
+    /// with `selectedTab` and cleared by the scroll that consumes it.
+    var jumpTarget: String?
+
+    /// Opens the tab that holds a field, then asks the scroll to reach it.
+    ///
+    /// The order matters and is not an accident: the tab has to change first,
+    /// so that by the time the content column reacts to `jumpTarget` the
+    /// anchor is on a view that is about to exist.
+    func jump(to entry: FieldEntry) {
+        selectedTab = entry.tab
+        jumpTarget = entry.id
+    }
 
     /// Takes every sheet off the shell.
     ///
@@ -151,6 +187,7 @@ final class AppState {
         showOnboarding = false
         showExistingAppImport = false
         showAddLocale = false
+        showFieldSearch = false
         releaseSheet = nil
         paywall = nil
         pendingPaywall = nil
@@ -1449,19 +1486,20 @@ final class AppState {
 
     // MARK: - The badges
 
-    /// The count of open items per tab, and how loud each one is.
+    /// The open items per tab, errors and warnings kept apart.
     ///
-    /// A badge is red when the tab holds an error and yellow when it holds
-    /// only warnings. Red means "this blocks the apply", so it must never
-    /// appear on a tab that holds no error.
-    func badge(for tab: Tab) -> (count: Int, severity: Severity)? {
+    /// Red means "this blocks the apply", so it must never appear on a tab
+    /// that holds no error. That rule is why the two counts are separate now
+    /// rather than summed under the louder colour.
+    func badge(for tab: Tab) -> TabBadge? {
         if applied { return nil }
         // Before the first read the only rule the app can run is the text
-        // limit, because every other rule needs the store side.
+        // limit, because every other rule needs the store side. It is an
+        // error in every case, so this branch has no warning to report.
         guard let plan else {
             let count = listingErrorCount
             guard count > 0 else { return nil }
-            return tab == .details || tab == .plan ? (count, .error) : nil
+            return tab == .details || tab == .plan ? TabBadge(errors: count) : nil
         }
         let target: FixTarget?
         switch tab {
@@ -1479,8 +1517,8 @@ final class AppState {
             ? plan.findings
             : plan.findings.filter { $0.fix == target }
         guard !findings.isEmpty else { return nil }
-        let severity: Severity = findings.contains { $0.severity == .error } ? .error : .warning
-        return (findings.count, severity)
+        let errors = findings.filter { $0.severity == .error }.count
+        return TabBadge(errors: errors, warnings: findings.count - errors)
     }
 
     var planIsBlocked: Bool {

@@ -380,7 +380,7 @@ struct BuildFromProjectView: View {
         case .building:
             "Your own build tool is running. Super Submitter reads its output and changes nothing in the project."
         case .inspectingArtifact:
-            "Reading the artifact. The artifact, not the preflight, decides what gets uploaded."
+            "Inspecting the artifact. The artifact, not the preflight, decides what gets uploaded."
         case .uploading:
             "Sending the exact file that this run produced."
         case .processingOrValidating:

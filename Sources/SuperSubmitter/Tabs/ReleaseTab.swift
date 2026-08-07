@@ -84,8 +84,14 @@ struct ReleaseTab: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("\(state.consoleDone) of \(state.consoleRows.count) steps are done")
+            // Verbatim and monospaced, for the reason the Summary counters
+            // are: a localized "\(int)" carries the locale's grouping
+            // separator, and proportional digits shuffle the words after them
+            // every time a step is ticked.
+            Text(verbatim: "\(state.consoleDone) of \(state.consoleRows.count) steps are done")
                 .font(.system(size: 14, weight: .semibold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
             Text("Every row below happens in a console. No API performs it.")
                 .font(.system(size: 12)).foregroundStyle(Theme.text2)
             Spacer(minLength: 0)
@@ -110,8 +116,10 @@ struct ReleaseTab: View {
                         SystemMark(name: card.name)
                         Text(card.name).font(.system(size: 12.5, weight: .semibold))
                         Spacer(minLength: 8)
-                        Text("\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
+                        Text(verbatim: "\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
                             .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -311,7 +319,7 @@ private struct ChecklistRow: View {
                         .foregroundStyle(Theme.text3)
                         .frame(width: 14, height: 14)
                         .help("The store reports this one. There is nothing to tick.")
-                        .accessibilityLabel("Read from the store")
+                        .accessibilityLabel("Reported by the store")
                 }
             }
             .frame(width: 15)

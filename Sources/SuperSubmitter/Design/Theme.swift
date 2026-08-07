@@ -80,10 +80,33 @@ enum Theme {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
+    // MARK: - The type scale
+    //
+    // Sizes were magic numbers in about thirty view files: 11, 11.5, 12, 12.5,
+    // 13, 13.5, 14, 17, 25. A change of tier meant a sweep, so the tiers never
+    // changed. These are the tiers. Call sites move onto them as they are
+    // touched, and a mechanical sweep of the rest would be a large diff that
+    // nothing can test.
+
+    /// The name of the screen, in the header band.
+    static let screenTitle = Font.system(size: 21, weight: .semibold)
+    /// The question under the screen title.
+    static let screenSubtitle = Font.system(size: 12)
+    /// The heading over a group of cards.
+    static let sectionHeader = Font.system(size: 12.5, weight: .semibold)
+    /// The heading on a single card.
+    static let cardTitle = Font.system(size: 13, weight: .semibold)
+    static let body = Font.system(size: 12.5)
+    static let caption = Font.system(size: 11.5)
+
     // The window itself.
     static let windowRadius: CGFloat = 11
     static let sidebarWidth: CGFloat = 240
-    static let headerHeight: CGFloat = 52
+    /// Tall enough to carry a title at `screenTitle` with the question under
+    /// it. It was 52, which held a 14 point title: smaller than the body text
+    /// on the tab below it, so the screen named itself more quietly than it
+    /// said anything else.
+    static let headerHeight: CGFloat = 64
     static let hairline: CGFloat = 0.5
 
     /// The content is the window surface, and the sidebar is a panel floating
@@ -204,17 +227,89 @@ extension View {
                 .strokeBorder(border, lineWidth: borderWidth))
     }
 
-    /// Turns a working area into a panel that floats on the window surface: a
-    /// rounded fill, a hairline edge, and a shadow that lifts it off the back.
+    /// Turns a working area into a panel that floats on the window surface.
+    ///
+    /// Glass where the OS has it, and the flat fill this app shipped on
+    /// everywhere else: a rounded fill, a hairline edge, and a shadow that
+    /// lifts it off the back.
     func panelSurface() -> some View {
-        self
-            .background(Theme.raised)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
-            // A full point, not a hairline. The panel sits on a surface close
-            // to its own tone, and half a point disappears into it.
-            .overlay(RoundedRectangle(cornerRadius: Theme.panelRadius)
-                .strokeBorder(Theme.panelEdge, lineWidth: 1))
-            .shadow(color: .black.opacity(0.20), radius: 6, y: 1)
+        modifier(PanelSurface())
+    }
+
+    /// The band that floats above scrolling content.
+    ///
+    /// It takes its own fill below macOS 26, because the band is the page at
+    /// rest and only separates itself once there is something above the fold.
+    /// `scrolled` is that state, and glass makes it moot: the material already
+    /// says "there is content under me".
+    func headerSurface(scrolled: Bool) -> some View {
+        modifier(HeaderSurface(scrolled: scrolled))
+    }
+
+    /// One group of header controls, merged into a single lozenge on macOS 26.
+    func glassCluster(spacing: CGFloat = 7) -> some View {
+        modifier(GlassCluster(spacing: spacing))
+    }
+}
+
+// MARK: - The floating materials
+//
+// Liquid Glass is macOS 26 and this app's floor is macOS 14, so every glass
+// surface carries both paths. The branch lives here, once per concept, and
+// never at a call site: a screen that has to know which OS it is on is a
+// screen that will disagree with the next one.
+//
+// Glass goes on the layers that float over something else, and nowhere else.
+// The form cards stay opaque, because glass under dense body copy is a
+// legibility regression and this app is a form.
+
+private struct PanelSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular,
+                                in: .rect(cornerRadius: Theme.panelRadius))
+        } else {
+            content
+                .background(Theme.raised)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
+                // A full point, not a hairline. The panel sits on a surface
+                // close to its own tone, and half a point disappears into it.
+                .overlay(RoundedRectangle(cornerRadius: Theme.panelRadius)
+                    .strokeBorder(Theme.panelEdge, lineWidth: 1))
+                .shadow(color: .black.opacity(0.20), radius: 6, y: 1)
+        }
+    }
+}
+
+private struct HeaderSurface: ViewModifier {
+    let scrolled: Bool
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            // No hairline. The material separates the band from what passes
+            // under it, which is the whole job the rule was doing.
+            content.glassEffect(.regular, in: .rect(cornerRadius: 0))
+        } else {
+            content
+                .background(scrolled ? Theme.raised : Theme.content)
+                .overlay(alignment: .bottom) {
+                    Hairline().opacity(scrolled ? 1 : 0)
+                }
+        }
+    }
+}
+
+/// The container alone. The caller keeps its own `HStack`, so the fallback is
+/// exactly the row this app already drew and nothing moves on macOS 14.
+private struct GlassCluster: ViewModifier {
+    let spacing: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) { content }
+        } else {
+            content
+        }
     }
 }
 
@@ -279,26 +374,74 @@ struct WarningNote: View {
 }
 
 /// The plain push button used across the tabs.
+///
+/// `glass` is opt-in, and off by default on purpose. It belongs to the buttons
+/// that sit in the header clusters, where the material is what merges
+/// neighbours into one lozenge. Every other quiet button stands on an opaque
+/// form card, and glass there buys nothing and costs contrast.
 struct QuietButton: View {
     let title: String
+    var glass = false
     var action: () -> Void = {}
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 4)
-                .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+        if #available(macOS 26.0, *), glass {
+            // The style draws the capsule, so the label carries no fill and
+            // no border of its own. Two chromes on one button is a double edge.
+            Button(action: action) { Text(title).font(.system(size: 12)) }
+                .buttonStyle(.glass)
+        } else {
+            Button(action: action) { flatLabel }
+                .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+    }
+
+    private var flatLabel: some View {
+        Text(title)
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 4)
+            .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
     }
 }
 
-/// The switch on the Plan toolbar.
+/// The one prominent action on a screen: the apply on Summary.
+///
+/// Prominent glass on macOS 26, the filled accent rectangle this app shipped
+/// below it. Deliberately not red. It writes a draft, a draft is reversible,
+/// and red belongs to the Release tab alone.
+struct ProminentButton: View {
+    let title: String
+    var enabled = true
+    let action: () -> Void
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            Button(action: action) {
+                Text(title).font(.system(size: 14, weight: .semibold))
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .tint(Theme.accent)
+        } else {
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(enabled ? Theme.accentText : Theme.text3)
+                    .padding(.horizontal, 26)
+                    .padding(.vertical, 11)
+                    .background(enabled ? Theme.accent : Theme.sep2,
+                                in: RoundedRectangle(cornerRadius: 9))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+/// The switch on the Summary toolbar.
 struct SmallToggle: View {
     @Binding var isOn: Bool
 

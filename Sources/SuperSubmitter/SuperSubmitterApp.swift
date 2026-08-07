@@ -89,6 +89,13 @@ struct SuperSubmitterApp: App {
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(state.manifestURL == nil)
             }
+            // About 120 fields across ten tabs, and no way to ask where one
+            // of them is. It sits under Edit, where ⌘F lives on the Mac.
+            CommandGroup(after: .textEditing) {
+                Button("Find a Field…") { state.showFieldSearch = true }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .disabled(state.manifestURL == nil)
+            }
             // The app has no Settings scene. Command-comma opens the panel
             // over the window, so the menu and the sidebar row do one thing.
             // The mode decides which tabs exist, so it belongs in the menu as

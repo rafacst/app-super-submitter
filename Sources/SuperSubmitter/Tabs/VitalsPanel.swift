@@ -25,7 +25,7 @@ struct VitalsPanel: View {
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Reading…" : "Read the vitals") { load() }
+                    QuietButton(title: busy ? "Fetching…" : "Fetch the vitals") { load() }
                         .disabled(busy)
                 }
 
@@ -76,7 +76,7 @@ struct VitalsPanel: View {
                 Text("Refunds and chargebacks")
                     .font(.system(size: 12, weight: .semibold))
                 Spacer(minLength: 8)
-                QuietButton(title: "Read the voided purchases") { loadVoided() }
+                QuietButton(title: "Fetch the voided purchases") { loadVoided() }
                     .disabled(busy || state.googleActionPackage == nil)
             }
             Text("Super Submitter reads these and issues none. A refund moves money to a customer, so you do that in the Play Console.")

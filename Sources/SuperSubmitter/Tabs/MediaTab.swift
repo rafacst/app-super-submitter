@@ -27,6 +27,10 @@ struct MediaTab: View {
             }
             videoSection
         }
+        // The one tab that never capped itself. Without this the group header
+        // stretches to the window, which put "Choose images…" about 1400
+        // points from the name of the group it belongs to.
+        .frame(maxWidth: 980, alignment: .leading)
     }
 
     private func mediaGroup(_ name: String, device: Manifest.DeviceClass) -> some View {
@@ -35,7 +39,13 @@ struct MediaTab: View {
         return VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text(name).font(.system(size: 12.5, weight: .semibold))
-                Text("\(paths.count) of \(limit)").font(.system(size: 11)).foregroundStyle(Theme.text2)
+                // Verbatim, so a locale that groups thousands cannot render a
+                // count as "1.242". The digits also have to hold still while
+                // the number changes, or the name beside them shuffles.
+                Text(verbatim: "\(paths.count) of \(limit)")
+                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
                 Spacer()
                 Button("Choose images…") { state.chooseMediaFiles(deviceClass: device) }
                     .controlSize(.small)
@@ -109,6 +119,7 @@ struct MediaTab: View {
         let previews = state.mediaPaths(deviceClass: device, previews: true)
         return VStack(alignment: .leading, spacing: 10) {
             Text("Video").font(.system(size: 12.5, weight: .semibold))
+                .fieldAnchor("media.video")
             Text("Apple takes a 15 to 30 second video file. Google takes a YouTube URL.")
                 .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
             HStack(alignment: .top, spacing: 14) {
