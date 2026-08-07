@@ -5,6 +5,10 @@ import SwiftUI
 /// Tab 4. Files are validated before their relative paths are written to the manifest.
 struct MediaTab: View {
     @Environment(AppState.self) private var state
+    /// The groups the developer opened or closed by hand. A device class that
+    /// is missing here follows what it holds, so an import that fills a bucket
+    /// opens it and nothing has to be told about the new files.
+    @State private var open: [Manifest.DeviceClass: Bool] = [:]
 
     private var groups: [(String, Manifest.DeviceClass)] {
         var values: [(String, Manifest.DeviceClass)] = [("Phone", .phone)]
@@ -33,72 +37,116 @@ struct MediaTab: View {
         .frame(maxWidth: 980, alignment: .leading)
     }
 
+    /// The tile takes the shape of the screen it shows.
+    ///
+    /// One 112 by 160 box for every device class put a 1440 by 900 desktop
+    /// screenshot in a portrait card and left ninety points of air under it,
+    /// five times across the row. The catalog already knows every shape.
+    ///
+    /// The floor is the caption: "1290 × 2796" needs more width than a phone
+    /// screen has at this height, so a portrait tile keeps the old column and
+    /// centres its image in it.
+    private static func tile(_ deviceClass: Manifest.DeviceClass) -> CGSize {
+        let side: CGFloat = 150
+        let aspect = AssetInspector.aspectRatio(for: deviceClass)
+        return CGSize(width: max(112, aspect >= 1 ? side : side * aspect),
+                      height: aspect >= 1 ? side / aspect : side)
+    }
+
     private func mediaGroup(_ name: String, device: Manifest.DeviceClass) -> some View {
         let paths = state.mediaPaths(deviceClass: device)
         let limit = state.stores.contains(.google) ? 8 : 10
+        // An import already downloaded these same images into the tiles, so
+        // the faded strip stays out of the way when the bucket holds them.
+        let live = paths.contains(where: AppState.isImported)
+            ? []
+            : state.storeSnapshot.screenshots(locale: state.locale, deviceClass: device)
+        // A group opens on what it holds. Nil is the default, so a bucket the
+        // next import fills opens by itself, and a developer who closed one by
+        // hand keeps it closed. Every store shows seven device classes and an
+        // app answers two of them, so six empty dashed cards used to push the
+        // one group with screenshots in it most of a screen down.
+        let isOpen = open[device] ?? !(paths.isEmpty && live.isEmpty)
+        let tile = Self.tile(device)
         return VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text(name).font(.system(size: 12.5, weight: .semibold))
-                // Verbatim, so a locale that groups thousands cannot render a
-                // count as "1.242". The digits also have to hold still while
-                // the number changes, or the name beside them shuffles.
-                Text(verbatim: "\(paths.count) of \(limit)")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+            HStack(spacing: 8) {
+                Button { open[device] = !isOpen } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Theme.text2)
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                        Text(name).font(.system(size: 12.5, weight: .semibold))
+                        // Verbatim, so a locale that groups thousands cannot
+                        // render a count as "1.242". The digits also have to
+                        // hold still while the number changes, or the name
+                        // beside them shuffles.
+                        Text(verbatim: "\(paths.count) of \(limit)")
+                            .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(name), \(paths.count) of \(limit)")
+                .accessibilityHint(isOpen ? "Hide the images" : "Show the images")
                 Spacer()
-                Button("Choose images…") { state.chooseMediaFiles(deviceClass: device) }
-                    .controlSize(.small)
+                // A closed group carries no control. Six "Choose images…"
+                // buttons down the right of a page is the noise this tab is
+                // here to lose.
+                if isOpen {
+                    Button("Choose images…") { state.chooseMediaFiles(deviceClass: device) }
+                        .controlSize(.small)
+                }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(Array(paths.enumerated()), id: \.element) { index, path in
-                        MediaTile(path: path, info: state.imageInfo(for: path),
-                                  stores: state.imageStores(for: path, deviceClass: device),
-                                  url: state.mediaURL(for: path),
-                                  fromStore: AppState.isImported(path),
-                                  canMoveEarlier: index > 0,
-                                  canMoveLater: index < paths.count - 1,
-                                  move: { offset in
-                                      state.moveMedia(path, by: offset, deviceClass: device)
-                                  }) {
-                            state.removeMedia(path, deviceClass: device)
+            if isOpen {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(Array(paths.enumerated()), id: \.element) { index, path in
+                            MediaTile(path: path, size: tile,
+                                      info: state.imageInfo(for: path),
+                                      stores: state.imageStores(for: path, deviceClass: device),
+                                      url: state.mediaURL(for: path),
+                                      fromStore: AppState.isImported(path),
+                                      canMoveEarlier: index > 0,
+                                      canMoveLater: index < paths.count - 1,
+                                      move: { offset in
+                                          state.moveMedia(path, by: offset, deviceClass: device)
+                                      }) {
+                                state.removeMedia(path, deviceClass: device)
+                            }
+                            // Drag to reorder. The payload is the manifest
+                            // path, so a tile dragged out of the window carries
+                            // text and never a promise of a file the app would
+                            // have to write.
+                            .draggable(path)
+                            .dropDestination(for: String.self) { dropped, _ in
+                                guard let moved = dropped.first else { return false }
+                                state.moveMedia(moved, before: path, deviceClass: device)
+                                return true
+                            }
                         }
-                        // Drag to reorder. The payload is the manifest path, so
-                        // a tile dragged out of the window carries text and
-                        // never a promise of a file the app would have to write.
-                        .draggable(path)
-                        .dropDestination(for: String.self) { dropped, _ in
-                            guard let moved = dropped.first else { return false }
-                            state.moveMedia(moved, before: path, deviceClass: device)
+                        MediaDropTile(title: "Drop images\nor choose files",
+                                      width: tile.width, height: tile.height) {
+                            state.chooseMediaFiles(deviceClass: device)
+                        }
+                        .dropDestination(for: URL.self) { urls, _ in
+                            state.addMediaFiles(urls, deviceClass: device)
                             return true
                         }
                     }
-                    MediaDropTile(title: "Drop images\nor choose files") {
-                        state.chooseMediaFiles(deviceClass: device)
-                    }
-                    .dropDestination(for: URL.self) { urls, _ in
-                        state.addMediaFiles(urls, deviceClass: device)
-                        return true
-                    }
                 }
+                liveScreenshots(live)
             }
-            liveScreenshots(device)
         }
+        .animation(.snappy(duration: 0.18), value: isOpen)
     }
 
     /// What each store shows today. It is faded and it takes no input, because
     /// nothing here is a file the developer owns yet.
-    ///
-    /// An import already downloaded these same images into the tiles above,
-    /// so the strip stays out of the way when the bucket holds them. The
-    /// alternative was every screenshot drawn twice on one row.
     @ViewBuilder
-    private func liveScreenshots(_ device: Manifest.DeviceClass) -> some View {
-        let imported = state.mediaPaths(deviceClass: device).contains(where: AppState.isImported)
-        let live = imported
-            ? []
-            : state.storeSnapshot.screenshots(locale: state.locale, deviceClass: device)
+    private func liveScreenshots(_ live: [(store: Store, urls: [URL])]) -> some View {
         if !live.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(live, id: \.store) { entry in
@@ -243,6 +291,7 @@ private struct LiveMediaWarning: View {
 
 private struct MediaTile: View {
     let path: String
+    let size: CGSize
     let info: ImageAssetInfo?
     let stores: Set<Store>
     let url: URL
@@ -259,7 +308,7 @@ private struct MediaTile: View {
                     Image(nsImage: image).resizable().scaledToFit()
                 } else { Hatched() }
             }
-            .frame(width: 112, height: 160)
+            .frame(width: size.width, height: size.height)
             .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
             .overlay(alignment: .topLeading) {
                 // The import downloaded this one. It says so, because a tile
@@ -310,7 +359,7 @@ private struct MediaTile: View {
                 TileButton(symbol: "trash", label: "Remove", enabled: true,
                            tint: Theme.red, action: remove)
             }
-        }.frame(width: 112, alignment: .leading)
+        }.frame(width: size.width, alignment: .leading)
     }
 }
 
@@ -346,15 +395,19 @@ private struct TileButton: View {
 
 private struct MediaDropTile: View {
     let title: String
+    /// Nil lets the caller size it, which the video section does.
+    var width: CGFloat?
+    var height: CGFloat = 82
     let choose: () -> Void
     var body: some View {
         Button(action: choose) {
             Text(title).font(.system(size: 11)).foregroundStyle(Theme.text3)
                 .multilineTextAlignment(.center).padding(8)
-                .frame(width: 112).frame(minHeight: 82)
+                .frame(maxWidth: .infinity).frame(height: height)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(width: width)
         .overlay(RoundedRectangle(cornerRadius: 6)
             .strokeBorder(Theme.controlEdge, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
     }
