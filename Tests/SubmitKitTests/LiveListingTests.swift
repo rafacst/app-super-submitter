@@ -140,20 +140,32 @@ extension LiveListingTests {
             "/v1/appStoreVersions/v-live/appStoreVersionLocalizations?limit=200": """
             {"data":[{"id":"vl-live","attributes":{"locale":"en-US"}}]}
             """,
+            // The shape App Store Connect really sends: the set lists its
+            // members, and an included screenshot carries no `relationships`
+            // key at all. A fixture that invented a back reference on the
+            // included row is what let the empty Media tab live for a week.
             "/v1/appStoreVersionLocalizations/vl-live/appScreenshotSets?include=appScreenshots&limit=50": """
-            {"data":[{"id":"set","attributes":{"screenshotDisplayType":"APP_DESKTOP"}}],
-             "included":[{"type":"appScreenshots","id":"s1",
-                          "relationships":{"appScreenshotSet":{"data":{"id":"set"}}},
+            {"data":[{"id":"set","attributes":{"screenshotDisplayType":"APP_DESKTOP"},
+                      "relationships":{"appScreenshots":{"data":[
+                        {"type":"appScreenshots","id":"s1"},
+                        {"type":"appScreenshots","id":"s2"}]}}}],
+             "included":[{"type":"appScreenshots","id":"s1","links":{"self":"x"},
                           "attributes":{"fileName":"one.png",
-                            "imageAsset":{"templateUrl":"https://example.com/{w}x{h}.{f}",
+                            "imageAsset":{"templateUrl":"https://example.com/1-{w}x{h}.{f}",
+                                          "width":2880,"height":1800}}},
+                         {"type":"appScreenshots","id":"s2","links":{"self":"x"},
+                          "attributes":{"fileName":"two.png",
+                            "imageAsset":{"templateUrl":"https://example.com/2-{w}x{h}.{f}",
                                           "width":2880,"height":1800}}}]}
             """,
         ])
 
         let apple = try await reader().readApple(appID: "9")
 
-        // The tab can draw what the store shows.
-        #expect(apple.screenshotURLs["en-US/APP_DESKTOP"]?.count == 1)
+        // The tab can draw what the store shows. Every shot of the bucket,
+        // not the first one: the fill used to test the bucket it was itself
+        // filling, so a five shot set came out as one.
+        #expect(apple.screenshotURLs["en-US/APP_DESKTOP"]?.count == 2)
         // The checksums stay the draft's. They decide which upload the apply
         // skips, and the live version is not the version being written to.
         #expect(apple.screenshotChecksums.isEmpty)

@@ -162,9 +162,10 @@ struct StoreImportReaderTests {
                       "marketingUrl":"https://example.com/"}}]}
             """,
             "/v1/appStoreVersionLocalizations/vl-live/appScreenshotSets?include=appScreenshots&limit=50": """
-            {"data":[{"id":"set","attributes":{"screenshotDisplayType":"APP_DESKTOP"}}],
-             "included":[{"type":"appScreenshots","id":"s1",
-                          "relationships":{"appScreenshotSet":{"data":{"id":"set"}}},
+            {"data":[{"id":"set","attributes":{"screenshotDisplayType":"APP_DESKTOP"},
+                      "relationships":{"appScreenshots":{"data":[
+                        {"type":"appScreenshots","id":"s1"}]}}}],
+             "included":[{"type":"appScreenshots","id":"s1","links":{"self":"x"},
                           "attributes":{"fileName":"one.png",
                             "imageAsset":{"templateUrl":"https://example.com/{w}x{h}.{f}",
                                           "width":2880,"height":1800}}}]}
@@ -217,5 +218,107 @@ struct StoreImportReaderTests {
         #expect(manifest.listingText(locale: "en-US", field: .subtitle) == "A subtitle")
         #expect(manifest.listingText(locale: "en-US", field: .supportURL) == "https://example.com/s")
         #expect(manifest.release?.versionName == "3.1")
+    }
+}
+
+/// The payload shape App Store Connect really answers with.
+///
+/// Captured from `/v1/appStoreVersionLocalizations/{id}/appScreenshotSets`
+/// `?include=appScreenshots` against a live app. The set lists its members
+/// under `relationships.appScreenshots.data`, and every included screenshot
+/// carries `type`, `id`, `attributes`, and `links` and **no** `relationships`
+/// key. The reader used to ask each included row which set it belonged to,
+/// so it matched nothing and dropped all five shots of a full store page
+/// without a word.
+struct AppleAssetShapeTests {
+    private let realPayload = """
+    {"data":[{"type":"appScreenshotSets","id":"set-desktop",
+              "attributes":{"screenshotDisplayType":"APP_DESKTOP"},
+              "relationships":{"appScreenshots":{"meta":{"paging":{"total":2,"limit":50}},
+                "data":[{"type":"appScreenshots","id":"a"},
+                        {"type":"appScreenshots","id":"b"}]}}}],
+     "included":[
+       {"type":"appScreenshots","id":"a","links":{"self":"x"},
+        "attributes":{"fileName":"01-home.png","sourceFileChecksum":"aaa",
+          "imageAsset":{"templateUrl":"https://example.com/a/{w}x{h}.{f}",
+                        "width":2880,"height":1800}}},
+       {"type":"appScreenshots","id":"b","links":{"self":"x"},
+        "attributes":{"fileName":"02-explore.png","sourceFileChecksum":"bbb",
+          "imageAsset":{"templateUrl":"https://example.com/b/{w}x{h}.{f}",
+                        "width":2880,"height":1800}}}]}
+    """
+
+    @Test func everyScreenshotOfASetSurvivesTheRealPayload() {
+        let assets = StoreImportReader.appleAssets(
+            JSON(data: Data(realPayload.utf8)), locale: "en-US",
+            itemType: "appScreenshots", kindKey: "screenshotDisplayType")
+
+        #expect(assets.count == 2)
+        #expect(assets.allSatisfy { $0.kind == "APP_DESKTOP" })
+        #expect(assets.allSatisfy { $0.locale == "en-US" })
+        // A Mac screenshot has to reach the tab's Desktop group.
+        #expect(assets.allSatisfy { $0.deviceClass == .desktop })
+        // The position leads the name, so two shots that share a name inside
+        // one set still become two files.
+        #expect(assets.map(\.fileName) == ["1-01-home.png", "2-02-explore.png"])
+        // The `{w}` `{h}` `{f}` template is expanded, so the tile can load it.
+        #expect(assets.contains { $0.url.absoluteString == "https://example.com/a/2880x1800.png" })
+    }
+
+    /// The app picker learns the platforms from the app's own relationship.
+    /// The included version rows carry no `relationships` key, and reading
+    /// only those left every app with no platform, so the import fell back on
+    /// its iPhone guess and wrote a Mac app into `store.yaml` as an iOS app.
+    @Test func thePickerReadsBothPlatformsOfAUniversalApp() throws {
+        let payload = """
+        {"data":[{"id":"app-1","attributes":{"name":"DeckDeckDeck",
+                  "bundleId":"com.example.deck"},
+                  "relationships":{"appStoreVersions":{"data":[
+                    {"type":"appStoreVersions","id":"v-ios"},
+                    {"type":"appStoreVersions","id":"v-mac"}]}}}],
+         "included":[
+           {"type":"appStoreVersions","id":"v-ios","attributes":{"platform":"IOS"}},
+           {"type":"appStoreVersions","id":"v-mac","attributes":{"platform":"MAC_OS"}}]}
+        """
+        let decoded = try JSONDecoder().decode(AppleAppsResponse.self,
+                                               from: Data(payload.utf8))
+
+        let platforms = StoreConnectionClient.platforms(decoded.included ?? [],
+                                                        apps: decoded.data)
+
+        #expect(platforms["app-1"] == [.ios, .macOS])
+    }
+}
+
+/// Apple lets two screenshots of one set carry the same name.
+///
+/// The import writes one file per name under
+/// `Store Import/apple/<locale>/<display type>/`, so two `09-profile.png`
+/// became one file and the tab lost three of five live screenshots.
+struct DuplicateScreenshotNameTests {
+    @Test func twoShotsThatShareANameStayTwoFiles() {
+        let payload = """
+        {"data":[{"type":"appScreenshotSets","id":"set",
+                  "attributes":{"screenshotDisplayType":"APP_DESKTOP"},
+                  "relationships":{"appScreenshots":{"data":[
+                    {"type":"appScreenshots","id":"a"},
+                    {"type":"appScreenshots","id":"b"}]}}}],
+         "included":[
+           {"type":"appScreenshots","id":"a",
+            "attributes":{"fileName":"09-profile.png","sourceFileChecksum":"one",
+              "imageAsset":{"templateUrl":"https://example.com/a/{w}x{h}.{f}",
+                            "width":2880,"height":1800}}},
+           {"type":"appScreenshots","id":"b",
+            "attributes":{"fileName":"09-profile.png","sourceFileChecksum":"two",
+              "imageAsset":{"templateUrl":"https://example.com/b/{w}x{h}.{f}",
+                            "width":2880,"height":1800}}}]}
+        """
+        let assets = StoreImportReader.appleAssets(
+            JSON(data: Data(payload.utf8)), locale: "en-US",
+            itemType: "appScreenshots", kindKey: "screenshotDisplayType")
+
+        #expect(assets.count == 2)
+        #expect(Set(assets.map(\.fileName)).count == 2)
+        #expect(Set(assets.map(\.url)).count == 2)
     }
 }
