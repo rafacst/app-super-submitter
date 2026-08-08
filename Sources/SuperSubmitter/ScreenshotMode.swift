@@ -167,6 +167,8 @@ enum ScreenshotMode {
         // none of them needs a tab of its own.
         case "settings":
             state.showSettings = true
+        case "about":
+            state.showAbout = true
         case "import":
             state.showExistingAppImport = true
         case "paywall":
