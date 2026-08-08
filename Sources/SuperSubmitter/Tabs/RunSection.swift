@@ -149,6 +149,21 @@ struct RunSection: View {
 
     // MARK: - The failure panels, section 11
 
+    /// What the undo can and cannot take back.
+    ///
+    /// A run that never opened a Google edit has no Play Console draft to
+    /// explain, and the panel used to explain one anyway. An App Store apply
+    /// read a paragraph about a store it does not publish to.
+    private func recoveryNote(_ failure: RunFailure) -> String {
+        if failure.canUndoGoogleEdit {
+            return "The undo deletes the Google edit that this run opened. It removes no App Store screenshot, because Apple keeps them in the version and a second apply reuses them by checksum."
+        }
+        guard state.runSteps.contains(where: { $0.system == .google }) else {
+            return "Every write in this run ended in a draft, so nothing reached the customers. A retry writes into the same version and reuses what already landed."
+        }
+        return "The Google edit is already committed, so the undo cannot remove the Play Console draft. The fix is another apply with a corrected manifest. The draft harms nobody in the meantime."
+    }
+
     private func failurePanel(_ failure: RunFailure) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("The run stopped at \(state.runSteps[safe: failure.stepIndex]?.title ?? "a step").")
@@ -157,9 +172,7 @@ struct RunSection: View {
                 .font(.system(size: 12))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(failure.canUndoGoogleEdit
-                 ? "The undo deletes the Google edit that this run opened. It removes no App Store screenshot, because Apple keeps them in the version and a second apply reuses them by checksum."
-                 : "The Google edit is already committed, so the undo cannot remove the Play Console draft. The fix is another apply with a corrected manifest. The draft harms nobody in the meantime.")
+            Text(recoveryNote(failure))
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
