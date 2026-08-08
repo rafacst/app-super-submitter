@@ -167,6 +167,47 @@ public struct AppleReportsClient: Sendable {
         return try Gzip.unpackText(result.data)
     }
 
+    /// One finance report, unpacked to text.
+    ///
+    /// The sales report answers "what sold". This answers "what Apple paid",
+    /// which is a different number: it is net of Apple's commission, it is in
+    /// the currency of each region, and it only exists for a month Apple has
+    /// closed. The shape is the same gzipped, tab-separated file.
+    ///
+    /// `reportDate` is `YYYY-MM` and Apple requires it, because a finance
+    /// report is monthly and there is no "latest". The newest closed month
+    /// appears a few weeks after it ends, and Apple answers 404 until then,
+    /// which is a state and not a failure.
+    ///
+    /// `regionCode` is Apple's own finance region, and `ZZ` is the one that
+    /// consolidates every region into a single report. `FINANCIAL` is the
+    /// summary; `FINANCE_DETAIL` is the transaction-level file behind it.
+    public func financeReport(vendorNumber: String,
+                              reportDate: String,
+                              regionCode: String = "ZZ",
+                              reportType: String = "FINANCIAL") async throws -> String {
+        let result = try await api.apple("GET", "/v1/financeReports", query: [
+            URLQueryItem(name: "filter[vendorNumber]", value: vendorNumber),
+            URLQueryItem(name: "filter[regionCode]", value: regionCode),
+            URLQueryItem(name: "filter[reportDate]", value: reportDate),
+            URLQueryItem(name: "filter[reportType]", value: reportType),
+        ])
+        return try Gzip.unpackText(result.data)
+    }
+
+    /// The month a finance report can actually exist for.
+    ///
+    /// Apple closes a month several weeks after it ends, so "this month" and
+    /// usually "last month" are both 404. The default is two months back,
+    /// which is the newest one that is normally there.
+    public static func defaultFinanceMonth(from now: Date = Date()) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        let month = calendar.date(byAdding: .month, value: -2, to: now) ?? now
+        let parts = calendar.dateComponents([.year, .month], from: month)
+        return String(format: "%04d-%02d", parts.year ?? 1970, parts.month ?? 1)
+    }
+
     /// The first rows of a report, which is what a panel shows. The whole
     /// report belongs in a spreadsheet and not in a window.
     public static func preview(_ text: String, rows: Int = 12) -> [[String]] {

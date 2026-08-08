@@ -95,6 +95,48 @@ private func store(_ held: [String: AgeRatingAnswer] = [
     #expect(changes.unknown.isEmpty)
 }
 
+/// The manifest the older build left behind heals when it is read.
+///
+/// Its five invented keys reach no store, so they must not hold an apply
+/// behind an acknowledgement. A key a developer typed by hand is not one of
+/// the five, so it stays and the warning still explains it.
+@Test func theDecodeDropsTheFiveInventedAgeRatingKeysAndKeepsEveryOther() throws {
+    let manifest = try ManifestFile.decode("""
+    version: 1
+    apps: {}
+    review:
+      ageRatingAnswers:
+        user_generated_content: true
+        violence: true
+        gambling: true
+        profanity: true
+        sexual_content: true
+        violenceCartoonOrFantasy: NONE
+        typedByHand: true
+    """)
+
+    #expect(manifest.review?.ageRatingAnswers == ["violenceCartoonOrFantasy": .text("NONE"),
+                                                 "typedByHand": .flag(true)])
+    #expect(Planner.appleAgeRatingChanges(manifest.review, store().apple).unknown
+            == ["typedByHand"])
+}
+
+/// Five invented keys and nothing else leaves no empty map behind.
+@Test func aManifestOfNothingButInventedKeysCarriesNoAnswers() throws {
+    let manifest = try ManifestFile.decode("""
+    version: 1
+    apps: {}
+    review:
+      ageRatingAnswers:
+        user_generated_content: true
+    """)
+
+    #expect(manifest.review?.ageRatingAnswers == nil)
+    #expect(Validator.findings(Planner.Input(
+        manifest: manifest, actual: store(), stores: [.apple]))
+        .contains { $0.id.hasPrefix("review.ageRating") } == false)
+}
+
 /// An unanswered demo account question is not the answer "no".
 @Test func anUnansweredDemoAccountQuestionOverwritesNothing() {
     var review = Manifest.Review()

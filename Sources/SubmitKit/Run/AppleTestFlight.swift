@@ -58,6 +58,14 @@ extension Runner {
             appID: appleAppID, wanted)
     }
 
+    /// The licence every external tester accepts. Apple keeps one per app and
+    /// creates it itself, so this only ever patches.
+    func appleBetaLicenseAgreement() async throws {
+        guard let text = manifest.release?.apple?.testFlight?.licenseAgreement else { return }
+        try await AppleTestFlightClient(api: api).setLicenseAgreement(appID: appleAppID,
+                                                                      text: text)
+    }
+
     /// The contact that Apple reaches about a beta review. The demo account
     /// comes from the Keychain and never from `store.yaml`, the same rule the
     /// App Store review detail follows.

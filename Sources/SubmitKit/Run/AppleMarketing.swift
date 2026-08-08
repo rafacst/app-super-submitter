@@ -527,25 +527,85 @@ extension Runner {
             var attributes: [String: Any] = [:]
             put(&attributes, "subtitle", text.subtitle ?? "")
             put(&attributes, "title", text.title ?? "")
-            guard !attributes.isEmpty else { continue }
-            if let id = byLocale[locale] {
-                try await api.apple(
-                    "PATCH", "/v1/appClipDefaultExperienceLocalizations/\(id)", body: [
-                        "data": ["type": "appClipDefaultExperienceLocalizations", "id": id,
-                                 "attributes": attributes],
-                    ])
-                continue
+            // The header image is the other half of the card, and a locale
+            // that carries only a picture is a locale with work in it, so the
+            // empty check covers both before it skips.
+            guard !attributes.isEmpty || text.headerImage != nil else { continue }
+            var localizationID = byLocale[locale]
+            if let id = localizationID {
+                if !attributes.isEmpty {
+                    try await api.apple(
+                        "PATCH", "/v1/appClipDefaultExperienceLocalizations/\(id)", body: [
+                            "data": ["type": "appClipDefaultExperienceLocalizations", "id": id,
+                                     "attributes": attributes],
+                        ])
+                }
+            } else {
+                attributes["locale"] = locale
+                let created = JSON(data: try await api.apple(
+                    "POST", "/v1/appClipDefaultExperienceLocalizations", body: [
+                        "data": [
+                            "type": "appClipDefaultExperienceLocalizations",
+                            "attributes": attributes,
+                            "relationships": ["appClipDefaultExperience": [
+                                "data": ["type": "appClipDefaultExperiences",
+                                         "id": experienceID]]],
+                        ],
+                    ]).data)
+                localizationID = created["data"]["id"].string
             }
-            attributes["locale"] = locale
-            try await api.apple("POST", "/v1/appClipDefaultExperienceLocalizations", body: [
-                "data": [
-                    "type": "appClipDefaultExperienceLocalizations",
-                    "attributes": attributes,
-                    "relationships": ["appClipDefaultExperience": [
-                        "data": ["type": "appClipDefaultExperiences", "id": experienceID]]],
-                ],
-            ])
+            if let id = localizationID {
+                try await appleAppClipHeaderImage(text.headerImage, localizationID: id)
+            }
         }
+    }
+
+    /// The picture on the App Clip card, for one locale.
+    ///
+    /// It is the visual half of the card the subtitle sits under, and it takes
+    /// the same three calls as every other Apple asset: reserve, send the
+    /// bytes, commit with the checksum.
+    ///
+    /// Apple keeps one image per localization, so a different picture replaces
+    /// the one that is there. The image Apple already holds costs no upload,
+    /// because the checksum decides, which is how the screenshots decide it.
+    private func appleAppClipHeaderImage(_ path: String?,
+                                         localizationID: String) async throws {
+        guard let path, let url = resolve(path) else { return }
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        let checksum = Checksums.md5(data)
+
+        // Apple keeps one, so this reads the one and compares it rather than
+        // listing a set. A localization with no image answers 404, which is a
+        // state and not a failure.
+        if let held = try? await api.apple(
+            "GET",
+            "/v1/appClipDefaultExperienceLocalizations/\(localizationID)/appClipHeaderImage") {
+            let payload = JSON(data: held.data)
+            if payload["data"]["attributes"]["sourceFileChecksum"].string == checksum { return }
+            if let stale = payload["data"]["id"].string {
+                try await api.apple("DELETE", "/v1/appClipHeaderImages/\(stale)")
+            }
+        }
+
+        let reservation = JSON(data: try await api.apple(
+            "POST", "/v1/appClipHeaderImages", body: [
+                "data": [
+                    "type": "appClipHeaderImages",
+                    "attributes": ["fileName": url.lastPathComponent,
+                                   "fileSize": data.count],
+                    "relationships": ["appClipDefaultExperienceLocalization": [
+                        "data": ["type": "appClipDefaultExperienceLocalizations",
+                                 "id": localizationID]]],
+                ],
+            ]).data)
+        guard let id = reservation["data"]["id"].string else { return }
+        try await executeUploadOperations(
+            reservation["data"]["attributes"]["uploadOperations"], data: data)
+        try await api.apple("PATCH", "/v1/appClipHeaderImages/\(id)", body: [
+            "data": ["type": "appClipHeaderImages", "id": id,
+                     "attributes": ["uploaded": true, "sourceFileChecksum": checksum]],
+        ])
     }
 
     // MARK: - Marketing Screenshots

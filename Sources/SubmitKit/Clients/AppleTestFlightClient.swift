@@ -283,6 +283,40 @@ public struct AppleTestFlightClient: Sendable {
         }
     }
 
+    // MARK: - The licence every external tester accepts
+
+    /// The beta licence agreement, or nil when the read failed.
+    ///
+    /// Apple creates one per app and fills it with its own standard text, so
+    /// this always exists on a real app. An empty string is a real answer and
+    /// means the agreement carries no text.
+    public func licenseAgreement(appID: String) async throws -> String? {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/betaLicenseAgreement").data)
+        guard payload["data"]["id"].string != nil else { return nil }
+        return payload["data"]["attributes"]["agreementText"].string ?? ""
+    }
+
+    /// **Every external tester accepts this before the first install.** A
+    /// wrong or stale agreement is the kind that blocks external testing, and
+    /// the plan shows the row before the run sends it.
+    ///
+    /// Apple keeps one agreement per app and creates it itself, so this only
+    /// ever patches. An app whose agreement cannot be read is left alone
+    /// rather than guessed at.
+    public func setLicenseAgreement(appID: String, text: String) async throws {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/betaLicenseAgreement").data)
+        guard let id = payload["data"]["id"].string else {
+            throw ConnectionError.http(
+                404, "Apple holds no beta licence agreement for this app yet.")
+        }
+        try await api.apple("PATCH", "/v1/betaLicenseAgreements/\(id)", body: [
+            "data": ["type": "betaLicenseAgreements", "id": id,
+                     "attributes": ["agreementText": text]],
+        ])
+    }
+
     /// The contact that Apple reaches about a beta review, and the demo
     /// account that a reviewer signs in with.
     ///

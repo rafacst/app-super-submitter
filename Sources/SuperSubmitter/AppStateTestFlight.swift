@@ -151,6 +151,20 @@ extension AppState {
         })
     }
 
+    /// The licence every external tester accepts before the first install.
+    ///
+    /// Apple keeps one per app and fills it with its own standard text. An
+    /// empty box here writes nothing, so the Apple text stays, and that is
+    /// what most apps want.
+    var betaLicenseAgreementBinding: Binding<String> {
+        Binding(get: { self.testFlight?.licenseAgreement ?? "" }, set: { value in
+            self.editTestFlight {
+                $0.licenseAgreement = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty ? nil : value
+            }
+        })
+    }
+
     // MARK: - The two switches
 
     var betaAutoNotifyBinding: Binding<Bool> {

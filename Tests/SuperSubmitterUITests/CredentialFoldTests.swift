@@ -42,6 +42,29 @@ struct CredentialFoldTests {
         #expect(state.credentialDetailsOpen(.apple))
     }
 
+    /// The update sheet folds on the key it holds, because nothing has called a
+    /// store at that point and it has no connection to follow. A developer who
+    /// imported before meets a folded card over the app list they came for.
+    @Test func theUpdateSheetFoldsACardWhoseKeyItAlreadyHas() {
+        let model = ExistingAppImportModel()
+        #expect(model.credentialDetailsOpen(.apple))
+
+        model.appleKeyID = "Z2YFP2FP9D"
+        model.appleIssuerID = "fc9538f3-8694-455f-b34f-50a9053d4d4a"
+        #expect(model.credentialDetailsOpen(.apple), "a half-entered key keeps the card open")
+
+        model.applePrivateKey = "-----BEGIN PRIVATE KEY-----"
+        #expect(!model.credentialDetailsOpen(.apple))
+
+        // The override outlives the key that folded the card, so a developer
+        // who opens one to replace a key keeps it open while they do.
+        model.toggleCredentialDetails(.apple)
+        model.appleKeyID = "OTHERKEY12"
+        #expect(model.credentialDetailsOpen(.apple))
+        // Google answers for itself.
+        #expect(model.credentialDetailsOpen(.google))
+    }
+
     /// `FieldIndex` sends ⌘F at fields that now live inside the fold. Scrolling
     /// to an anchor in a collapsed card lands on nothing, silently, which is the
     /// one failure the index exists to prevent. The loop is what keeps an

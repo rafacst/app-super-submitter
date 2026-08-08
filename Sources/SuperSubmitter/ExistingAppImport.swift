@@ -98,6 +98,10 @@ final class ExistingAppImportModel {
     var googleCredential: GoogleServiceAccount?
     var googleFileName = ""
     var googlePackages = ""
+    /// Whether a credential card shows its fields, for the developer who said
+    /// so by hand. A store that is missing here follows its own key.
+    var credentialOpen: [Store: Bool] = [:]
+    var guideOpen: Set<Store> = []
     var candidates: [ExistingAppCandidate] = []
     /// The app icon of a candidate, keyed by its id. A candidate with no icon
     /// shows its store mark, so a missing icon costs nothing.
@@ -107,7 +111,6 @@ final class ExistingAppImportModel {
     var selection = ExistingAppSelection()
     var loading = false
     var error: String?
-    var imported: [URL] = []
 
     var selectedCandidates: [ExistingAppCandidate] {
         candidates.filter(selection.contains)
@@ -148,9 +151,7 @@ final class ExistingAppImportModel {
             appleIssuerID = state.appleIssuerID
             applePrivateKey = state.applePrivateKeyPEM
             appleFileName = state.appleCredentialFileName
-            if !appleKeyID.isEmpty, !appleIssuerID.isEmpty, !applePrivateKey.isEmpty {
-                stores.insert(.apple)
-            }
+            if hasCredential(.apple) { stores.insert(.apple) }
         }
         if googleCredential == nil, let google = state.googleCredential {
             googleCredential = google
@@ -159,10 +160,38 @@ final class ExistingAppImportModel {
         }
     }
 
+    /// Whether this sheet holds everything the store needs from it.
+    func hasCredential(_ store: Store) -> Bool {
+        switch store {
+        case .apple: !appleKeyID.isEmpty && !appleIssuerID.isEmpty && !applePrivateKey.isEmpty
+        case .google: googleCredential != nil
+        }
+    }
+
+    /// Whether the credential card shows its fields.
+    ///
+    /// A card whose key the sheet already holds folds itself, the way the
+    /// Stores tab folds a connected one. `seedCredentials` fills this sheet
+    /// from the Keychain, so a developer who imported before now meets a folded
+    /// card over the app list they came for, instead of a file well and two
+    /// filled fields they have no reason to read.
+    ///
+    /// The dictionary is the override and not the state, so a card opened by
+    /// hand stays open while the key is dropped into it.
+    func credentialDetailsOpen(_ store: Store) -> Bool {
+        credentialOpen[store] ?? !hasCredential(store)
+    }
+
+    func toggleCredentialDetails(_ store: Store) {
+        credentialOpen[store] = !credentialDetailsOpen(store)
+    }
+
+    func toggleGuide(_ store: Store) {
+        if !guideOpen.insert(store).inserted { guideOpen.remove(store) }
+    }
+
     var canDiscover: Bool {
-        let appleReady = !stores.contains(.apple)
-            || (!appleKeyID.isEmpty && !appleIssuerID.isEmpty && !applePrivateKey.isEmpty)
-        return !stores.isEmpty && appleReady && (!stores.contains(.google) || googleCredential != nil)
+        !stores.isEmpty && stores.allSatisfy(hasCredential)
     }
 
     var appleCredential: AppleCredential? {

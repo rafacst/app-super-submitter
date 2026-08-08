@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 /// Tab 1. Store selection writes `apps` in the manifest. Credential files are
 /// copied into the Keychain and never into the repository. Each credential
 /// panel opens in the column under its own store card.
+///
+/// The card itself is `CredentialCard`, which the update sheet asks with too.
 struct StoresTab: View {
     @Environment(AppState.self) private var state
     /// The store the developer just switched off, while the app asks whether
@@ -12,20 +14,28 @@ struct StoresTab: View {
     @State private var removing: Store?
 
     var body: some View {
-        StoreSelectionGrid(selected: state.stores) { store in
-            let turningOff = state.stores.contains(store)
-            state.setStore(store, enabled: !turningOff)
-            // Switching a store off is how a developer says "not this one".
-            // The key is the other half of that, and it is the half no other
-            // control reaches, so this is where it gets offered.
-            if turningOff, state.hasCredential(for: store) { removing = store }
-        } detail: { store in
-            switch store {
-            case .apple:
-                if state.stores.contains(.apple) { AppleCredentialPanel() }
-            case .google:
-                if state.stores.contains(.google) { GoogleCredentialPanel() }
+        VStack(alignment: .leading, spacing: 20) {
+            StoreSelectionGrid(selected: state.stores) { store in
+                let turningOff = state.stores.contains(store)
+                state.setStore(store, enabled: !turningOff)
+                // Switching a store off is how a developer says "not this
+                // one". The key is the other half of that, and it is the half
+                // no other control reaches, so this is where it gets offered.
+                if turningOff, state.hasCredential(for: store) { removing = store }
+            } detail: { store in
+                switch store {
+                case .apple:
+                    if state.stores.contains(.apple) { AppleCredentialPanel() }
+                case .google:
+                    if state.stores.contains(.google) { GoogleCredentialPanel() }
+                }
             }
+            // Under both columns and not inside the Google one. A colleague
+            // belongs to the developer account, the same way the service
+            // account above does, so the panel is as wide as the tab rather
+            // than half of it.
+            if state.stores.contains(.apple) { AppleTeamPanel() }
+            if state.stores.contains(.google) { GoogleTeamPanel() }
         }
         .frame(maxWidth: 900, alignment: .leading)
         .confirmationDialog("Remove the stored credential?", isPresented: $removing.isPresent,
@@ -43,13 +53,6 @@ struct StoresTab: View {
 
 }
 
-private extension AnyTransition {
-    /// Grows out of the store card above it, rather than fading in place.
-    static var credentialPanel: AnyTransition {
-        .scale(scale: 0.96, anchor: .top).combined(with: .opacity)
-    }
-}
-
 private struct AppleCredentialPanel: View {
     @Environment(AppState.self) private var state
     @State private var importerOpen = false
@@ -59,12 +62,14 @@ private struct AppleCredentialPanel: View {
         CredentialCard(
             store: .apple,
             status: state.appleConnection,
-            keychainNote: "One key for the whole App Store Connect account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
             summary: state.appleKeyID,
+            open: state.credentialDetailsOpen(.apple),
+            toggle: { state.toggleCredentialDetails(.apple) },
+            guide: .apple,
             guideOpen: state.appleGuideOpen,
             toggleGuide: { state.appleGuideOpen.toggle() },
-            guide: guide,
-            connect: state.connectAppleStore
+            connect: state.connectAppleStore,
+            keychainNote: "One key for the whole App Store Connect account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied."
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 FileWell(
@@ -100,18 +105,6 @@ private struct AppleCredentialPanel: View {
         }
         .transition(.credentialPanel)
     }
-
-    private var guide: GuideContent {
-        GuideContent(
-            steps: [
-                "Open App Store Connect, then Users and Access, then Integrations, then App Store Connect API.",
-                "Create a key with the App Manager role. Copy the key id and the issuer id.",
-                "Download the .p8 file.",
-            ],
-            warning: "Apple shows the .p8 file once. Save it now. A lost key cannot be downloaded again. You create a new one.",
-            buttons: [GuideLink("Open Users and Access ↗",
-                                "https://appstoreconnect.apple.com/access/integrations/api")])
-    }
 }
 
 private struct GoogleCredentialPanel: View {
@@ -119,16 +112,17 @@ private struct GoogleCredentialPanel: View {
     @State private var importerOpen = false
 
     var body: some View {
-        @Bindable var state = state
         CredentialCard(
             store: .google,
             status: state.googleConnection,
-            keychainNote: "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
             summary: state.googleAccountEmail,
+            open: state.credentialDetailsOpen(.google),
+            toggle: { state.toggleCredentialDetails(.google) },
+            guide: .google,
             guideOpen: state.googleGuideOpen,
             toggleGuide: { state.googleGuideOpen.toggle() },
-            guide: guide,
-            connect: state.connectGoogleStore
+            connect: state.connectGoogleStore,
+            keychainNote: "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied."
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 FileWell(
@@ -154,313 +148,5 @@ private struct GoogleCredentialPanel: View {
             if case .failure(let error) = result { state.errorMessage = error.localizedDescription }
         }
         .transition(.credentialPanel)
-    }
-
-    private var guide: GuideContent {
-        GuideContent(
-            steps: [
-                "In the Google Cloud console, create a service account and download its JSON key.",
-                "Grant it the Android Publisher role.",
-                "In the Play Console, open Users and permissions and invite the service account email.",
-            ],
-            warning: "Step 3 is mandatory and no API performs it. A skipped invitation returns a permission error during the connection test.",
-            buttons: [
-                GuideLink("Open Cloud console ↗", "https://console.cloud.google.com/iam-admin/serviceaccounts"),
-                GuideLink("Open Play Console ↗", "https://play.google.com/console"),
-            ])
-    }
-}
-
-private struct GuideLink: Identifiable {
-    let title: String
-    let url: URL
-    var id: String { title }
-
-    init(_ title: String, _ url: String) {
-        self.title = title
-        self.url = URL(string: url)!
-    }
-}
-
-private struct GuideContent {
-    let steps: [String]
-    let warning: String
-    let buttons: [GuideLink]
-}
-
-private struct CredentialCard<Content: View>: View {
-    @Environment(AppState.self) private var state
-    let store: Store
-    let status: ConnectionStatus
-    let keychainNote: String
-    /// What the card says about itself while it is folded away: the key id, or
-    /// the service account address. It is the answer to "connected as what",
-    /// which is the only question a connected card still has to answer.
-    let summary: String
-    let guideOpen: Bool
-    let toggleGuide: () -> Void
-    let guide: GuideContent
-    let connect: () -> Void
-    @ViewBuilder let content: Content
-
-    private var connectionSymbol: String {
-        if status.isConnected { return "checkmark.circle.fill" }
-        if status.isFailed { return "exclamationmark.triangle.fill" }
-        return status == .connecting ? "clock.fill" : "circle.dashed"
-    }
-
-    private var connectionWord: String {
-        if status.isConnected { return "Connected" }
-        if status.isFailed { return "The store refused it" }
-        return status == .connecting ? "Connecting" : "Not connected"
-    }
-
-    /// Yellow and not red for a refusal. Nothing was written, so nothing has to
-    /// be taken back, and red says irreversible everywhere in this app.
-    private var connectionColour: Color {
-        if status.isConnected { return Theme.green }
-        if status.isFailed || status == .connecting { return Theme.yellow }
-        return Theme.text2
-    }
-
-    /// The whole card below the header. It folds away once the store is
-    /// connected, because the key is entered once and covers every app on the
-    /// account: after the connection passes, the fields are four controls
-    /// nobody touches again, sitting above the store picker they pushed down.
-    private var open: Bool { state.credentialDetailsOpen(store) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-
-            if open {
-                VStack(alignment: .leading, spacing: 12) {
-                    content
-
-                    Button(action: toggleGuide) {
-                        HStack(spacing: 6) {
-                            Text(guideOpen ? "▼" : "▶").font(.system(size: 8))
-                            Text("Where do I get this?").font(.system(size: 12))
-                        }
-                        .foregroundStyle(Theme.accent)
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityValue(guideOpen ? "Expanded" : "Collapsed")
-
-                    if guideOpen { GuideBox(guide: guide) }
-
-                    VStack(alignment: .leading, spacing: 7) {
-                        // Prominent, and below the fields rather than after the
-                        // paragraph. Connecting is the reason this card exists,
-                        // until it succeeds nothing else in the app can reach a
-                        // store, and it was a quiet button sitting under forty
-                        // words of Keychain policy, which made the policy look
-                        // like the point and the action like a footnote.
-                        // Prominent until it passes. A connected store has
-                        // nothing left to ask for, so the button steps down.
-                        //
-                        // "Test connection" named the smaller half of what it
-                        // did. The button saves the key to the Keychain and then
-                        // calls the store with it, so a pass is a connection and
-                        // not a rehearsal of one. A developer reading "test"
-                        // reasonably waits for a Connect button that never was.
-                        let connected = if case .connected = status { true } else { false }
-                        let title = switch status {
-                        case .connecting: "Connecting…"
-                        case .connected: "Reconnect"
-                        default: "Connect to the store"
-                        }
-                        QuietButton(title: title, glass: true, prominent: !connected,
-                                    action: connect)
-                            .disabled(status == .connecting)
-                        Text(keychainNote).font(.system(size: 11.5))
-                            .foregroundStyle(Theme.text2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if case .failed(let message) = status {
-                            WarningNote(message)
-                        } else if case .connected(let message) = status {
-                            Text(message).font(.system(size: 11.5))
-                                .foregroundStyle(Theme.green)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 14)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-        .animation(.snappy(duration: 0.18), value: open)
-    }
-
-    /// The row that stays whatever the card is doing, and the control that
-    /// folds it.
-    ///
-    /// The whole row is the hit target rather than a lone chevron: this is a
-    /// disclosure, and macOS gives a disclosure its title bar. The status keeps
-    /// its four words, because they are the reason to open the card at all.
-    private var header: some View {
-        Button { state.toggleCredentialDetails(store) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Theme.text3)
-                    .rotationEffect(.degrees(open ? 90 : 0))
-                StoreMark(store: store, size: 18)
-                Text("\(store.storeName) credential")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                // What the fold hides. A folded card that says only
-                // "Connected" cannot answer "as which account", which is the
-                // one thing a second developer on the machine has to check.
-                if !open, !summary.isEmpty {
-                    Text(summary)
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.text2)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer(minLength: 6)
-                // Four states, four words, four glyphs. A refused key used to
-                // draw the same grey "Not connected" as a key nobody has tried
-                // yet, so the one state that needs the developer to act looked
-                // like the state they had not reached.
-                HStack(spacing: 5) {
-                    Image(systemName: connectionSymbol).font(.system(size: 11))
-                    Text(connectionWord).font(.system(size: 11.5)).fixedSize()
-                }
-                .foregroundStyle(connectionColour)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(store.storeName) credential")
-        .accessibilityValue(open ? "\(connectionWord), expanded" : "\(connectionWord), collapsed")
-        .accessibilityHint(open ? "Hide the credential" : "Show the credential")
-    }
-}
-
-private struct GuideBox: View {
-    let guide: GuideContent
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
-                HStack(alignment: .top, spacing: 9) {
-                    Text("\(index + 1)").foregroundStyle(Theme.text2)
-                    Text(step).fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.system(size: 12))
-                .lineSpacing(3)
-            }
-
-            HStack(alignment: .top, spacing: 9) {
-                Text("!").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.yellow)
-                Text(guide.warning)
-                    .font(.system(size: 12))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.yellow, lineWidth: 1))
-
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(guide.buttons) { item in
-                    Link(destination: item.url) { QuietButtonLabel(title: item.title) }
-                }
-            }
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 13)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-    }
-}
-
-private struct QuietButtonLabel: View {
-    let title: String
-    var body: some View {
-        Text(title)
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.text)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4)
-            .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-    }
-}
-
-private struct FileWell: View {
-    let name: String
-    let emptyName: String
-    let prompt: String
-    let choose: () -> Void
-    let accept: ([URL]) -> Bool
-    @State private var targeted = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Theme.field)
-                .overlay(RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-                .frame(width: 30, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name.isEmpty ? emptyName : name).font(.system(size: 12)).lineLimit(1)
-                HStack(spacing: 3) {
-                    Text(prompt).foregroundStyle(Theme.text2)
-                    Button("choose a file…", action: choose)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Theme.accent)
-                }
-                .font(.system(size: 11))
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(targeted ? Theme.field : Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(targeted ? Theme.accent : Theme.sep,
-                          style: StrokeStyle(lineWidth: targeted ? 1.5 : 1, dash: [3, 3])))
-        .dropDestination(for: URL.self) { urls, _ in
-            accept(urls)
-        } isTargeted: { targeted = $0 }
-    }
-}
-
-private struct EditableField: View {
-    let label: String
-    @Binding var value: String
-    let prompt: String
-    /// The length the store issues, where it issues a fixed one. Nil means the
-    /// field takes whatever the developer has.
-    var limit: Int?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
-            TextField(prompt, text: $value.limited(to: limit))
-                .textFieldStyle(.plain)
-                .font(Theme.mono(12))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-        }
     }
 }

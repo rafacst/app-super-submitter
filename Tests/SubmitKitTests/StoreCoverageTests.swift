@@ -291,6 +291,12 @@ enum AppleApplyEligibility {
 
 /// The app reads the refunds and issues none. A refund moves real money, so
 /// no code path here sends one.
+///
+/// Every endpoint that moves money back to a customer ends in one of the
+/// tokens below. The check used to ask instead whether a file mentioned
+/// `orders/` and `refund` anywhere at all, which the support lookup trips
+/// honestly: it reads an order, it reads the refundable quantity of a
+/// purchase, and it says in prose that the app issues no refund.
 @Test func noCodePathIssuesARefund() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
@@ -304,8 +310,15 @@ enum AppleApplyEligibility {
             contentsOf: root.appendingPathComponent("Sources").appendingPathComponent(path),
             encoding: .utf8)
         #expect(!text.contains(":refund"), "\(path) reaches the refund endpoint.")
-        #expect(!text.contains("orders/") || !text.contains("refund"),
-                "\(path) reaches the order refund endpoint.")
+        #expect(!text.contains("reviewrefund"),
+                "\(path) reaches the refund review endpoint.")
+        // The purchase writes that reach a paying customer, held to the same
+        // rule as the refunds beside them. `:cancel` is not on the list, and
+        // it cannot be: a recovery action legitimately cancels itself.
+        for call in [":revoke", ":defer", ":consume", ":acknowledge"] {
+            #expect(!text.contains(call),
+                    "\(path) reaches \(call.dropFirst()), which changes what a customer holds.")
+        }
     }
 }
 

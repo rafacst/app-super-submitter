@@ -111,6 +111,9 @@ public struct ActualState: Sendable, Equatable {
         /// apart with `betaAppLocalizationsRead`.
         public var betaAppLocalizations: [String: Manifest.Release.TestFlight.Localization] = [:]
         public var betaAppLocalizationsRead = false
+        /// The licence text that every external tester accepts. Nil means the
+        /// read failed; an empty string means Apple holds an empty agreement.
+        public var betaLicenseAgreement: String?
         /// The subscription grace period, in days, and its switch.
         public var gracePeriodDays: Int?
         public var gracePeriodOptIn: Bool?

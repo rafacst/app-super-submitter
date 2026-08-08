@@ -15,6 +15,11 @@ struct VitalsPanel: View {
     @State private var failures: [String] = []
     @State private var voided: [StoreVitalsClient.Voided] = []
     @State private var voidedError: String?
+    @State private var lookupQuery = ""
+    @State private var lookupProduct = ""
+    @State private var lookup: StoreVitalsClient.PurchaseLookup?
+    @State private var lookupBusy = false
+    @State private var lookupError: String?
 
     var body: some View {
         Section_("How the shipped app is doing", icon: "waveform.path.ecg",
@@ -42,7 +47,10 @@ struct VitalsPanel: View {
                 if !apple.isEmpty { metricBlock(.apple, apple) }
                 if !google.isEmpty { metricBlock(.google, google) }
 
-                if state.stores.contains(.google) { refundBlock }
+                if state.stores.contains(.google) {
+                    refundBlock
+                    lookupBlock
+                }
             }
             .storePanel(padding: 14)
         }
@@ -103,6 +111,80 @@ struct VitalsPanel: View {
         .padding(.top, 4)
     }
 
+    /// The other half of support. The refunds above say what Google already
+    /// took back; this says what one customer holds right now.
+    ///
+    /// One field takes whatever the ticket carried. An order id announces
+    /// itself with `GPA.`, so the panel needs no picker, and the product id
+    /// beside it is the one thing Google cannot infer: it puts the product in
+    /// the path of the one-time endpoint and in no other.
+    @ViewBuilder private var lookupBlock: some View {
+        Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Look an order or a purchase up")
+                .font(.system(size: 12, weight: .semibold))
+            Text("Paste what the customer sent: an order id, several of them, or a purchase token. This reads. It issues no refund and it cancels nothing.")
+                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                TextField("GPA.1234-5678-9012-34567, or a purchase token",
+                          text: $lookupQuery)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(11))
+                    .frame(maxWidth: 340)
+                TextField("Product id", text: $lookupProduct)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(11))
+                    .frame(width: 150)
+                QuietButton(title: lookupBusy ? "Reading…" : "Look it up") { runLookup() }
+                    .disabled(lookupBusy || state.googleActionPackage == nil
+                        || lookupQuery.trimmingCharacters(in: .whitespaces).isEmpty)
+                Spacer(minLength: 0)
+            }
+            Text("Leave the product id empty to read a token as a subscription. Fill it to read the token as a one-time purchase.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let lookupError { ErrorLine(text: lookupError) }
+            if let lookup {
+                ForEach(lookup.notes, id: \.self) { note in
+                    Label(note, systemImage: "info.circle")
+                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if lookup.blocks.isEmpty, lookup.notes.isEmpty {
+                    Text("Google answered nothing for that. Check the id, and check that it belongs to this app.")
+                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(lookup.blocks) { block in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(block.title).font(.system(size: 11.5, weight: .medium))
+                            .textSelection(.enabled)
+                        ForEach(block.rows) { row in
+                            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                                Text(row.name)
+                                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                                Spacer(minLength: 8)
+                                if let detail = row.detail {
+                                    Text(detail).font(.system(size: 10.5))
+                                        .foregroundStyle(Theme.text3)
+                                        .multilineTextAlignment(.trailing)
+                                }
+                                Text(row.value).font(Theme.mono(10.5))
+                                    .textSelection(.enabled)
+                                    .lineLimit(1).truncationMode(.middle)
+                                    .frame(maxWidth: 260, alignment: .trailing)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+
     private func load() {
         busy = true
         Task {
@@ -117,5 +199,12 @@ struct VitalsPanel: View {
 
     private func loadVoided() {
         track($busy, $voidedError) { voided = try await state.googleVoidedPurchases() }
+    }
+
+    private func runLookup() {
+        track($lookupBusy, $lookupError) {
+            lookup = try await state.googlePurchaseLookup(query: lookupQuery,
+                                                          productId: lookupProduct)
+        }
     }
 }
