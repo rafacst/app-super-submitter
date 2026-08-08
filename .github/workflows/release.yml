@@ -319,12 +319,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The download the website links to. Its name never changes, so
+          # releases/latest/download/SuperSubmitter.zip redirects to whatever
+          # the newest release holds and the link on the site never goes stale.
+          # It is a copy, not a rename: the appcast names the versioned zip
+          # above, and the update path is not worth touching for a URL. It is
+          # also made here rather than in dist/, because generate_appcast reads
+          # every zip in that folder and a second one would be a second item in
+          # the feed.
+          cp "dist/${{ steps.version.outputs.name }}.zip" \
+             "$RUNNER_TEMP/SuperSubmitter.zip"
           # generate_appcast folds HTML notes into the appcast itself, so the
           # update window needs no download. The notes ship as an asset anyway:
           # a Markdown notes file makes it emit a link to
           # releases/latest/download/ instead, and then the asset must be there.
           gh release create "${{ steps.version.outputs.tag }}" \
             "dist/${{ steps.version.outputs.name }}.zip" \
+            "$RUNNER_TEMP/SuperSubmitter.zip" \
             "dist/${{ steps.version.outputs.name }}.html" \
             dist/appcast.xml \
             --title "${{ steps.version.outputs.marketing }} (${{ steps.version.outputs.build }})" \
