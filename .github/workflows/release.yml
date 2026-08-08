@@ -58,7 +58,7 @@ jobs:
     needs: test
     runs-on: macos-26
     # The gate. Add a required reviewer to this environment and every run
-    # stops here until someone approves it. See RELEASING.html.
+    # stops here until someone approves it.
     environment: release
 
     steps:
