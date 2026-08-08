@@ -28,7 +28,7 @@ extension BuildFlow {
         guard canBuild, let project else { return }
         showBuildConfirmation = false
         failure = nil
-        logLines = []
+        clearLog()
         candidate = nil
         artifactOnly = false
         uploadProgress = 0
@@ -688,7 +688,7 @@ extension BuildFlow {
         run = UploadRun(platform: run.platform, linkedProjectID: project.id)
         candidate = nil
         appleArchiveInfo = nil
-        logLines = []
+        clearLog()
         failure = nil
         blocking = nil
         processingLabel = nil
@@ -712,7 +712,7 @@ extension BuildFlow {
         snapshot = PreflightSnapshot()
         candidate = nil
         appleArchiveInfo = nil
-        logLines = []
+        clearLog()
         failure = nil
         blocking = nil
         warnings = []
@@ -734,9 +734,46 @@ extension BuildFlow {
         return Redactor(literals: literals)
     }
 
+    /// Collects a line, and publishes at ten frames a second.
+    ///
+    /// `xcodebuild` prints several hundred lines a second. Appending each one
+    /// straight to `logLines` invalidated the view that many times a second,
+    /// and the window stopped answering while the log was open. The buffer is
+    /// not observed, so a line costs an array append until the flush.
+    ///
+    /// The flush is a `Task` and not a timer: it holds no reference when
+    /// nothing is running, so a finished build schedules nothing.
     func append(_ line: String) {
-        logLines.append(line)
-        if logLines.count > 2_000 { logLines.removeFirst(logLines.count - 2_000) }
+        logBuffer.append(line)
+        if logBuffer.count > Self.logLimit {
+            logBuffer.removeFirst(logBuffer.count - Self.logLimit)
+        }
+        scheduleLogFlush()
+    }
+
+    /// Drops the log and the flush waiting to publish it. Without the cancel,
+    /// a flush scheduled by the last line of the previous run would republish
+    /// that run's log a tenth of a second into this one.
+    func clearLog() {
+        logFlush?.cancel()
+        logFlush = nil
+        logBuffer = []
+        logLines = []
+    }
+
+    /// The flush that publishes the buffer, a tenth of a second from now.
+    ///
+    /// It doubles as the last flush of a run. A run that stops printing leaves
+    /// one scheduled, and it fires, so no separate "the build finished" flush
+    /// has to exist and be remembered at five call sites.
+    private func scheduleLogFlush() {
+        guard logFlush == nil else { return }
+        logFlush = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard let self, !Task.isCancelled else { return }
+            logFlush = nil
+            if logLines != logBuffer { logLines = logBuffer }
+        }
     }
 
     func record(preview: String) {
@@ -744,7 +781,9 @@ extension BuildFlow {
         append("$ \(preview)")
     }
 
-    var logText: String { logLines.joined(separator: "\n") }
+    /// Every line, for the pasteboard. `logLines` is what the box drew at
+    /// the last flush; the buffer is the whole run.
+    var logText: String { logBuffer.joined(separator: "\n") }
 
     var elapsed: String {
         guard let startedAt else { return "" }
