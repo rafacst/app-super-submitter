@@ -77,3 +77,33 @@ import Testing
         return (apple[deviceClass.rawValue] ?? []).map { ($0[0], $0[1]) }
     }
 }
+
+/// The Media tab draws a tile per device class, and the shape comes from the
+/// same catalog the upload reads.
+///
+/// One box for every class put a 1440 by 900 desktop screenshot in a portrait
+/// card and left ninety points of air under it.
+struct DeviceShapeTests {
+    @Test func aDesktopScreenIsWideAndAPhoneScreenIsTall() {
+        #expect(AssetInspector.aspectRatio(for: .desktop) > 1)
+        #expect(AssetInspector.aspectRatio(for: .tv) > 1)
+        #expect(AssetInspector.aspectRatio(for: .vision) > 1)
+        #expect(AssetInspector.aspectRatio(for: .phone) < 1)
+        #expect(AssetInspector.aspectRatio(for: .tablet10) < 1)
+        // The watch is nearly square, and it is still taller than it is wide.
+        let watch = AssetInspector.aspectRatio(for: .watch)
+        #expect(watch < 1 && watch > 0.7)
+    }
+
+    /// 1280 x 800 is the size Apple documents for a Mac screenshot.
+    @Test func theDesktopShapeIsTheSizeAppleAsksFor() {
+        #expect(abs(AssetInspector.aspectRatio(for: .desktop) - 1_280.0 / 800.0) < 0.001)
+    }
+
+    /// The small Android tablet has no Apple size of its own, so it falls back
+    /// on a portrait shape rather than a square or a divide by zero.
+    @Test func theSmallTabletFallsBackToAPortraitShape() {
+        let tablet7 = AssetInspector.aspectRatio(for: .tablet7)
+        #expect(tablet7 > 0 && tablet7 < 1)
+    }
+}

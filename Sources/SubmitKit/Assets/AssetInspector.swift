@@ -174,6 +174,20 @@ public enum AssetInspector {
         return result
     }()
 
+    /// The shape of one device class's screen, width over height.
+    ///
+    /// It comes out of the same catalog the upload reads, so a tile can never
+    /// draw a shape the app would refuse to accept. A hand-written copy here
+    /// is what this file has already been burned by twice.
+    ///
+    /// The small Android tablet has no Apple size of its own, so it takes the
+    /// portrait shape Google asks for.
+    public static func aspectRatio(for deviceClass: Manifest.DeviceClass) -> Double {
+        guard let size = (try? appleSizes())?[deviceClass.rawValue]?.first,
+              size.count == 2, size[1] != 0 else { return 0.6 }
+        return Double(size[0]) / Double(size[1])
+    }
+
     /// The Google `imageType`. Google sorts by device class, so this needs no
     /// dimensions. Spec section 6.3.
     public static func googleImageType(for deviceClass: Manifest.DeviceClass) -> String? {
