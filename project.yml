@@ -23,6 +23,9 @@ packages:
   PostHog:
     url: https://github.com/PostHog/posthog-ios.git
     from: 3.59.3
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle.git
+    from: 2.9.0
 targets:
   SubmitKit:
     type: framework
@@ -59,15 +62,27 @@ targets:
       - target: SubmitKit
       - package: PostHog
         product: PostHog
+      - package: Sparkle
+        product: Sparkle
     entitlements:
       path: SuperSubmitter.entitlements
-    # The build number is the commit count. Without this every build carries
-    # CURRENT_PROJECT_VERSION, so two builds a week apart both read as build 1
-    # and About cannot tell a tester which one they are running. Runs before
-    # the code signature, so the stamped bundle is the signed one.
+    # The build number is the commit count, the same formula the release
+    # workflow uses. Without this a local build stays at CURRENT_PROJECT_VERSION
+    # and Sparkle reads it as older than every published release, so "Check for
+    # updates" offers the version you already have. Runs before the code
+    # signature, so the stamped bundle is the signed one.
     postBuildScripts:
       - name: Stamp the build number from git
         basedOnDependencyAnalysis: false
+        # The ordering edge, and the whole reason this phase works. Being last
+        # in the phase list buys nothing: the build system schedules a script
+        # with no declared inputs whenever it likes, and on an incremental
+        # build it put this one before the Info.plist was processed. The stamp
+        # landed and was then overwritten, so every incremental build carried
+        # CFBundleVersion 1 while a clean build carried the commit count.
+        # Naming the processed plist as an input forces it to exist first.
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         script: |
           set -euo pipefail
           cd "$SRCROOT"
@@ -80,11 +95,11 @@ targets:
           esac
           plutil -replace CFBundleVersion -string "$BUILD" \
             "$TARGET_BUILD_DIR/$INFOPLIST_PATH"
-    # The INFOPLIST_KEY_ build settings only carry the keys Apple knows, and
-    # the four SS keys below are this app's own. So the app writes a real
-    # Info.plist. XcodeGen generates it from this block, and Xcode expands the
-    # $() at build time, so a build can still override a value on the command
-    # line.
+    # Sparkle reads SUFeedURL and SUPublicEDKey out of the bundle, the four SS
+    # keys below are this app's own, and the INFOPLIST_KEY_ build settings only
+    # carry the keys Apple knows. So the app writes a real Info.plist. XcodeGen
+    # generates it from this block, and Xcode expands the $() at build time, so
+    # a build can still override a value on the command line.
     info:
       path: Supporting/Info.plist
       properties:
@@ -101,6 +116,19 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: Copyright © 2026 Rafa CST
         NSPrincipalClass: NSApplication
+        # The feed the app polls. GitHub keeps /releases/latest/download/<name>
+        # pointing at the newest release, so this URL never changes.
+        #
+        # It is inside every bundle that ships, and a shipped bundle polls this
+        # address forever. Renaming or deleting the repository strands every
+        # install on the version it has, with no way to tell it where to look:
+        # that is exactly what happened to the previous repository. Treat the
+        # owner and the name as permanent.
+        SUFeedURL: https://github.com/rafacst/app-super-submitter/releases/latest/download/appcast.xml
+        # The public half of the EdDSA pair. The private half is in the login
+        # keychain under the service https://sparkle-project.org, and it cannot
+        # be recovered if it is lost. RELEASING.md says how both are used.
+        SUPublicEDKey: Tz2ycxl8EBhbHB1DwRx24yiGi0wIZvbOMeyrWncwOGI=
         # The licensing service and the key that verifies its entitlement
         # documents. A build without them refuses every store write, which is
         # the safe answer.
