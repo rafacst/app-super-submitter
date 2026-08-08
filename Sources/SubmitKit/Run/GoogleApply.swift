@@ -47,21 +47,18 @@ extension Runner {
         try await api.google("PATCH", try editPath("/details"), body: body)
     }
 
+    /// The Data safety declaration, from a CSV that Play Console exported.
+    ///
+    /// This used to build a CSV out of four `question_id` values that the app
+    /// made up. Google owns those ids and publishes them in the export, so a
+    /// body built from invented ones could only be refused. Nothing is sent
+    /// without the real file now, and the validator asks for it.
     func googleDataSafety() async throws {
-        if let path = manifest.review?.dataSafetyCSV, !path.isEmpty {
-            guard let url = resolve(path) else {
-                throw RunError.uploadFailed("The Data safety CSV \(path) could not be read.")
-            }
-            let safetyLabels = try String(contentsOf: url, encoding: .utf8)
-            try await api.google("POST", "\(googleBase)/dataSafety",
-                                 body: ["safetyLabels": safetyLabels])
-            return
+        guard let path = manifest.review?.dataSafetyCSV, !path.isEmpty else { return }
+        guard let url = resolve(path) else {
+            throw RunError.uploadFailed("The Data safety CSV \(path) could not be read.")
         }
-        guard let answers = manifest.review?.dataSafetyAnswers, !answers.isEmpty else { return }
-        let rows = answers.sorted(by: { $0.key < $1.key }).map {
-            "\(Self.csv($0.key)),\($0.value ? "TRUE" : "FALSE")"
-        }
-        let safetyLabels = (["question_id,answer"] + rows).joined(separator: "\n")
+        let safetyLabels = try String(contentsOf: url, encoding: .utf8)
         try await api.google("POST", "\(googleBase)/dataSafety",
                              body: ["safetyLabels": safetyLabels])
     }
@@ -378,11 +375,6 @@ extension Runner {
 
     private static func contentType(for url: URL) -> String {
         url.pathExtension.lowercased() == "png" ? "image/png" : "image/jpeg"
-    }
-
-    private static func csv(_ value: String) -> String {
-        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
-        return escaped.contains(",") || escaped.contains("\n") ? "\"\(escaped)\"" : escaped
     }
 
     /// The Google tax block, or nil when the manifest names nothing. An

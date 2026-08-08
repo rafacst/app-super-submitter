@@ -32,6 +32,11 @@ public struct ActualState: Sendable, Equatable {
         /// because a live version is not a version the app may write to. The
         /// validator needs it to demand a higher number in the manifest.
         public var liveVersionString: String?
+        /// Every category id App Store Connect accepts, parents and children.
+        /// Apple owns this list and changes it, so the app checks a manifest
+        /// category against this read and never against a list of its own.
+        /// Empty means the read never reached it, and nothing is checked.
+        public var appCategoryIDs: Set<String> = []
         public var primaryCategory: String?
         public var secondaryCategory: String?
         public var infoLocales: [String: InfoLocale] = [:]

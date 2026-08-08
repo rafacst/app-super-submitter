@@ -377,7 +377,9 @@ private func googleCatalogManifest(active: Bool? = nil,
 
 @Test func theDataSafetyRowSaysThatNoReadExists() throws {
     var manifest = googleManifest()
-    manifest.review = Manifest.Review(dataSafetyAnswers: ["collectsLocation": true])
+    // The CSV is the only thing that plans this step. Google owns the question
+    // ids, so an answer map the app filled in plans nothing.
+    manifest.review = Manifest.Review(dataSafetyCSV: "safety.csv")
 
     let result = Planner.plan(Planner.Input(manifest: manifest, actual: ActualState(),
                                             stores: [.google]))

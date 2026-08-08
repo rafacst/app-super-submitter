@@ -76,6 +76,30 @@ public struct StateReader: Sendable {
         // Review info tab showed two empty boxes on an app that has both, and
         // the console checklist reported "the API reports no primary
         // category" for the same reason.
+        // The ids Apple accepts. A category the manifest names and Apple does
+        // not have fails the apply the way an invented age rating field did,
+        // so the plan checks it against this and stops before any write.
+        //
+        // Every page, because a short list here would call a real category
+        // invented and block a release over it. A page that fails leaves the
+        // set empty, and an empty set judges nothing.
+        var categoryPath: String? = "/v1/appCategories?limit=200"
+        var seenPages: Set<String> = []
+        while let current = categoryPath, seenPages.insert(current).inserted,
+              result.appCategoryIDs.count < 1_000 {
+            guard let page = try? await api.apple("GET", current) else {
+                result.appCategoryIDs = []
+                break
+            }
+            let payload = JSON(data: page.data)
+            for item in payload["data"].array {
+                guard let id = item["id"].string else { continue }
+                result.appCategoryIDs.insert(id)
+            }
+            categoryPath = payload["links"]["next"].string
+                .flatMap(StoreDiagnostics.appleNextPath)
+        }
+
         let infos = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/appInfos?limit=200"
                 + "&include=primaryCategory,secondaryCategory").data)
