@@ -8,9 +8,20 @@
 .DS_Store
 .super-submitter/
 
-# The PostHog project token is a real credential. `.env.example` carries the
-# variable names; the values never enter the repository.
+# The PostHog project token is a real credential, and the names of the
+# variables around it are nobody's business either. Both files stay local.
 .env
+.env.example
+
+# Working folders that describe the product rather than build it. They stay on
+# the machine that writes them; the public tree shows the app and nothing else.
+.claude/
+.design-notes/
+
+# The release runbook is built from RELEASING.html. Publishing the rendering
+# beside its source puts a 226 KB binary in a tree of source files, and GitHub
+# cannot show it anyway.
+RELEASING.pdf
 
 # Icon Composer writes these from super-submitter-icon.icon on every export.
 super-submitter-icon Exports/
