@@ -71,13 +71,17 @@ public enum Planner {
             }
         }
 
-        if manifest.release?.apple?.releaseType != nil {
+        // A version this run creates carries Apple's default, and the read saw
+        // no version at all, so a created version always writes this once.
+        if let releaseType = manifest.release?.apple?.releaseType,
+           actual?.versionId == nil || releaseType.rawValue != actual?.releaseType {
             steps.append(PlanStep(
                 id: "apple.versionAttributes", system: .apple, kind: .change,
                 summary: "When it goes on sale: \(Self.appleReleaseLabel(manifest))",
                 title: "Write the release type",
                 requests: [RequestSketch("PATCH", "/v1/appStoreVersions/{id}")],
-                operation: .appleVersionAttributes))
+                operation: .appleVersionAttributes,
+                comparison: actual == nil ? .unverified : .verified))
         }
 
         // 3. The categories.
@@ -225,16 +229,23 @@ public enum Planner {
             }
         }
 
-        // 10. The age rating.
-        if manifest.review?.ageRatingAnswers?.isEmpty == false
-            || manifest.review?.kidsAgeBand?.isEmpty == false {
-            let answerCount = manifest.review?.ageRatingAnswers?.count ?? 0
+        // 10. The age rating. An app that already carries the rating it wants
+        // writes nothing, because every answer here matches the store.
+        let ageRating = appleAgeRatingChanges(manifest.review, actual)
+        let bandDiffers = manifest.review?.kidsAgeBand.map {
+            !$0.isEmpty && AgeRatingAnswer.text($0) != actual?.ageRating["kidsAgeBand"]
+        } ?? false
+        if !ageRating.write.isEmpty || bandDiffers {
+            let count = ageRating.write.count + (bandDiffers ? 1 : 0)
             steps.append(PlanStep(
                 id: "apple.ageRating", system: .apple, kind: .change,
-                summary: "Age rating: \(answerCount) \(answerCount == 1 ? "answer" : "answers")",
+                summary: "Age rating: \(count) \(count == 1 ? "answer" : "answers") "
+                    + (ageRating.write.keys.sorted() + (bandDiffers ? ["kidsAgeBand"] : []))
+                        .joined(separator: ", "),
                 title: "Write the age rating answers",
                 requests: [RequestSketch("PATCH", "/v1/ageRatingDeclarations/{id}")],
-                operation: .appleAgeRating))
+                operation: .appleAgeRating,
+                comparison: actual == nil ? .unverified : .verified))
         }
 
         // 11. The purchases. The per-product read carries the names, the
@@ -469,9 +480,11 @@ public enum Planner {
         }
 
         // The beta review contact. Apple keeps one per app, and the values come
-        // from `review`, so the step appears whenever TestFlight does and the
-        // review block holds something to write.
-        if input.manifest.review != nil {
+        // from `review`. The condition was `review != nil`, so an empty review
+        // block wrote the contact on every apply and blanked what Apple held.
+        // No read covers this resource, so "keep" here means the manifest has
+        // to name a value before anything is sent.
+        if input.manifest.review?.hasBetaReviewContact == true {
             steps.append(PlanStep(
                 id: "apple.betaReviewDetail", system: .apple, kind: .change,
                 summary: "TestFlight  the beta review contact",
@@ -964,6 +977,35 @@ public enum Planner {
     ///
     /// An attachment has no readable counterpart, so a manifest that names one
     /// always lists it and the upload repeats.
+    /// The age rating fields to write, and the ones Apple does not have.
+    ///
+    /// One definition for the plan, the run, the validator, and the sheet. An
+    /// answer that matches the store is not a change, so an app that already
+    /// carries its rating writes nothing and keeps what it has.
+    ///
+    /// A key the read never returned is a key Apple has no attribute for, and
+    /// sending one fails the whole apply with a 409. The read decides, so a
+    /// field Apple adds needs no release here.
+    public static func appleAgeRatingChanges(
+        _ review: Manifest.Review?, _ actual: ActualState.Apple?
+    ) -> (write: [String: AgeRatingAnswer], unknown: [String]) {
+        let wanted = review?.ageRatingAnswers ?? [:]
+        guard !wanted.isEmpty else { return ([:], []) }
+        // With no read there is nothing to compare against and nothing to
+        // check a name against, so the apply writes nothing.
+        let held = actual?.ageRating ?? [:]
+        guard !held.isEmpty else { return ([:], []) }
+
+        var write: [String: AgeRatingAnswer] = [:]
+        var unknown: [String] = []
+        for (key, value) in wanted {
+            guard let current = held[key] else { unknown.append(key); continue }
+            guard current != value else { continue }
+            write[key] = value
+        }
+        return (write, unknown.sorted())
+    }
+
     static func appleReviewDetailChanges(_ review: Manifest.Review,
                                          _ actual: ActualState.Apple?) -> [String] {
         var changes: [String] = []

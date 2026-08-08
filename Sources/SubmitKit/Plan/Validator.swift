@@ -26,7 +26,31 @@ public enum Validator {
     }
 
     static func review(_ input: Planner.Input) -> [Finding] {
-        guard input.stores.contains(.google) else { return [] }
+        var result = ageRating(input)
+        guard input.stores.contains(.google) else { return result }
+        result += googleDataSafety(input)
+        return result
+    }
+
+    /// An age rating answer whose field App Store Connect does not have.
+    ///
+    /// A warning and not an error. The apply no longer sends the key, so it
+    /// cannot fail on it, and blocking a release over a line that already does
+    /// nothing would help nobody. The developer still has to hear that the
+    /// answer they typed declares nothing.
+    static func ageRating(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple) else { return [] }
+        let unknown = Planner.appleAgeRatingChanges(
+            input.manifest.review, input.actual.apple).unknown
+        return unknown.map { key in
+            Finding(
+                id: "review.ageRating.\(key)", severity: .warning,
+                message: "\(key) is not an age rating field in App Store Connect, so this answer declares nothing and no apply sends it. Open Review info · Age rating, which lists the fields Apple has, and remove this one.",
+                location: "Review Info · Age rating", fix: .reviewInfo)
+        }
+    }
+
+    static func googleDataSafety(_ input: Planner.Input) -> [Finding] {
         if let path = input.manifest.review?.dataSafetyCSV, !path.isEmpty,
            Planner.resolve(path, root: input.root) == nil {
             return [Finding(

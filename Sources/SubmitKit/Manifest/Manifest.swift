@@ -1009,6 +1009,62 @@ extension Manifest {
 
 // MARK: - review (tab 6)
 
+/// One answer on Apple's age rating questionnaire.
+///
+/// Apple owns the field list and the shape of each value. Most fields take an
+/// enum string, a few take a flag, and Apple has changed both. Nothing here
+/// names a field or a value, so the app carries no copy of a questionnaire
+/// that is not its own to define. The names come from the store read, and an
+/// answer the read does not know is never sent.
+///
+/// This replaced a `[String: Bool]` map filled from five invented keys.
+/// `user_generated_content` is not an App Store Connect attribute, and every
+/// apply died on it with a 409.
+public enum AgeRatingAnswer: Codable, Sendable, Equatable, Hashable {
+    case text(String)
+    case flag(Bool)
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(Bool.self) {
+            self = .flag(value)
+        } else {
+            self = .text(try container.decode(String.self))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .text(let value): try container.encode(value)
+        case .flag(let value): try container.encode(value)
+        }
+    }
+
+    /// The value as a request body carries it.
+    public var body: Any {
+        switch self {
+        case .text(let value): value
+        case .flag(let value): value
+        }
+    }
+
+    /// The value as a person reads it.
+    public var display: String {
+        switch self {
+        case .text(let value): value
+        case .flag(let value): value ? "Yes" : "No"
+        }
+    }
+
+    /// What the store answered, whatever shape it used.
+    public init?(_ json: JSON) {
+        if let value = json.bool { self = .flag(value) }
+        else if let value = json.string { self = .text(value) }
+        else { return nil }
+    }
+}
+
 extension Manifest {
     /// The demo account user name and password are **not** here. They live in
     /// the Keychain. A manifest sits in a repository. Spec section 9.5.
@@ -1021,7 +1077,16 @@ extension Manifest {
         public var notes: String?
         public var applePrimaryCategory: String?
         public var appleSecondaryCategory: String?
-        public var ageRatingAnswers: [String: Bool]?
+        /// Whether this block names anything the beta review contact wants.
+        /// An empty review block used to blank Apple's copy on every apply.
+        public var hasBetaReviewContact: Bool {
+            [contactFirstName, contactLastName, contactEmail, contactPhone, notes]
+                .contains { $0?.isEmpty == false } || demoAccountRequired != nil
+        }
+
+        /// Only the answers you changed. Everything absent here keeps whatever
+        /// App Store Connect already holds.
+        public var ageRatingAnswers: [String: AgeRatingAnswer]?
         public var dataSafetyAnswers: [String: Bool]?
         /// A current Data safety CSV exported from Play Console. Google owns
         /// this evolving format, so this exact file takes precedence over the
@@ -1040,7 +1105,7 @@ extension Manifest {
                     demoAccountRequired: Bool? = nil, notes: String? = nil,
                     applePrimaryCategory: String? = nil,
                     appleSecondaryCategory: String? = nil,
-                    ageRatingAnswers: [String: Bool]? = nil,
+                    ageRatingAnswers: [String: AgeRatingAnswer]? = nil,
                     dataSafetyAnswers: [String: Bool]? = nil,
                     dataSafetyCSV: String? = nil,
                     usesNonExemptEncryption: Bool? = nil,

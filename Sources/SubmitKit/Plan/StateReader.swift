@@ -106,6 +106,14 @@ public struct StateReader: Sendable {
             let ageRating = JSON(data: try await api.apple(
                 "GET", "/v1/appInfos/\(infoID)/ageRatingDeclaration").data)
             result.ageRatingDeclarationId = ageRating["data"]["id"].string
+            // Apple's own answer names every field it has. The app hardcodes
+            // none of them, so a questionnaire change on Apple's side arrives
+            // here without a release.
+            let attributes = ageRating["data"]["attributes"]
+            for key in attributes.keys {
+                guard let value = AgeRatingAnswer(attributes[key]) else { continue }
+                result.ageRating[key] = value
+            }
         }
 
         // One platform's versions. An app that ships on iOS and macOS holds a
@@ -163,6 +171,7 @@ public struct StateReader: Sendable {
             result.versionString = version["attributes"]["versionString"].string
             result.versionState = version["attributes"]["appVersionState"].string
                 ?? version["attributes"]["appStoreState"].string
+            result.releaseType = version["attributes"]["releaseType"].string
             result.attachedBuildId = version["relationships"]["build"]["data"]["id"].string
 
             if let versionID {

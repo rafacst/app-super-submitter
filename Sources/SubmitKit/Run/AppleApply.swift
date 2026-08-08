@@ -715,10 +715,20 @@ extension Runner {
         }
     }
 
+    /// Writes only the age rating answers that differ from the store, and only
+    /// the fields the store read returned.
+    ///
+    /// Everything the manifest does not name keeps whatever App Store Connect
+    /// already holds. An app that is only shipping new release notes writes
+    /// nothing here.
     func appleAgeRating() async throws {
         guard let id = actual.apple?.ageRatingDeclarationId else { return }
-        var attributes: [String: Any] = manifest.review?.ageRatingAnswers ?? [:]
-        if let band = manifest.review?.kidsAgeBand { attributes["kidsAgeBand"] = band }
+        let changes = Planner.appleAgeRatingChanges(manifest.review, actual.apple)
+        var attributes: [String: Any] = changes.write.mapValues(\.body)
+        if let band = manifest.review?.kidsAgeBand, !band.isEmpty,
+           AgeRatingAnswer.text(band) != actual.apple?.ageRating["kidsAgeBand"] {
+            attributes["kidsAgeBand"] = band
+        }
         guard !attributes.isEmpty else { return }
         try await api.apple("PATCH", "/v1/ageRatingDeclarations/\(id)", body: [
             "data": ["type": "ageRatingDeclarations", "id": id, "attributes": attributes],

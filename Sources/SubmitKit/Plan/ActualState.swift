@@ -24,6 +24,10 @@ public struct ActualState: Sendable, Equatable {
         /// `PREPARE_FOR_SUBMISSION`, `WAITING_FOR_REVIEW`, and the rest.
         /// Spec section 10.6 blocks a metadata write outside the first one.
         public var versionState: String?
+        /// How the version goes on sale once Apple approves it. The plan
+        /// compares against this, so a manifest that names the type the store
+        /// already carries writes nothing.
+        public var releaseType: String?
         /// The version the customers see. It never equals `versionString`,
         /// because a live version is not a version the app may write to. The
         /// validator needs it to demand a higher number in the manifest.
@@ -71,6 +75,12 @@ public struct ActualState: Sendable, Equatable {
         public var reviewDemoAccountRequired: Bool?
         public var reviewNotes: String?
         public var ageRatingDeclarationId: String?
+        /// Every age rating field App Store Connect holds, with its current
+        /// value. Apple owns this questionnaire, so this read is the only
+        /// place the app learns the field names. A manifest answer whose key
+        /// is missing here is a key Apple does not have, and no apply sends
+        /// one. Empty means the read never reached the declaration.
+        public var ageRating: [String: AgeRatingAnswer] = [:]
         public var purchaseIds: Set<String> = []
         public var subscriptionIds: Set<String> = []
         /// Every paid product that Apple holds, keyed by the product id. The

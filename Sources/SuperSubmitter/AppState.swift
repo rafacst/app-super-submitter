@@ -1633,22 +1633,73 @@ final class AppState {
 
     func reviewAnswerBinding(group: String, key: String) -> Binding<Bool> {
         Binding(get: {
-            if group == "age" { return self.manifest.review?.ageRatingAnswers?[key] ?? false }
-            return self.manifest.review?.dataSafetyAnswers?[key] ?? false
+            self.manifest.review?.dataSafetyAnswers?[key] ?? false
         }, set: { value in
             var review = self.manifest.review ?? Manifest.Review()
-            if group == "age" {
-                var answers = review.ageRatingAnswers ?? [:]
-                answers[key] = value
-                review.ageRatingAnswers = answers
-            } else {
-                var answers = review.dataSafetyAnswers ?? [:]
-                answers[key] = value
-                review.dataSafetyAnswers = answers
-            }
+            var answers = review.dataSafetyAnswers ?? [:]
+            answers[key] = value
+            review.dataSafetyAnswers = answers
             self.manifest.review = review
             self.saveManifestReportingErrors()
         })
+    }
+
+    /// One row of Apple's age rating questionnaire.
+    ///
+    /// `held` is what App Store Connect answered and it decides the control.
+    /// The app names no field and no value, so a questionnaire Apple changes
+    /// arrives through the read.
+    struct AgeRatingField: Sendable, Equatable {
+        let key: String
+        let held: AgeRatingAnswer
+        let wanted: AgeRatingAnswer
+        var changed: Bool { wanted != held }
+    }
+
+    /// Every age rating field the store read returned, with the value that the
+    /// next apply would send. Empty until the stores are read.
+    var ageRatingFields: [AgeRatingField] {
+        let held = actualState.apple?.ageRating ?? [:]
+        let wanted = manifest.review?.ageRatingAnswers ?? [:]
+        return held.keys.sorted().map { key in
+            AgeRatingField(key: key, held: held[key]!, wanted: wanted[key] ?? held[key]!)
+        }
+    }
+
+    /// Answers whose field App Store Connect does not have. They declare
+    /// nothing and no apply sends them.
+    var unknownAgeRatingKeys: [String] {
+        Planner.appleAgeRatingChanges(manifest.review, actualState.apple).unknown
+    }
+
+    func removeUnknownAgeRatingKeys() {
+        guard var review = manifest.review, var answers = review.ageRatingAnswers else { return }
+        for key in unknownAgeRatingKeys { answers[key] = nil }
+        review.ageRatingAnswers = answers.isEmpty ? nil : answers
+        manifest.review = review
+        saveManifestReportingErrors()
+    }
+
+    func ageRatingFlagBinding(_ field: AgeRatingField) -> Binding<Bool> {
+        Binding(get: {
+            if case .flag(let value) = field.wanted { return value }
+            return false
+        }, set: { self.setAgeRating(field, .flag($0)) })
+    }
+
+    func ageRatingTextBinding(_ field: AgeRatingField) -> Binding<String> {
+        Binding(get: { field.wanted.display }, set: { self.setAgeRating(field, .text($0)) })
+    }
+
+    /// Writes the answer, or drops it when it matches the store again. A
+    /// manifest that carries no answer is a manifest that keeps what Apple has.
+    private func setAgeRating(_ field: AgeRatingField, _ value: AgeRatingAnswer) {
+        var review = manifest.review ?? Manifest.Review()
+        var answers = review.ageRatingAnswers ?? [:]
+        if value == field.held { answers[field.key] = nil } else { answers[field.key] = value }
+        review.ageRatingAnswers = answers.isEmpty ? nil : answers
+        manifest.review = review
+        saveManifestReportingErrors()
     }
 
     var encryptionBinding: Binding<Bool> {

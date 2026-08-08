@@ -242,27 +242,75 @@ private struct ActionRow: View {
     }
 }
 
+/// Apple's age rating questionnaire, as App Store Connect reports it.
+///
+/// This listed five invented keys and sent them as attribute names. Apple has
+/// no `user_generated_content` attribute, so it refused the whole request and
+/// every apply died at that step. Nothing here names a field now. The rows are
+/// what the store read returned, and a row you do not touch is never sent.
 private struct AgeRatingSheet: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
-    private let questions = [
-        ("violence", "Violence"), ("sexual_content", "Sexual content"),
-        ("profanity", "Profanity or crude humor"), ("gambling", "Gambling"),
-        ("user_generated_content", "User-generated content")
-    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Age rating").font(.title2.weight(.semibold))
-            Text("Enable every content type present anywhere in the app.")
-                .foregroundStyle(Theme.text2)
-            ForEach(questions, id: \.0) { key, title in
-                Toggle(title, isOn: state.reviewAnswerBinding(group: "age", key: key))
+            if state.ageRatingFields.isEmpty {
+                Text("Read the stores to load the questionnaire. Apple owns these fields, so the app asks App Store Connect for them instead of keeping its own list.")
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("App Store Connect holds the value on the right. Change a row to write it on the next apply. Everything you leave alone stays as it is.")
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(state.ageRatingFields, id: \.key) { field in
+                            AgeRatingRow(field: field)
+                        }
+                    }
+                }.frame(maxHeight: 380)
             }
             HStack {
+                // The only way to clear a key from an older manifest. The
+                // rows above list Apple's fields, so a key Apple never had
+                // appears nowhere else and could not be removed here.
+                if !state.unknownAgeRatingKeys.isEmpty {
+                    QuietButton(title: "Remove \(state.unknownAgeRatingKeys.count) field(s) Apple does not have") {
+                        state.removeUnknownAgeRatingKeys()
+                    }
+                }
                 Spacer()
                 Button("Done", action: dismiss.callAsFunction).keyboardShortcut(.defaultAction)
             }
-        }.padding(24).frame(width: 430)
+        }.padding(24).frame(width: 520)
+    }
+}
+
+private struct AgeRatingRow: View {
+    @Environment(AppState.self) private var state
+    let field: AppState.AgeRatingField
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(field.key)
+                .font(.system(size: 11.5, design: .monospaced))
+                .frame(width: 250, alignment: .leading)
+            switch field.held {
+            case .flag:
+                Toggle("", isOn: state.ageRatingFlagBinding(field))
+                    .labelsHidden()
+            case .text:
+                TextField("", text: state.ageRatingTextBinding(field))
+                    .frame(width: 170)
+            }
+            if field.changed {
+                Text("changed").font(.system(size: 10)).foregroundStyle(Theme.yellow)
+            } else {
+                Text("keeps").font(.system(size: 10)).foregroundStyle(Theme.text3)
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 
