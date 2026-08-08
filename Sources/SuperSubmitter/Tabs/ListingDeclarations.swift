@@ -27,11 +27,12 @@ struct ListingDeclarations: View {
                 if state.stores.contains(.apple) {
                     LabeledField("Primary", note: "Apple") {
                         ChoiceField(value: state.reviewBinding(.applePrimaryCategory),
-                                    choices: StoreValues.appleCategories, emptyLabel: "Pick a category")
+                                    choices: state.appleCategoryChoices,
+                                    emptyLabel: "Pick a category")
                     }
                     LabeledField("Secondary", note: "Apple, optional") {
                         ChoiceField(value: state.reviewBinding(.appleSecondaryCategory),
-                                    choices: StoreValues.appleCategories, emptyLabel: "None")
+                                    choices: state.appleCategoryChoices, emptyLabel: "None")
                     }
                 }
             }.storePanel()
@@ -314,23 +315,29 @@ private struct AgeRatingRow: View {
     }
 }
 
+/// The Data safety declaration.
+///
+/// This offered four toggles whose `question_id` values the app invented.
+/// Google publishes the ids in its own export and refuses anything else, so
+/// the toggles could never declare anything. The CSV is the only real path,
+/// and it is the only one here now.
 private struct DataSafetySheet: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
-    private let questions = [
-        ("collects_personal_data", "Collects personal data"),
-        ("shares_personal_data", "Shares personal data with third parties"),
-        ("data_encrypted_in_transit", "Data is encrypted in transit"),
-        ("supports_data_deletion", "Users can request data deletion")
-    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Google data safety").font(.title2.weight(.semibold))
-            Text("For production, export the current CSV from Play Console and select it here. The file is sent unchanged because Google controls its columns and question IDs.")
+            Text("Export the current CSV from Play Console and select it here. The file is sent unchanged, because Google owns its columns and its question ids. Without the file, nothing is written and Play Console keeps the declaration it has.")
                 .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
             TextField("Data safety CSV path", text: state.reviewMetadataBinding("dataSafetyCSV"))
-            ForEach(questions, id: \.0) { key, title in
-                Toggle(title, isOn: state.reviewAnswerBinding(group: "safety", key: key))
+            if !state.staleDataSafetyAnswers.isEmpty {
+                Text("This manifest carries \(state.staleDataSafetyAnswers.count) older answers that used question ids Google does not publish. They are never sent.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+                QuietButton(title: "Remove them") { state.removeDataSafetyAnswers() }
             }
             HStack {
                 Link("Open Play Console ↗",

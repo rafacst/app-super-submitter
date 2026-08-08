@@ -26,10 +26,32 @@ public enum Validator {
     }
 
     static func review(_ input: Planner.Input) -> [Finding] {
-        var result = ageRating(input)
+        var result = ageRating(input) + appleCategories(input)
         guard input.stores.contains(.google) else { return result }
         result += googleDataSafety(input)
         return result
+    }
+
+    /// A category id App Store Connect does not have.
+    ///
+    /// An error, unlike the age rating twin, because this value is sent. Apple
+    /// refuses it and the apply dies partway through, with the earlier writes
+    /// already in the draft. Catching it in the plan costs nothing.
+    ///
+    /// It checks only against a list the read actually returned. With no read
+    /// the app knows nothing about Apple's categories and says nothing.
+    static func appleCategories(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple),
+              let known = input.actual.apple?.appCategoryIDs, !known.isEmpty else { return [] }
+        let named = [("primary", input.manifest.review?.applePrimaryCategory),
+                     ("secondary", input.manifest.review?.appleSecondaryCategory)]
+        return named.compactMap { label, value in
+            guard let value, !value.isEmpty, !known.contains(value) else { return nil }
+            return Finding(
+                id: "review.category.\(value)", severity: .error,
+                message: "\(value) is not an App Store category. Apple refuses it and the apply stops partway. Pick one from the list in the Review info tab, which now comes from App Store Connect.",
+                location: "Review Info · Category", fix: .reviewInfo)
+        }
     }
 
     /// An age rating answer whose field App Store Connect does not have.
@@ -62,7 +84,7 @@ public enum Validator {
            input.manifest.review?.dataSafetyAnswers?.isEmpty == false {
             return [Finding(
                 id: "review.dataSafetyCSV.recommended", severity: .warning,
-                message: "Use a current CSV exported from Play Console for a complete Data safety declaration. Google's question template changes over time.",
+                message: "These data safety answers use question ids that Google does not publish, so nothing is sent for them. Export the current Data safety CSV from Play Console and select it here.",
                 location: "Review Info · Google data safety", fix: .reviewInfo)]
         }
         return []
