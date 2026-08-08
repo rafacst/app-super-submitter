@@ -145,6 +145,12 @@ extension AppState {
         eventTask?.cancel()
         eventTask = nil
         runner = nil
+        // The failure belonged to the run this plan replaces. Its step index
+        // points into the old step list, so the panel named no step at all and
+        // Retry from the failed step would have started at whatever now sits
+        // at that number.
+        runFailure = nil
+        providerFailure = nil
         plan = result
         actualState = actual
         storeSnapshot.merge(actual)
