@@ -113,7 +113,6 @@ public enum Validator {
             if let supported = input.actual.apple?.infoLocales.keys, !supported.isEmpty,
                stores.contains(.apple), input.actual.apple?.versionId != nil,
                !supported.contains(code), listing.locales.count > 1,
-               input.actual.apple?.infoLocales.isEmpty == false,
                !Self.appleLocales.contains(code) {
                 result.append(Finding(
                     id: "text.\(code).unsupported", severity: .warning,

@@ -263,6 +263,9 @@ private final class LineCollector: @unchecked Sendable {
     /// A build log can reach hundreds of megabytes. The retained text is
     /// bounded; the streamed lines are not.
     private let limit = 512 * 1_024
+    /// The bytes the limit already threw away, per stream. `text` says so,
+    /// because a tail that starts mid-line reads like a whole log.
+    private var dropped: [ToolStream: Int] = [:]
 
     init(redactor: Redactor, onLine: @escaping @Sendable (ToolStream, String) -> Void) {
         self.redactor = redactor
@@ -274,14 +277,18 @@ private final class LineCollector: @unchecked Sendable {
         let chunk = String(decoding: data, as: UTF8.self)
         var emit: [String] = []
         lock.withLock {
-            var buffer = (partial[stream] ?? "") + chunk
-            while let index = buffer.firstIndex(of: "\n") {
-                let line = redactor.redact(String(buffer[..<index]))
+            let buffer = (partial[stream] ?? "") + chunk
+            // The cursor walks the buffer once. Rebuilding the buffer per
+            // line copied the whole remainder every time, which a chunk of
+            // ten thousand short lines pays for ten thousand times.
+            var start = buffer.startIndex
+            while let index = buffer[start...].firstIndex(of: "\n") {
+                let line = redactor.redact(String(buffer[start..<index]))
                 emit.append(line)
                 append(line, to: stream)
-                buffer = String(buffer[buffer.index(after: index)...])
+                start = buffer.index(after: index)
             }
-            partial[stream] = buffer
+            partial[stream] = String(buffer[start...])
         }
         for line in emit { onLine(stream, line) }
     }
@@ -300,12 +307,32 @@ private final class LineCollector: @unchecked Sendable {
     }
 
     func text(_ stream: ToolStream) -> String {
-        lock.withLock { full[stream] ?? "" }
+        lock.withLock {
+            let value = full[stream] ?? ""
+            guard let bytes = dropped[stream] else { return value }
+            return "[\(bytes / 1_024) KB of earlier output dropped. "
+                + "This is the tail of the log.]\n" + value
+        }
     }
 
     private func append(_ line: String, to stream: ToolStream) {
-        var value = (full[stream] ?? "") + line + "\n"
-        if value.count > limit { value = String(value.suffix(limit)) }
+        // `removeValue` hands back the only reference to the buffer, so the
+        // two appends run in place. Read it through the subscript and the
+        // dictionary still holds a copy, which makes every line copy the
+        // whole buffer.
+        var value = full.removeValue(forKey: stream) ?? ""
+        value += line
+        value += "\n"
+        // `utf8.count` is the stored byte count. `count` walks the string to
+        // find the grapheme breaks, which is the same cost as the trim.
+        if value.utf8.count > limit {
+            // Down to three quarters, so the trim runs once per 128 KB and
+            // not once per line from here on. The head goes, because a tool
+            // reports its failure last.
+            let keep = limit * 3 / 4
+            dropped[stream, default: 0] += value.utf8.count - keep
+            value = String(decoding: Array(value.utf8.suffix(keep)), as: UTF8.self)
+        }
         full[stream] = value
     }
 }

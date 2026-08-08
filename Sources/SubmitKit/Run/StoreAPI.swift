@@ -255,17 +255,25 @@ public actor StoreAPI {
     /// response, and the app slows down under 10 percent of it.
     private func readRateLimits(system: PlanSystem, headers: [String: String]) {
         var usedFraction: Double?
-        if let value = headers["x-rate-limit"] {
-            let fields = Self.semicolonFields(value)
-            if let limit = fields["user-hour-lim"], let remaining = fields["user-hour-rem"],
-               limit > 0 {
-                usedFraction = 1 - Double(remaining) / Double(limit)
+        // Each system reports its budget in its own header, so each one reads
+        // only its own. Read both and the second silently wins the first.
+        switch system {
+        case .apple:
+            if let value = headers["x-rate-limit"] {
+                let fields = Self.semicolonFields(value)
+                if let limit = fields["user-hour-lim"], let remaining = fields["user-hour-rem"],
+                   limit > 0 {
+                    usedFraction = 1 - Double(remaining) / Double(limit)
+                }
             }
-        }
-        if let usage = headers["revenuecat-rate-limit-current-usage"].flatMap(Int.init),
-           let limit = headers["revenuecat-rate-limit-current-limit"].flatMap(Int.init),
-           limit > 0 {
-            usedFraction = Double(usage) / Double(limit)
+        case .provider:
+            if let usage = headers["revenuecat-rate-limit-current-usage"].flatMap(Int.init),
+               let limit = headers["revenuecat-rate-limit-current-limit"].flatMap(Int.init),
+               limit > 0 {
+                usedFraction = Double(usage) / Double(limit)
+            }
+        case .google:
+            break
         }
         guard let usedFraction, usedFraction > 0.9 else { return }
         nextAllowed[system] = Date().addingTimeInterval(1)
@@ -285,8 +293,11 @@ public actor StoreAPI {
         if let appleToken, appleToken.expires > Date().addingTimeInterval(60) {
             return appleToken.value
         }
-        let token = try AppleJWT.make(credential: credential)
-        appleToken = (token, Date().addingTimeInterval(15 * 60))
+        // One instant for both, so the cached expiry cannot outlast the `exp`
+        // the token carries.
+        let now = Date()
+        let token = try AppleJWT.make(credential: credential, now: now)
+        appleToken = (token, now + AppleJWT.lifetime)
         return token
     }
 
@@ -329,15 +340,13 @@ public actor StoreAPI {
         guard let url = URL(string: credential.tokenURI) else {
             throw ConnectionError.invalidTokenURL
         }
-        var components = URLComponents()
-        components.queryItems = [
-            URLQueryItem(name: "grant_type", value: "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            URLQueryItem(name: "assertion", value: assertion),
-        ]
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data((components.percentEncodedQuery ?? "").utf8)
+        request.httpBody = FormBody.encoded([
+            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+            ("assertion", assertion),
+        ])
         let result = try await perform(request, system: .google, path: "/token",
                                        retryOverride: true)
         let payload = try JSONDecoder().decode(GoogleToken.self, from: result.data)
