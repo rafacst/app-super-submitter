@@ -315,7 +315,10 @@
           "type": "string"
         },
         "ageRatingAnswers": {
-          "$ref": "#/$defs/answers"
+          "type": "object",
+          "additionalProperties": {
+            "type": ["boolean", "string"]
+          }
         },
         "dataSafetyAnswers": {
           "$ref": "#/$defs/answers"
