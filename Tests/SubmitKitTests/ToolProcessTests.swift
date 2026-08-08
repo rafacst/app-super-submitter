@@ -166,6 +166,21 @@ final class FakeToolRunner: ToolRunning, @unchecked Sendable {
     #expect(outcome.succeeded)
 }
 
+@Test func anOversizeLogKeepsTheTailAndSaysThatItDroppedTheHead() async throws {
+    // `seq` prints about 1.2 MB, over the 512 KB the collector retains.
+    let outcome = try await ToolProcess().run(
+        ToolInvocation(executable: URL(fileURLWithPath: "/usr/bin/seq"),
+                       arguments: ["1", "200000"], phase: "test"),
+        onLine: { _, _ in })
+
+    #expect(outcome.succeeded)
+    // The tail survives, the head does not, and the text says which.
+    #expect(outcome.standardOutput.hasSuffix("\n200000\n"))
+    #expect(outcome.standardOutput.contains("KB of earlier output dropped"))
+    #expect(!outcome.standardOutput.contains("\n1000\n"))
+    #expect(outcome.standardOutput.utf8.count < 600 * 1_024)
+}
+
 /// Collects streamed lines across the reader threads.
 private final class LineSink: @unchecked Sendable {
     private let lock = NSLock()

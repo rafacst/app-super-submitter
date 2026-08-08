@@ -289,8 +289,13 @@ public actor Runner {
     /// deletes its own on any failure and on any cancellation. Spec 7.4.
     func cleanUpGoogleEdit() async {
         guard let editID = googleEditID, !googleCommitted, !dryRun else { return }
-        _ = try? await api.google("DELETE", "\(googleBase)/edits/\(editID)")
-        googleEditID = nil
+        // The id survives a failed delete, so a later `undo()` can try again.
+        // The recorder already logged the failure. Google expires the edit
+        // either way, and a second delete of a gone edit is harmless.
+        do {
+            try await api.google("DELETE", "\(googleBase)/edits/\(editID)")
+            googleEditID = nil
+        } catch {}
         await log?.close()
     }
 

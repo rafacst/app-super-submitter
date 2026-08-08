@@ -340,15 +340,13 @@ public struct StoreConnectionClient: Sendable {
         guard let url = URL(string: credential.tokenURI) else {
             throw ConnectionError.invalidTokenURL
         }
-        var components = URLComponents()
-        components.queryItems = [
-            URLQueryItem(name: "grant_type", value: "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            URLQueryItem(name: "assertion", value: assertion),
-        ]
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data((components.percentEncodedQuery ?? "").utf8)
+        request.httpBody = FormBody.encoded([
+            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+            ("assertion", assertion),
+        ])
         let (data, response) = try await session.data(for: request)
         try Self.requireSuccess(response, data: data)
         return try JSONDecoder().decode(GoogleTokenResponse.self, from: data).accessToken
@@ -457,13 +455,18 @@ public enum ConnectionError: Error, LocalizedError {
 /// Shared with `StoreAPI`. Both the read clients and the runner sign the same
 /// way, so the signing code exists once.
 enum AppleJWT {
+    /// How long a token this app signs stays good for. Apple refuses anything
+    /// over 20 minutes. A cache that holds a token reads this and never its
+    /// own copy of the number, because a second copy drifts.
+    static let lifetime: TimeInterval = 15 * 60
+
     static func make(credential: AppleCredential, now: Date = Date()) throws -> String {
         let header: [String: Any] = ["alg": "ES256", "kid": credential.keyID, "typ": "JWT"]
         let issued = Int(now.timeIntervalSince1970)
         let payload: [String: Any] = [
             "iss": credential.issuerID,
             "iat": issued,
-            "exp": issued + 15 * 60,
+            "exp": issued + Int(Self.lifetime),
             "aud": "appstoreconnect-v1",
         ]
         let signingInput = try JWT.signingInput(header: header, payload: payload)
@@ -475,6 +478,27 @@ enum AppleJWT {
         }
         let signature = try key.signature(for: Data(signingInput.utf8))
         return "\(signingInput).\(signature.rawRepresentation.base64URL)"
+    }
+}
+
+/// An `application/x-www-form-urlencoded` body.
+///
+/// `URLComponents.percentEncodedQuery` writes a query, not a form body: it
+/// leaves `+` alone, and a form reader takes a `+` for a space. Today every
+/// value here is a base64url token or a fixed URN, so nothing breaks. This
+/// keeps it that way for the next field somebody adds.
+enum FormBody {
+    /// RFC 3986 unreserved. Everything else takes a percent escape, which a
+    /// form reader decodes back to the exact bytes.
+    private static let unreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+
+    static func encoded(_ fields: [(String, String)]) -> Data {
+        Data(fields.map { "\(escape($0.0))=\(escape($0.1))" }.joined(separator: "&").utf8)
+    }
+
+    private static func escape(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: unreserved) ?? value
     }
 }
 
