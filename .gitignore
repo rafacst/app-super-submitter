@@ -15,6 +15,11 @@
 # Icon Composer writes these from super-submitter-icon.icon on every export.
 super-submitter-icon Exports/
 
+# The 6,084-page App Store Connect API mirror under docs/ is a local-only
+# reference corpus fetched from sosumi.ai. It regenerates on demand; it does
+# not belong in history.
+docs/
+
 # The release workflow builds into this.
 dist/
 
