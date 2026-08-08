@@ -130,6 +130,12 @@ struct AccountTab: View {
                           foreground: state.isPaid ? Theme.green : Theme.text2,
                           background: state.isPaid ? Theme.greenBg : Theme.sep2)
             }
+            if let problem = state.entitlementProblem {
+                // Above `billingMessage`, and worded as the fault it is. This
+                // is the only state in the app where the plan reads Free and
+                // the card may already have been charged.
+                WarningNote("This Mac could not confirm your access. \(problem) Your payment is not lost. Press Restore access, and report this if it stays.")
+            }
             if let message = state.billingMessage {
                 WarningNote(message)
             }
