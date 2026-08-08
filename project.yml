@@ -127,7 +127,9 @@ targets:
         SUFeedURL: https://github.com/rafacst/app-super-submitter/releases/latest/download/appcast.xml
         # The public half of the EdDSA pair. The private half is in the login
         # keychain under the service https://sparkle-project.org, and it cannot
-        # be recovered if it is lost. RELEASING.html says how both are used.
+        # be recovered if it is lost. Never generate a second pair: the app
+        # trusts this key alone, and every installed copy would refuse every
+        # update signed by another one.
         SUPublicEDKey: Tz2ycxl8EBhbHB1DwRx24yiGi0wIZvbOMeyrWncwOGI=
         # The licensing service and the key that verifies its entitlement
         # documents. A build without them refuses every store write, which is
