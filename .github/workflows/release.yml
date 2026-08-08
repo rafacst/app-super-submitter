@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      notes:
+        description: "One line of release notes. Blank uses the commit subjects."
+        required: false
+        default: ""
 
 # One release at a time. Two pushes close together must not race for one tag.
 concurrency:
@@ -261,15 +266,26 @@ jobs:
       # name. Sparkle loads it into a web view, and GitHub renders a plain
       # list in a release body, so one file serves both.
       - name: Write the release notes
+        env:
+          # Only a hand-started run can set this. A push says what its commits
+          # say, because that is the only thing it knows.
+          NOTES: ${{ inputs.notes }}
         run: |
           set -euo pipefail
-          PREV=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+          # These notes are read twice: once on the release page, and once
+          # inside the update window of every copy already installed. Commit
+          # subjects are the right default and the wrong thing for a release
+          # whose real news is not a list of chores.
+          escape() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
           {
             echo "<ul>"
-            git log ${PREV:+$PREV..HEAD} --no-merges --max-count=50 \
-              --pretty=format:'%s' \
-              | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
-                    -e 's|.*|<li>&</li>|'
+            if [ -n "${NOTES:-}" ]; then
+              printf '%s\n' "$NOTES" | escape | sed -e 's|.*|<li>&</li>|'
+            else
+              PREV=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+              git log ${PREV:+$PREV..HEAD} --no-merges --max-count=50 \
+                --pretty=format:'%s' | escape | sed -e 's|.*|<li>&</li>|'
+            fi
             echo "</ul>"
           } > "dist/${{ steps.version.outputs.name }}.html"
           cat "dist/${{ steps.version.outputs.name }}.html"
