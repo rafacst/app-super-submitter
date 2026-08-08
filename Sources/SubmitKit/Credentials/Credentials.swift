@@ -150,6 +150,24 @@ public enum KeychainCredentials {
         return try JSONDecoder().decode(type, from: data)
     }
 
+    /// Removes the whole vault item, and with it every credential the app
+    /// holds. Nothing else in the Keychain is touched: the item is found by
+    /// this service and this account, and both belong to Super Submitter.
+    public static func deleteEverything() throws {
+        try lock.withLock {
+            let status = SecItemDelete([
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: vaultAccount,
+            ] as CFDictionary)
+            // Nothing stored is the state this asks for, not a failure.
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw KeychainError(status)
+            }
+            cache = nil
+        }
+    }
+
     public static func delete(kind: CredentialKind, account: String) throws {
         try lock.withLock {
             var vault = try readVault()

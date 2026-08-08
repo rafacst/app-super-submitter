@@ -84,6 +84,57 @@ struct SettingsPanel: View {
         case .workspace: workspace
         case .files: files
         case .provider: provider
+        case .nuclear: nuclear
+        }
+    }
+
+    /// Start over. Everything the app holds, gone, and back to onboarding.
+    ///
+    /// Two confirmations and not one. The first is the ordinary destructive
+    /// dialog, which people dismiss by reflex; the second names what goes and
+    /// cannot be answered by reflex, because the buttons say different things.
+    /// Nothing here reaches outside the app: the store listings, the developer
+    /// accounts, and every `store.yaml` on disk are untouched, and the panel
+    /// says so before the first click.
+    private var nuclear: some View {
+        @Bindable var state = state
+        return VStack(alignment: .leading, spacing: 13) {
+            SettingRow("Start over", alignment: .top) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Erase everything Super Submitter knows and return to the first-run screen.")
+                        .font(.system(size: 12))
+                        .frame(width: Self.controlWidth, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Note("This forgets every linked app, every store key in your Keychain, your account, and all run data. It does not touch a store.yaml on your disk, your projects, your developer accounts, or anything already published. Those stay exactly as they are.")
+                    Button("Erase everything") { state.nuclearFirstConfirm = true }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.red)
+                        .controlSize(.large)
+                }
+            }
+        }
+        // First gate: the ordinary destructive dialog.
+        .confirmationDialog("Erase everything Super Submitter knows?",
+                            isPresented: $state.nuclearFirstConfirm,
+                            titleVisibility: .visible) {
+            Button("Continue", role: .destructive) { state.nuclearSecondConfirm = true }
+            Button("Cancel", role: .cancel) { state.nuclearFirstConfirm = false }
+        } message: {
+            Text("Every linked app, every store key, your account and all run data. Your files and your store listings are not touched.")
+        }
+        // Second gate. The destructive button says what it does rather than
+        // "OK", so the reflex that cleared the first dialog does not clear
+        // this one too.
+        .confirmationDialog("This cannot be undone.",
+                            isPresented: $state.nuclearSecondConfirm,
+                            titleVisibility: .visible) {
+            Button("Erase everything and start over", role: .destructive) {
+                state.eraseEverything()
+                dismiss()
+            }
+            Button("Keep my data", role: .cancel) { state.nuclearSecondConfirm = false }
+        } message: {
+            Text("Super Submitter restarts at the first-run screen with nothing in it.")
         }
     }
 
@@ -271,7 +322,7 @@ struct SettingsPanel: View {
 /// label on the tin, which the sidebar opens at its foot. Both were buried two
 /// levels down, behind a sheet and under a tab strip.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case workspace, files, provider
+    case workspace, files, provider, nuclear
 
     var id: String { rawValue }
 
@@ -280,6 +331,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .workspace: "Workspace"
         case .files: "Files"
         case .provider: "Provider"
+        case .nuclear: "Nuclear"
         }
     }
 
@@ -288,6 +340,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .workspace: "macwindow"
         case .files: "folder"
         case .provider: "creditcard"
+        case .nuclear: "exclamationmark.octagon"
         }
     }
 }
