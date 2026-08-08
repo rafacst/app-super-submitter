@@ -25,15 +25,19 @@ struct RootView: View {
         // Without this the panel starts below the traffic lights instead of
         // carrying them, and the shell reads as a bar above a panel.
         .ignoresSafeArea(.container, edges: .top)
-        .sheet(isPresented: $state.showSettings) { SettingsPanel() }
-        .sheet(isPresented: $state.showAbout) { AboutPanel() }
+        // Every sheet carries the message alert. See AppMessage: an alert on
+        // this view alone cannot appear while a sheet covers it.
+        .sheet(isPresented: $state.showSettings) { SettingsPanel().appMessage() }
+        .sheet(isPresented: $state.showAbout) { AboutPanel().appMessage() }
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
-            OnboardingPanel()
+            OnboardingPanel().appMessage()
         }
-        .sheet(isPresented: $state.showExistingAppImport) { ExistingAppImportSheet() }
-        .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store) }
-        .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet() }
-        .sheet(isPresented: $state.showFieldSearch) { FieldSearchSheet() }
+        .sheet(isPresented: $state.showExistingAppImport) {
+            ExistingAppImportSheet().appMessage()
+        }
+        .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store).appMessage() }
+        .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet().appMessage() }
+        .sheet(isPresented: $state.showFieldSearch) { FieldSearchSheet().appMessage() }
         .confirmationDialog("Remove \(state.removalName) from Super Submitter?",
                             isPresented: Binding(
                                 get: { state.appPendingRemoval != nil },
@@ -44,14 +48,7 @@ struct RootView: View {
         } message: {
             Text("Super Submitter forgets this app. The store.yaml file, the store keys in your Keychain, and both store listings stay as they are.")
         }
-        .alert("Super Submitter", isPresented: Binding(
-            get: { state.errorMessage != nil },
-            set: { if !$0 { state.errorMessage = nil } }
-        )) {
-            Button("OK") { state.errorMessage = nil }
-        } message: {
-            Text(state.errorMessage ?? "")
-        }
+        .appMessage()
         // Coming back from the browser lands here, and so does waking from
         // sleep. The refresh is what unlocks the app after a checkout; the
         // browser return itself proves nothing.
@@ -623,4 +620,34 @@ private struct LocalePicker: View {
             .help("Add a language")
         }
     }
+}
+
+/// The one message channel, presented wherever the user is actually looking.
+///
+/// `errorMessage` had a single presenter, on the root view. A sheet covers the
+/// root, so an action taken inside Settings set the message and SwiftUI held
+/// the alert back until that sheet closed. "Delete old run data" read as a
+/// dead button, and its answer turned up minutes later attached to nothing the
+/// user was doing. Nine sheets sit over this view, and every action taken from
+/// inside one of them had the same fault.
+///
+/// So each sheet carries this too. Only one presentation is frontmost, that
+/// one answers, and clearing the message means the root's copy never fires.
+struct AppMessage: ViewModifier {
+    @Environment(AppState.self) private var state
+
+    func body(content: Content) -> some View {
+        content.alert("Super Submitter", isPresented: Binding(
+            get: { state.errorMessage != nil },
+            set: { if !$0 { state.errorMessage = nil } }
+        )) {
+            Button("OK") { state.errorMessage = nil }
+        } message: {
+            Text(state.errorMessage ?? "")
+        }
+    }
+}
+
+extension View {
+    func appMessage() -> some View { modifier(AppMessage()) }
 }

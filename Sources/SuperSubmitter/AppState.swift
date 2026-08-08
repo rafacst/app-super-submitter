@@ -107,6 +107,10 @@ final class AppState {
     var linkedApps: [LinkedAppRecord] = []
     var errorMessage: String?
 
+    // The two gates in front of Settings ▸ Nuclear. See `eraseEverything()`.
+    var nuclearFirstConfirm = false
+    var nuclearSecondConfirm = false
+
     // Undo. See AppStateUndo.swift.
     /// The stack for `store.yaml`. The app owns it rather than the window,
     /// because every field writes the manifest as it is typed, so the manifest
@@ -2044,6 +2048,76 @@ final class AppState {
             .isEmpty == false
         dryRun = hasRun ? false : (defaults.object(forKey: "dryRunByDefault")
             as? Bool ?? true)
+    }
+
+    /// Settings ▸ Nuclear. Everything the app holds, gone, back to first run.
+    ///
+    /// The boundary is the point of this feature, so it is drawn explicitly.
+    /// What goes is what Super Submitter created: its defaults, its Keychain
+    /// vault, its Application Support folder, and the list of apps it linked.
+    /// What stays is everything that was not ours to delete: every
+    /// `store.yaml` where the developer keeps it, their projects, their
+    /// accounts at Apple and Google, and anything already published. Removing
+    /// a linked app has always worked this way; this does it for all of them
+    /// at once.
+    ///
+    /// Two gates in front of it, and neither is this function's job. It is
+    /// only ever called from the second one.
+    /// `storage` is a parameter so a test can point the deletion at a
+    /// temporary folder. Called without one, it is the real app folder, which
+    /// is what the button in Settings wants and what a test must never touch.
+    func eraseEverything(storage: BuildStorage = BuildStorage()) {
+        nuclearFirstConfirm = false
+        nuclearSecondConfirm = false
+
+        // Stop anything in flight first. A run that is mid-upload holds the
+        // storage folder this is about to remove.
+        resetRunState()
+        resetUndo()
+
+        // The account keeps its entitlement in the same vault, so it is
+        // cleared first and the vault goes second, both in one task so the
+        // order holds. The other way round, `forget()` writes an empty vault
+        // back and the nuclear option leaves a Keychain item behind.
+        //
+        // One delete for the credentials, never a per-store loop: a store the
+        // user connected and then deselected still has a key in there, and a
+        // loop over the selected stores would walk straight past it.
+        let controller = accessController
+        Task.detached {
+            await controller?.forget()
+            do { try KeychainCredentials.deleteEverything() }
+            catch {
+                let reason = error.localizedDescription
+                await MainActor.run {
+                    self.errorMessage = "The Keychain refused to clear: \(reason)"
+                }
+            }
+        }
+
+        // The app-owned folder. Nothing inside it is the developer's: archives
+        // this app made, logs it wrote, and the workspaces of managed apps.
+        try? FileManager.default.removeItem(at: storage.root)
+
+        // Every default this app writes, including the ones the views own
+        // through @AppStorage. It walks the suite in use rather than removing
+        // a domain by bundle identifier: a screenshot or demo run points at a
+        // suite of its own, and clearing the domain would clear the real one
+        // and leave the throwaway suite full. `removeObject` only reaches this
+        // app's own values, so a global key read through here is left alone.
+        for key in defaults.dictionaryRepresentation().keys {
+            defaults.removeObject(forKey: key)
+        }
+
+        // Now the memory, so nothing writes a cleared key back on the way out.
+        linkedApps = []
+        manifest = Manifest()
+        manifestURL = nil
+
+        // Back to the first-run screen, which is where a new install starts.
+        showEntryScreen = true
+        showSettings = false
+        showOnboarding = true
     }
 
     func resetRunState() {
