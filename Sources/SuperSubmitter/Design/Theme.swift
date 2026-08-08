@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The design tokens, one for one with the mockup.
@@ -126,7 +127,23 @@ enum Theme {
     /// on the tab below it, so the screen named itself more quietly than it
     /// said anything else.
     static let headerHeight: CGFloat = 64
-    static let hairline: CGFloat = 0.5
+    /// One device pixel, on whatever display is drawing.
+    ///
+    /// This was the constant 0.5, which is exactly one pixel on a Retina
+    /// screen and half of one on every other. Half a pixel has no pixel to
+    /// land on, so the stroke antialiased into whichever neighbour the layout
+    /// rounded toward: a card drew its border on the sides where the rounding
+    /// went its way and drew nothing on the rest, and a rule disappeared
+    /// outright. It looked like a bug in the cards. It was one number.
+    ///
+    /// Every border, rule and stroke in the app reads this, so the fix lands
+    /// in all of them at once.
+    ///
+    /// ponytail: reads the key window's screen when asked. A window dragged
+    /// from a Retina display to a 1x one corrects on the next redraw rather
+    /// than the instant it crosses. Move to @Environment(\.displayScale) if
+    /// that ever shows.
+    static var hairline: CGFloat { 1 / (NSScreen.main?.backingScaleFactor ?? 2) }
 
     /// The content is the window surface, and the sidebar is a panel floating
     /// on it. The gap is the separator, so no rule runs between the two.
