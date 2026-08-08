@@ -105,7 +105,7 @@ struct SettingsPanel: View {
                         .font(.system(size: 12))
                         .frame(width: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Note("This forgets every linked app, every store key in your Keychain, your account, and all run data. It does not touch a store.yaml on your disk, your projects, your developer accounts, or anything already published. Those stay exactly as they are.")
+                    Note("This forgets every linked app, every key and password you entered, your account, and the archives, logs and settings Super Submitter wrote. It deletes no store.yaml anywhere, including the one a managed app keeps here. Your projects, your developer accounts, and everything already published are untouched.")
                     Button("Erase everything") { state.nuclearFirstConfirm = true }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.red)
@@ -120,7 +120,7 @@ struct SettingsPanel: View {
             Button("Continue", role: .destructive) { state.nuclearSecondConfirm = true }
             Button("Cancel", role: .cancel) { state.nuclearFirstConfirm = false }
         } message: {
-            Text("Every linked app, every store key, your account and all run data. Your files and your store listings are not touched.")
+            Text("Every linked app, every key you entered, your account, and the data Super Submitter wrote. No store.yaml is deleted, and nothing on the stores changes.")
         }
         // Second gate. The destructive button says what it does rather than
         // "OK", so the reflex that cleared the first dialog does not clear
