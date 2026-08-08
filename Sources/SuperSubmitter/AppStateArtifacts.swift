@@ -106,6 +106,31 @@ extension AppState {
                 })
     }
 
+    /// The Google Groups that may install one closed track.
+    ///
+    /// Google replaces the whole list on every write and takes group email
+    /// addresses only: the single-tester list stays in the Play Console. A
+    /// closed track with no group here reaches nobody, and until this field
+    /// existed the raw YAML editor was the only way to fill it.
+    func googleTestersBinding(track: String) -> Binding<String> {
+        Binding(get: {
+            (self.manifest.release?.google?.testers?[track] ?? []).joined(separator: ", ")
+        }, set: { value in
+            self.ensureGoogleRelease()
+            var all = self.manifest.release?.google?.testers ?? [:]
+            let list = Self.splitList(value)
+            // An empty list is not the same as no key. Google clears a track
+            // that names an empty list, and leaves one it never hears about.
+            if list.isEmpty, value.trimmingCharacters(in: .whitespaces).isEmpty {
+                all.removeValue(forKey: track)
+            } else {
+                all[track] = list
+            }
+            self.manifest.release?.google?.testers = all.isEmpty ? nil : all
+            self.saveManifestReportingErrors()
+        })
+    }
+
     // MARK: - The externally hosted APK
 
     var hasExternalApk: Bool { manifest.release?.google?.externalApk != nil }

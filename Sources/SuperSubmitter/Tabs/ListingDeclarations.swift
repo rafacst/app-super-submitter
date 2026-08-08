@@ -51,9 +51,15 @@ struct ListingDeclarations: View {
                     state.showDataSafety = true
                 }
                 Divider()
-                Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
-                    .font(.system(size: 12))
-                    .padding(.horizontal, 14).padding(.vertical, 11)
+                VStack(alignment: .leading, spacing: 9) {
+                    Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
+                        .font(.system(size: 12))
+                    // The toggle above is what creates the need for this, so
+                    // the paperwork appears with the answer that owes it and
+                    // stays out of the way of every app that does not.
+                    if state.encryptionBinding.wrappedValue { exportCompliance }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
                 Divider()
                 VStack(alignment: .leading, spacing: 9) {
                     LabeledField("Kids age band", note: "Apple, optional") {
@@ -68,6 +74,62 @@ struct ListingDeclarations: View {
             }.storePanel(padding: 0)
         }
     }
+}
+
+/// The export compliance declaration, beside the toggle that asks for it.
+///
+/// Apple attaches it to the build that ships, and it goes to the regulator's
+/// review, so the app writes what the developer answers and invents nothing.
+private struct ExportCompliance: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if state.hasEncryptionDeclaration {
+                HStack {
+                    Text("Export compliance").font(.system(size: 11.5, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Button(role: .destructive) { state.removeEncryptionDeclaration() } label: {
+                        Image(systemName: "trash")
+                    }
+                    .controlSize(.small)
+                }
+                ForEach(AppState.EncryptionFlag.allCases, id: \.self) { flag in
+                    Toggle(flag.label, isOn: state.encryptionFlagBinding(flag))
+                        .font(.system(size: 11.5))
+                }
+                LabeledField("Regulator code", note: "when Apple has issued one") {
+                    TextField("", text: state.encryptionTextBinding(.codeValue))
+                }
+                LabeledField("CCATS or ERN document") {
+                    PathField(path: state.encryptionTextBinding(.documentPath),
+                              problem: state.missingFileNote(
+                                for: state.encryptionTextBinding(.documentPath).wrappedValue)) {
+                        guard let url = state.chooseOneFile(
+                            allowedExtensions: ["pdf", "doc", "docx", "txt"]) else { return }
+                        state.encryptionTextBinding(.documentPath).wrappedValue =
+                            state.relativePath(for: url)
+                    }
+                }
+                Text("The run creates the declaration in the review state and uploads the document with it.")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("An app that uses non-exempt encryption and claims no exemption also owes Apple this declaration.")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Add the export declaration") { state.addEncryptionDeclaration() }
+                    .controlSize(.small)
+            }
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+    }
+}
+
+extension ListingDeclarations {
+    var exportCompliance: some View { ExportCompliance() }
 }
 
 /// The Console-only rows that the Details tab owns, from the **one** list that
