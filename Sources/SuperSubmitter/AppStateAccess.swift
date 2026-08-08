@@ -519,18 +519,30 @@ extension AppState {
         }
     }
 
+    /// The pill beside the plan name, or nil where the plan name is already
+    /// that word. A box that reads Free beside Free, or Active over Active,
+    /// says one thing twice and looks like two facts.
+    var statusLabel: String? {
+        let text = isPaid ? "Active" : "Free"
+        return text == planLabel ? nil : text
+    }
+
     var entitlementLabel: String {
         switch entitlement.status {
         case .free:
             return "No paid access. Editing, validation, builds, reads, plans, and dry runs are free."
         case .active:
+            // The pill beside this already reads Active, so this line never
+            // says it again. It carries what the pill cannot: the date, or
+            // the fact that there is no date.
             if entitlement.cancelAtPeriodEnd == true, let end = entitlement.currentPeriodEnd {
-                return "Active until \(end.formatted(date: .abbreviated, time: .omitted)). It does not renew."
+                return "It does not renew. Access ends on \(end.formatted(date: .abbreviated, time: .omitted))."
             }
-            if let end = entitlement.currentPeriodEnd, entitlement.plan != .lifetime {
-                return "Active. It renews on \(end.formatted(date: .abbreviated, time: .omitted))."
+            if entitlement.plan == .lifetime { return "It does not expire." }
+            if let end = entitlement.currentPeriodEnd {
+                return "It renews on \(end.formatted(date: .abbreviated, time: .omitted))."
             }
-            return "Active."
+            return ""
         case .grace:
             return "A payment did not go through. Access continues for now. Update the payment method."
         case .expired:
