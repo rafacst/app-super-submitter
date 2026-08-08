@@ -138,6 +138,10 @@ private final class VersionStubProtocol: URLProtocol, @unchecked Sendable {
 
         if method == "POST", path == "/v1/appStoreVersions" {
             body = #"{"data":{"id":"version-new","type":"appStoreVersions"}}"#
+        } else if path.hasSuffix("/appStoreReviewDetail"), method == "GET" {
+            // Apple copies the previous version's review detail onto the new
+            // one, so the created version already carries this id.
+            body = #"{"data":{"id":"review-new","type":"appStoreReviewDetails"}}"#
         } else if path.hasSuffix("/appStoreVersionLocalizations"), method == "GET" {
             // Apple pre-fills the new version, so the copied localization
             // carries a different id from the live one the read saw.
@@ -206,14 +210,15 @@ private func readAppleState() async throws -> ActualState.Apple {
     return try await StateReader(api: api).readApple(appID: "1234567890", versionName: "3.2.0")
 }
 
-private func stubbedRunner(plan: PlanResult, actual: ActualState) -> Runner {
+private func stubbedRunner(plan: PlanResult, actual: ActualState,
+                           manifest: Manifest = liveApp()) -> Runner {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [VersionStubProtocol.self]
     let credential = AppleCredential(
         keyID: "ABCD123456", issuerID: "issuer",
         privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation,
         fileName: "AuthKey_ABCD123456.p8")
-    return Runner(plan: plan, manifest: liveApp(), actual: actual, root: nil,
+    return Runner(plan: plan, manifest: manifest, actual: actual, root: nil,
                   credentials: StoreCredentials(apple: credential), dryRun: false,
                   access: GrantAll(),
                   session: URLSession(configuration: configuration), emit: { _ in })
@@ -256,6 +261,55 @@ struct AppleVersionCreationRunTests {
         #expect(VersionStubProtocol.log.all.contains {
             $0.method == "GET"
                 && $0.path == "/v1/appStoreVersions/version-new/appStoreVersionLocalizations"
+        })
+    }
+
+    /// The 409 that stopped a real update one step short of the submit.
+    ///
+    /// Apple copies a review detail onto a version this run creates, and the
+    /// read that seeded the id saw no version at all, so it carried none. The
+    /// apply POSTed a second detail and App Store Connect refused it: "The
+    /// given app version already has an existing review." A retry keeps the
+    /// runner and starts at the failed step, so it re-read nothing and failed
+    /// in exactly the same place, forever.
+    @Test func theReviewDetailIsPatchedOnAVersionTheReadNeverSaw() async throws {
+        VersionStubProtocol.log = CallLog()
+        var manifest = liveApp()
+        var review = Manifest.Review()
+        review.contactEmail = "someone@example.com"
+        review.notes = "Nothing special."
+        manifest.review = review
+
+        // The read found no writable version, so it carries no detail id.
+        let actual = liveState()
+        #expect(actual.apple?.reviewDetailId == nil)
+
+        var plan = PlanResult()
+        plan.steps = [
+            PlanStep(id: "apple.version", system: .apple, kind: .add, summary: "",
+                     title: "Create the version 3.2.0",
+                     requests: [RequestSketch("POST", "/v1/appStoreVersions")],
+                     operation: .appleEnsureVersion("3.2.0")),
+            PlanStep(id: "apple.review", system: .apple, kind: .add, summary: "",
+                     title: "Write the review details",
+                     requests: [RequestSketch("POST", "/v1/appStoreReviewDetails")],
+                     operation: .appleReviewDetails),
+        ]
+
+        let runner = stubbedRunner(plan: plan, actual: actual, manifest: manifest)
+        await runner.run()
+
+        // It asks the version it is writing, and patches what it finds.
+        #expect(VersionStubProtocol.log.all.contains {
+            $0.method == "GET"
+                && $0.path == "/v1/appStoreVersions/version-new/appStoreReviewDetail"
+        })
+        #expect(VersionStubProtocol.log.all.contains {
+            $0.method == "PATCH" && $0.path == "/v1/appStoreReviewDetails/review-new"
+        })
+        // The POST is what App Store Connect answered with a 409.
+        #expect(!VersionStubProtocol.log.all.contains {
+            $0.method == "POST" && $0.path == "/v1/appStoreReviewDetails"
         })
     }
 
