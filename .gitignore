@@ -18,9 +18,10 @@
 .claude/
 .design-notes/
 
-# The release runbook is built from RELEASING.html. Publishing the rendering
-# beside its source puts a 226 KB binary in a tree of source files, and GitHub
-# cannot show it anyway.
+# The release runbook and its rendering. It names the signing certificate, the
+# team, and the shape of every secret the workflow reads, which is a map of the
+# release for anybody who wants one. It stays on the machine that ships.
+RELEASING.html
 RELEASING.pdf
 
 # Icon Composer writes these from super-submitter-icon.icon on every export.
