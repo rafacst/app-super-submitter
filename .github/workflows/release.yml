@@ -23,7 +23,7 @@ jobs:
   release:
     runs-on: macos-26
     # The gate. Add a required reviewer to this environment and every run
-    # stops here until someone approves it. See RELEASING.md.
+    # stops here until someone approves it. See RELEASING.pdf.
     environment: release
 
     steps:
