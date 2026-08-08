@@ -17,10 +17,45 @@ env:
   # The tools that sign the appcast. Keep this at or above the Sparkle
   # version that project.yml resolves.
   SPARKLE_TOOLS_VERSION: "2.9.5"
+  # XcodeGen writes the project from project.yml. Pinned, and taken from the
+  # release rather than from Homebrew: `brew install` spends most of a minute
+  # on a tap it does not need, and this is a 4 MB zip.
+  XCODEGEN_VERSION: "2.46.0"
   TEAM_ID: "88BXH8KNVZ"
 
 jobs:
+  # Publishing is the one irreversible step here: an update this workflow signs
+  # installs itself on every Mac that already has the app. So the suite runs
+  # before anything is signed, and a regression costs a red check instead of a
+  # bad release.
+  #
+  # It sits in its own job on purpose. The release job below waits for a human,
+  # and a human takes minutes. Running the tests here means they finish during
+  # that wait instead of after it, and nobody is asked to approve a build whose
+  # tests then fail.
+  test:
+    runs-on: macos-26
+
+    steps:
+      # No fetch-depth here. Only the release job reads the history.
+      - uses: actions/checkout@v7
+
+      # Serial, not parallel. The suite deadlocked on a runner under parallel
+      # execution: 476 tests announced themselves, none of them ever returned,
+      # and the step died at its bound with nothing to name. The parallelism
+      # was not even buying speed. Measured on the same 630 tests: 4.5s serial
+      # against 11.6s parallel, because the contention it created cost more
+      # than the concurrency returned.
+      #
+      # The bound is not decoration. These tests reach the Keychain, and a
+      # Keychain prompt on a runner has nobody to answer it. If this fires
+      # again, the last test named in the log is the one that hung.
+      - name: Test
+        timeout-minutes: 15
+        run: swift test --no-parallel
+
   release:
+    needs: test
     runs-on: macos-26
     # The gate. Add a required reviewer to this environment and every run
     # stops here until someone approves it. See RELEASING.pdf.
@@ -45,19 +80,6 @@ jobs:
             echo "tag=v$MARKETING-$BUILD"
             echo "name=SuperSubmitter-$MARKETING-$BUILD"
           } >> "$GITHUB_OUTPUT"
-
-      # Publishing is the one irreversible step here: an update this workflow
-      # signs installs itself on every Mac that already has the app. The suite
-      # takes well under a minute and it runs before anything is signed, so a
-      # regression costs a red check instead of a bad release.
-      # The bound is not decoration. These tests reach the Keychain, and a
-      # Keychain item written by a differently signed binary makes macOS raise
-      # a password prompt that a runner has nobody to answer. A fresh runner
-      # has no such item, so this should never fire; if it does, the job fails
-      # in ten minutes instead of holding the release open for six hours.
-      - name: Test
-        timeout-minutes: 10
-        run: swift test
 
       - name: Load the signing certificate
         env:
@@ -84,8 +106,10 @@ jobs:
       - name: Build and sign
         run: |
           set -euo pipefail
-          brew install --quiet xcodegen
-          xcodegen generate
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate
           # The licensing address and the verifier key come from project.yml,
           # beside the Supabase pair. They are not secrets: the address is
           # what the app calls, the key is the public half, and every
