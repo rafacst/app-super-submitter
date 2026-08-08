@@ -326,6 +326,15 @@ struct AccountTab: View {
             }
             if let preview = state.promotionPreview, preview.valid {
                 discount(preview)
+            } else if let message = state.promotionMessage {
+                // Under the field, not in the identity card most of a screen
+                // above it. A refused code used to report itself where the
+                // person who typed it was not looking, so Apply read as a
+                // button that did nothing.
+                Label(message, systemImage: "exclamationmark.circle.fill")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
