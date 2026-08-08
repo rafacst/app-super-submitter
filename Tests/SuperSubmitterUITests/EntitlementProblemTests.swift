@@ -39,6 +39,31 @@ struct EntitlementProblemTests {
         }
     }
 
+    /// An active document that grants nothing is not paid access.
+    ///
+    /// The incident: a lifetime purchase was written as a `complimentary` grant
+    /// and arrived with `status: active` and no capabilities. `isPaid` read the
+    /// status alone, so the checkout poll announced success and the restore
+    /// button reported nothing wrong, while every gate and the whole Account tab
+    /// read `grants(_:)` and stayed locked. The app told the customer two
+    /// different things and believed the wrong one.
+    @Test func anActiveDocumentThatGrantsNothingIsNotPaid() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func document(_ capabilities: [AccessCapability],
+                      _ status: EntitlementStatus = .active) -> Entitlement {
+            Entitlement(subject: "u", status: status, plan: .complimentary,
+                        capabilities: capabilities, issuedAt: now,
+                        refreshAfter: now, expiresAt: now.addingTimeInterval(2_592_000))
+        }
+        #expect(!document([]).isPaid)
+        #expect(!document([], .grace).isPaid)
+        #expect(document([.storeWrite, .storeUpload, .storeRelease]).isPaid)
+        // A plan the service is entitled to send. It is not what gates access;
+        // the capabilities are, and both readings have to agree on that.
+        #expect(document([.storeWrite]).plan == .complimentary)
+        #expect(!document([.storeWrite], .expired).isPaid)
+    }
+
     /// The capability strings the service must send.
     ///
     /// The wire form is snake_case and the Swift case names are not. A brief
