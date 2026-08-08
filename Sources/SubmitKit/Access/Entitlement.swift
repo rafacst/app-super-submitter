@@ -67,7 +67,22 @@ public struct Entitlement: Codable, Sendable, Equatable {
         capabilities.contains(capability)
     }
 
-    public var isPaid: Bool { status == .active || status == .grace }
+    /// Whether this document actually opens anything.
+    ///
+    /// The status alone was not enough, and the gap between the two readings is
+    /// where a real purchase was lost. Every gate and the whole Account tab ask
+    /// `grants(_:)`, so a document with `status: active` and no capabilities
+    /// locks the app exactly as hard as free access. This property was
+    /// status-only, so the checkout poll declared the purchase confirmed, the
+    /// restore button reported nothing wrong, and the tab went on drawing the
+    /// Free pill over three locked rows. The app disagreed with itself and told
+    /// the customer the cheerful half.
+    ///
+    /// One definition, and it is the one the gates use: an active document that
+    /// grants nothing is not paid access.
+    public var isPaid: Bool {
+        (status == .active || status == .grace) && !capabilities.isEmpty
+    }
 
     /// What nobody has proved anything about. Every gate refuses it.
     public static func free(subject: String = "anonymous", at date: Date) -> Entitlement {
