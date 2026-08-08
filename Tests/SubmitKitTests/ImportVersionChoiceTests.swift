@@ -41,14 +41,17 @@ private final class VersionOrderStub: URLProtocol, @unchecked Sendable {
         """
     }
 
+    /// The set lists its members, and the included screenshot carries no
+    /// `relationships` key. That is what App Store Connect answers.
     static let screenshots = """
     {"data":[{"id":"set-1","type":"appScreenshotSets",
-      "attributes":{"screenshotDisplayType":"APP_DESKTOP"}}],
-     "included":[{"id":"shot-1","type":"appScreenshots",
+      "attributes":{"screenshotDisplayType":"APP_DESKTOP"},
+      "relationships":{"appScreenshots":{"data":[
+        {"type":"appScreenshots","id":"shot-1"}]}}}],
+     "included":[{"id":"shot-1","type":"appScreenshots","links":{"self":"x"},
       "attributes":{"fileName":"one.png",
         "imageAsset":{"templateUrl":"https://example.com/{w}x{h}.{f}",
-                      "width":2880,"height":1800}},
-      "relationships":{"appScreenshotSet":{"data":{"id":"set-1"}}}}]}
+                      "width":2880,"height":1800}}}]}
     """
 
     override class func canInit(with request: URLRequest) -> Bool { true }

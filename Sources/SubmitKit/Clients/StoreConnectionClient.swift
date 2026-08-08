@@ -138,21 +138,22 @@ public struct StoreConnectionClient: Sendable {
     /// answerable from its versions, and a second request per app to learn it
     /// would cost one round trip for every row of the picker.
     ///
-    /// `fields[appStoreVersions]` names the `app` relationship as well as the
-    /// platform. The field list decides the relationships too, so asking for
-    /// the platform alone returns versions that name no app, and there is
-    /// then no way to tell whose they are.
+    /// Which app a version belongs to is answered by the **app**, not by the
+    /// version: an included row carries `type`, `id`, `attributes`, and
+    /// `links` and no relationships at all. Asking `fields[appStoreVersions]`
+    /// for the `app` relationship did not change that, and the read learned
+    /// no platform for any app for as long as it tried.
     public func appleApps(credential: AppleCredential) async throws -> [RemoteStoreApp] {
         let token = try AppleJWT.make(credential: credential)
         var next = URL(string: "https://api.appstoreconnect.apple.com/v1/apps?limit=200"
             + "&include=appStoreVersions"
-            + "&fields%5BappStoreVersions%5D=platform,app"
+            + "&fields%5BappStoreVersions%5D=platform"
             + "&limit%5BappStoreVersions%5D=50")
         var result: [RemoteStoreApp] = []
         while let url = next {
             let data = try await appleGET(url, token: token)
             let payload = try JSONDecoder().decode(AppleAppsResponse.self, from: data)
-            let platforms = Self.platforms(payload.included ?? [])
+            let platforms = Self.platforms(payload.included ?? [], apps: payload.data)
             result.append(contentsOf: payload.data.map {
                 RemoteStoreApp(id: $0.id, name: $0.attributes.name,
                                identifier: $0.attributes.bundleID,
@@ -165,10 +166,25 @@ public struct StoreConnectionClient: Sendable {
 
     /// App id -> the platforms its versions name, in `Platform.allCases`
     /// order so two apps on the same platforms always read the same way.
-    static func platforms(_ included: [AppleIncluded]) -> [String: [Manifest.Platform]] {
+    ///
+    /// The owner comes off the **app's** own `appStoreVersions` relationship.
+    /// App Store Connect fills `data` there, on the side the `include` was
+    /// asked for, and leaves the included version's own `app` back reference
+    /// carrying `links` alone. Reading only that back reference learned no
+    /// platform for any app, the picker then showed no platform under any
+    /// row, and the import fell back on its iPhone guess and wrote every Mac
+    /// app into `store.yaml` as an iOS app.
+    static func platforms(_ included: [AppleIncluded],
+                          apps: [AppleAppsResponse.Item]) -> [String: [Manifest.Platform]] {
+        var owner: [String: String] = [:]
+        for app in apps {
+            for version in app.relationships?.appStoreVersions?.data ?? [] {
+                owner[version.id] = app.id
+            }
+        }
         var found: [String: Set<Manifest.Platform>] = [:]
         for item in included where item.type == "appStoreVersions" {
-            guard let appID = item.relationships?.app?.data?.id,
+            guard let appID = owner[item.id],
                   let raw = item.attributes?.platform,
                   let platform = Manifest.Platform(rawValue: raw) else { continue }
             found[appID, default: []].insert(platform)
@@ -558,7 +574,7 @@ private enum PKCS8 {
     }
 }
 
-private struct AppleAppsResponse: Decodable {
+struct AppleAppsResponse: Decodable {
     struct Item: Decodable {
         struct Attributes: Decodable {
             let name: String
@@ -569,8 +585,19 @@ private struct AppleAppsResponse: Decodable {
                 case bundleID = "bundleId"
             }
         }
+        /// The version ids this app owns. App Store Connect fills it for the
+        /// relationship the request includes, which is the only side that
+        /// names the owner at all.
+        struct Relationships: Decodable {
+            struct Versions: Decodable {
+                struct Item: Decodable { let id: String }
+                let data: [Item]?
+            }
+            let appStoreVersions: Versions?
+        }
         let id: String
         let attributes: Attributes
+        let relationships: Relationships?
     }
     let data: [Item]
     let included: [AppleIncluded]?
@@ -582,20 +609,13 @@ private struct AppleAppsResponse: Decodable {
 /// reader does not know costs nothing.
 struct AppleIncluded: Decodable {
     struct Attributes: Decodable { let platform: String? }
-    struct Relationships: Decodable {
-        struct Related: Decodable {
-            struct Item: Decodable { let id: String }
-            let data: Item?
-        }
-        let app: Related?
-    }
 
+    let id: String
     let type: String
     let attributes: Attributes?
-    let relationships: Relationships?
 }
 
-private struct AppleLinks: Decodable { let next: String? }
+struct AppleLinks: Decodable { let next: String? }
 
 private struct GoogleTokenResponse: Decodable {
     let accessToken: String

@@ -390,8 +390,7 @@ public struct StoreImportReader: Sendable {
         let payload = JSON(data: try await api.apple(
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
                 + "/appScreenshotSets?include=appScreenshots&limit=50").data)
-        return Self.appleAssets(payload, locale: locale, setKey: "appScreenshotSet",
-                                itemType: "appScreenshots",
+        return Self.appleAssets(payload, locale: locale, itemType: "appScreenshots",
                                 kindKey: "screenshotDisplayType")
     }
 
@@ -400,8 +399,8 @@ public struct StoreImportReader: Sendable {
         let payload = JSON(data: try await api.apple(
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
                 + "/appPreviewSets?include=appPreviews&limit=50").data)
-        return Self.appleAssets(payload, locale: locale, setKey: "appPreviewSet",
-                                itemType: "appPreviews", kindKey: "previewType")
+        return Self.appleAssets(payload, locale: locale, itemType: "appPreviews",
+                                kindKey: "previewType")
     }
 
     /// The versions of one platform, out of a payload that holds every
@@ -424,29 +423,69 @@ public struct StoreImportReader: Sendable {
         return matching
     }
 
+    /// Item id -> the bucket its set names, for a payload read with `include`.
+    ///
+    /// The **set** names its members. App Store Connect fills `data` on the
+    /// to-many relationship the `include` asked for, and sends each included
+    /// screenshot with `type`, `id`, `attributes`, and `links` and no
+    /// `relationships` key at all.
+    ///
+    /// This used to walk the included items and ask each one which set it
+    /// belonged to. That key does not exist, so every screenshot and every
+    /// preview was dropped from a 200 that carried all of them. Nothing threw
+    /// and nothing was logged, because a payload that parses to no assets and
+    /// a version that holds no media are the same value. The Media tab opened
+    /// empty on an app whose store page is full.
+    ///
+    /// `itemType` is both the type of the included rows and the name of the
+    /// relationship that lists them: `appScreenshots`, `appPreviews`.
+    static func appleBuckets(_ payload: JSON, itemType: String,
+                             kindKey: String) -> [String: String] {
+        var kinds: [String: String] = [:]
+        for set in payload["data"].array {
+            guard let kind = set["attributes"][kindKey].string else { continue }
+            for member in set["relationships"][itemType]["data"].array {
+                guard let id = member["id"].string else { continue }
+                kinds[id] = kind
+            }
+        }
+        return kinds
+    }
+
     /// Apple serves a screenshot as a template with `{w}`, `{h}`, and `{f}`
     /// placeholders, and a preview as a plain video URL.
-    static func appleAssets(_ payload: JSON, locale: String, setKey: String,
+    ///
+    /// The set's own member list drives the walk, so the assets come back in
+    /// the order the store shows them, which is the order the tiles keep.
+    ///
+    /// The position leads the file name because Apple does not make a name
+    /// unique inside a set. A real listing here holds two `09-profile.png`
+    /// with different checksums, and the import writes one file per name: the
+    /// second one found an existing file, skipped its download, and five live
+    /// screenshots came back as three tiles, two of them the wrong picture.
+    static func appleAssets(_ payload: JSON, locale: String,
                             itemType: String, kindKey: String) -> [ImportedStoreAsset] {
-        var kinds: [String: String] = [:]
-        for entry in payload["data"].array {
-            guard let id = entry["id"].string,
-                  let kind = entry["attributes"][kindKey].string else { continue }
-            kinds[id] = kind
+        var rows: [String: JSON] = [:]
+        for item in payload["included"].array where item["type"].string == itemType {
+            guard let id = item["id"].string else { continue }
+            rows[id] = item
         }
-        return payload["included"].array.compactMap { item -> ImportedStoreAsset? in
-            guard item["type"].string == itemType,
-                  let setID = item["relationships"][setKey]["data"]["id"].string,
-                  let kind = kinds[setID] else { return nil }
-            let attributes = item["attributes"]
-            let url = attributes["videoUrl"].string.flatMap(URL.init(string:))
-                ?? Self.imageURL(attributes["imageAsset"])
-            guard let url else { return nil }
-            let fallback = "\(kind)-\(item["id"].string ?? UUID().uuidString)"
-            let name = attributes["fileName"].string
-                ?? "\(fallback).\(url.pathExtension.isEmpty ? "png" : url.pathExtension)"
-            return ImportedStoreAsset(locale: locale, kind: kind, url: url, fileName: name)
+        var result: [ImportedStoreAsset] = []
+        for set in payload["data"].array {
+            guard let kind = set["attributes"][kindKey].string else { continue }
+            for (index, member) in set["relationships"][itemType]["data"].array.enumerated() {
+                guard let id = member["id"].string, let item = rows[id] else { continue }
+                let attributes = item["attributes"]
+                let url = attributes["videoUrl"].string.flatMap(URL.init(string:))
+                    ?? Self.imageURL(attributes["imageAsset"])
+                guard let url else { continue }
+                let extension_ = url.pathExtension.isEmpty ? "png" : url.pathExtension
+                let name = attributes["fileName"].string ?? "\(kind).\(extension_)"
+                result.append(ImportedStoreAsset(locale: locale, kind: kind, url: url,
+                                                 fileName: "\(index + 1)-\(name)"))
+            }
         }
+        return result
     }
 
     /// Apple serves an image as a template with `{w}`, `{h}`, `{f}`, and `{c}`
