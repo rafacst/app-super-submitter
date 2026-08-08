@@ -201,6 +201,7 @@
 		F7997F9BD64F0382BB79659F /* PaywallPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC85D798CDF72F2460CAB075 /* PaywallPresentationTests.swift */; };
 		F82ADF7D6568471646AD461D /* OnboardingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D79543711F7C6E1462DED4B /* OnboardingPanel.swift */; };
 		F8BE96D6021A97655433EC7F /* screenshot-sizes.json in Resources */ = {isa = PBXBuildFile; fileRef = A68D788C058A969747CCDAA8 /* screenshot-sizes.json */; };
+		F9CDCC984131AEBD6819C99F /* CoalescedSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D388634D29F89757F46429 /* CoalescedSaveTests.swift */; };
 		FA6146E83AAD3EADDBE3B3B5 /* ExistingAppImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A36C4DB016021EBF8FC5FAA /* ExistingAppImportSheet.swift */; };
 		FAC7D4EC0745F35E909A8F0A /* PlanStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220A6E0FD20FA397139568C1 /* PlanStep.swift */; };
 		FAF804DE2D9D05F6EB014D58 /* ProtoManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D33E2834F78C9B6DF4C98CB /* ProtoManifest.swift */; };
@@ -414,6 +415,7 @@
 		B250B0D5FEBCFE87793711BE /* LicensingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensingClient.swift; sourceTree = "<group>"; };
 		B41DF84B54D31B54FACFEA4F /* AppStateCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateCatalog.swift; sourceTree = "<group>"; };
 		B4CDB9A4E6D89AF09E2C51A2 /* AndroidManifest.pb */ = {isa = PBXFileReference; path = AndroidManifest.pb; sourceTree = "<group>"; };
+		B4D388634D29F89757F46429 /* CoalescedSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoalescedSaveTests.swift; sourceTree = "<group>"; };
 		B552F0B4703F1833D8640EF6 /* BindingLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BindingLimits.swift; sourceTree = "<group>"; };
 		B711B900DC3B36F741DC7CD3 /* DirectApplyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectApplyBar.swift; sourceTree = "<group>"; };
 		B890D881A432DAE718E961BC /* AccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessTests.swift; sourceTree = "<group>"; };
@@ -578,6 +580,7 @@
 				4DD6651F8318B42732684163 /* AppRowStoresTests.swift */,
 				360506813C5CC582DF217F11 /* BuildPathNoticeTests.swift */,
 				A7C77E78F475B91BAA4EB5A8 /* CheckoutKeyTests.swift */,
+				B4D388634D29F89757F46429 /* CoalescedSaveTests.swift */,
 				2BFDD51C0BA2B89467FBD96E /* CredentialLifetimeTests.swift */,
 				7934EB70A5C0A23285EE2D40 /* ExistingAppAssetTests.swift */,
 				A1FDC311FE6663720F580BBA /* ExistingAppImportTests.swift */,
@@ -1316,6 +1319,7 @@
 				12B61CBF632C65881AD260D0 /* AppRowStoresTests.swift in Sources */,
 				35698200EBCA20CB147E2B3A /* BuildPathNoticeTests.swift in Sources */,
 				DF28F237257414B7CB789DEF /* CheckoutKeyTests.swift in Sources */,
+				F9CDCC984131AEBD6819C99F /* CoalescedSaveTests.swift in Sources */,
 				2600DD6F47A0A17991DA70AB /* CredentialLifetimeTests.swift in Sources */,
 				24B75668C6A1D14896B9022B /* ExistingAppAssetTests.swift in Sources */,
 				4C5125281AB8833C02CE6B86 /* ExistingAppImportTests.swift in Sources */,

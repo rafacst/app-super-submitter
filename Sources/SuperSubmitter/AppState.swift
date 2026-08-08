@@ -92,6 +92,9 @@ final class AppState {
     @ObservationIgnored var runContinuation: AsyncStream<RunEvent>.Continuation?
     @ObservationIgnored var pollTask: Task<Void, Never>?
     @ObservationIgnored var stateGeneration = 0
+    /// The coalesced write. See `scheduleSave`.
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingSave = false
     @ObservationIgnored var applePrivateKeyPEM = ""
     @ObservationIgnored var googleCredential: GoogleServiceAccount?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
@@ -371,6 +374,17 @@ final class AppState {
         // grouping would decide it instead, and it would put two mutations
         // made by one action into one step and two keystrokes into two.
         undoManager.groupsByEvent = false
+        // A coalesced write must not outlive the app or the moment the
+        // developer looks somewhere else. Both of these arrive on the main
+        // thread before the process goes, and a flush with nothing waiting
+        // costs nothing, so this can be blunt.
+        for name in [NSApplication.willTerminateNotification,
+                     NSApplication.willResignActiveNotification] {
+            NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flushSave() }
+            }
+        }
         if let data = defaults.data(forKey: linkedAppsDefaultsKey),
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
@@ -497,6 +511,9 @@ final class AppState {
     /// Spec 16.5. The settings panel names the manifest, and this opens it.
     func revealManifest() {
         guard let manifestURL else { return }
+        // The developer is about to read the file, so it says what the screen
+        // says.
+        flushSave()
         NSWorkspace.shared.activateFileViewerSelecting([manifestURL])
     }
 
@@ -1619,6 +1636,9 @@ final class AppState {
     // MARK: - The manifest file
 
     func load(from url: URL) throws {
+        // Before the document is swapped, or a coalesced write still holding
+        // this app's last keystroke would land against the next app's file.
+        flushSave()
         manifest = try ManifestFile.load(from: url)
         manifestURL = url
         // The stack holds whole manifests, so it cannot cross an app. See
@@ -1628,10 +1648,50 @@ final class AppState {
         syncEditingStateFromManifest()
     }
 
+    /// Writes now. Every call is also a flush, so a coalesced write waiting
+    /// behind this one is answered by it and never lands afterwards. That is
+    /// what lets every existing caller stay a plain `try save()`.
     func save() throws {
         guard let manifestURL else { return }
+        saveTask?.cancel()
+        saveTask = nil
+        pendingSave = false
         try ManifestFile.save(manifest, to: manifestURL)
         lastSavedAt = Date()
+    }
+
+    /// Asks for a write and returns. The disk is touched once the typing stops.
+    ///
+    /// Every character used to re-encode the whole manifest through Yams and
+    /// write it atomically, on the main actor: about 1.7 ms and one temporary
+    /// file per key on a 16 KB listing. That is what made a text field lag
+    /// behind the keyboard. It also stamped `lastSavedAt` per key, so the
+    /// sidebar tick restarted its fade on every character and read as a blink.
+    ///
+    /// `flushSave` is what keeps this safe. Nothing may swap the document,
+    /// show the file, or leave the process with a write still waiting.
+    private func scheduleSave() {
+        guard manifestURL != nil else { return }
+        pendingSave = true
+        saveTask?.cancel()
+        // Long enough that a burst of typing is one write, short enough that
+        // the pause between two words already committed the first one.
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            self?.flushSave()
+        }
+    }
+
+    /// Writes whatever is waiting. It costs nothing when nothing is.
+    func flushSave() {
+        guard pendingSave else {
+            saveTask?.cancel()
+            saveTask = nil
+            return
+        }
+        do { try save() }
+        catch { errorMessage = "The manifest could not be saved. \(error.localizedDescription)" }
     }
 
     /// File > Save. Every edit already writes `store.yaml`, so this writes it
@@ -1895,13 +1955,12 @@ final class AppState {
     ///
     /// The undo is registered here and nowhere else, so a tab that edits a
     /// field does not know undo exists and a tab written later inherits it.
+    /// One edit. The undo step and the stale plan are immediate, because both
+    /// are in memory; only the file waits for the typing to stop.
     func saveManifestReportingErrors() {
         registerManifestUndo()
-        do {
-            try save()
-            invalidatePlan()
-        }
-        catch { errorMessage = "The manifest could not be saved. \(error.localizedDescription)" }
+        invalidatePlan()
+        scheduleSave()
     }
 
     func invalidatePlan() {
