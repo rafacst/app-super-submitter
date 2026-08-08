@@ -119,16 +119,20 @@ struct AccountTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(state.planLabel)
                         .font(.system(size: 13, weight: .semibold))
-                    Text(state.entitlementLabel)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.text2)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !state.entitlementLabel.isEmpty {
+                        Text(state.entitlementLabel)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.text2)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 8)
-                StatePill(text: state.isPaid ? "Active" : "Free",
-                          foreground: state.isPaid ? Theme.green : Theme.text2,
-                          background: state.isPaid ? Theme.greenBg : Theme.sep2)
+                if let status = state.statusLabel {
+                    StatePill(text: status,
+                              foreground: state.isPaid ? Theme.green : Theme.text2,
+                              background: state.isPaid ? Theme.greenBg : Theme.sep2)
+                }
             }
             if let problem = state.entitlementProblem {
                 // Above `billingMessage`, and worded as the fault it is. This
