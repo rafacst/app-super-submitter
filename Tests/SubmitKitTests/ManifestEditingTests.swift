@@ -167,14 +167,21 @@ import Testing
 @Test func reviewAnswersAndCategoriesSurviveManifestCoding() throws {
     var manifest = Manifest()
     manifest.setReviewText("Games", field: .applePrimaryCategory)
-    manifest.review?.ageRatingAnswers = ["violence": false]
+    // Apple's questionnaire mixes enum strings and flags, so both shapes have
+    // to survive the round trip in the same map.
+    manifest.review?.ageRatingAnswers = [
+        "violenceCartoonOrFantasy": .text("INFREQUENT_OR_MILD"),
+        "unrestrictedWebAccess": .flag(false),
+    ]
     manifest.review?.dataSafetyAnswers = ["data_encrypted_in_transit": true]
     manifest.review?.usesNonExemptEncryption = true
 
     let data = try JSONEncoder().encode(manifest)
     let decoded = try JSONDecoder().decode(Manifest.self, from: data)
     #expect(decoded.reviewText(.applePrimaryCategory) == "Games")
-    #expect(decoded.review?.ageRatingAnswers?["violence"] == false)
+    #expect(decoded.review?.ageRatingAnswers?["violenceCartoonOrFantasy"]
+            == .text("INFREQUENT_OR_MILD"))
+    #expect(decoded.review?.ageRatingAnswers?["unrestrictedWebAccess"] == .flag(false))
     #expect(decoded.review?.dataSafetyAnswers?["data_encrypted_in_transit"] == true)
     #expect(decoded.review?.usesNonExemptEncryption == true)
 }
