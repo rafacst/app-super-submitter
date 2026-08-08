@@ -16,8 +16,8 @@ struct ListingDeclarations: View {
             categories
             declarations
         }
-        .sheet(isPresented: $state.showAgeRating) { AgeRatingSheet() }
-        .sheet(isPresented: $state.showDataSafety) { DataSafetySheet() }
+        .sheet(isPresented: $state.showAgeRating) { AgeRatingSheet().appMessage() }
+        .sheet(isPresented: $state.showDataSafety) { DataSafetySheet().appMessage() }
     }
 
     private var categories: some View {
