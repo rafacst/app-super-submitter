@@ -2053,13 +2053,16 @@ final class AppState {
     /// Settings ▸ Nuclear. Everything the app holds, gone, back to first run.
     ///
     /// The boundary is the point of this feature, so it is drawn explicitly.
-    /// What goes is what Super Submitter created: its defaults, its Keychain
-    /// vault, its Application Support folder, and the list of apps it linked.
-    /// What stays is everything that was not ours to delete: every
-    /// `store.yaml` where the developer keeps it, their projects, their
-    /// accounts at Apple and Google, and anything already published. Removing
-    /// a linked app has always worked this way; this does it for all of them
-    /// at once.
+    ///
+    /// What goes is what Super Submitter made and what was typed into it: its
+    /// defaults, its Keychain vault, the account, the list of linked apps, and
+    /// the archives, artifacts, run logs and scratch it wrote.
+    ///
+    /// What stays is every file that holds the user's own work. No `store.yaml`
+    /// is deleted, in a repository or in `Managed/`. Neither are their source
+    /// projects, their accounts at Apple and Google, or anything published.
+    /// Forgetting a single app has always worked this way. This is that, for
+    /// all of them at once, and it must not become more than that.
     ///
     /// Two gates in front of it, and neither is this function's job. It is
     /// only ever called from the second one.
@@ -2095,9 +2098,21 @@ final class AppState {
             }
         }
 
-        // The app-owned folder. Nothing inside it is the developer's: archives
-        // this app made, logs it wrote, and the workspaces of managed apps.
-        try? FileManager.default.removeItem(at: storage.root)
+        // Named one by one, and never the folder above them.
+        //
+        // `Managed/` is in there too, and that is where a managed app keeps
+        // its `store.yaml`. The workspace is this app's, but the listing text,
+        // the catalog and the review answers inside it are the user's work and
+        // there is no second copy anywhere. Removing the root took all of it.
+        //
+        // These five are byproducts: a list of paths to projects that live
+        // elsewhere, archives this app built, artifacts it exported, logs it
+        // wrote, and scratch it should already have cleaned up. Nuclear takes
+        // what Super Submitter made. It does not take what the user wrote.
+        for folder in [storage.projects, storage.archives, storage.artifacts,
+                       storage.runs, storage.scratch] {
+            try? FileManager.default.removeItem(at: folder)
+        }
 
         // Every default this app writes, including the ones the views own
         // through @AppStorage. It walks the suite in use rather than removing
