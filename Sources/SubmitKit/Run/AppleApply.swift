@@ -648,13 +648,27 @@ extension Runner {
         put(&attributes, "contactEmail", review.contactEmail ?? "")
         put(&attributes, "contactPhone", review.contactPhone ?? "")
         put(&attributes, "notes", review.notes ?? "")
-        attributes["demoAccountRequired"] = review.demoAccountRequired ?? false
+        // An unanswered question is not the answer "no". Every other field
+        // here goes through `put`, which skips nil and keeps the store's copy.
+        put(&attributes, "demoAccountRequired", review.demoAccountRequired)
         if review.demoAccountRequired == true, let account = reviewerCredential {
             put(&attributes, "demoAccountName", account.username)
             put(&attributes, "demoAccountPassword", account.password)
         }
 
-        if let id = actual.apple?.reviewDetailId {
+        // Apple gives every version a review detail, and copies one onto a
+        // version this run created. The id from the read belongs to whatever
+        // version the read saw, which on a first apply is no version at all,
+        // and a retry starts at the failed step so it never creates one either.
+        // A POST against a version that already carries a detail is a 409, and
+        // it stopped the whole apply one step short of the submit.
+        var detailID = actual.apple?.reviewDetailId
+        if detailID == nil, let response = try? await api.apple(
+            "GET", "/v1/appStoreVersions/\(versionID)/appStoreReviewDetail") {
+            detailID = JSON(data: response.data)["data"]["id"].string
+        }
+
+        if let id = detailID {
             try await api.apple("PATCH", "/v1/appStoreReviewDetails/\(id)", body: [
                 "data": ["type": "appStoreReviewDetails", "id": id, "attributes": attributes],
             ])

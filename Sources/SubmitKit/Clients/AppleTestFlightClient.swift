@@ -301,7 +301,12 @@ public struct AppleTestFlightClient: Sendable {
         if let value = review?.contactEmail { attributes["contactEmail"] = value }
         if let value = review?.contactPhone { attributes["contactPhone"] = value }
         if let value = review?.notes { attributes["notes"] = value }
-        attributes["demoAccountRequired"] = review?.demoAccountRequired ?? false
+        // An unanswered question is not the answer "no". This sent `false`
+        // whenever the manifest said nothing, which overwrote whatever Apple
+        // held and also defeated the empty check below.
+        if let required = review?.demoAccountRequired {
+            attributes["demoAccountRequired"] = required
+        }
         if review?.demoAccountRequired == true, let reviewer {
             attributes["demoAccountName"] = reviewer.username
             attributes["demoAccountPassword"] = reviewer.password
