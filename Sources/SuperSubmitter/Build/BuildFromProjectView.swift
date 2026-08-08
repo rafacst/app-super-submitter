@@ -359,18 +359,7 @@ struct BuildFromProjectView: View {
                 }
             }
 
-            if flow.logOpen {
-                ScrollView {
-                    Text(flow.logText)
-                        .font(Theme.mono(10.5))
-                        .foregroundStyle(Theme.text2)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(9)
-                }
-                .frame(height: 220)
-                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
-            }
+            if flow.logOpen { LogView(lines: flow.logLines) }
         }
         .storePanel(horizontal: 15)
     }

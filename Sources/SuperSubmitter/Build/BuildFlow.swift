@@ -31,7 +31,16 @@ final class BuildFlow {
 
     var snapshot = PreflightSnapshot()
     var candidate: BuildCandidate?
+    /// What the log box draws. It is written by `flushLog`, ten times a second
+    /// at most, and never once per line: a build prints hundreds a second, and
+    /// an observed write per line is what froze the window.
     var logLines: [String] = []
+    /// Every line the tools printed. Not observed, so a line costs an append.
+    @ObservationIgnored var logBuffer: [String] = []
+    @ObservationIgnored var logFlush: Task<Void, Never>?
+    /// How much of a build log is worth keeping. Beyond this the head goes,
+    /// because the end of a log is the half that says what went wrong.
+    static let logLimit = 5_000
     var logOpen = false
     var failure: BuildFailure?
     var processingLabel: String?
@@ -50,7 +59,10 @@ final class BuildFlow {
     var showBuildConfirmation = false
     var showUploadConfirmation = false
 
-    init(app: AppState) {
+    /// `app` is already weak and optional, so the initialiser says so too. It
+    /// lets the log tests build a flow without an `AppState`, which reads the
+    /// Keychain and the defaults and answers nothing this flow needs.
+    init(app: AppState?) {
         self.app = app
         self.run = UploadRun(platform: .ios)
     }

@@ -242,16 +242,13 @@ struct RunSection: View {
             .buttonStyle(.plain)
             .accessibilityValue(state.logOpen ? "Expanded" : "Collapsed")
 
+            // The same virtualized box the build log uses. This one holds a
+            // line per API call rather than per line of compiler output, so it
+            // never froze, but a run of a large plan still laid out every call
+            // to draw the last ten.
             if state.logOpen {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    Text(state.logText)
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.text2)
-                        .textSelection(.enabled)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
-                }
-                .frame(maxHeight: 220)
+                LogView(lines: state.logLines).padding(.horizontal, 5)
+                    .padding(.bottom, 5)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
