@@ -34,24 +34,67 @@ import Testing
         #expect(state.defaults.object(forKey: "hasSeenOnboarding") == nil)
     }
 
-    /// The folder is the app's own: archives it made and logs it wrote. A
-    /// `store.yaml` never lives in there, which is why this may remove it
-    /// whole.
-    @Test func theEraseRemovesTheAppOwnedFolderAndNothingAboveIt() throws {
+    /// The byproducts go: archives this app built, artifacts it exported, run
+    /// logs it wrote, scratch, and the list of paths to projects that live
+    /// somewhere else entirely.
+    @Test func theEraseRemovesWhatTheAppItselfWrote() throws {
         let (state, storage, root) = fixture()
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try FileManager.default.createDirectory(at: storage.projects,
-                                                withIntermediateDirectories: true)
-        try Data("log".utf8).write(to: storage.projects.appendingPathComponent("a.log"))
-        #expect(FileManager.default.fileExists(atPath: storage.root.path))
+        let made = [storage.projects, storage.archives, storage.artifacts,
+                    storage.runs, storage.scratch]
+        for folder in made {
+            try FileManager.default.createDirectory(at: folder,
+                                                    withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: folder.appendingPathComponent("a.file"))
+        }
 
         state.eraseEverything(storage: storage)
 
-        #expect(!FileManager.default.fileExists(atPath: storage.root.path))
-        // The temporary directory that held it is still there. The erase takes
-        // its own folder and never the one it happens to sit in.
-        #expect(FileManager.default.fileExists(atPath: NSTemporaryDirectory()))
+        for folder in made {
+            #expect(!FileManager.default.fileExists(atPath: folder.path),
+                    "\(folder.lastPathComponent) survived the erase")
+        }
+    }
+
+    /// The one that matters. `Managed/` sits inside the same folder as the
+    /// archives and the logs, but a managed app's `store.yaml` is in there:
+    /// the listing text, the catalog and the review answers the user typed,
+    /// with no second copy anywhere. Deleting the folder above it took all of
+    /// that, which is the whole reason this erase names its targets one by one
+    /// instead of removing the root.
+    @Test func theEraseNeverTouchesAManagedAppsManifest() throws {
+        let (state, storage, root) = fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let folder = try storage.managedFolder(name: "Fast Bill Split", identifier: "1234")
+        let manifest = folder.appendingPathComponent("store.yaml")
+        try Data("version: 1\n".utf8).write(to: manifest)
+
+        state.eraseEverything(storage: storage)
+
+        #expect(FileManager.default.fileExists(atPath: manifest.path),
+                "the nuclear option deleted a manifest the user wrote")
+        #expect(try String(contentsOf: manifest, encoding: .utf8) == "version: 1\n")
+    }
+
+    /// A linked app is a path to a file the developer keeps. Forgetting the
+    /// list must never follow the path and delete the file at the end of it.
+    @Test func theEraseForgetsThePathAndLeavesTheFile() throws {
+        let (state, storage, root) = fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let repo = root.appendingPathComponent("a-repo", isDirectory: true)
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        let manifest = repo.appendingPathComponent("store.yaml")
+        try Data("version: 1\n".utf8).write(to: manifest)
+        state.manifestURL = manifest
+
+        state.eraseEverything(storage: storage)
+
+        #expect(state.manifestURL == nil)
+        #expect(FileManager.default.fileExists(atPath: manifest.path),
+                "the nuclear option deleted the developer's own store.yaml")
     }
 
     @Test func theEraseForgetsEveryLinkedAppAndTheOpenManifest() throws {
