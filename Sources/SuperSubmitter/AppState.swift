@@ -189,6 +189,27 @@ final class AppState {
         jumpTarget = entry.id
     }
 
+    /// Takes every sheet off the shell.
+    ///
+    /// AppKit refuses to quit an app that has a modal sheet on a window, and
+    /// Sparkle installs an update by quitting. "Check for updates" is reachable
+    /// from the About panel, which is itself a sheet, so the install waited for
+    /// the user to close a panel that nothing on the screen connected to the
+    /// update. See Updater.
+    ///
+    /// Every sheet in `RootView`, and the test below it holds this list to
+    /// that: an eighth sheet added to the shell and forgotten here brings the
+    /// bug straight back, and it looks like the app simply refusing to quit.
+    func closeEverySheet() {
+        showSettings = false
+        showAbout = false
+        showOnboarding = false
+        showExistingAppImport = false
+        showAddLocale = false
+        showFieldSearch = false
+        releaseSheet = nil
+    }
+
     // Paid access. Every gate reads `entitlement`; nothing keeps its own
     // `isPaid` boolean. See AppStateAccess.swift.
     /// The gate every mutation boundary in SubmitKit receives. It refuses

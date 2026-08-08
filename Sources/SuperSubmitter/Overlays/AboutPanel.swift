@@ -46,7 +46,12 @@ struct AboutPanel: View {
                     .padding(.bottom, 30)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 470)
+            // Raised with the Updates section, which pushed the copyright a
+            // scroll below the fold and put the support address back against
+            // the bottom edge. This holds the whole panel with no scroll at
+            // all. The window is at least 720 tall, so 630 points and the 44
+            // point bar still fit inside it.
+            .frame(height: 660)
             .background(Theme.content)
         }
         .frame(width: 480)
@@ -115,15 +120,30 @@ struct AboutPanel: View {
 
             Hairline()
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(Self.copyright)
+            // The version is three lines above, so this is where a person
+            // already is when they wonder whether it is the current one.
+            VStack(alignment: .leading, spacing: 9) {
+                Text("Updates")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Super Submitter checks for a new version on its own and asks before it downloads anything. Every update is signed, and the app refuses one that carries the wrong signature.")
                     .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.text3)
-                Text("This build carries no updater. It never checks for a new version, and it never downloads one.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text3)
+                    .foregroundStyle(Theme.text2)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    // The panel closes as this runs. Sparkle installs by
+                    // quitting the app, and AppKit refuses to quit an app
+                    // holding a sheet, which this panel is. See Updater.
+                    QuietButton(title: "Check now") { Updater.check() }
+                    Spacer(minLength: 0)
+                }
             }
+
+            Hairline()
+
+            Text(Self.copyright)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.text3)
         }
     }
 
