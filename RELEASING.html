@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Releasing Super Submitter</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 17mm 15mm; }
+
+  :root {
+    --ink: #16181d;
+    --ink2: #4a5160;
+    --ink3: #6b7280;
+    --rule: #d8dce4;
+    --rule2: #e8ebf0;
+    --accent: #0b5fd0;
+    --green: #1a7f4b;
+    --green-bg: #eef8f2;
+    --green-edge: #a9d9c0;
+    --warn-bg: #fdf6e3;
+    --warn-edge: #e0c069;
+    --grey-bg: #f4f6f9;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    margin: 0;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14pt;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  h1 {
+    font-size: 31pt; line-height: 1.1; letter-spacing: -0.5pt;
+    margin: 0 0 4pt; font-weight: 700;
+  }
+  .lede { font-size: 15pt; line-height: 1.45; color: var(--ink2); margin: 0 0 6pt; }
+  .rule-top { border: 0; border-top: 3pt solid var(--ink); margin: 10pt 0 18pt; }
+
+  h2 {
+    font-size: 20pt; line-height: 1.2; letter-spacing: -0.3pt;
+    margin: 26pt 0 8pt; padding-bottom: 5pt;
+    border-bottom: 1pt solid var(--rule); font-weight: 700;
+    break-after: avoid; break-inside: avoid;
+  }
+  h2:first-of-type { margin-top: 4pt; }
+
+  /* A numbered step. The app it happens in rides on the same line, so you
+     always know where you are before you read what to do. */
+  .step {
+    margin: 24pt 0 8pt;
+    break-after: avoid; break-inside: avoid;
+  }
+  .step .n {
+    display: inline-block;
+    min-width: 26pt; height: 26pt; line-height: 26pt;
+    text-align: center;
+    background: var(--ink); color: #fff;
+    border-radius: 13pt;
+    font-size: 14pt; font-weight: 700;
+    margin-right: 9pt;
+  }
+  .step .t { font-size: 18pt; font-weight: 700; letter-spacing: -0.2pt; }
+  .step .app {
+    display: inline-block;
+    margin-left: 8pt;
+    font-size: 11pt; font-weight: 600;
+    color: var(--accent);
+    background: #eaf1fc;
+    border: 1pt solid #c3d8f5;
+    border-radius: 10pt;
+    padding: 1.5pt 8pt;
+    vertical-align: middle;
+  }
+
+  p { margin: 0 0 10pt; }
+  strong { font-weight: 700; }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* Something you click, type, or choose on screen. */
+  .ui {
+    font-weight: 600;
+    background: var(--grey-bg);
+    border: 1pt solid var(--rule2);
+    border-radius: 3pt;
+    padding: 0.5pt 4pt;
+    white-space: nowrap;
+  }
+
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5pt;
+    background: var(--grey-bg);
+    border: 1pt solid var(--rule2);
+    border-radius: 3pt;
+    padding: 0.5pt 3.5pt;
+    overflow-wrap: break-word;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
+  pre {
+    background: var(--grey-bg);
+    border: 1pt solid var(--rule2);
+    border-left: 3pt solid var(--ink3);
+    border-radius: 4pt;
+    padding: 10pt 12pt; margin: 0 0 12pt;
+    break-inside: avoid;
+  }
+  pre code {
+    font-size: 10.5pt; line-height: 1.5;
+    background: none; border: 0; padding: 0;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+    display: block;
+  }
+
+  ol.sub, ul.sub { margin: 0 0 11pt; padding-left: 21pt; }
+  ol.sub li, ul.sub li { margin-bottom: 5pt; }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 0 0 13pt; font-size: 12.5pt;
+    break-inside: avoid;
+  }
+  th {
+    text-align: left; font-weight: 700;
+    background: var(--grey-bg);
+    border-bottom: 1.5pt solid var(--rule);
+  }
+  th, td { padding: 6.5pt 9pt; border-bottom: 1pt solid var(--rule2); vertical-align: top; }
+
+  .done {
+    background: var(--green-bg);
+    border: 1pt solid var(--green-edge);
+    border-radius: 5pt;
+    padding: 12pt 14pt 12pt;
+    margin: 0 0 14pt;
+    break-inside: avoid;
+  }
+  .done h3 {
+    margin: 0 0 7pt; font-size: 14pt; font-weight: 700; color: var(--green);
+  }
+  .done ul { margin: 0; padding-left: 17pt; font-size: 12.5pt; line-height: 1.5; }
+  .done li { margin-bottom: 3pt; }
+
+  .callout {
+    background: var(--warn-bg);
+    border: 1pt solid var(--warn-edge);
+    border-left: 4pt solid var(--warn-edge);
+    border-radius: 4pt;
+    padding: 11pt 13pt; margin: 0 0 13pt;
+    break-inside: avoid;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+
+  /* The one place a command line survives. Marked so it reads as the
+     exception it is. */
+  .terminal {
+    border: 1pt dashed var(--rule);
+    border-radius: 4pt;
+    padding: 10pt 13pt 4pt;
+    margin: 0 0 13pt;
+    background: #fbfcfd;
+    break-inside: avoid;
+  }
+  .terminal .tag {
+    font-size: 10.5pt; font-weight: 700; letter-spacing: 0.4pt;
+    text-transform: uppercase; color: var(--ink3);
+    margin: 0 0 6pt;
+  }
+  .terminal p { font-size: 12.5pt; }
+
+  .breaks dt { font-weight: 700; margin-top: 14pt; break-after: avoid; }
+  .breaks dd { margin: 3pt 0 0; }
+  .breaks { margin: 0; }
+
+  .footnote {
+    margin-top: 24pt; padding-top: 8pt;
+    border-top: 1pt solid var(--rule2);
+    font-size: 11pt; color: var(--ink3);
+  }
+</style>
+</head>
+<body>
+
+<h1>Releasing</h1>
+<p class="lede">Super Submitter for macOS. Everything here happens in an app or in a web page.</p>
+<hr class="rule-top">
+
+<p>Sending the code to GitHub builds a signed, notarized release and publishes it. The app then finds that release on its own, because Sparkle polls the appcast the release carries.</p>
+
+<p><strong>Nothing ships without you.</strong> Every run stops and waits for your approval. You press a button on the Actions page, and only then does it build.</p>
+
+<div class="done">
+  <h3>Already set up. You do not need to do any of this.</h3>
+  <ul>
+    <li>The repository <strong>rafacst/app-super-submitter</strong> exists and is public.</li>
+    <li>Your Mac already knows how to reach it. The remote is named <code>github</code>.</li>
+    <li>The approval gate exists. The environment is named <code>release</code> and you are the required reviewer.</li>
+    <li>The Sparkle signing key already exists in your login keychain, and the app already carries its matching public half. <strong>Never create a new one.</strong></li>
+    <li>Your Mac is already signed in to GitHub, so sending code will not ask for a password.</li>
+  </ul>
+</div>
+
+<p>What is left is five secrets, one push, and one approval. Steps 1 to 5 happen once. Steps 6 and 7 are how you ship, every time.</p>
+
+<div class="callout">
+  <p><strong>The repository name is permanent.</strong> Its address is inside every copy of the app you ever release, and a released copy asks that address for updates forever. If you rename or delete the repository, every installed copy stops updating and there is no way to tell it where to look. This already happened once, to the previous repository. Leave the name alone.</p>
+</div>
+
+<h2>Set it up once</h2>
+
+<div class="step"><span class="n">1</span><span class="t">Copy the Sparkle signing key</span><span class="app">Keychain Access</span></div>
+
+<p>This key proves an update came from you. The app refuses any download this key did not sign.</p>
+
+<ol class="sub">
+  <li>Press <span class="ui">Command</span> and <span class="ui">Space</span>, type <strong>Keychain Access</strong>, and press Return.</li>
+  <li>In the sidebar choose the <span class="ui">login</span> keychain, then the <span class="ui">All Items</span> category.</li>
+  <li>Type <strong>sparkle</strong> in the search box at the top right.</li>
+  <li>Double-click the item named <strong>https://sparkle-project.org</strong>. Its Kind is <em>private key</em> and its Account is <em>ed25519</em>.</li>
+  <li>Tick <span class="ui">Show password</span>. Your Mac asks for your login password. Type it and choose <span class="ui">Allow</span>.</li>
+  <li>Select the line of text that appears and copy it. It is 44 characters and it ends in <code>=</code>.</li>
+</ol>
+
+<p>Paste it somewhere safe for a moment. You need it in step 5, as <code>SPARKLE_PRIVATE_KEY</code>.</p>
+
+<div class="callout">
+  <p><strong>This key cannot be replaced.</strong> If you ever lose it, no copy of the app that people already have can update again, ever. Back up that keychain item. Never run Sparkle's key generator a second time: a new key makes every installed copy refuse every update you publish, silently.</p>
+</div>
+
+<div class="step"><span class="n">2</span><span class="t">Export the signing certificate</span><span class="app">Keychain Access</span></div>
+
+<p>This is the Apple certificate that tells macOS the app is really yours.</p>
+
+<ol class="sub">
+  <li>Stay in Keychain Access. Clear the search box.</li>
+  <li>In the sidebar choose the <span class="ui">login</span> keychain, then the <span class="ui">My Certificates</span> category. This category matters. The plain <span class="ui">Certificates</span> category leaves out the private half, and the export will not work.</li>
+  <li>Find <strong>Developer ID Application: R CASTRO SILVA CONSULTORIA EM TECNOLOGIA LTDA (88BXH8KNVZ)</strong>.</li>
+  <li>Right-click it and choose <span class="ui">Export</span>.</li>
+  <li>Set the file format to <span class="ui">Personal Information Exchange (.p12)</span>. Save it to your Desktop as <strong>certificate.p12</strong>.</li>
+  <li>Your Mac asks you to invent a password for the file. Type one and write it down. You need it in step 5, as <code>DEVELOPER_ID_CERT_PASSWORD</code>.</li>
+  <li>Your Mac then asks for your login password, to allow the export. Type it and choose <span class="ui">Allow</span>.</li>
+</ol>
+
+<div class="step"><span class="n">3</span><span class="t">Turn the certificate into text</span><span class="app">Shortcuts</span></div>
+
+<p>A GitHub secret holds text, and <code>certificate.p12</code> is not text. This step converts it. It is the only step on this page with no app built for the job, so you build a small one yourself, once. It takes about a minute and you can use it again forever.</p>
+
+<ol class="sub">
+  <li>Open the <strong>Shortcuts</strong> app and choose <span class="ui">File</span>, then <span class="ui">New Shortcut</span>.</li>
+  <li>In the search box on the right, type <strong>base64</strong>. Drag the <span class="ui">Base64 Encode</span> action into the empty shortcut.</li>
+  <li>Search for <strong>clipboard</strong>. Drag <span class="ui">Copy to Clipboard</span> underneath it.</li>
+  <li>Open the shortcut's settings in the sidebar on the right and turn on <span class="ui">Use as Quick Action</span> and <span class="ui">Finder</span>. Name it <strong>Copy as Base64</strong> and close the window.</li>
+  <li>In Finder, right-click <strong>certificate.p12</strong>, open <span class="ui">Quick Actions</span>, and choose <span class="ui">Copy as Base64</span>.</li>
+</ol>
+
+<p>The clipboard now holds a long block of letters and numbers. Paste it somewhere safe. You need it in step 5, as <code>DEVELOPER_ID_CERT_P12</code>.</p>
+
+<div class="terminal">
+  <p class="tag">If you would rather not build the shortcut</p>
+  <p>Open the Terminal app and paste this one line. It does the same thing and puts the result on the clipboard.</p>
+  <pre><code>base64 -i ~/Desktop/certificate.p12 | pbcopy</code></pre>
+</div>
+
+<div class="step"><span class="n">4</span><span class="t">Make an app-specific password</span><span class="app">appleid.apple.com</span></div>
+
+<p>Apple checks every release before people can open it. That check signs in as you, and it needs a password of its own. Your real Apple ID password will not work.</p>
+
+<ol class="sub">
+  <li>Go to <a href="https://appleid.apple.com">appleid.apple.com</a> and sign in.</li>
+  <li>Open <span class="ui">Sign-In and Security</span>, then <span class="ui">App-Specific Passwords</span>.</li>
+  <li>Choose the <span class="ui">+</span> button, name it <strong>Super Submitter releases</strong>, and confirm.</li>
+  <li>Copy the password Apple shows you. It looks like <code>abcd-efgh-ijkl-mnop</code>. Apple shows it once only.</li>
+</ol>
+
+<p>You need it in step 5, as <code>NOTARY_PASSWORD</code>.</p>
+
+<div class="step"><span class="n">5</span><span class="t">Add the five secrets</span><span class="app">github.com</span></div>
+
+<ol class="sub">
+  <li>Go to <strong>github.com/rafacst/app-super-submitter</strong>.</li>
+  <li>Open the <span class="ui">Settings</span> tab, then <span class="ui">Secrets and variables</span> in the sidebar, then <span class="ui">Actions</span>.</li>
+  <li>Choose <span class="ui">New repository secret</span>. Type the name, paste the value, and choose <span class="ui">Add secret</span>.</li>
+  <li>Do that five times, once for each row below. The names must match exactly.</li>
+</ol>
+
+<table>
+  <thead><tr><th>Name</th><th>What to paste</th></tr></thead>
+  <tbody>
+    <tr><td><code>SPARKLE_PRIVATE_KEY</code></td><td>The 44 characters from step 1</td></tr>
+    <tr><td><code>DEVELOPER_ID_CERT_P12</code></td><td>The long block of text from step 3</td></tr>
+    <tr><td><code>DEVELOPER_ID_CERT_PASSWORD</code></td><td>The password you invented in step 2</td></tr>
+    <tr><td><code>NOTARY_APPLE_ID</code></td><td>Your Apple ID, the email address you sign in with</td></tr>
+    <tr><td><code>NOTARY_PASSWORD</code></td><td>The app-specific password from step 4</td></tr>
+  </tbody>
+</table>
+
+<p>When all five are listed, delete <strong>certificate.p12</strong> from your Desktop and empty the Trash. GitHub holds it now, and a copy sitting on the Desktop is a copy that can be taken.</p>
+
+<h2>Ship a release</h2>
+
+<div class="step"><span class="n">6</span><span class="t">Send the code to GitHub</span><span class="app">Xcode</span></div>
+
+<ol class="sub">
+  <li>Open <strong>SuperSubmitter.xcodeproj</strong>.</li>
+  <li>Open the <span class="ui">Source Control</span> menu and choose <span class="ui">Push…</span>.</li>
+  <li>In the sheet, set the destination to <span class="ui">github / main</span>. Not <span class="ui">origin</span>. That one is GitLab, and it publishes nothing.</li>
+  <li>Choose <span class="ui">Push</span>.</li>
+</ol>
+
+<p>Xcode will not ask for a password. Your Mac is already signed in.</p>
+
+<div class="step"><span class="n">7</span><span class="t">Approve the release</span><span class="app">github.com</span></div>
+
+<ol class="sub">
+  <li>Go to the <span class="ui">Actions</span> tab of the repository. A run named <strong>Release</strong> is waiting.</li>
+  <li>Open it. It says <em>Review pending deployments</em>.</li>
+  <li>Choose <span class="ui">Review deployments</span>, tick <span class="ui">release</span>, and choose <span class="ui">Approve and deploy</span>.</li>
+</ol>
+
+<p>About fifteen minutes later the release appears on the Releases page, and every copy of the app already out there will offer it to its owner within a day.</p>
+
+<p>To watch it, stay on the run page. Each step reports as it finishes. If one turns red, open it and read the last few lines: the workflow is written to say what went wrong in plain words.</p>
+
+<h2>Every release after the first</h2>
+
+<p>Repeat steps 6 and 7. Nothing else.</p>
+
+<p>You can also start a release without sending any new code. On the <span class="ui">Actions</span> tab, choose <strong>Release</strong> in the sidebar, then the <span class="ui">Run workflow</span> button. It still waits for your approval.</p>
+
+<p>To change the version number people see, open <strong>project.yml</strong> and edit the <code>MARKETING_VERSION</code> line. The build number takes care of itself: it counts the commits, and that count is what tells the app a newer version exists.</p>
+
+<h2>What the release does, in order</h2>
+
+<ol class="sub">
+  <li>Runs every test. Publishing cannot be undone, so nothing is signed until the tests pass.</li>
+  <li>Builds the app and signs it with your Developer ID certificate.</li>
+  <li>Sends it to Apple to be checked, and staples Apple's approval into the app.</li>
+  <li>Checks four things before it goes out: the build number reached the app, the licensing settings are filled in, the update address matches this repository, and the update list is signed.</li>
+  <li>Writes the release notes from your commit messages since the last release.</li>
+  <li>Signs the update list with your Sparkle key.</li>
+  <li>Publishes the app and the update list together as one GitHub release.</li>
+</ol>
+
+<h2>Things that break, and why</h2>
+
+<dl class="breaks">
+  <dt>Every install stops updating, and nothing says so.</dt>
+  <dd>The repository was renamed or deleted. Its address is inside every copy already released and cannot be changed afterwards. There is no repair. Do not rename or delete it.</dd>
+
+  <dt>Every update is refused, and nothing says so.</dt>
+  <dd>Somebody made a new Sparkle key. The app only trusts the original. Put the original private key back in the login keychain. Nothing else fixes it.</dd>
+
+  <dt>Apple's check fails.</dt>
+  <dd>Usually the app-specific password from step 4 expired or was revoked. Make a new one and update the <code>NOTARY_PASSWORD</code> secret. If the message instead names an entitlement, the app asked for a permission it has no profile for, and that is a code change.</dd>
+
+  <dt>The run fails on the signing certificate.</dt>
+  <dd>Developer ID certificates expire after five years. Renew it in your Apple Developer account, then redo steps 2, 3 and 5 with the new one.</dd>
+
+  <dt>The run never starts, or never pauses for you.</dt>
+  <dd>The <code>release</code> environment lost its reviewer. Open <span class="ui">Settings</span>, then <span class="ui">Environments</span>, then <span class="ui">release</span>, and put yourself back under <span class="ui">Required reviewers</span>.</dd>
+
+  <dt>The build fails and names a macOS version.</dt>
+  <dd>GitHub retired the machine the workflow asks for. Open <code>.github/workflows/release.yml</code>, find the <code>runs-on</code> line, and change it to the current macOS label.</dd>
+</dl>
+
+<p class="footnote">Super Submitter. Copyright &copy; 2026 Rafa CST.</p>
+
+</body>
+</html>
