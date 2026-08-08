@@ -89,6 +89,9 @@ public struct StoreDiagnostics: Sendable {
     /// The newest device tier configurations. The apply creates a new one
     /// only when the manifest file differs from the newest, and this read is
     /// what tells it.
+    ///
+    /// Google orders them newest first and assigns every id, so the first row
+    /// is the one in force.
     public func deviceTierConfigs(packageName: String) async throws -> [DeviceTierConfig] {
         let path = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
             + "/deviceTierConfigs?pageSize=20"
@@ -98,6 +101,63 @@ public struct StoreDiagnostics: Sendable {
                 ?? item["deviceTierConfigId"].int.map(String.init) else { return nil }
             return DeviceTierConfig(id: id,
                                     groupCount: item["deviceGroups"].array.count)
+        }
+    }
+
+    /// The newest configuration in full, as a fingerprint that compares to a
+    /// local file. Nil when the app has none.
+    ///
+    /// The list above carries the ids. This reads one whole body, because the
+    /// comparison needs every device group and every selector inside it.
+    public func newestDeviceTierFingerprint(packageName: String) async throws -> String? {
+        let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
+            + "/deviceTierConfigs"
+        let list = JSON(data: try await api.google("GET", "\(base)?pageSize=1").data)
+        guard let newest = list["deviceTierConfigs"].array.first,
+              let id = newest["deviceTierConfigId"].string
+                  ?? newest["deviceTierConfigId"].int.map(String.init) else { return nil }
+        let full = try await api.google("GET", "\(base)/\(StateReader.escape(id))")
+        return Self.deviceTierFingerprint(
+            try? JSONSerialization.jsonObject(with: full.data))
+    }
+
+    /// One device tier configuration as a string that compares.
+    ///
+    /// Three differences are Google's and not the developer's, and all three
+    /// are normalized away: it returns the device groups in its own order, it
+    /// encodes every 64-bit number as a string, and it adds the id it
+    /// assigned. What is left is what the developer wrote.
+    ///
+    /// `// ponytail: a sorted string, not a diff tree. The answer is one bit
+    /// // wide, "create or skip", so nothing needs to name which group moved.`
+    public static func deviceTierFingerprint(_ value: Any?) -> String {
+        switch value {
+        case let dictionary as [String: Any]:
+            return "{" + dictionary.keys.sorted()
+                .filter { $0 != "deviceTierConfigId" }
+                .map { "\($0):\(deviceTierFingerprint(dictionary[$0]))" }
+                .joined(separator: ",") + "}"
+        case let list as [Any]:
+            // Sorted, because the group order carries no meaning and Google
+            // returns its own.
+            return "[" + list.map(deviceTierFingerprint).sorted()
+                .joined(separator: ",") + "]"
+        case let number as NSNumber:
+            // A JSON `true` bridges to NSNumber as well, and `stringValue`
+            // would answer "1" for it.
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return number.boolValue ? "true" : "false"
+            }
+            // `stringValue` prints an integer without a decimal point, which
+            // is what makes the number 2000000000 and the string Google sends
+            // for it read as the same value.
+            return number.stringValue
+        case let text as String:
+            return text
+        case nil, is NSNull:
+            return ""
+        default:
+            return String(describing: value!)
         }
     }
 

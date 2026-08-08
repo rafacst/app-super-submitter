@@ -62,50 +62,85 @@ struct ExistingAppImportSheet: View {
                 Text("You enter these once. The key covers every app in your developer account, and it goes to the macOS Keychain when the import starts.")
                     .font(.system(size: 13)).foregroundStyle(Theme.text2)
             }
-            StoreSelectionGrid(selected: model.stores, toggle: model.toggleStore)
-
-            if model.stores.contains(.apple) {
-                credentialSection(store: .apple) {
-                    HStack(alignment: .bottom, spacing: 12) {
-                        labeledField("Key ID", text: $model.appleKeyID, prompt: "ABC123DEFG",
-                                     limit: AppleCredential.keyIDLength)
-                        labeledField("Issuer ID", text: $model.appleIssuerID,
-                                     prompt: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-                                     limit: AppleCredential.issuerIDLength)
-                        chooseFile(title: model.appleFileName.isEmpty
-                                   ? "Choose .p8 key" : model.appleFileName) {
-                            appleImporterOpen = true
-                        }
-                        // Each importer hangs off its own button. Stacking them
-                        // on one view lets only the last one present.
-                        .fileImporter(isPresented: $appleImporterOpen,
-                                      allowedContentTypes: [UTType(filenameExtension: "p8") ?? .data]) {
-                            handleFile($0, importWith: model.importAppleKey)
-                        }
-                    }
-                }
-            }
-            if model.stores.contains(.google) {
-                credentialSection(store: .google) {
-                    HStack {
-                        chooseFile(title: model.googleFileName.isEmpty
-                                   ? "Choose service-account JSON" : model.googleFileName) {
-                            googleImporterOpen = true
-                        }
-                        .fileImporter(isPresented: $googleImporterOpen,
-                                      allowedContentTypes: [.json]) {
-                            handleFile($0, importWith: model.importGoogleKey)
-                        }
-                        if let email = model.googleCredential?.clientEmail {
-                            Text(email).font(Theme.mono(11)).foregroundStyle(Theme.text2)
-                                .textSelection(.enabled)
-                        }
-                    }
+            // The Stores tab layout, because this asks the Stores tab question:
+            // each credential card in the column under the store it belongs to.
+            StoreSelectionGrid(selected: model.stores, toggle: model.toggleStore) { store in
+                switch store {
+                case .apple:
+                    if model.stores.contains(.apple) { appleCard }
+                case .google:
+                    if model.stores.contains(.google) { googleCard }
                 }
             }
             limitationNote
             errorView
         }
+    }
+
+    /// No status word and no connect button, unlike the Stores tab. Nothing has
+    /// called App Store Connect yet at this point, and the footer of this sheet
+    /// is what will: a second Connect inside the card would be the same job,
+    /// half done.
+    private var appleCard: some View {
+        @Bindable var model = model
+        return CredentialCard(
+            store: .apple,
+            summary: model.appleKeyID,
+            open: model.credentialDetailsOpen(.apple),
+            toggle: { model.toggleCredentialDetails(.apple) },
+            guide: .apple,
+            guideOpen: model.guideOpen.contains(.apple),
+            toggleGuide: { model.toggleGuide(.apple) }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                FileWell(
+                    name: model.appleFileName,
+                    emptyName: "App Store Connect private key",
+                    prompt: "Drop the .p8 file, or",
+                    choose: { appleImporterOpen = true },
+                    accept: { take($0, extension: "p8", with: model.importAppleKey) })
+                EditableField(label: "Key ID", value: $model.appleKeyID, prompt: "Key ID",
+                              limit: AppleCredential.keyIDLength)
+                EditableField(label: "Issuer id", value: $model.appleIssuerID,
+                              prompt: "Issuer UUID", limit: AppleCredential.issuerIDLength)
+            }
+        }
+        // Each importer hangs off its own card. Stacking them on one view lets
+        // only the last one present.
+        .fileImporter(isPresented: $appleImporterOpen,
+                      allowedContentTypes: [UTType(filenameExtension: "p8") ?? .data]) {
+            handleFile($0, importWith: model.importAppleKey)
+        }
+        .transition(.credentialPanel)
+    }
+
+    private var googleCard: some View {
+        CredentialCard(
+            store: .google,
+            summary: model.googleCredential?.clientEmail ?? "",
+            open: model.credentialDetailsOpen(.google),
+            toggle: { model.toggleCredentialDetails(.google) },
+            guide: .google,
+            guideOpen: model.guideOpen.contains(.google),
+            toggleGuide: { model.toggleGuide(.google) }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                FileWell(
+                    name: model.googleFileName,
+                    emptyName: "Google service-account key",
+                    prompt: "Drop the service account JSON, or",
+                    choose: { googleImporterOpen = true },
+                    accept: { take($0, extension: "json", with: model.importGoogleKey) })
+                if let email = model.googleCredential?.clientEmail {
+                    Text(email).font(Theme.mono(11)).foregroundStyle(Theme.text2)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .fileImporter(isPresented: $googleImporterOpen, allowedContentTypes: [.json]) {
+            handleFile($0, importWith: model.importGoogleKey)
+        }
+        .transition(.credentialPanel)
     }
 
     private var appsStep: some View {
@@ -130,6 +165,9 @@ struct ExistingAppImportSheet: View {
                         TextField("company.product, company.otherproduct", text: $model.googlePackages,
                                   axis: .vertical)
                             .textFieldStyle(.roundedBorder)
+                            // A newline separates two packages here, the same
+                            // as a comma. `addGooglePackages` splits on both.
+                            .returnInsertsLineBreak()
                             .lineLimit(2...4)
                         QuietButton(title: "Add packages", action: model.addGooglePackages)
                     }
@@ -179,18 +217,18 @@ struct ExistingAppImportSheet: View {
     }
 
     private var completeStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 26) {
             Label(completeTitle, systemImage: "checkmark.circle.fill")
                 .font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.green)
             Text(completeDetail)
                 .font(.system(size: 13)).foregroundStyle(Theme.text2)
-            ForEach(model.imported, id: \.path) { url in
-                HStack {
-                    Image(systemName: "doc.text.fill").foregroundStyle(Theme.teal)
-                    Text(url.path).font(Theme.mono(11)).textSelection(.enabled)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 16)], spacing: 24) {
+                ForEach(Array(model.selectedCandidates.enumerated()), id: \.element.id) { index, candidate in
+                    ImportedMark(candidate: candidate, icon: model.icons[candidate.id],
+                                 delay: Double(index) * 0.09)
                 }
-                .padding(11).background(Theme.raised, in: RoundedRectangle(cornerRadius: 8))
             }
+            .padding(.top, 6)
         }
     }
 
@@ -258,32 +296,6 @@ struct ExistingAppImportSheet: View {
         }
     }
 
-    private func credentialSection<Content: View>(store: Store,
-                                                   @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
-            StoreLabel(store: store, size: 14)
-            content()
-        }
-        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.sep,
-                                                                 lineWidth: Theme.hairline))
-    }
-
-    private func labeledField(_ label: String, text: Binding<String>,
-                              prompt: String, limit: Int? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(label).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
-            TextField(prompt, text: text.limited(to: limit)).textFieldStyle(.roundedBorder)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func chooseFile(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Label(title, systemImage: "doc.badge.plus") }
-            .buttonStyle(.bordered).controlSize(.large)
-    }
-
     private var stepLabel: String {
         switch model.step {
         case .credentials: "1 of 4 · Credentials"
@@ -297,6 +309,17 @@ struct ExistingAppImportSheet: View {
                             importWith: (URL) throws -> Void) {
         do { try importWith(result.get()); model.error = nil }
         catch { model.error = error.localizedDescription }
+    }
+
+    /// A dropped file. It answers the well, which paints the drop as refused
+    /// when the answer is false, so a `.json` on the Apple card says so where
+    /// the developer is looking instead of in the error line at the bottom.
+    private func take(_ urls: [URL], extension type: String,
+                      with importer: (URL) throws -> Void) -> Bool {
+        guard let url = urls.first,
+              url.pathExtension.lowercased() == type else { return false }
+        do { try importer(url); model.error = nil; return true }
+        catch { model.error = error.localizedDescription; return false }
     }
 
     /// Super Submitter keeps `store.yaml` beside the app, so the panel asks for
@@ -352,7 +375,7 @@ struct ExistingAppImportSheet: View {
         model.error = nil
         Task {
             do {
-                model.imported = try await state.importManagedApps(
+                _ = try await state.importManagedApps(
                     model.selectedCandidates,
                     appleCredential: model.appleCredential,
                     googleCredential: model.googleCredential)
@@ -371,7 +394,7 @@ struct ExistingAppImportSheet: View {
         Task {
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
             do {
-                model.imported = try await state.importExistingApps(
+                _ = try await state.importExistingApps(
                     model.selectedCandidates, destination: url,
                     appleCredential: model.appleCredential,
                     googleCredential: model.googleCredential)
@@ -380,6 +403,48 @@ struct ExistingAppImportSheet: View {
                 model.error = error.localizedDescription
                 model.step = .apps
             }
+        }
+    }
+}
+
+/// One app that just landed. The glow behind the icon is the icon itself,
+/// blurred, so every app arrives in its own colour and none of them fight the
+/// artwork. They fade in one after another, in the order they were picked.
+private struct ImportedMark: View {
+    let candidate: ExistingAppCandidate
+    let icon: URL?
+    let delay: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    var body: some View {
+        VStack(spacing: 9) {
+            AsyncImage(url: icon) { image in
+                image.resizable().aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .background {
+                        image.resizable().aspectRatio(contentMode: .fit)
+                            .blur(radius: 20).saturation(1.6).opacity(0.75)
+                    }
+            } placeholder: {
+                // No icon: the store mark over a glow of the store colour.
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(candidate.store.tint.opacity(0.14))
+                    .overlay(StoreMark(store: candidate.store, size: 30))
+                    .shadow(color: candidate.store.tint.opacity(0.55), radius: 18)
+            }
+            .frame(width: 72, height: 72)
+
+            Text(candidate.name)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(Theme.text2)
+                .lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: 104)
+        }
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(reduceMotion ? 1 : (shown ? 1 : 0.8))
+        .onAppear {
+            withAnimation(.spring(duration: 0.65).delay(reduceMotion ? 0 : delay)) { shown = true }
         }
     }
 }

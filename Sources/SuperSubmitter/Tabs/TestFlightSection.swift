@@ -26,6 +26,8 @@ struct TestFlightSection: View {
                     Divider().overlay(Theme.sep)
                     page
                     Divider().overlay(Theme.sep)
+                    licence
+                    Divider().overlay(Theme.sep)
                     switches
                 }
                 .storePanel()
@@ -105,6 +107,7 @@ struct TestFlightSection: View {
                          anchor: "build.whatToTest") {
                 TextField("", text: state.whatToTestBinding(locale: state.locale),
                           axis: .vertical)
+                    .returnInsertsLineBreak()
                     .lineLimit(2...8)
             }
             Text("Apple keys this to the build, so every upload carries it again.")
@@ -120,6 +123,7 @@ struct TestFlightSection: View {
                 TextField("", text: state.testFlightPageBinding(locale: state.locale,
                                                                 field: .description),
                           axis: .vertical)
+                    .returnInsertsLineBreak()
                     .lineLimit(2...6)
             }
             FieldRow {
@@ -138,6 +142,26 @@ struct TestFlightSection: View {
             }
             Text("This belongs to the app, not to one build, so it survives every upload.")
                 .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+        }
+    }
+
+    // MARK: - The licence the testers accept
+
+    /// Apple fills this with its own standard text and every external tester
+    /// accepts it before the first install, so a stale one blocks the beta as
+    /// surely as a missing build does.
+    private var licence: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Beta licence agreement").font(.system(size: 12, weight: .semibold))
+                .fieldAnchor("build.betaLicence")
+            TextEditor(text: state.betaLicenseAgreementBinding)
+                .font(.system(size: 12))
+                .frame(height: 90)
+                .scrollContentBackground(.hidden)
+                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+            Text("Leave it empty and Apple's own standard licence stays. Every external tester accepts whatever is here before they install the build.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

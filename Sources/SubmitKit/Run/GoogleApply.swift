@@ -18,17 +18,50 @@ extension Runner {
         return "\(googleBase)/edits/\(editID)\(suffix)"
     }
 
+    /// One localized store listing.
+    ///
+    /// A locale Google already holds is patched, and a new one is written
+    /// whole. The difference matters, because this body has never carried
+    /// every field: it omits what the manifest does not manage, and a PUT
+    /// replaces the listing, so an unmanaged promo video that the developer
+    /// set in the Play Console was silently deleted by an apply that only
+    /// meant to write a description. No plan row could show that, because the
+    /// planner skips an unmanaged field too.
+    ///
+    /// The three manifest states now reach Google intact: a value writes the
+    /// field, a null clears it, and an absent key leaves the Play Console
+    /// alone.
     func googleListing(_ locale: String) async throws {
+        let entry = manifest.listing?.locales[locale]
         var body: [String: Any] = ["language": locale]
         let title = manifest.listingText(locale: locale, field: .name)
-        let short = Planner.googleShortDescription(manifest, locale)
-        let full = manifest.listingText(locale: locale, field: .description)
-        let video = manifest.listingText(locale: locale, field: .googleVideo)
         if !title.isEmpty { body["title"] = title }
-        if !short.isEmpty { body["shortDescription"] = short }
-        if !full.isEmpty { body["fullDescription"] = full }
-        if !video.isEmpty { body["video"] = video }
-        try await api.google("PUT", try editPath("/listings/\(locale)"), body: body)
+        // The short description falls back to the Apple subtitle, which is the
+        // same rule the plan compares with.
+        if let short = Self.listingField(entry?.google?.shortDescription)
+            ?? Self.listingField(entry?.subtitle) {
+            body["shortDescription"] = short
+        }
+        if let full = Self.listingField(entry?.description) {
+            body["fullDescription"] = full
+        }
+        if let video = Self.listingField(entry?.google?.video) {
+            body["video"] = video
+        }
+        let method = actual.google?.listings[locale] == nil ? "PUT" : "PATCH"
+        try await api.google(method, try editPath("/listings/\(locale)"), body: body)
+    }
+
+    /// What one listing field sends, or nil when the manifest leaves it alone.
+    ///
+    /// `// ponytail: nil means "omit", and the empty string means "clear".
+    /// // Two different absences, because the manifest has two.`
+    static func listingField(_ managed: Managed<String>?) -> String? {
+        switch managed {
+        case .value(let text): text.isEmpty ? nil : text
+        case .clear: ""
+        case .unmanaged, nil: nil
+        }
     }
 
     func googleDetails() async throws {
@@ -132,7 +165,35 @@ extension Runner {
             throw RunError.uploadFailed("Google accepted the APK and returned no version code.")
         }
         googleApkVersionCode = versionCode
-        report(index: index, fraction: 1, detail: "version code \(versionCode)")
+        report(index: index, fraction: 0.9, detail: "version code \(versionCode)")
+
+        // The direct confirmation. The bundle flow reads the edit back in
+        // `UploadService.checkGoogle`; the APK had only the upload response,
+        // so a version code that never reached the edit went unnoticed until
+        // the commit refused it.
+        let uploaded = try await googleApks().first { $0.versionCode == versionCode }
+        guard let uploaded else {
+            throw RunError.uploadFailed(
+                "Google answered version code \(versionCode) for \(url.lastPathComponent) and then listed no such APK in the edit.")
+        }
+        report(index: index, fraction: 1,
+               detail: uploaded.sha1.map { "version code \(versionCode)  ·  \($0)" }
+                   ?? "version code \(versionCode)")
+    }
+
+    /// One APK inside the open edit. Google lists the ones it already holds
+    /// for the app as well as the ones this edit uploaded.
+    struct EditAPK: Equatable {
+        var versionCode: Int
+        var sha1: String?
+    }
+
+    func googleApks() async throws -> [EditAPK] {
+        let payload = JSON(data: try await api.google("GET", try editPath("/apks")).data)
+        return payload["apks"].array.compactMap { item in
+            guard let code = item["versionCode"].int else { return nil }
+            return EditAPK(versionCode: code, sha1: item["binary"]["sha1"].string)
+        }
     }
 
     /// An APK that the developer hosts. Google stores the metadata and never
@@ -182,19 +243,67 @@ extension Runner {
 
     /// An expansion file. Google accepts one for an APK and never for a
     /// bundle, so this reads the APK version code and no other.
+    ///
+    /// The file Google already holds costs no upload, the same rule the
+    /// product images follow. An expansion file runs to two gigabytes, so a
+    /// re-run that skips it is the difference between a minute and an hour.
     func googleExpansionFile(kind: String, path: String, index: Int) async throws {
         guard let url = resolve(path) else { throw RunError.missingBuild }
         guard let editID = googleEditID else { throw RunError.missingEdit }
-        guard let versionCode = googleApkVersionCode else {
+        guard let versionCode = try await googleExpansionTarget() else {
             throw RunError.uploadFailed(
-                "An expansion file needs an APK. The manifest names no androidApk build.")
+                "An expansion file needs an APK. The manifest names no androidApk build, and the app holds no APK to attach one to.")
         }
         report(index: index, fraction: 0.05, detail: url.lastPathComponent)
+
+        let local = Planner.fileSize(url)
+        if local > 0,
+           try await googleExpansionFileState(versionCode: versionCode, kind: kind) == local {
+            report(index: index, fraction: 1,
+                   detail: "already attached to version code \(versionCode)")
+            return
+        }
+
         let uploadPath = "/upload/androidpublisher/v3/applications/"
             + "\(StateReader.escape(manifest.apps.google?.packageName ?? ""))"
             + "/edits/\(editID)/apks/\(versionCode)/expansionFiles/\(kind)"
         try await api.googleUpload(uploadPath, contentType: "application/octet-stream", file: url)
         report(index: index, fraction: 1, detail: "attached to version code \(versionCode)")
+    }
+
+    /// The APK the expansion file attaches to: the one this run uploaded, or
+    /// the newest one the app already holds.
+    ///
+    /// The second half is what a re-run needs. A run that uploads no APK used
+    /// to fail this step outright, even though the app had an APK sitting
+    /// right there to attach to.
+    func googleExpansionTarget() async throws -> Int? {
+        if let versionCode = googleApkVersionCode { return versionCode }
+        return try await googleApks().map(\.versionCode).max()
+    }
+
+    /// The size of what Google has attached to one APK, or nil when it has
+    /// nothing to compare.
+    ///
+    /// Google answers a size here and no checksum, so the size is the whole
+    /// comparison. It answers no size at all for an expansion file that only
+    /// points at another version's, and nil then means "upload", which is the
+    /// safe way round.
+    ///
+    /// `// ponytail: the byte count decides. Two different files of the same
+    /// // exact length on one version code would read as equal. Compare a
+    /// // local hash instead the day Google answers one.`
+    func googleExpansionFileState(versionCode: Int, kind: String) async throws -> Int64? {
+        let path = try editPath("/apks/\(versionCode)/expansionFiles/\(kind)")
+        let payload: JSON
+        do {
+            payload = JSON(data: try await api.google("GET", path).data)
+        } catch ConnectionError.http(let status, _) where status == 404 {
+            // No expansion file of this kind on this APK. A state, not a
+            // failure, and the caller uploads one.
+            return nil
+        }
+        return payload["fileSize"].int.map(Int64.init)
     }
 
     /// The release `status` is always `draft` in an apply, whatever the

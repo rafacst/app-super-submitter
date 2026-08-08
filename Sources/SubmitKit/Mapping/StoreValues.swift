@@ -113,6 +113,28 @@ public enum StoreValues {
         Choice("AUDIO_DESCRIPTIONS", "Audio descriptions"),
     ]
 
+    /// What a colleague may do in App Store Connect. It is the App Store twin
+    /// of `googleAccountPermissions` below.
+    ///
+    /// `ACCOUNT_HOLDER` is left out on purpose: Apple gives that role to the
+    /// person who enrolled and refuses every attempt to hand it over through
+    /// the API, so offering it in a chooser is offering a 409. The three
+    /// deprecated permissions are left out for the same reason the deprecated
+    /// Google rows are.
+    public static let appleUserRoles: [Choice] = [
+        Choice("ADMIN", "Admin, everything but the legal agreements"),
+        Choice("APP_MANAGER", "App Manager, the whole of an app"),
+        Choice("DEVELOPER", "Developer, build and deliver"),
+        Choice("MARKETING", "Marketing, the promotional material"),
+        Choice("SALES", "Sales, the downloads and the analytics"),
+        Choice("FINANCE", "Finance, the reports and the tax forms"),
+        Choice("CUSTOMER_SUPPORT", "Customer Support, the ratings and reviews"),
+        Choice("CREATE_APPS", "May create app records"),
+        Choice("CLOUD_MANAGED_APP_DISTRIBUTION", "May sign with the cloud distribution certificate"),
+        Choice("CLOUD_MANAGED_DEVELOPER_ID", "May sign with the cloud Developer ID certificate"),
+        Choice("GENERATE_INDIVIDUAL_KEYS", "May generate an individual API key"),
+    ]
+
     // MARK: - Google Play
 
     /// The four tracks every Play app already has. A closed track that the
@@ -138,6 +160,53 @@ public enum StoreValues {
     public static let withdrawalRights: [Choice] = [
         Choice("WITHDRAWAL_RIGHT_DIGITAL_CONTENT", "Digital content"),
         Choice("WITHDRAWAL_RIGHT_SERVICE", "Service"),
+    ]
+
+    /// What a colleague may do across the whole developer account.
+    ///
+    /// Google's own two deprecated rows are left out: `CAN_SEE_ALL_APPS` is
+    /// superseded by `CAN_VIEW_NON_FINANCIAL_DATA_GLOBAL`, and offering a
+    /// deprecated permission in a chooser is offering a mistake. A person who
+    /// already holds one still shows it, because the chooser keeps a value it
+    /// does not carry.
+    public static let googleAccountPermissions: [Choice] = [
+        Choice("CAN_MANAGE_PERMISSIONS_GLOBAL", "Admin, every permission"),
+        Choice("CAN_VIEW_NON_FINANCIAL_DATA_GLOBAL", "View app information and reports"),
+        Choice("CAN_VIEW_FINANCIAL_DATA_GLOBAL", "View financial data and orders"),
+        Choice("CAN_VIEW_APP_QUALITY_GLOBAL", "View app quality"),
+        Choice("CAN_MANAGE_PUBLIC_APKS_GLOBAL", "Release to production"),
+        Choice("CAN_MANAGE_TRACK_APKS_GLOBAL", "Release to testing tracks"),
+        Choice("CAN_MANAGE_TRACK_USERS_GLOBAL", "Manage tracks and tester lists"),
+        Choice("CAN_MANAGE_PUBLIC_LISTING_GLOBAL", "Manage store presence"),
+        Choice("CAN_MANAGE_DRAFT_APPS_GLOBAL", "Create and edit draft apps"),
+        Choice("CAN_MANAGE_ORDERS_GLOBAL", "Manage orders and subscriptions"),
+        Choice("CAN_MANAGE_APP_CONTENT_GLOBAL", "Manage the policy pages"),
+        Choice("CAN_REPLY_TO_REVIEWS_GLOBAL", "Reply to reviews"),
+        Choice("CAN_MANAGE_DEEPLINKS_GLOBAL", "Manage the deep links"),
+        Choice("CAN_EDIT_GAMES_GLOBAL", "Edit Play Games Services projects"),
+        Choice("CAN_PUBLISH_GAMES_GLOBAL", "Publish Play Games Services projects"),
+        Choice("CAN_CREATE_MANAGED_PLAY_APPS_GLOBAL", "Create private apps"),
+        Choice("CAN_CHANGE_MANAGED_PLAY_SETTING_GLOBAL", "Change the private app setting"),
+        Choice("CAN_VIEW_CONNECTED_APPS_GLOBAL", "View connected apps"),
+        Choice("CAN_EDIT_CONNECTED_APPS_GLOBAL", "Edit connected apps"),
+    ]
+
+    /// What a colleague may do with one app. `CAN_ACCESS_APP` is the
+    /// deprecated twin of `CAN_VIEW_NON_FINANCIAL_DATA` and is left out.
+    public static let googleAppPermissions: [Choice] = [
+        Choice("CAN_MANAGE_PERMISSIONS", "Admin, every permission"),
+        Choice("CAN_VIEW_NON_FINANCIAL_DATA", "View app information"),
+        Choice("CAN_VIEW_FINANCIAL_DATA", "View financial data"),
+        Choice("CAN_VIEW_APP_QUALITY", "View app quality"),
+        Choice("CAN_MANAGE_PUBLIC_APKS", "Release to production"),
+        Choice("CAN_MANAGE_TRACK_APKS", "Release to testing tracks"),
+        Choice("CAN_MANAGE_TRACK_USERS", "Manage tracks and tester lists"),
+        Choice("CAN_MANAGE_PUBLIC_LISTING", "Manage store presence"),
+        Choice("CAN_MANAGE_DRAFT_APPS", "Edit and delete draft apps"),
+        Choice("CAN_MANAGE_ORDERS", "Manage orders and subscriptions"),
+        Choice("CAN_MANAGE_APP_CONTENT", "Manage the policy pages"),
+        Choice("CAN_REPLY_TO_REVIEWS", "Reply to reviews"),
+        Choice("CAN_MANAGE_DEEPLINKS", "Manage the deep links"),
     ]
 
     // MARK: - Languages

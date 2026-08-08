@@ -184,6 +184,12 @@ public struct UploadService: Sendable {
             }
             let bundles = JSON(data: try await api.google("GET", "\(editBase)/bundles").data)
             codes += bundles["bundles"].array.compactMap { $0["versionCode"].int }
+            // The APKs too. An app that ships a plain APK and has not released
+            // it to a track yet showed no version code at all here, so the
+            // collision check below waved a duplicate through and Google
+            // refused it at the upload instead.
+            let apks = JSON(data: try await api.google("GET", "\(editBase)/apks").data)
+            codes += apks["apks"].array.compactMap { $0["versionCode"].int }
             result.highestVersionCode = codes.max()
 
             if let versionCode {

@@ -190,15 +190,21 @@ extension Manifest {
             /// belongs to one build; this belongs to the app and it survives
             /// every build.
             public var localizations: [String: Localization]?
+            /// The licence that every external tester accepts before the first
+            /// install. Apple fills it with its own standard text, and a
+            /// missing key here leaves whatever Apple holds alone.
+            public var licenseAgreement: String?
 
             public init(groups: [Group]? = nil, whatToTest: [String: String]? = nil,
                         autoNotify: Bool? = nil, submitForBetaReview: Bool? = nil,
-                        localizations: [String: Localization]? = nil) {
+                        localizations: [String: Localization]? = nil,
+                        licenseAgreement: String? = nil) {
                 self.groups = groups
                 self.whatToTest = whatToTest
                 self.autoNotify = autoNotify
                 self.submitForBetaReview = submitForBetaReview
                 self.localizations = localizations
+                self.licenseAgreement = licenseAgreement
             }
 
             /// One locale of the TestFlight page. Apple calls the resource
@@ -998,9 +1004,15 @@ extension Manifest {
             public struct ClipLocale: Codable, Sendable, Equatable {
                 public var subtitle: String?
                 public var title: String?
-                public init(subtitle: String? = nil, title: String? = nil) {
+                /// The picture on the App Clip card. Apple keeps one per
+                /// locale, beside the subtitle a reader sees under it, and it
+                /// is reserved and uploaded the same way as a screenshot.
+                public var headerImage: String?
+                public init(subtitle: String? = nil, title: String? = nil,
+                            headerImage: String? = nil) {
                     self.subtitle = subtitle
                     self.title = title
+                    self.headerImage = headerImage
                 }
             }
         }
@@ -1062,6 +1074,29 @@ public enum AgeRatingAnswer: Codable, Sendable, Equatable, Hashable {
         if let value = json.bool { self = .flag(value) }
         else if let value = json.string { self = .text(value) }
         else { return nil }
+    }
+}
+
+extension Manifest {
+    /// The manifest without the five age rating keys the older build invented.
+    ///
+    /// That build offered them as the whole questionnaire, and the apply sent
+    /// them as App Store Connect attribute names. Apple has none of them, so
+    /// every manifest it touched still carries lines that declare nothing.
+    /// They are dropped on the way in, because a warning about a line no store
+    /// ever sees must not stand between a developer and a release.
+    ///
+    /// It names these five and nothing else. Apple's attributes are camelCase,
+    /// so none of these can ever become one, and a key a developer typed by
+    /// hand still earns the warning that explains it.
+    func withoutInventedAgeRatingAnswers() -> Manifest {
+        let invented: Set<String> = ["gambling", "profanity", "sexual_content",
+                                     "user_generated_content", "violence"]
+        guard let answers = review?.ageRatingAnswers else { return self }
+        let kept = answers.filter { !invented.contains($0.key) }
+        var result = self
+        result.review?.ageRatingAnswers = kept.isEmpty ? nil : kept
+        return result
     }
 }
 

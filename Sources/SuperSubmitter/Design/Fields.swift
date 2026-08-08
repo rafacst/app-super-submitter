@@ -1,5 +1,31 @@
+import AppKit
 import SubmitKit
 import SwiftUI
+
+extension View {
+    /// Return adds a line break here, instead of ending the edit.
+    ///
+    /// A `TextField(axis: .vertical)` on macOS commits on Return the way a
+    /// one-line field does, and SwiftUI then selects the whole value. So a
+    /// developer who pressed Return to start a paragraph in a release note got
+    /// their release note selected instead, one keystroke away from replacing
+    /// it. The break was on Option-Return, which nothing on screen said.
+    ///
+    /// This sends the responder action Option-Return sends, so the break lands
+    /// at the caret and not at the end, and the edit carries on. The field
+    /// editor is what performs it; when there is none the action fails, the key
+    /// is left alone, and the field behaves as it did before.
+    ///
+    /// Every prose box takes this. The one-line fields do not: Return commits
+    /// there, and keywords, ids and paths hold no second line.
+    func returnInsertsLineBreak() -> some View {
+        onKeyPress(.return) {
+            NSApp.sendAction(#selector(NSStandardKeyBindingResponding
+                .insertNewlineIgnoringFieldEditor(_:)), to: nil, from: nil)
+                ? .handled : .ignored
+        }
+    }
+}
 
 /// Picks one value from a list, and shows the words rather than the code.
 ///

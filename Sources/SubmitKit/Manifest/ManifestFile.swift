@@ -28,9 +28,13 @@ public enum ManifestFile {
 
     /// The one door in. `ManifestBlocks.apply` ends here too, so the YAML
     /// editor and the file both explain a failure the same way.
+    ///
+    /// It is also where a manifest an older build wrote heals itself. See
+    /// `withoutInventedAgeRatingAnswers`.
     public static func decode(_ yaml: String) throws -> Manifest {
         do {
             return try YAMLDecoder().decode(Manifest.self, from: yaml)
+                .withoutInventedAgeRatingAnswers()
         } catch let error as DecodingError {
             throw ManifestError(explain(error, in: yaml))
         }

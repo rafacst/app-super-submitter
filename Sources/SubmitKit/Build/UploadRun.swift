@@ -131,6 +131,28 @@ public struct UploadRun: Codable, Sendable, Equatable, Identifiable {
         if next.isTerminal { finishedAt = now }
         return true
     }
+
+    /// Puts the run back at the preflight, from wherever it stopped.
+    ///
+    /// `move` refuses a jump the table does not carry, and it refuses in
+    /// silence. `unlinked` is the state a fresh launch and a restored link
+    /// both sit in, and it reaches `preflight` only through `discovering`,
+    /// so every caller that wanted a preflight had to know the table.
+    ///
+    /// One of them did not. A finished run and a link restored from disk both
+    /// left the Build tab drawing a project card with no Build button, so one
+    /// upload was the whole session and a developer who changed the app
+    /// afterwards had no way to send the change.
+    ///
+    /// An active run answers false. A build that is running is not a run to
+    /// throw back to the start.
+    @discardableResult
+    public mutating func moveToPreflight(now: Date = Date()) -> Bool {
+        guard !state.isActive || state == .discovering else { return false }
+        if move(to: .preflight, now: now) { return true }
+        guard move(to: .discovering, now: now) else { return false }
+        return move(to: .preflight, now: now)
+    }
 }
 
 /// upload-spec section 14. The category never discards the original cause.

@@ -96,6 +96,7 @@ public enum PlanOperation: Sendable, Equatable {
     /// The TestFlight page of the app, and the contact for its review. Both
     /// belong to the app and neither one changes with a build.
     case appleBetaAppLocalizations
+    case appleBetaLicenseAgreement
     case appleBetaReviewDetail
     /// Takes a place in the beta review queue. No call takes it back.
     case appleBetaReview

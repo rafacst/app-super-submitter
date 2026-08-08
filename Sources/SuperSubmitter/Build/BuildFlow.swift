@@ -186,6 +186,19 @@ final class BuildFlow {
         run.platform = saved.platform
         run.linkedProjectID = saved.id
         allowProvisioningUpdates = saved.selection.allowProvisioningUpdates
+        // A restored link is a linked project, so the tab owes the same
+        // preflight the first link got. Without it the card sat there with
+        // no toolchain, no scheme, and no Build button until the developer
+        // unlinked the project and chose the folder again.
+        //
+        // The state is read again inside the task, not here. `.task` calls
+        // `resumeUnfinishedRuns` immediately after this line, and a run that
+        // outlived the last launch is the one that belongs on screen. Only an
+        // untouched run is still `unlinked` by the time this body runs.
+        task = Task { [weak self] in
+            guard let self, run.state == .unlinked else { return }
+            await refreshPreflight()
+        }
     }
 
     private func savedProjectForOpenApp() -> LinkedSourceProject? {
@@ -209,8 +222,6 @@ final class BuildFlow {
     /// upload-spec 8.1 to 8.8 and 9.3 to 9.8. Read-only. Nothing here builds.
     func refreshPreflight() async {
         guard let project else { return }
-        candidate = nil
-        artifactOnly = false
         // A saved link is not proof that the folder still holds the project.
         guard FileManager.default.fileExists(atPath: project.containerPath) else {
             fail(BuildFailure(
@@ -219,7 +230,17 @@ final class BuildFlow {
                 recovery: "Press Link Project Folder and locate it again."))
             return
         }
-        run.move(to: .preflight)
+        // Not `move(to: .preflight)`. A finished run, a link restored from
+        // disk, and a fresh launch all sit in a state that cannot reach the
+        // preflight in one move, and `move` refuses those in silence: the
+        // snapshot below then filled for a run that was still `complete` or
+        // `unlinked`, the guard at the end never reached `readyToBuild`, and
+        // the tab drew a project card with no Build button.
+        guard run.moveToPreflight() else { return }
+        // After the move and not before it. A refused call leaves the run and
+        // the artifact it holds exactly as they were.
+        candidate = nil
+        artifactOnly = false
         blocking = nil
         failure = nil
         snapshot = PreflightSnapshot()

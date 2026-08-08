@@ -97,6 +97,19 @@ extension AppState {
         return try await diagnostics().deviceTierConfigs(packageName: packageName)
     }
 
+    /// Whether the newest configuration already says what the manifest file
+    /// says, which is exactly the question the apply asks before it creates
+    /// one. Nil when the manifest names no file or Google holds none.
+    func googleDeviceTierMatchesManifest() async throws -> Bool? {
+        guard let packageName = manifest.apps.google?.packageName, !packageName.isEmpty,
+              let path = manifest.release?.google?.deviceTierConfig, !path.isEmpty,
+              let url = Planner.resolve(path, root: manifestRoot),
+              let body = try? JSONSerialization.jsonObject(with: Data(contentsOf: url)),
+              let live = try await diagnostics()
+                  .newestDeviceTierFingerprint(packageName: packageName) else { return nil }
+        return live == StoreDiagnostics.deviceTierFingerprint(body)
+    }
+
     /// What is inside the build that the version holds: the app bundle, the
     /// extensions, the download size, and the encryption flag.
     func appleBuildBundles() async throws -> [StoreDiagnostics.BuildBundle] {

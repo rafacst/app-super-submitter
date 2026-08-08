@@ -14,19 +14,23 @@ extension Runner {
 
     // MARK: - The device tier configuration
 
-    /// Google assigns the id, so a create is the only write and every apply
-    /// makes a new configuration. The validator says so, because the
-    /// developer cannot see it in a diff.
+    /// Google assigns the id and keeps every configuration, so a create is the
+    /// only write it offers. The newest one is the one in force, so this reads
+    /// it back and creates nothing when it already says what the file says.
     ///
-    /// `// ponytail: no content comparison. Google returns the groups in its
-    /// // own order and its own shape, so a diff would need a normalizer that
-    /// // is longer than this file. Remove the manifest key between applies.`
+    /// This used to create a configuration on every apply, and the validator
+    /// had to warn the developer to remove the manifest key between runs.
+    /// Neither is true now: the manifest is the desired state here, exactly
+    /// like everywhere else in the app.
     func googleDeviceTierConfig(path: String) async throws {
         guard let url = resolve(path) else { throw RunError.missingBuild }
         let data = try Data(contentsOf: url)
         guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw RunError.uploadFailed("\(url.lastPathComponent) is not a JSON object.")
         }
+        let live = try await StoreDiagnostics(api: api).newestDeviceTierFingerprint(
+            packageName: manifest.apps.google?.packageName ?? "")
+        guard live != StoreDiagnostics.deviceTierFingerprint(body) else { return }
         try await api.google("POST", "\(monetizationBase)/deviceTierConfigs", body: body)
     }
 

@@ -26,9 +26,9 @@ extension AppState {
             case .apk: "Optional. A bundle and an APK may go into one edit."
             case .mappingFile: "ProGuard or R8. Google needs it to read a stack trace."
             case .nativeSymbols: "The NDK debug symbols archive."
-            case .expansionMain: "APK only. A bundle carries its assets inside."
-            case .expansionPatch: "APK only."
-            case .deviceTierConfig: "JSON. Every apply creates a new configuration."
+            case .expansionMain: "APK only. A bundle carries its assets inside. An apply re-uploads it only when it differs from the one Google holds."
+            case .expansionPatch: "APK only. Re-uploaded only when it differs."
+            case .deviceTierConfig: "JSON. An apply reuses the newest matching configuration and creates one only when yours differs."
             }
         }
     }

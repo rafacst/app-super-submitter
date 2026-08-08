@@ -8,6 +8,11 @@ import SwiftUI
 /// with it, so that stays in the Developer portal where one person owns the
 /// consequence.
 ///
+/// Two rows at the bottom write, and both are deliberate exceptions. A device
+/// is a UDID on a list, and a tester whose phone is not on it cannot install a
+/// build. A bundle ID is a name in a namespace, and it is the one bootstrap
+/// step of a new app that Apple's API allows at all.
+///
 /// The value is the expiry. A certificate and a profile both lapse on a date
 /// that nothing else in the app shows, and the first sign of a lapse is usually
 /// a failed build.
@@ -15,8 +20,19 @@ struct SigningIdentitiesPanel: View {
     @Environment(AppState.self) private var state
     @State private var busy = false
     @State private var loaded = false
+    @State private var error: String?
     @State private var items: [AppleProvisioningClient.Item] = []
     @State private var failures: [String] = []
+
+    @State private var deviceName = ""
+    @State private var deviceUDID = ""
+    @State private var devicePlatform = "IOS"
+    @State private var confirmingDevice = false
+
+    @State private var bundleName = ""
+    @State private var bundleIdentifier = ""
+    @State private var bundlePlatform = "IOS"
+    @State private var confirmingBundle = false
 
     var body: some View {
         Section_("Signing identities", icon: "seal", tint: Theme.purple) {
@@ -41,12 +57,95 @@ struct SigningIdentitiesPanel: View {
                 }
                 if !expiring.isEmpty { expiryNote }
 
+                if let error { ErrorLine(text: error) }
+
                 ForEach(AppleProvisioningClient.Item.Kind.allCases, id: \.self) { kind in
                     let group = items.filter { $0.kind == kind }
                     if !group.isEmpty { block(kind, group) }
                 }
+
+                Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+                registerDevice
+                Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+                addBundleID
             }
             .storePanel(padding: 14)
+        }
+        .confirmationDialog("Register this device?", isPresented: $confirmingDevice) {
+            Button("Register the device") { register() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It takes one slot of the yearly device quota, and Apple only clears that quota when the membership renews. Check the identifier before you spend the slot.")
+        }
+        .confirmationDialog("Create this bundle ID?", isPresented: $confirmingBundle) {
+            Button("Create the bundle ID") { createBundle() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It reserves \(bundleIdentifier.trimmingCharacters(in: .whitespaces)) for this team, and no call here deletes one again. It does not create the App Store record: Apple publishes no call for that, so you still make the app once in App Store Connect.")
+        }
+    }
+
+    // MARK: - The two writes
+
+    /// A tester whose phone is not on this list cannot install a build, which
+    /// is why this is the one provisioning write every team makes constantly.
+    private var registerDevice: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Register a device").font(.system(size: 12, weight: .semibold))
+            HStack(spacing: 8) {
+                TextField("Anna's iPhone", text: $deviceName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                TextField("Device identifier", text: $deviceUDID)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(11))
+                Picker("", selection: $devicePlatform) {
+                    ForEach(AppleProvisioningClient.platforms) { Text($0.label).tag($0.value) }
+                }
+                .labelsHidden()
+                .frame(width: 170)
+                Button("Register") { confirmingDevice = true }
+                    .controlSize(.small)
+                    .disabled(busy
+                              || deviceName.trimmingCharacters(in: .whitespaces).isEmpty
+                              || !AppleProvisioningClient.looksLikeAUDID(
+                                deviceUDID.trimmingCharacters(in: .whitespaces)))
+            }
+            Text("Xcode shows the identifier under Window ▸ Devices and Simulators. It costs one slot of the yearly quota, so a typo is spent until the membership renews.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The closest thing to a "new app" call that Apple publishes. There is no
+    /// `POST /v1/apps`, so the app record itself is still made by a person in
+    /// App Store Connect, and this is the step before it.
+    private var addBundleID: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Create a bundle ID").font(.system(size: 12, weight: .semibold))
+            HStack(spacing: 8) {
+                TextField("My App", text: $bundleName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                // No sample identifier in the box. `RuntimePlaceholderTests`
+                // bans a placeholder dataset from the runtime sources, and a
+                // fake bundle ID is one.
+                TextField("Reverse-DNS identifier", text: $bundleIdentifier)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(11))
+                Picker("", selection: $bundlePlatform) {
+                    ForEach(AppleProvisioningClient.platforms) { Text($0.label).tag($0.value) }
+                }
+                .labelsHidden()
+                .frame(width: 170)
+                Button("Create") { confirmingBundle = true }
+                    .controlSize(.small)
+                    .disabled(busy || !AppleProvisioningClient.looksLikeABundleID(
+                        bundleIdentifier.trimmingCharacters(in: .whitespaces)))
+            }
+            Text("Apple publishes no call that creates the App Store record, so this reserves the identifier and you make the app once in App Store Connect. Nothing here deletes one again.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -104,6 +203,37 @@ struct SigningIdentitiesPanel: View {
             failures = result.failures
             loaded = true
             busy = false
+        }
+    }
+
+    /// Both writes re-read afterwards, so the list shows what Apple stored
+    /// rather than what this app sent.
+    private func register() {
+        track($busy, $error) {
+            try await state.registerAppleDevice(name: deviceName, platform: devicePlatform,
+                                                udid: deviceUDID.trimmingCharacters(
+                                                    in: .whitespacesAndNewlines))
+            deviceName = ""
+            deviceUDID = ""
+            let result = await state.appleProvisioning()
+            items = result.items
+            failures = result.failures
+            loaded = true
+        }
+    }
+
+    private func createBundle() {
+        track($busy, $error) {
+            try await state.createAppleBundleID(
+                name: bundleName,
+                identifier: bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines),
+                platform: bundlePlatform)
+            bundleName = ""
+            bundleIdentifier = ""
+            let result = await state.appleProvisioning()
+            items = result.items
+            failures = result.failures
+            loaded = true
         }
     }
 }

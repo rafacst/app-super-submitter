@@ -154,4 +154,55 @@ extension AppState {
         try await googleActions().addRecoveryTargeting(packageName: packageName,
                                                        recoveryId: id, allUsers: true)
     }
+
+    // MARK: - The people on the developer account
+
+    /// The team calls belong to the account and not to an app, so this one
+    /// needs no manifest and no package name. It works with no app open,
+    /// which is the whole reason it sits on the Stores tab.
+    func googleTeam() -> GoogleTeamClient {
+        GoogleTeamClient(api: readOnlyAPI())
+    }
+
+    func googleTeamMembers() async throws -> [GoogleTeamClient.Member] {
+        try await googleTeam().members(developerId: googleDeveloperId)
+    }
+
+    /// **This emails a real person an invitation.** The panel confirms it.
+    func inviteGoogleTeamMember(email: String,
+                                permissions: [String]) async throws {
+        try await googleTeam().invite(developerId: googleDeveloperId, email: email,
+                                      permissions: permissions)
+    }
+
+    /// **This changes what a colleague may do**, account-wide. Google takes up
+    /// to 48 hours to propagate it.
+    func setGoogleTeamPermissions(member: String, permissions: [String]) async throws {
+        try await googleTeam().setAccountPermissions(member: member,
+                                                     permissions: permissions)
+    }
+
+    /// **This shuts a colleague out of the developer account.** The panel
+    /// confirms it, and only a fresh invitation puts them back.
+    func removeGoogleTeamMember(_ member: String) async throws {
+        try await googleTeam().removeMember(member)
+    }
+
+    /// Gives a colleague access to the package this app names, or to another
+    /// one that the panel asked for.
+    func grantGoogleTeamAccess(member: String, packageName: String,
+                               permissions: [String]) async throws {
+        try await googleTeam().grant(member: member, packageName: packageName,
+                                     permissions: permissions)
+    }
+
+    func setGoogleGrantPermissions(grant: String, permissions: [String]) async throws {
+        try await googleTeam().setGrantPermissions(grant: grant, permissions: permissions)
+    }
+
+    /// **This takes one app away from a colleague.** Their account-level
+    /// access stays.
+    func revokeGoogleGrant(_ grant: String) async throws {
+        try await googleTeam().revokeGrant(grant)
+    }
 }

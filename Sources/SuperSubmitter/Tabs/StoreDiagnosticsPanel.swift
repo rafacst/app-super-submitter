@@ -12,6 +12,8 @@ struct StoreDiagnosticsPanel: View {
     @State private var error: String?
     @State private var apks: [StoreDiagnostics.GeneratedApk] = []
     @State private var tiers: [StoreDiagnostics.DeviceTierConfig] = []
+    /// Nil when the manifest names no configuration file, or Google holds none.
+    @State private var tierMatch: Bool?
     @State private var bundles: [StoreDiagnostics.BuildBundle] = []
     @State private var icons: [String] = []
     @State private var territories: [StoreDiagnostics.Territory] = []
@@ -103,9 +105,27 @@ struct StoreDiagnosticsPanel: View {
         VStack(alignment: .leading, spacing: 5) {
             Text("Google device tier configurations")
                 .font(.system(size: 12, weight: .semibold))
-            ForEach(tiers) { tier in
-                Text("\(tier.id) · \(tier.groupCount) groups")
-                    .font(Theme.mono(11)).textSelection(.enabled)
+            ForEach(Array(tiers.enumerated()), id: \.element.id) { position, tier in
+                HStack(spacing: 8) {
+                    Text("\(tier.id) · \(tier.groupCount) groups")
+                        .font(Theme.mono(11)).textSelection(.enabled)
+                    // Google orders them newest first, and the newest is the
+                    // one in force.
+                    if position == 0 {
+                        Text("in force").font(.system(size: 10))
+                            .foregroundStyle(Theme.text3)
+                    }
+                }
+            }
+            // The same comparison the apply makes, shown before it runs. It
+            // answers the one question the developer used to have no way to
+            // ask: does my file already match what Google holds.
+            if let tierMatch {
+                Text(tierMatch
+                    ? "Your file matches the one in force. The next apply creates nothing."
+                    : "Your file differs from the one in force. The next apply creates a new configuration, and Google assigns its id.")
+                    .font(.system(size: 11)).foregroundStyle(tierMatch ? Theme.text3 : Theme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -159,8 +179,10 @@ struct StoreDiagnosticsPanel: View {
                 async let readCategories = state.appleAppCategories()
                 let version = state.actualState.google?.highestVersionCode
                 async let readApks = loadApks(version)
+                async let readTierMatch = state.googleDeviceTierMatchesManifest()
                 (apks, tiers, bundles, icons, territories, categories) = try await (
                     readApks, readTiers, readBundles, readIcons, readTerritories, readCategories)
+                tierMatch = try await readTierMatch
                 loaded = true
             } catch {
                 self.error = error.localizedDescription

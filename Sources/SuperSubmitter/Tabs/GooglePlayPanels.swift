@@ -226,6 +226,7 @@ struct GoogleReviewsPanel: View {
                 TextField("Write a reply, 350 characters",
                           text: draftBinding(review.id), axis: .vertical)
                     .textFieldStyle(.roundedBorder)
+                    .returnInsertsLineBreak()
                     .font(.system(size: 12))
                     .lineLimit(1...3)
                 let draft = (drafts[review.id] ?? "")

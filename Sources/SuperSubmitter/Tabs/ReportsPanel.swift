@@ -24,12 +24,20 @@ struct ReportsPanel: View {
     @State private var salesRows: [[String]] = []
     @State private var salesNote: String?
 
+    @State private var financeMonth = AppleReportsClient.defaultFinanceMonth()
+    @State private var financeRegion = "ZZ"
+    @State private var financeType = "FINANCIAL"
+    @State private var financeRows: [[String]] = []
+    @State private var financeNote: String?
+
     var body: some View {
         Section_("Reports", icon: "chart.bar.doc.horizontal", tint: Theme.teal) {
             VStack(alignment: .leading, spacing: 12) {
                 analytics
                 Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
                 sales
+                Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+                finance
             }
             .storePanel(padding: 14)
         }
@@ -139,16 +147,58 @@ struct ReportsPanel: View {
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !salesRows.isEmpty { table }
+            if !salesRows.isEmpty { table(salesRows) }
         }
     }
 
-    /// The first rows only. A whole sales report belongs in a spreadsheet and
-    /// not in a window.
-    private var table: some View {
+    // MARK: - The finance report
+
+    /// What Apple paid, which is not what the sales report counts. The sales
+    /// report counts units; this one counts money after Apple's commission,
+    /// and only for a month Apple has closed.
+    @ViewBuilder private var finance: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Finance").font(.system(size: 12, weight: .semibold))
+            Text("The same vendor number as the sales report above. A finance report is monthly, and Apple closes a month a few weeks after it ends, so the newest one is usually two months back.")
+                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                TextField("YYYY-MM", text: $financeMonth)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(11.5))
+                    .frame(width: 100)
+                TextField("Region", text: $financeRegion)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(11.5))
+                    .frame(width: 70)
+                Picker("", selection: $financeType) {
+                    Text("Summary").tag("FINANCIAL")
+                    Text("Every transaction").tag("FINANCE_DETAIL")
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                QuietButton(title: busy ? "Fetching…" : "Fetch the report") { loadFinance() }
+                    .disabled(busy)
+                Spacer(minLength: 0)
+            }
+            Text("ZZ is the one region code that consolidates every region into a single report. A three-letter code, for example USA, gives that region on its own.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            if let financeNote {
+                Text(financeNote)
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !financeRows.isEmpty { table(financeRows) }
+        }
+    }
+
+    /// The first rows only. A whole report belongs in a spreadsheet and not in
+    /// a window.
+    private func table(_ rows: [[String]]) -> some View {
         ScrollView(.horizontal) {
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(salesRows.enumerated()), id: \.offset) { index, row in
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     HStack(spacing: 12) {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(cell)
@@ -207,6 +257,29 @@ struct ReportsPanel: View {
                 salesNote = "Apple holds no \(frequency.lowercased()) report for that period yet. The newest one appears a day after the period closes."
             } catch {
                 salesNote = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+
+    /// The same 404 rule as the sales report, for a different reason: Apple
+    /// has not closed that month yet.
+    private func loadFinance() {
+        busy = true
+        financeNote = nil
+        financeRows = []
+        Task {
+            do {
+                let text = try await state.appleFinanceReport(
+                    month: financeMonth.trimmingCharacters(in: .whitespacesAndNewlines),
+                    regionCode: financeRegion.trimmingCharacters(in: .whitespacesAndNewlines),
+                    reportType: financeType)
+                financeRows = AppleReportsClient.preview(text)
+                if financeRows.isEmpty { financeNote = "The report came back empty." }
+            } catch ConnectionError.http(404, _) {
+                financeNote = "Apple has not closed \(financeMonth) for that region yet, or it paid nothing there. A closed month appears a few weeks after it ends."
+            } catch {
+                financeNote = error.localizedDescription
             }
             busy = false
         }

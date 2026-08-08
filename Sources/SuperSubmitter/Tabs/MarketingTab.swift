@@ -112,6 +112,10 @@ struct MarketingTab: View {
                     }.storePanel()
                 }
                 Button("Add an experiment") { state.addExperiment() }
+                // The last step of an experiment, and the one the manifest
+                // cannot hold: promoting addresses Apple's own treatment id,
+                // and it happens once, on a button.
+                if state.stores.contains(.apple) { PromoteTreatment() }
             }
         }
     }
@@ -240,10 +244,23 @@ struct MarketingTab: View {
                 }.labelsHidden()
                 TextField("Description", text: state.nominationBinding(.description),
                           axis: .vertical)
+                    .returnInsertsLineBreak()
                     .lineLimit(2...4)
                 Text("The app creates a draft and never submits it.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
+        }
+    }
+
+    /// The same path box the routing coverage and the purchase screenshots
+    /// use, so a missing file is named here and not three tabs away.
+    private var headerImageField: some View {
+        let binding = state.appClipHeaderImageBinding(locale: state.locale)
+        return PathField(path: binding,
+                         problem: state.missingFileNote(for: binding.wrappedValue)) {
+            guard let url = state.chooseOneFile(allowedExtensions: ["png", "jpg", "jpeg"])
+            else { return }
+            binding.wrappedValue = state.relativePath(for: url)
         }
     }
 
@@ -271,9 +288,99 @@ struct MarketingTab: View {
                 }.labelsHidden()
                 TextField("Subtitle, \(state.locale)",
                           text: state.appClipSubtitleBinding(locale: state.locale))
+                // The visual half of the same card. Apple keeps one image per
+                // locale, so it sits under the subtitle it appears above.
+                LabeledField("Header image, \(state.locale)") {
+                    headerImageField
+                }
                 Text("Xcode creates the clip. This writes what the store shows.")
                     .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
+        }
+    }
+}
+
+/// Promoting one treatment of a product page experiment.
+///
+/// The app writes the experiments and their treatments above, and it never
+/// starts one, because a running experiment changes what a real customer sees.
+/// This is the step after the experiment is over: the treatment that won
+/// becomes the product page.
+///
+/// It cannot come from the manifest. A promotion addresses Apple's own
+/// treatment id, and it happens once, so it is a button and not a plan row.
+private struct PromoteTreatment: View {
+    @Environment(AppState.self) private var state
+    @State private var busy = false
+    @State private var loaded = false
+    @State private var error: String?
+    @State private var treatments: [AppleActionsClient.Treatment] = []
+    @State private var selection = ""
+    @State private var confirming = false
+
+    private var chosen: AppleActionsClient.Treatment? {
+        treatments.first { $0.id == selection }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Text("Promote a treatment").font(.system(size: 12, weight: .semibold))
+                Spacer(minLength: 8)
+                QuietButton(title: busy ? "Fetching…" : "Fetch the treatments") { load() }
+                    .disabled(busy || state.actualState.apple?.versionId == nil)
+            }
+            if let error { ErrorLine(text: error) }
+            if state.actualState.apple?.versionId == nil {
+                Text("Read the stores on the Summary tab first, so the app knows which version the treatments belong to.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if loaded, treatments.isEmpty {
+                Text("Apple holds no treatment for this version. The experiments above create them on the next run.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !treatments.isEmpty {
+                HStack(spacing: 8) {
+                    Picker("", selection: $selection) {
+                        Text("Pick a treatment").tag("")
+                        ForEach(treatments) { treatment in
+                            Text("\(treatment.experimentName)  ·  \(treatment.name)")
+                                .tag(treatment.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 380)
+                    Button("Promote it") { confirming = true }
+                        .controlSize(.small)
+                        .disabled(busy || chosen == nil)
+                    Spacer(minLength: 0)
+                }
+                Text("The winning treatment's screenshots and text replace the ones on the live page. Promoting a different treatment is the way back.")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .storePanel()
+        .confirmationDialog("Promote this treatment?", isPresented: $confirming) {
+            Button("Promote it", role: .destructive) { promote() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every App Store visitor sees \(chosen?.name ?? "this treatment") on the product page from now on. Promoting a different treatment is the way back.")
+        }
+    }
+
+    private func load() {
+        track($busy, $error) {
+            treatments = try await state.appleTreatments()
+            loaded = true
+        }
+    }
+
+    private func promote() {
+        guard let chosen else { return }
+        track($busy, $error) {
+            try await state.promoteAppleTreatment(chosen.id)
         }
     }
 }
