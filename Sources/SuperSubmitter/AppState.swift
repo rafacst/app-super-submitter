@@ -1631,17 +1631,17 @@ final class AppState {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func reviewAnswerBinding(group: String, key: String) -> Binding<Bool> {
-        Binding(get: {
-            self.manifest.review?.dataSafetyAnswers?[key] ?? false
-        }, set: { value in
-            var review = self.manifest.review ?? Manifest.Review()
-            var answers = review.dataSafetyAnswers ?? [:]
-            answers[key] = value
-            review.dataSafetyAnswers = answers
-            self.manifest.review = review
-            self.saveManifestReportingErrors()
-        })
+    /// Data safety answers left by an older build, whose question ids the app
+    /// invented. Google publishes its own, so these declare nothing.
+    var staleDataSafetyAnswers: [String] {
+        (manifest.review?.dataSafetyAnswers ?? [:]).keys.sorted()
+    }
+
+    func removeDataSafetyAnswers() {
+        guard var review = manifest.review else { return }
+        review.dataSafetyAnswers = nil
+        manifest.review = review
+        saveManifestReportingErrors()
     }
 
     /// One row of Apple's age rating questionnaire.
@@ -1664,6 +1664,20 @@ final class AppState {
         return held.keys.sorted().map { key in
             AgeRatingField(key: key, held: held[key]!, wanted: wanted[key] ?? held[key]!)
         }
+    }
+
+    /// The categories to choose from: the ones App Store Connect reported,
+    /// or the built-in snapshot until the stores are read.
+    ///
+    /// Apple adds and renames categories. The snapshot is a starting point,
+    /// never the authority, so a read replaces it whole. A label the snapshot
+    /// knows is kept, and one it does not shows the id Apple uses.
+    var appleCategoryChoices: [StoreValues.Choice] {
+        let known = actualState.apple?.appCategoryIDs ?? []
+        guard !known.isEmpty else { return StoreValues.appleCategories }
+        let labels = Dictionary(uniqueKeysWithValues:
+            StoreValues.appleCategories.map { ($0.value, $0.label) })
+        return known.sorted().map { StoreValues.Choice($0, labels[$0] ?? $0) }
     }
 
     /// Answers whose field App Store Connect does not have. They declare

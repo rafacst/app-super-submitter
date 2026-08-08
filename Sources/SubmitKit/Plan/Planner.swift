@@ -708,8 +708,10 @@ public enum Planner {
                 operation: .googleDetails))
         }
 
-        if manifest.review?.dataSafetyCSV?.isEmpty == false
-            || manifest.review?.dataSafetyAnswers?.isEmpty == false {
+        // Only a real CSV. Google owns the question ids, and the four the app
+        // used to synthesize were its own invention, so that body could only
+        // be refused. The step no longer appears without the file.
+        if manifest.review?.dataSafetyCSV?.isEmpty == false {
             body.append(PlanStep(
                 id: "google.dataSafety", system: .google, kind: .change,
                 summary: "data safety declaration",
