@@ -24,6 +24,10 @@ struct SuperSubmitterApp: App {
                 // scheme, and until this existed the app opened and sat there.
                 .onOpenURL { state.handle(callback: $0) }
                 .task {
+                    // Sparkle quits the app to install, and AppKit will not
+                    // quit an app that holds a modal sheet. The updater has
+                    // no way to reach the shell, so the shell hands it one.
+                    Updater.closeSheets = { state.closeEverySheet() }
                     guard !ScreenshotMode.isActive else {
                         ScreenshotMode.apply(to: state)
                         ScreenshotMode.placeWindow()
@@ -43,9 +47,12 @@ struct SuperSubmitterApp: App {
         // shows one surface and not a bar above a bar.
         .windowStyle(.hiddenTitleBar)
         .commands {
-            // Where a Mac user looks for it: the app menu, first item.
+            // Where a Mac user looks for both: the app menu, About first and
+            // the update check under it.
             CommandGroup(replacing: .appInfo) {
                 Button("About Super Submitter") { state.showAbout = true }
+                Button("Check for Updates…") { Updater.check() }
+                Divider()
             }
             // The two doors of the entry screen, plus the way out. The entry
             // screen hides itself once one app is linked, so without these the
@@ -124,14 +131,15 @@ struct SuperSubmitterApp: App {
 /// The package builds a plain executable, not an app bundle. Without these
 /// two lines the window opens behind every other app.
 ///
-/// The shipping build is the Xcode project, because notarization needs a real
-/// bundle. The package build stays for `swift test`.
+/// The shipping build is the Xcode project, because notarization and the
+/// updater both need a real bundle. The package build stays for `swift test`.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         // Before any window draws, so no screen flashes the other theme.
         ScreenshotMode.applyAppearance()
         Appearance.applyStored()
+        Updater.start()
         // Only the plain executable needs this. The app bundle carries the
         // asset catalog icon, and overriding it here would replace a whole
         // icon set with one 1024 point image.

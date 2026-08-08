@@ -47,5 +47,9 @@
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>SSSupabaseURL</key>
 	<string>$(SUPABASE_URL)</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/rafacst/app-super-submitter/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>Tz2ycxl8EBhbHB1DwRx24yiGi0wIZvbOMeyrWncwOGI=</string>
 </dict>
 </plist>
