@@ -365,6 +365,19 @@ final class AppState {
         }
     }
 
+    /// The Google Play developer account id, which only the team panel needs.
+    ///
+    /// It belongs to the account the same way the vendor number does, so it
+    /// keeps the same home: the defaults, never `store.yaml`. Google publishes
+    /// no method that answers it, so the developer reads it out of the Play
+    /// Console URL and it is typed once.
+    var googleDeveloperId = "" {
+        didSet {
+            guard googleDeveloperId != oldValue else { return }
+            defaults.set(googleDeveloperId, forKey: "googleDeveloperId")
+        }
+    }
+
     /// The app list and the two settings live here. A test passes its own
     /// suite, so a test run never rewrites the real app list.
     @ObservationIgnored let defaults: UserDefaults
@@ -407,6 +420,7 @@ final class AppState {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
         }
         appleVendorNumber = defaults.string(forKey: "appleVendorNumber") ?? ""
+        googleDeveloperId = defaults.string(forKey: "googleDeveloperId") ?? ""
         if let saved = defaults.string(forKey: modeDefaultsKey),
            let restored = Mode(rawValue: saved) {
             mode = restored

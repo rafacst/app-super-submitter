@@ -273,9 +273,10 @@ private struct AgeRatingSheet: View {
                 }.frame(maxHeight: 380)
             }
             HStack {
-                // The only way to clear a key from an older manifest. The
-                // rows above list Apple's fields, so a key Apple never had
-                // appears nowhere else and could not be removed here.
+                // The rows above list Apple's fields, so a key Apple never had
+                // appears nowhere else and this is the only way to remove it.
+                // The five the older build wrote are already gone: the decode
+                // drops them. This is for a key typed by hand.
                 if !state.unknownAgeRatingKeys.isEmpty {
                     QuietButton(title: "Remove \(state.unknownAgeRatingKeys.count) field(s) Apple does not have") {
                         state.removeUnknownAgeRatingKeys()

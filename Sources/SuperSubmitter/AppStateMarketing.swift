@@ -278,17 +278,49 @@ extension AppState {
     }
 
     func appClipSubtitleBinding(locale: String) -> Binding<String> {
-        Binding(get: { self.marketing.appClip?.locales?[locale]?.subtitle ?? "" },
-                set: { text in
-                    var value = self.marketing
-                    var clip = value.appClip ?? .init()
-                    var locales = clip.locales ?? [:]
-                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if trimmed.isEmpty { locales.removeValue(forKey: locale) }
-                    else { locales[locale] = .init(subtitle: text) }
-                    clip.locales = locales.isEmpty ? nil : locales
-                    value.appClip = clip.action == nil && clip.locales == nil ? nil : clip
-                    self.setMarketing(value)
-                })
+        appClipLocaleBinding(locale: locale, field: .subtitle)
+    }
+
+    /// The picture on the App Clip card. Apple keeps one per locale, beside
+    /// the subtitle a reader sees under it.
+    func appClipHeaderImageBinding(locale: String) -> Binding<String> {
+        appClipLocaleBinding(locale: locale, field: .headerImage)
+    }
+
+    enum AppClipLocaleField { case subtitle, title, headerImage }
+
+    /// One writer for the whole locale.
+    ///
+    /// The subtitle binding built a fresh `ClipLocale` on every keystroke, so
+    /// typing a subtitle threw away the title beside it. With a header image
+    /// on the same locale that would have thrown away a picture too.
+    func appClipLocaleBinding(locale: String,
+                              field: AppClipLocaleField) -> Binding<String> {
+        Binding(get: {
+            let text = self.marketing.appClip?.locales?[locale]
+            return switch field {
+            case .subtitle: text?.subtitle ?? ""
+            case .title: text?.title ?? ""
+            case .headerImage: text?.headerImage ?? ""
+            }
+        }, set: { text in
+            var value = self.marketing
+            var clip = value.appClip ?? .init()
+            var locales = clip.locales ?? [:]
+            var entry = locales[locale] ?? .init()
+            let stored: String? = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty ? nil : text
+            switch field {
+            case .subtitle: entry.subtitle = stored
+            case .title: entry.title = stored
+            case .headerImage: entry.headerImage = stored
+            }
+            let empty = entry.subtitle == nil && entry.title == nil
+                && entry.headerImage == nil
+            if empty { locales.removeValue(forKey: locale) } else { locales[locale] = entry }
+            clip.locales = locales.isEmpty ? nil : locales
+            value.appClip = clip.action == nil && clip.locales == nil ? nil : clip
+            self.setMarketing(value)
+        })
     }
 }

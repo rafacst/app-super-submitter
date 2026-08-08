@@ -20,6 +20,13 @@ struct MoneyTab: View {
             .fixedSize(horizontal: false, vertical: true)
             purchasesSection
             subscriptionsSection
+            // The two App Store surfaces beside the catalogue: who can test
+            // these products, and where a metadata change goes now that Apple
+            // has a versioned draft for one.
+            if state.stores.contains(.apple) {
+                SubscriptionDraftsPanel()
+                SandboxTestersPanel()
+            }
             if state.provider != .none { providerCatalog }
         }
         .frame(maxWidth: 940, alignment: .leading)

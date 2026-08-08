@@ -112,7 +112,240 @@ public struct XcodeCloudClient: Sendable {
         return Self.parseRun(payload["data"])
     }
 
+    // MARK: - Why a run failed
+
+    /// One step inside a run: the build, the tests, the archive, the analysis.
+    ///
+    /// A run says `FAILED` and nothing else. The action says which step failed
+    /// and how many issues it found, which is the first thing a developer
+    /// needs and the reason this panel existed only half way before.
+    public struct Action: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var name: String
+        /// `BUILD`, `TEST`, `ARCHIVE`, `ANALYZE`.
+        public var actionType: String?
+        public var completionStatus: String?
+        public var executionProgress: String?
+        public var errorCount: Int?
+        public var warningCount: Int?
+        public var testFailureCount: Int?
+
+        public init(id: String, name: String, actionType: String? = nil,
+                    completionStatus: String? = nil, executionProgress: String? = nil,
+                    errorCount: Int? = nil, warningCount: Int? = nil,
+                    testFailureCount: Int? = nil) {
+            self.id = id
+            self.name = name
+            self.actionType = actionType
+            self.completionStatus = completionStatus
+            self.executionProgress = executionProgress
+            self.errorCount = errorCount
+            self.warningCount = warningCount
+            self.testFailureCount = testFailureCount
+        }
+
+        public var state: String { completionStatus ?? executionProgress ?? "unknown" }
+
+        /// The one line a row shows when a step went wrong. Nil means nothing
+        /// is worth saying, which is what a clean step looks like.
+        public var issues: String? {
+            var parts: [String] = []
+            if let errorCount, errorCount > 0 { parts.append("\(errorCount) errors") }
+            if let testFailureCount, testFailureCount > 0 {
+                parts.append("\(testFailureCount) test failures")
+            }
+            if let warningCount, warningCount > 0 { parts.append("\(warningCount) warnings") }
+            return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
+        }
+    }
+
+    /// One file the run produced: the archive, the logs, the test products.
+    public struct Artifact: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var fileName: String
+        /// `ARCHIVE`, `LOG_BUNDLE`, `RESULT_BUNDLE`, and the rest.
+        public var fileType: String?
+        public var fileSize: Int?
+        /// Apple serves it from a URL that expires, so nothing is cached here
+        /// and the panel opens it in a browser.
+        public var downloadURL: URL?
+
+        public init(id: String, fileName: String, fileType: String? = nil,
+                    fileSize: Int? = nil, downloadURL: URL? = nil) {
+            self.id = id
+            self.fileName = fileName
+            self.fileType = fileType
+            self.fileSize = fileSize
+            self.downloadURL = downloadURL
+        }
+    }
+
+    /// One test that did not pass. A test that passed is not news.
+    public struct TestFailure: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var name: String
+        public var className: String?
+        public var status: String?
+        public var message: String?
+
+        public init(id: String, name: String, className: String? = nil,
+                    status: String? = nil, message: String? = nil) {
+            self.id = id
+            self.name = name
+            self.className = className
+            self.status = status
+            self.message = message
+        }
+    }
+
+    /// The steps of one run, in the order Xcode Cloud performed them.
+    public func actions(runID: String) async throws -> [Action] {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/ciBuildRuns/\(runID)/actions",
+            query: [URLQueryItem(name: "limit", value: "200")]).data)
+        return payload["data"].array.compactMap(Self.parseAction)
+    }
+
+    public func artifacts(actionID: String) async throws -> [Artifact] {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/ciBuildActions/\(actionID)/artifacts",
+            query: [URLQueryItem(name: "limit", value: "200")]).data)
+        return payload["data"].array.compactMap(Self.parseArtifact)
+    }
+
+    /// The failing tests of one action.
+    ///
+    /// A green run returns hundreds of passes, and none of them is why anybody
+    /// opened this panel, so the passes are dropped here rather than drawn.
+    public func testFailures(actionID: String) async throws -> [TestFailure] {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/ciBuildActions/\(actionID)/testResults",
+            query: [URLQueryItem(name: "limit", value: "200")]).data)
+        return payload["data"].array.compactMap(Self.parseTestResult)
+            .filter { ($0.status ?? "SUCCESS") != "SUCCESS" }
+    }
+
+    // MARK: - What the workflow is wired to
+
+    /// One connected repository, with the branch or the pull request that a
+    /// run would build.
+    public struct Repository: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var name: String
+        public var owner: String?
+        public var httpCloneURL: String?
+        /// The branches and the tags, and the open pull requests.
+        public var references: [String] = []
+        public var pullRequests: [String] = []
+
+        public init(id: String, name: String, owner: String? = nil,
+                    httpCloneURL: String? = nil, references: [String] = [],
+                    pullRequests: [String] = []) {
+            self.id = id
+            self.name = name
+            self.owner = owner
+            self.httpCloneURL = httpCloneURL
+            self.references = references
+            self.pullRequests = pullRequests
+        }
+    }
+
+    /// Every repository App Store Connect can see, with its branches and its
+    /// open pull requests.
+    ///
+    /// A team with no source-control connection answers an empty list, which
+    /// is a state and not a failure.
+    public func repositories(limit: Int = 20) async throws -> [Repository] {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/scmRepositories",
+            query: [URLQueryItem(name: "limit", value: String(min(max(limit, 1), 200)))]).data)
+        var result: [Repository] = []
+        for item in payload["data"].array {
+            guard var repository = Self.parseRepository(item),
+                  let id = item["id"].string else { continue }
+            if let response = try? await api.apple(
+                "GET", "/v1/scmRepositories/\(id)/gitReferences",
+                query: [URLQueryItem(name: "limit", value: "50")]) {
+                repository.references = JSON(data: response.data)["data"].array
+                    .compactMap { $0["attributes"]["name"].string }
+            }
+            if let response = try? await api.apple(
+                "GET", "/v1/scmRepositories/\(id)/pullRequests",
+                query: [URLQueryItem(name: "limit", value: "50")]) {
+                repository.pullRequests = JSON(data: response.data)["data"].array
+                    .filter { $0["attributes"]["isClosed"].bool != true }
+                    .compactMap { item in
+                        let title = item["attributes"]["title"].string ?? ""
+                        guard let number = item["attributes"]["number"].int else { return title }
+                        return "#\(number)  \(title)"
+                    }
+            }
+            result.append(repository)
+        }
+        return result
+    }
+
+    /// Turns a workflow on, or off again.
+    ///
+    /// This is the whole of the workflow write. Creating one takes the Xcode
+    /// version, the macOS version, the actions, the start conditions, the
+    /// repository, and the branch, which is a form that belongs in Xcode where
+    /// the developer is already standing.
+    ///
+    /// `// ponytail: the switch, not the form. Add POST /v1/ciWorkflows when
+    /// // somebody wants to author a workflow away from Xcode.`
+    public func setWorkflowEnabled(workflowID: String, _ enabled: Bool) async throws {
+        try await api.apple("PATCH", "/v1/ciWorkflows/\(workflowID)", body: [
+            "data": ["type": "ciWorkflows", "id": workflowID,
+                     "attributes": ["isEnabled": enabled]],
+        ])
+    }
+
     // MARK: - The parsers
+
+    static func parseAction(_ item: JSON) -> Action? {
+        guard let id = item["id"].string else { return nil }
+        let attributes = item["attributes"]
+        let counts = attributes["issueCounts"]
+        return Action(id: id,
+                      name: attributes["name"].string ?? id,
+                      actionType: attributes["actionType"].string,
+                      completionStatus: attributes["completionStatus"].string,
+                      executionProgress: attributes["executionProgress"].string,
+                      errorCount: counts["errors"].int,
+                      warningCount: counts["warnings"].int,
+                      testFailureCount: counts["testFailures"].int)
+    }
+
+    static func parseArtifact(_ item: JSON) -> Artifact? {
+        guard let id = item["id"].string else { return nil }
+        let attributes = item["attributes"]
+        return Artifact(id: id,
+                        fileName: attributes["fileName"].string ?? id,
+                        fileType: attributes["fileType"].string,
+                        fileSize: attributes["fileSize"].int,
+                        downloadURL: attributes["downloadUrl"].string
+                            .flatMap(URL.init(string:)))
+    }
+
+    static func parseTestResult(_ item: JSON) -> TestFailure? {
+        guard let id = item["id"].string else { return nil }
+        let attributes = item["attributes"]
+        return TestFailure(id: id,
+                           name: attributes["name"].string ?? id,
+                           className: attributes["className"].string,
+                           status: attributes["status"].string,
+                           message: attributes["message"].string)
+    }
+
+    static func parseRepository(_ item: JSON) -> Repository? {
+        guard let id = item["id"].string else { return nil }
+        let attributes = item["attributes"]
+        return Repository(id: id,
+                          name: attributes["repositoryName"].string ?? id,
+                          owner: attributes["ownerName"].string,
+                          httpCloneURL: attributes["httpCloneUrl"].string)
+    }
 
     static func parseWorkflow(_ item: JSON, productName: String) -> Workflow? {
         let attributes = item["attributes"]

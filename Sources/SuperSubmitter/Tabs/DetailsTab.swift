@@ -58,6 +58,10 @@ struct DetailsTab: View {
                 // is so easily mistaken for.
                 if state.stores.contains(.apple) {
                     SearchKeywordsPanel().padding(.top, 6)
+                    // The other half of how the store classifies the app, and
+                    // the only part of this tab that Apple writes rather than
+                    // the developer.
+                    AppTagsPanel().padding(.top, 6)
                 }
             }
             .padding(.horizontal, 4)
@@ -118,6 +122,7 @@ struct DetailsTab: View {
                 TextField("", text: state.listingBinding(field).limited(to: limit),
                           axis: .vertical)
                     .textFieldStyle(.plain)
+                    .returnInsertsLineBreak()
                     .lineLimit(3...16)
                     .font(.system(size: 13))
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)

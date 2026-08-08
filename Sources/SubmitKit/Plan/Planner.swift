@@ -164,7 +164,7 @@ public enum Planner {
             let bytes = fileSize(named.file)
             steps.append(PlanStep(
                 id: "apple.build", system: .apple, kind: .add,
-                summary: "build \(named.file.lastPathComponent)  ·  \(bytesText(bytes))",
+                summary: artifactSummary(named.file, bytes: bytes, prefix: "build "),
                 title: "Upload the build \(named.file.lastPathComponent)",
                 requests: [RequestSketch("POST", "/v1/buildUploads"),
                            RequestSketch("POST", "/v1/buildUploadFiles")],
@@ -479,6 +479,21 @@ public enum Planner {
             }
         }
 
+        // The licence every external tester accepts before the first install.
+        // Apple fills it with its own standard text, so a manifest that names
+        // none leaves that alone rather than blanking it.
+        if let agreement = testFlight.licenseAgreement,
+           actual?.betaLicenseAgreement != agreement {
+            let verified = actual?.betaLicenseAgreement != nil
+            steps.append(PlanStep(
+                id: "apple.betaLicenseAgreement", system: .apple, kind: .change,
+                summary: "TestFlight  the tester licence  \(agreement.count) characters",
+                title: "Write the beta licence agreement",
+                requests: [RequestSketch("PATCH", "/v1/betaLicenseAgreements/{id}")],
+                operation: .appleBetaLicenseAgreement,
+                comparison: verified ? .verified : .unverified))
+        }
+
         // The beta review contact. Apple keeps one per app, and the values come
         // from `review`. The condition was `review != nil`, so an empty review
         // block wrote the contact on every apply and blanked what Apple held.
@@ -677,13 +692,29 @@ public enum Planner {
                          listing?.fullDescription)
             appendChange(&changes, .googleVideo, managedText(manifest, code, .googleVideo),
                          listing?.video)
+            // A null in the manifest clears the field, and the apply sends an
+            // empty string for it. `appendChange` reads the flattened text,
+            // where a cleared field and an absent key look alike, so the row
+            // that says "clear it" can only come from here.
+            let entry = manifest.listing?.locales[code]
+            appendClear(&changes, .googleShortDescription,
+                        entry?.google?.shortDescription ?? .unmanaged,
+                        fallback: entry?.subtitle, listing?.shortDescription)
+            appendClear(&changes, .description, entry?.description ?? .unmanaged,
+                        fallback: nil, listing?.fullDescription)
+            appendClear(&changes, .googleVideo, entry?.google?.video ?? .unmanaged,
+                        fallback: nil, listing?.video)
             if !changes.isEmpty {
                 body.append(PlanStep(
                     id: "google.listing.\(code)", system: .google,
                     kind: listing == nil ? .add : .change,
                     summary: "\(code)  \(changes.joined(separator: ", "))",
                     title: "Write the \(code) listing",
-                    requests: [RequestSketch("PUT", "/edits/{editId}/listings/\(code)")],
+                    // A locale Google already holds is patched, so an
+                    // unmanaged field keeps whatever the Play Console holds.
+                    // A new one is written whole.
+                    requests: [RequestSketch(listing == nil ? "PUT" : "PATCH",
+                                             "/edits/{editId}/listings/\(code)")],
                     operation: .googleListing(code)))
             }
         }
@@ -736,7 +767,7 @@ public enum Planner {
             let bytes = fileSize(file)
             body.append(PlanStep(
                 id: "google.bundle", system: .google, kind: .add,
-                summary: "bundle \(file.lastPathComponent)  ·  \(bytesText(bytes))",
+                summary: artifactSummary(file, bytes: bytes, prefix: "bundle "),
                 title: "Upload the bundle \(file.lastPathComponent)",
                 requests: [RequestSketch("POST", "/edits/{editId}/bundles")],
                 operation: .googleBundleUpload(path: path, bytes: bytes),
@@ -748,7 +779,7 @@ public enum Planner {
             let bytes = fileSize(file)
             body.append(PlanStep(
                 id: "google.apk", system: .google, kind: .add,
-                summary: "apk \(file.lastPathComponent)  ·  \(bytesText(bytes))",
+                summary: artifactSummary(file, bytes: bytes, prefix: "apk "),
                 title: "Upload the APK \(file.lastPathComponent)",
                 requests: [RequestSketch("POST", "/edits/{editId}/apks")],
                 operation: .googleApkUpload(path: path, bytes: bytes),
@@ -1775,6 +1806,29 @@ public enum Planner {
         list.append("\(field.label) (\(wanted.count) characters)")
     }
 
+    /// One field the manifest asks Google to empty, named as such.
+    ///
+    /// A null in `store.yaml` is not the same as a missing key: the missing
+    /// key leaves the Play Console alone, and the null wipes the field. Only
+    /// the second is a change, and only when Google holds something to wipe.
+    ///
+    /// - Parameter fallback: the field the apply reads when this one is
+    ///   unmanaged, which the short description has and the others do not.
+    static func appendClear(_ list: inout [String], _ field: ListingTextField,
+                            _ managed: Managed<String>,
+                            fallback: Managed<String>?, _ current: String?) {
+        let clears = switch managed {
+        case .clear: true
+        // An unmanaged field, or one holding an empty value, hands over to
+        // the fallback, and then the fallback decides.
+        case .unmanaged: fallback.map { if case .clear = $0 { true } else { false } } ?? false
+        case .value(let text): text.isEmpty
+            && (fallback.map { if case .clear = $0 { true } else { false } } ?? false)
+        }
+        guard clears, !(current ?? "").isEmpty else { return }
+        list.append("\(field.label) (cleared)")
+    }
+
     static func managedText(_ manifest: Manifest, _ code: String,
                             _ field: ListingTextField) -> String {
         manifest.listingText(locale: code, field: field)
@@ -1870,6 +1924,42 @@ public enum Planner {
 
     static func bytesText(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    /// How old the artifact is, in the words an upload row uses.
+    ///
+    /// An upload row named the file and its size and never said when it was
+    /// made, so a build from last month read exactly like one made a minute
+    /// ago. The manifest names a path, not a moment, and the file at that path
+    /// is whatever was last written there: a developer who rebuilt their app
+    /// somewhere else has an old artifact sitting under the same name.
+    ///
+    /// The age is the one field that tells those two apart, and this is the
+    /// row the developer reads immediately before Apply sends the bytes.
+    ///
+    /// `// ponytail: the age, not a policy. No threshold refuses an upload,
+    /// // because a legitimate artifact can be a week old and only the person
+    /// // pressing the button knows which one this is.`
+    public static func builtText(_ file: URL, now: Date = Date()) -> String? {
+        guard let date = try? file.resourceValues(forKeys: [.contentModificationDateKey])
+            .contentModificationDate else { return nil }
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        guard minutes >= 1 else { return "built just now" }
+        if minutes < 60 { return "built \(count(minutes, "minute")) ago" }
+        let hours = minutes / 60
+        if hours < 24 { return "built \(count(hours, "hour")) ago" }
+        return "built \(count(hours / 24, "day")) ago"
+    }
+
+    private static func count(_ value: Int, _ noun: String) -> String {
+        "\(value) \(noun)\(value == 1 ? "" : "s")"
+    }
+
+    /// `file.aab · 41 MB · built 3 days ago`, for an upload row.
+    static func artifactSummary(_ file: URL, bytes: Int64, prefix: String) -> String {
+        [prefix + file.lastPathComponent, bytesText(bytes), builtText(file)]
+            .compactMap { $0 }
+            .joined(separator: "  ·  ")
     }
 }
 

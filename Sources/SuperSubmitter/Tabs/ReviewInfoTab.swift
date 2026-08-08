@@ -95,6 +95,7 @@ struct ReviewInfoTab: View {
                  anchor: "review.notes") {
             TextField("", text: state.reviewBinding(.notes), axis: .vertical)
                 .textFieldStyle(.plain)
+                .returnInsertsLineBreak()
                 .lineLimit(4...22)
                 .font(.system(size: 12.5))
                 .padding(8)

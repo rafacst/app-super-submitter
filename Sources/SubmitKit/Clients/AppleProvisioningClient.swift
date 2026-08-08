@@ -4,14 +4,22 @@ import Foundation
 /// certificates, the devices, the profiles, the merchant IDs, and the pass
 /// type IDs.
 ///
-/// Every call here is a read. Nothing in this file creates, revokes, or
-/// deletes an identity. A revoked certificate breaks every machine that signs
-/// with it, and a deleted profile breaks a build, so those stay in the
-/// Developer portal where one person owns the consequence.
+/// Nothing in this file revokes or deletes an identity. A revoked certificate
+/// breaks every machine that signs with it, and a deleted profile breaks a
+/// build, so those stay in the Developer portal where one person owns the
+/// consequence.
 ///
-/// The value this adds is the expiry. A certificate and a profile both lapse
-/// on a date that nothing else in the app shows, and the first sign of a lapse
-/// is usually a failed build.
+/// Two calls create, and both are deliberate exceptions to that rule. A
+/// **device** is a UDID on a list: registering one costs a slot in a quota that
+/// resets every year, it breaks nothing, and it is the write every team makes
+/// constantly, because a tester with an unregistered phone cannot install a
+/// build. A **bundle ID** is a name in a namespace: it is the one bootstrap
+/// step of a new app that the API allows at all, since App Store Connect
+/// publishes no call that creates the app record itself.
+///
+/// The value this adds otherwise is the expiry. A certificate and a profile
+/// both lapse on a date that nothing else in the app shows, and the first sign
+/// of a lapse is usually a failed build.
 public struct AppleProvisioningClient: Sendable {
     private let api: StoreAPI
 
@@ -131,6 +139,104 @@ public struct AppleProvisioningClient: Sendable {
         ("/v1/merchantIds", parseMerchantId),
         ("/v1/passTypeIds", parsePassTypeId),
     ]
+
+    // MARK: - The two writes
+
+    /// What Apple calls a platform on these two resources. It is not the
+    /// `Manifest.Platform` list: the Developer portal groups iOS, tvOS, and
+    /// watchOS under one word and keeps macOS apart.
+    public static let platforms: [StoreValues.Choice] = [
+        .init("IOS", "iOS, tvOS, and watchOS"),
+        .init("MAC_OS", "macOS"),
+        .init("UNIVERSAL", "Every platform"),
+    ]
+
+    /// **This registers a device on the team.** It costs one slot of the
+    /// yearly device quota, and Apple only clears that quota once a year when
+    /// the membership renews, so a typo spends a slot until then.
+    ///
+    /// Nothing else here breaks: the device installs builds, and disabling it
+    /// later is a Developer portal job.
+    @discardableResult
+    public func registerDevice(name: String, platform: String,
+                               udid: String) async throws -> Item {
+        let identifier = udid.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else {
+            throw ConnectionError.http(400, "Give the device a name you will recognise later.")
+        }
+        guard Self.looksLikeAUDID(identifier) else {
+            throw ConnectionError.http(
+                400,
+                "That is not a device identifier. It is 25 or 40 characters, and Xcode shows it under Window ▸ Devices and Simulators.")
+        }
+        let payload = JSON(data: try await api.apple("POST", "/v1/devices", body: [
+            "data": [
+                "type": "devices",
+                "attributes": ["name": label, "platform": platform, "udid": identifier],
+            ],
+        ]).data)
+        guard let device = Self.parseDevice(payload["data"]) else {
+            throw ConnectionError.invalidResponse
+        }
+        return device
+    }
+
+    /// **This creates a bundle ID in the Developer portal.** It reserves the
+    /// identifier for this team, and no call here deletes one again.
+    ///
+    /// It does not create the App Store record. Apple publishes no call for
+    /// that, so the developer still opens App Store Connect once to make the
+    /// app, and this is the step that comes first.
+    @discardableResult
+    public func createBundleID(name: String, identifier: String, platform: String,
+                               seedID: String? = nil) async throws -> Item {
+        let bundle = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.looksLikeABundleID(bundle) else {
+            throw ConnectionError.http(
+                400,
+                "A bundle ID is reverse-DNS: two or more parts separated by dots, and each part takes letters, numbers, and hyphens.")
+        }
+        var attributes: [String: Any] = [
+            "identifier": bundle,
+            "name": label.isEmpty ? bundle : label,
+            "platform": platform,
+        ]
+        if let seedID, !seedID.isEmpty { attributes["seedId"] = seedID }
+        let payload = JSON(data: try await api.apple("POST", "/v1/bundleIds", body: [
+            "data": ["type": "bundleIds", "attributes": attributes],
+        ]).data)
+        guard let created = Self.parseBundleId(payload["data"]) else {
+            throw ConnectionError.invalidResponse
+        }
+        return created
+    }
+
+    /// The two shapes Apple issues: 40 hexadecimal characters on the older
+    /// devices, and `00008030-001C2D6A3E80802E` on the newer ones. A Mac gives
+    /// a 36-character UUID.
+    ///
+    /// Apple refuses the rest with a 409 that names nothing, and this refusal
+    /// names the field the developer is looking at.
+    public static func looksLikeAUDID(_ value: String) -> Bool {
+        guard !value.contains(where: \.isWhitespace) else { return false }
+        let body = value.replacingOccurrences(of: "-", with: "")
+        guard body.count >= 24, body.count <= 40 else { return false }
+        return body.allSatisfy(\.isHexDigit)
+    }
+
+    /// Reverse-DNS: two or more parts, and each part is letters, numbers, or a
+    /// hyphen. A wildcard `*` is legal in the last part and passes here too.
+    public static func looksLikeABundleID(_ value: String) -> Bool {
+        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 2 else { return false }
+        return parts.allSatisfy { part in
+            !part.isEmpty && part.allSatisfy {
+                $0.isLetter || $0.isNumber || $0 == "-" || $0 == "*"
+            }
+        }
+    }
 
     // MARK: - The parsers
 

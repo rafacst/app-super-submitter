@@ -222,6 +222,7 @@ public actor Runner {
         case .appleWhatToTest: try await appleWhatToTest()
         case .appleBetaAutoNotify(let on): try await appleBetaAutoNotify(on)
         case .appleBetaAppLocalizations: try await appleBetaAppLocalizations()
+        case .appleBetaLicenseAgreement: try await appleBetaLicenseAgreement()
         case .appleBetaReviewDetail: try await appleBetaReviewDetail()
         case .appleBetaReview: try await appleBetaReview()
         case .appleEncryptionDeclaration: try await appleEncryptionDeclaration()

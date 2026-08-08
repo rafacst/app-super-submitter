@@ -665,6 +665,40 @@ extension BuildFlow {
         try? storage.save(run)
     }
 
+    /// The next build, after one finished.
+    ///
+    /// A run that reached `complete` had no control that left it: the Build
+    /// button asks for `readyToBuild`, and **Start over** is for an imported
+    /// artifact. So the tab allowed one build per session, and a developer who
+    /// changed the app afterwards had to send the artifact of the build before
+    /// the change, or nothing at all.
+    ///
+    /// A new `UploadRun` rather than a move back. The run id names the archive
+    /// file, the saved run record, and the command previews, so a second build
+    /// under the first run's id would write over the record of an upload that
+    /// already happened.
+    ///
+    /// The linked project, the platform, and the provisioning choice stay: the
+    /// developer chose those, and a rebuild is not a reason to ask again.
+    func buildAgain() {
+        guard !state.isActive, let project else { return }
+        task?.cancel()
+        task = nil
+        storage.removeScratch(runID: run.id)
+        run = UploadRun(platform: run.platform, linkedProjectID: project.id)
+        candidate = nil
+        appleArchiveInfo = nil
+        logLines = []
+        failure = nil
+        blocking = nil
+        processingLabel = nil
+        successLink = nil
+        artifactOnly = false
+        uploadProgress = 0
+        startedAt = nil
+        task = Task { [weak self] in await self?.refreshPreflight() }
+    }
+
     func reset() {
         task?.cancel()
         task = nil

@@ -484,6 +484,20 @@ struct BuildFromProjectView: View {
                 .disabled(!flow.canUpload)
                 QuietButton(title: "Keep the artifact and stop") { flow.keepArtifact() }
             }
+            // The way back from a finished run. Without it the tab allowed one
+            // build per session: the Build button asks for `readyToBuild`, and
+            // the two states a run ends in are not it.
+            if flow.project != nil, flow.state == .complete || flow.state == .cancelled {
+                Button { flow.buildAgain() } label: {
+                    Text(flow.project?.platform == .android
+                         ? "Build a new App Bundle" : "Build a new archive")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.accentText)
+                        .padding(.horizontal, 20).padding(.vertical, 9)
+                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
             if flow.project?.platform == .android, !flow.state.isActive {
                 QuietButton(title: "Choose Built AAB") { flow.chooseBuiltBundle() }
             }

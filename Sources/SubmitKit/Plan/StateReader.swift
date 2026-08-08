@@ -497,6 +497,11 @@ public struct StateReader: Sendable {
             result.betaAppLocalizations = localizations
             result.betaAppLocalizationsRead = true
         }
+        // So does the licence. Apple creates one per app and fills it with its
+        // own standard text, so a nil here is a read that failed.
+        if let agreement = try? await client.licenseAgreement(appID: appID) {
+            result.betaLicenseAgreement = agreement
+        }
         guard let buildID = result.attachedBuildId else { return }
         if let notes = try? await client.whatToTest(buildID: buildID) {
             result.whatToTest = notes

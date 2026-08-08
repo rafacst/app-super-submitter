@@ -415,12 +415,22 @@ public enum Validator {
 
         // Google attaches an expansion file to an APK. A bundle carries its
         // assets inside, so the pair is a manifest mistake, not a store error.
+        //
+        // The app the developer already shipped is the exception. An expansion
+        // file that is already live needs no APK in this run, and the apply
+        // attaches it to the newest APK the edit holds. That case used to be
+        // an error, which left a developer no way to fix an expansion file
+        // without re-uploading the whole APK.
         let hasExpansion = [google?.expansionFileMain, google?.expansionFilePatch]
             .contains { $0?.isEmpty == false }
         if hasExpansion, manifest.release?.build?.androidApk?.isEmpty != false {
+            let published = input.actual.google?.highestVersionCode
             result.append(Finding(
-                id: "build.expansionNeedsApk", severity: .error,
-                message: "An expansion file needs an APK. The manifest names no androidApk build.",
+                id: "build.expansionNeedsApk",
+                severity: published == nil ? .error : .warning,
+                message: published.map {
+                    "The manifest names no androidApk build, so the expansion file attaches to version code \($0), the newest APK Google holds. It fails if that version code is a bundle."
+                } ?? "An expansion file needs an APK. The manifest names no androidApk build.",
                 location: "Build · Android", fix: .build))
         }
 
@@ -479,20 +489,16 @@ public enum Validator {
                 message: "\(code) is not a two-letter uppercase country code.",
                 location: "Build · Android", fix: .build))
         }
-        // Google assigns the id and keeps every configuration, so a second
-        // apply makes a second configuration. No diff row can show that.
-        if let path = manifest.release?.google?.deviceTierConfig, !path.isEmpty {
-            if Planner.resolve(path, root: input.root) == nil {
-                result.append(Finding(
-                    id: "build.deviceTierMissing", severity: .error,
-                    message: "The manifest names the device tier configuration \(path) and the file does not exist.",
-                    location: "Build · Android", fix: .build))
-            } else {
-                result.append(Finding(
-                    id: "build.deviceTierRepeats", severity: .warning,
-                    message: "Every apply creates a new device tier configuration, because Google assigns the id and keeps the old one. Remove the key once the configuration is live.",
-                    location: "Build · Android", fix: .build))
-            }
+        // Google assigns the id and keeps every configuration, so a create is
+        // the only write it offers. The apply reads the newest one back and
+        // creates nothing when it matches, so a second apply no longer makes a
+        // second configuration and this no longer warns about one.
+        if let path = manifest.release?.google?.deviceTierConfig, !path.isEmpty,
+           Planner.resolve(path, root: input.root) == nil {
+            result.append(Finding(
+                id: "build.deviceTierMissing", severity: .error,
+                message: "The manifest names the device tier configuration \(path) and the file does not exist.",
+                location: "Build · Android", fix: .build))
         }
 
         if (manifest.release?.google?.countries ?? []).isEmpty,

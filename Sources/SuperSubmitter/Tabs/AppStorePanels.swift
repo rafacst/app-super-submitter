@@ -18,6 +18,7 @@ private struct AppleReviewsPanel: View {
     @State private var loaded = false
     @State private var error: String?
     @State private var reviews: [AppleActionsClient.Review] = []
+    @State private var summaries: [AppleActionsClient.ReviewSummary] = []
     @State private var drafts: [String: String] = [:]
     @State private var confirming: AppleActionsClient.Review?
 
@@ -36,6 +37,9 @@ private struct AppleReviewsPanel: View {
                 }
 
                 if let error { ErrorLine(text: error) }
+                // Apple's own summary of the thousands below. It reads before
+                // the list, because it is the answer the list only implies.
+                ForEach(summaries) { summary in summaryBlock(summary) }
                 if loaded, reviews.isEmpty {
                     Text("Apple reports no review for this app.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
@@ -56,6 +60,37 @@ private struct AppleReviewsPanel: View {
         } message: { review in
             Text("Every App Store visitor reads it under \(review.authorName ?? "this review"). It replaces any reply that is there now.")
         }
+    }
+
+    /// Apple summarizes the reviews itself, per locale and per platform. It
+    /// appears only for an app with enough of them, so most apps see nothing
+    /// here and that is a state.
+    private func summaryBlock(_ summary: AppleActionsClient.ReviewSummary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Label("What the reviews say", systemImage: "sparkles")
+                    .font(.system(size: 11.5, weight: .semibold))
+                if let locale = summary.locale {
+                    Text(locale).font(Theme.mono(10)).foregroundStyle(Theme.text3)
+                }
+                if let platform = summary.platform {
+                    Text(AppleWords.title(platform)).font(.system(size: 10.5))
+                        .foregroundStyle(Theme.text3)
+                }
+                Spacer(minLength: 8)
+                if let date = summary.createdDate {
+                    Text(date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                }
+            }
+            Text(summary.text).font(.system(size: 12)).foregroundStyle(Theme.text2)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Apple wrote this summary, not a person and not this app.")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+        }
+        .padding(10)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
     }
 
     @ViewBuilder private func reviewRow(_ review: AppleActionsClient.Review) -> some View {
@@ -100,6 +135,7 @@ private struct AppleReviewsPanel: View {
             HStack(spacing: 8) {
                 TextField("Write a reply", text: draftBinding(review.id), axis: .vertical)
                     .textFieldStyle(.roundedBorder)
+                    .returnInsertsLineBreak()
                     .font(.system(size: 12))
                     .lineLimit(1...4)
                 let draft = (drafts[review.id] ?? "")
@@ -122,6 +158,9 @@ private struct AppleReviewsPanel: View {
     private func load() {
         track($busy, $error) {
             reviews = try await state.appleReviews()
+            // An account whose key predates the summarization resource answers
+            // an error, and that costs the reviews nothing.
+            summaries = (try? await state.appleReviewSummaries()) ?? []
             loaded = true
         }
     }

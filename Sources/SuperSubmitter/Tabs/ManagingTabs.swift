@@ -30,7 +30,13 @@ struct LiveAppTab: View {
 
                 Hairline().padding(.vertical, 2)
                 VitalsPanel()
+                // The vitals answer "is it healthy" with a number, and this
+                // answers the question that number raises. It reads the App
+                // Store alone: Google keeps its crashes on the Play Console
+                // and publishes no equivalent.
+                if state.stores.contains(.apple) { CrashesPanel() }
                 if state.stores.contains(.apple) { ReportsPanel() }
+                if state.stores.contains(.apple) { WebhooksPanel() }
 
                 Hairline().padding(.vertical, 2)
                 if state.stores.contains(.google) {
