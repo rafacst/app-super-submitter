@@ -155,23 +155,6 @@
   }
   .callout p:last-child { margin-bottom: 0; }
 
-  /* The one place a command line survives. Marked so it reads as the
-     exception it is. */
-  .terminal {
-    border: 1pt dashed var(--rule);
-    border-radius: 4pt;
-    padding: 10pt 13pt 4pt;
-    margin: 0 0 13pt;
-    background: #fbfcfd;
-    break-inside: avoid;
-  }
-  .terminal .tag {
-    font-size: 10.5pt; font-weight: 700; letter-spacing: 0.4pt;
-    text-transform: uppercase; color: var(--ink3);
-    margin: 0 0 6pt;
-  }
-  .terminal p { font-size: 12.5pt; }
-
   .breaks dt { font-weight: 700; margin-top: 14pt; break-after: avoid; }
   .breaks dd { margin: 3pt 0 0; }
   .breaks { margin: 0; }
@@ -186,7 +169,7 @@
 <body>
 
 <h1>Releasing</h1>
-<p class="lede">Super Submitter for macOS. Everything here happens in an app or in a web page.</p>
+<p class="lede">Super Submitter for macOS. One export, two web pages, and a handful of commands.</p>
 <hr class="rule-top">
 
 <p>Sending the code to GitHub builds a signed, notarized release and publishes it. The app then finds that release on its own, because Sparkle polls the appcast the release carries.</p>
@@ -200,11 +183,11 @@
     <li>Your Mac already knows how to reach it. The remote is named <code>github</code>.</li>
     <li>The approval gate exists. The environment is named <code>release</code> and you are the required reviewer.</li>
     <li>The Sparkle signing key already exists in your login keychain, and the app already carries its matching public half. <strong>Never create a new one.</strong></li>
-    <li>Your Mac is already signed in to GitHub, so sending code will not ask for a password.</li>
+    <li>Your Mac is already signed in to GitHub, for Git and for the <code>gh</code> command. Nothing here asks for a GitHub password.</li>
   </ul>
 </div>
 
-<p>What is left is five secrets, one push, and one approval. Steps 1 to 5 happen once. Steps 6 and 7 are how you ship, every time.</p>
+<p>What is left is five secrets, one push, and one approval. Steps 1 to 3 happen once. Steps 4 and 5 are how you ship, every time.</p>
 
 <div class="callout">
   <p><strong>The repository name is permanent.</strong> Its address is inside every copy of the app you ever release, and a released copy asks that address for updates forever. If you rename or delete the repository, every installed copy stops updating and there is no way to tell it where to look. This already happened once, to the previous repository. Leave the name alone.</p>
@@ -212,60 +195,21 @@
 
 <h2>Set it up once</h2>
 
-<div class="step"><span class="n">1</span><span class="t">Copy the Sparkle signing key</span><span class="app">Keychain Access</span></div>
+<div class="step"><span class="n">1</span><span class="t">Export the signing certificate</span><span class="app">Keychain Access</span></div>
 
-<p>This key proves an update came from you. The app refuses any download this key did not sign.</p>
+<p>This is the Apple certificate that tells macOS the app is really yours. It is the one thing here with no command line worth writing: the Terminal can only export every private key you own at once, and you want exactly this one.</p>
 
 <ol class="sub">
   <li>Press <span class="ui">Command</span> and <span class="ui">Space</span>, type <strong>Keychain Access</strong>, and press Return.</li>
-  <li>In the sidebar choose the <span class="ui">login</span> keychain, then the <span class="ui">All Items</span> category.</li>
-  <li>Type <strong>sparkle</strong> in the search box at the top right.</li>
-  <li>Double-click the item named <strong>https://sparkle-project.org</strong>. Its Kind is <em>private key</em> and its Account is <em>ed25519</em>.</li>
-  <li>Tick <span class="ui">Show password</span>. Your Mac asks for your login password. Type it and choose <span class="ui">Allow</span>.</li>
-  <li>Select the line of text that appears and copy it. It is 44 characters and it ends in <code>=</code>.</li>
-</ol>
-
-<p>Paste it somewhere safe for a moment. You need it in step 5, as <code>SPARKLE_PRIVATE_KEY</code>.</p>
-
-<div class="callout">
-  <p><strong>This key cannot be replaced.</strong> If you ever lose it, no copy of the app that people already have can update again, ever. Back up that keychain item. Never run Sparkle's key generator a second time: a new key makes every installed copy refuse every update you publish, silently.</p>
-</div>
-
-<div class="step"><span class="n">2</span><span class="t">Export the signing certificate</span><span class="app">Keychain Access</span></div>
-
-<p>This is the Apple certificate that tells macOS the app is really yours.</p>
-
-<ol class="sub">
-  <li>Stay in Keychain Access. Clear the search box.</li>
   <li>In the sidebar choose the <span class="ui">login</span> keychain, then the <span class="ui">My Certificates</span> category. This category matters. The plain <span class="ui">Certificates</span> category leaves out the private half, and the export will not work.</li>
   <li>Find <strong>Developer ID Application: R CASTRO SILVA CONSULTORIA EM TECNOLOGIA LTDA (88BXH8KNVZ)</strong>.</li>
   <li>Right-click it and choose <span class="ui">Export</span>.</li>
   <li>Set the file format to <span class="ui">Personal Information Exchange (.p12)</span>. Save it to your Desktop as <strong>certificate.p12</strong>.</li>
-  <li>Your Mac asks you to invent a password for the file. Type one and write it down. You need it in step 5, as <code>DEVELOPER_ID_CERT_PASSWORD</code>.</li>
+  <li>Your Mac asks you to invent a password for the file. Type one and write it down. You need it in step 3, as <code>DEVELOPER_ID_CERT_PASSWORD</code>.</li>
   <li>Your Mac then asks for your login password, to allow the export. Type it and choose <span class="ui">Allow</span>.</li>
 </ol>
 
-<div class="step"><span class="n">3</span><span class="t">Turn the certificate into text</span><span class="app">Shortcuts</span></div>
-
-<p>A GitHub secret holds text, and <code>certificate.p12</code> is not text. This step converts it. It is the only step on this page with no app built for the job, so you build a small one yourself, once. It takes about a minute and you can use it again forever.</p>
-
-<ol class="sub">
-  <li>Open the <strong>Shortcuts</strong> app and choose <span class="ui">File</span>, then <span class="ui">New Shortcut</span>.</li>
-  <li>In the search box on the right, type <strong>base64</strong>. Drag the <span class="ui">Base64 Encode</span> action into the empty shortcut.</li>
-  <li>Search for <strong>clipboard</strong>. Drag <span class="ui">Copy to Clipboard</span> underneath it.</li>
-  <li>Open the shortcut's settings in the sidebar on the right and turn on <span class="ui">Use as Quick Action</span> and <span class="ui">Finder</span>. Name it <strong>Copy as Base64</strong> and close the window.</li>
-  <li>In Finder, right-click <strong>certificate.p12</strong>, open <span class="ui">Quick Actions</span>, and choose <span class="ui">Copy as Base64</span>.</li>
-</ol>
-
-<p>The clipboard now holds a long block of letters and numbers. Paste it somewhere safe. You need it in step 5, as <code>DEVELOPER_ID_CERT_P12</code>.</p>
-
-<div class="terminal">
-  <p class="tag">If you would rather not build the shortcut</p>
-  <p>Open the Terminal app and paste this one line. It does the same thing and puts the result on the clipboard.</p>
-  <pre><code>base64 -i ~/Desktop/certificate.p12 | pbcopy</code></pre>
-</div>
-
-<div class="step"><span class="n">4</span><span class="t">Make an app-specific password</span><span class="app">appleid.apple.com</span></div>
+<div class="step"><span class="n">2</span><span class="t">Make an app-specific password</span><span class="app">appleid.apple.com</span></div>
 
 <p>Apple checks every release before people can open it. That check signs in as you, and it needs a password of its own. Your real Apple ID password will not work.</p>
 
@@ -276,44 +220,57 @@
   <li>Copy the password Apple shows you. It looks like <code>abcd-efgh-ijkl-mnop</code>. Apple shows it once only.</li>
 </ol>
 
-<p>You need it in step 5, as <code>NOTARY_PASSWORD</code>.</p>
+<p>You need it in step 3, as <code>NOTARY_PASSWORD</code>.</p>
 
-<div class="step"><span class="n">5</span><span class="t">Add the five secrets</span><span class="app">github.com</span></div>
+<div class="step"><span class="n">3</span><span class="t">Add the five secrets</span><span class="app">Terminal</span></div>
 
-<ol class="sub">
-  <li>Go to <strong>github.com/rafacst/app-super-submitter</strong>.</li>
-  <li>Open the <span class="ui">Settings</span> tab, then <span class="ui">Secrets and variables</span> in the sidebar, then <span class="ui">Actions</span>.</li>
-  <li>Choose <span class="ui">New repository secret</span>. Type the name, paste the value, and choose <span class="ui">Add secret</span>.</li>
-  <li>Do that five times, once for each row below. The names must match exactly.</li>
-</ol>
+<p>The <code>gh</code> command puts the secrets on GitHub without a browser, and without the Sparkle key or the certificate ever reaching the clipboard. Open the Terminal app and go to the project folder. Every command below runs from there.</p>
 
-<table>
-  <thead><tr><th>Name</th><th>What to paste</th></tr></thead>
-  <tbody>
-    <tr><td><code>SPARKLE_PRIVATE_KEY</code></td><td>The 44 characters from step 1</td></tr>
-    <tr><td><code>DEVELOPER_ID_CERT_P12</code></td><td>The long block of text from step 3</td></tr>
-    <tr><td><code>DEVELOPER_ID_CERT_PASSWORD</code></td><td>The password you invented in step 2</td></tr>
-    <tr><td><code>NOTARY_APPLE_ID</code></td><td>Your Apple ID, the email address you sign in with</td></tr>
-    <tr><td><code>NOTARY_PASSWORD</code></td><td>The app-specific password from step 4</td></tr>
-  </tbody>
-</table>
+<pre><code>cd ~/apps/app-super-submitter-app</code></pre>
 
-<p>When all five are listed, delete <strong>certificate.p12</strong> from your Desktop and empty the Trash. GitHub holds it now, and a copy sitting on the Desktop is a copy that can be taken.</p>
+<p><strong>The Sparkle key.</strong> This key proves an update came from you, and the app refuses any download it did not sign. It is already in your login keychain, so read it from there.</p>
+
+<pre><code>SPARKLE_KEY=$(security find-generic-password \
+  -s "https://sparkle-project.org" -a ed25519 -w)
+echo "${#SPARKLE_KEY} characters"</code></pre>
+
+<p>If your Mac asks for your login password, type it and choose <span class="ui">Allow</span>. The answer must read <strong>44 characters</strong>. If it reads 0, the key was not read, and sending it now would set an empty secret. Run both lines again. Once it reads 44, send it:</p>
+
+<pre><code>printf '%s' "$SPARKLE_KEY" | gh secret set SPARKLE_PRIVATE_KEY</code></pre>
+
+<div class="callout">
+  <p><strong>This key cannot be replaced.</strong> If you ever lose it, no copy of the app that people already have can update again, ever. Back up that keychain item. Never run Sparkle's key generator a second time: a new key makes every installed copy refuse every update you publish, silently.</p>
+</div>
+
+<p><strong>The certificate.</strong> A GitHub secret holds text, and <code>certificate.p12</code> is not text, so this turns it into text on the way. The second line deletes the file outright. GitHub holds it now, and a copy sitting on the Desktop is a copy that can be taken.</p>
+
+<pre><code>base64 -i ~/Desktop/certificate.p12 | gh secret set DEVELOPER_ID_CERT_P12
+rm ~/Desktop/certificate.p12</code></pre>
+
+<p><strong>The three you type.</strong> Run them one at a time. Each answers with <em>Paste your secret</em>. Paste the value and press Return. Nothing appears as you paste, which is normal. The first takes the file password you invented in step 1, the second your Apple ID, and the third the app-specific password from step 2.</p>
+
+<pre><code>gh secret set DEVELOPER_ID_CERT_PASSWORD   # from step 1
+gh secret set NOTARY_APPLE_ID              # your Apple ID email
+gh secret set NOTARY_PASSWORD              # from step 2</code></pre>
+
+<p>Now check your work. This prints the names only, never the values, and all five must be there.</p>
+
+<pre><code>gh secret list</code></pre>
 
 <h2>Ship a release</h2>
 
-<div class="step"><span class="n">6</span><span class="t">Send the code to GitHub</span><span class="app">Xcode</span></div>
+<div class="step"><span class="n">4</span><span class="t">Send the code to GitHub</span><span class="app">Terminal</span></div>
 
-<ol class="sub">
-  <li>Open <strong>SuperSubmitter.xcodeproj</strong>.</li>
-  <li>Open the <span class="ui">Source Control</span> menu and choose <span class="ui">Push…</span>.</li>
-  <li>In the sheet, set the destination to <span class="ui">github / main</span>. Not <span class="ui">origin</span>. That one is GitLab, and it publishes nothing.</li>
-  <li>Choose <span class="ui">Push</span>.</li>
-</ol>
+<pre><code>cd ~/apps/app-super-submitter-app
+git push github main</code></pre>
 
-<p>Xcode will not ask for a password. Your Mac is already signed in.</p>
+<p>Name <code>github</code> every time. The other remote is <code>origin</code>, that one is GitLab, and it publishes nothing. No password is asked for. Your Mac is already signed in.</p>
 
-<div class="step"><span class="n">7</span><span class="t">Approve the release</span><span class="app">github.com</span></div>
+<p>Xcode does the same job if you prefer it: the <span class="ui">Source Control</span> menu, then <span class="ui">Push…</span>, with the destination set to <span class="ui">github / main</span>.</p>
+
+<div class="step"><span class="n">5</span><span class="t">Approve the release</span><span class="app">github.com</span></div>
+
+<p>This one is a web page. The approval is the gate, and GitHub only opens it from the browser.</p>
 
 <ol class="sub">
   <li>Go to the <span class="ui">Actions</span> tab of the repository. A run named <strong>Release</strong> is waiting.</li>
@@ -323,13 +280,17 @@
 
 <p>About fifteen minutes later the release appears on the Releases page, and every copy of the app already out there will offer it to its owner within a day.</p>
 
-<p>To watch it, stay on the run page. Each step reports as it finishes. If one turns red, open it and read the last few lines: the workflow is written to say what went wrong in plain words.</p>
+<p>To watch it without the browser, run this. Each step reports as it finishes, and the command ends when the run does. If a step turns red, it prints the failure: the workflow is written to say what went wrong in plain words.</p>
+
+<pre><code>gh run watch</code></pre>
 
 <h2>Every release after the first</h2>
 
-<p>Repeat steps 6 and 7. Nothing else.</p>
+<p>Repeat steps 4 and 5. Nothing else.</p>
 
-<p>You can also start a release without sending any new code. On the <span class="ui">Actions</span> tab, choose <strong>Release</strong> in the sidebar, then the <span class="ui">Run workflow</span> button. It still waits for your approval.</p>
+<p>You can also start a release without sending any new code. It still waits for your approval.</p>
+
+<pre><code>gh workflow run release.yml</code></pre>
 
 <p>To change the version number people see, open <strong>project.yml</strong> and edit the <code>MARKETING_VERSION</code> line. The build number takes care of itself: it counts the commits, and that count is what tells the app a newer version exists.</p>
 
@@ -355,10 +316,16 @@
   <dd>Somebody made a new Sparkle key. The app only trusts the original. Put the original private key back in the login keychain. Nothing else fixes it.</dd>
 
   <dt>Apple's check fails.</dt>
-  <dd>Usually the app-specific password from step 4 expired or was revoked. Make a new one and update the <code>NOTARY_PASSWORD</code> secret. If the message instead names an entitlement, the app asked for a permission it has no profile for, and that is a code change.</dd>
+  <dd>Usually the app-specific password from step 2 expired or was revoked. Make a new one, then run <code>gh secret set NOTARY_PASSWORD</code> again. Setting a secret twice replaces it. If the message instead names an entitlement, the app asked for a permission it has no profile for, and that is a code change.</dd>
 
   <dt>The run fails on the signing certificate.</dt>
-  <dd>Developer ID certificates expire after five years. Renew it in your Apple Developer account, then redo steps 2, 3 and 5 with the new one.</dd>
+  <dd>Developer ID certificates expire after five years. Renew it in your Apple Developer account, then redo step 1 and the certificate part of step 3 with the new one.</dd>
+
+  <dt>A <code>gh</code> command says you are not logged in.</dt>
+  <dd>The GitHub sign-in on your Mac expired. Run <code>gh auth login</code>, choose <span class="ui">GitHub.com</span>, then <span class="ui">HTTPS</span>, and follow the questions. It ends in a browser page that you confirm.</dd>
+
+  <dt>A <code>gh</code> command names the wrong repository, or none.</dt>
+  <dd>You are not in the project folder. Run <code>cd ~/apps/app-super-submitter-app</code> first. To be certain, add <code>-R rafacst/app-super-submitter</code> to the end of any <code>gh</code> command.</dd>
 
   <dt>The run never starts, or never pauses for you.</dt>
   <dd>The <code>release</code> environment lost its reviewer. Open <span class="ui">Settings</span>, then <span class="ui">Environments</span>, then <span class="ui">release</span>, and put yourself back under <span class="ui">Required reviewers</span>.</dd>
