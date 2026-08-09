@@ -56,13 +56,58 @@ private func detailsReviewSource(_ relativePath: String) throws -> String {
     #expect(tab.contains("writeCount"))
 }
 
-/// One value drawn in two columns is still one value, and a window too narrow
-/// for two columns has to be able to stand them on top of each other.
+/// The merged column is where the tab opens. Two columns are the study, and a
+/// developer who wants them asks for them.
 @MainActor
-@Test func theColumnsMergeOnDemand() {
+@Test func theTabOpensMerged() {
     let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                          storeAccount: "test-\(UUID().uuidString)")
-    #expect(!state.detailsMerged)
-    state.detailsMerged = true
     #expect(state.detailsMerged)
+    state.detailsMerged = false
+    #expect(!state.detailsMerged)
+}
+
+/// One value is one box. Merged, the two columns of a shared field collapsed
+/// into two boxes of the same text stacked on each other: Name over Name,
+/// Description over Description, both writing the same manifest key.
+@Test func aMergedRowDrawsOneBoxPerValue() throws {
+    let tab = try detailsReviewSource("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+
+    #expect(tab.contains("private func sharedRow"))
+    #expect(tab.contains("private func limits"))
+}
+
+/// A limit the developer cannot see is a limit they find out about from the
+/// store. Every field that has one prints it, and a merged row says whose it
+/// is, because Apple cuts the subtitle at 30 and Play cuts it at 80.
+@Test func everyBudgetIsPrintedAndNamed() throws {
+    let editor = try detailsReviewSource("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+
+    #expect(editor.contains("struct FieldLimit"))
+    #expect(editor.contains("limit.store"))
+    // The counter used to wait until the text passed half the budget.
+    #expect(!editor.contains("> 0.5"))
+}
+
+/// The identifiers belong to the store, and a box you can type in says the
+/// opposite. The Build tab already draws them as values; so does this one.
+@Test func theIdentifiersAreNotTypedIn() throws {
+    let panel = try detailsReviewSource("Sources/SuperSubmitter/Tabs/AppIdentifiers.swift")
+
+    #expect(!panel.contains("TextField("))
+    #expect(panel.contains("Choose visible app"))
+}
+
+/// The inspector is a column of the window, not a column inside the tab.
+///
+/// Opening it from inside the detail column grew that column by the width of
+/// the inspector, so the split view laid all three out wider than the window
+/// and the sidebar slid off the left edge until the animation settled.
+@Test func theInspectorIsAColumnOfTheWindow() throws {
+    let root = try detailsReviewSource("Sources/SuperSubmitter/Shell/RootView.swift")
+    let start = try #require(root.range(of: "private struct ContentArea"))
+    let contentArea = String(root[start.lowerBound...])
+
+    #expect(!contentArea.contains(".inspector(isPresented:"))
+    #expect(root.contains(".inspector(isPresented:"))
 }
