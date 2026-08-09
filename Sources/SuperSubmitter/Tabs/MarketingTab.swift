@@ -25,7 +25,7 @@ struct MarketingTab: View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle").foregroundStyle(Theme.text3)
             Text("Every field on this tab reaches the App Store alone. Google Play has no equivalent for any of it.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             Spacer(minLength: 0)
         }
         .padding(10)
@@ -62,7 +62,7 @@ struct MarketingTab: View {
                                 .limited(to: MarketingLimits.customProductPagePromotionalText))
                         }
                         Text("Apple allows 35 pages.")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }.storePanel()
                 }
                 Button("Add a custom product page") { state.addCustomProductPage() }
@@ -108,7 +108,7 @@ struct MarketingTab: View {
                             Spacer(minLength: 0)
                         }
                         Text("The app creates the experiment and never starts it. Apple allows 3 treatments.")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }.storePanel()
                 }
                 Button("Add an experiment") { state.addExperiment() }
@@ -176,7 +176,7 @@ struct MarketingTab: View {
                  anchor: "marketing.eula") {
             VStack(alignment: .leading, spacing: 7) {
                 TextEditor(text: state.eulaTextBinding)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .frame(height: 110)
                     .scrollContentBackground(.hidden)
                     .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
@@ -196,7 +196,7 @@ struct MarketingTab: View {
                     }
                 }
                 Text("An empty agreement leaves the Apple standard licence in place.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
         }
     }
@@ -229,7 +229,7 @@ struct MarketingTab: View {
                     }.controlSize(.small)
                 }
                 Text("A GeoJSON file. Only a routing app needs one.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
         }
     }
@@ -247,7 +247,7 @@ struct MarketingTab: View {
                     .returnInsertsLineBreak()
                     .lineLimit(2...4)
                 Text("The app creates a draft and never submits it.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
         }
     }
@@ -270,10 +270,10 @@ struct MarketingTab: View {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(StoreValues.accessibilityFeatures) { feature in
                     Toggle(feature.label, isOn: state.accessibilityBinding(feature.value))
-                        .font(.system(size: 11.5))
+                        .font(Theme.font(size: 11.5))
                 }
                 Text("The declaration is written as a draft.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
         }
     }
@@ -294,7 +294,7 @@ struct MarketingTab: View {
                     headerImageField
                 }
                 Text("Xcode creates the clip. This writes what the store shows.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }.storePanel()
         }
     }
@@ -325,7 +325,7 @@ private struct PromoteTreatment: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Text("Promote a treatment").font(.system(size: 12, weight: .semibold))
+                Text("Promote a treatment").font(Theme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 8)
                 QuietButton(title: busy ? "Fetching…" : "Fetch the treatments") { load() }
                     .disabled(busy || state.actualState.apple?.versionId == nil)
@@ -333,11 +333,11 @@ private struct PromoteTreatment: View {
             if let error { ErrorLine(text: error) }
             if state.actualState.apple?.versionId == nil {
                 Text("Read the stores on the Summary tab first, so the app knows which version the treatments belong to.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             } else if loaded, treatments.isEmpty {
                 Text("Apple holds no treatment for this version. The experiments above create them on the next run.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !treatments.isEmpty {
@@ -357,7 +357,7 @@ private struct PromoteTreatment: View {
                     Spacer(minLength: 0)
                 }
                 Text("The winning treatment's screenshots and text replace the ones on the live page. Promoting a different treatment is the way back.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

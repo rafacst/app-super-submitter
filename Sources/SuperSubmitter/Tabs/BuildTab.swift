@@ -34,14 +34,14 @@ struct BuildTab: View {
     private var versionSection: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Version").font(.system(size: 12.5, weight: .semibold))
+                Text("Version").font(Theme.font(size: 12.5, weight: .semibold))
                 TextField("1.0", text: state.releaseVersionBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 96)
                     .monospacedDigit()
                 if let live = state.liveAppleVersion {
                     Text(verbatim: "\(live) is live on the App Store")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .monospacedDigit()
                 }
                 Spacer(minLength: 8)
@@ -53,7 +53,7 @@ struct BuildTab: View {
                 }
             }
             Text("Apple refuses a version that does not climb past the one on sale. A package you import fills this in while it is empty.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
@@ -74,7 +74,7 @@ struct BuildTab: View {
                     state.showBuildFromProject = fromProject
                 } label: {
                     Text(fromProject ? "Build from project" : "Import a package")
-                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        .font(Theme.font(size: 12, weight: selected ? .semibold : .regular))
                         .foregroundStyle(selected ? Theme.accentText : Theme.text)
                         .padding(.horizontal, 14).padding(.vertical, 5)
                         .background(selected ? Theme.accent : .clear)
@@ -125,7 +125,7 @@ struct BuildTab: View {
 
     private var submitBuilds: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Text("Submit a build").font(.system(size: 13, weight: .semibold))
+            Text("Submit a build").font(Theme.font(size: 13, weight: .semibold))
             VStack(spacing: 9) {
                 PackageDropWell(
                     title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
@@ -163,7 +163,7 @@ struct BuildTab: View {
 
     private var updateExistingApp: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Text("Update an app that exists").font(.system(size: 13, weight: .semibold))
+            Text("Update an app that exists").font(Theme.font(size: 13, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 9) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -197,7 +197,7 @@ struct BuildTab: View {
             }
 
             Text("App Store apps come from the connected account. Android Publisher cannot list apps, so Google uses the tested package name from Stores.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -216,7 +216,7 @@ struct BuildTab: View {
                     EmptyView()
                 }
             }
-            .font(.system(size: 11.5))
+            .font(Theme.font(size: 11.5))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 15)
@@ -256,7 +256,7 @@ struct BuildTab: View {
         let count = sortedPackages.reduce(0) { $0 + $1.filledFieldCount }
         return HStack(spacing: 14) {
             Text("Inspected \(count) build fields and saved their manifest values.")
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
             QuietButton(title: "Open Details") { state.selectedTab = .details }
             Spacer(minLength: 0)
         }
@@ -293,12 +293,12 @@ struct BuildTab: View {
 
     private func versionWarning(_ mismatch: (apple: String, google: String)) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text("!").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.yellow)
+            Text("!").font(Theme.font(size: 13, weight: .bold)).foregroundStyle(Theme.yellow)
             VStack(alignment: .leading, spacing: 3) {
                 Text("The version name differs between the Apple and Android packages.")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(Theme.font(size: 12.5, weight: .medium))
                 Text("Apple reads \(mismatch.apple); Google reads \(mismatch.google). Choose the release name that the manifest should use.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
@@ -342,22 +342,22 @@ private struct PackageDropWell: View {
                     .frame(width: 26, height: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(reading ? "Inspecting \(title)…" : title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(Theme.font(size: 12, weight: .medium))
                     HStack(spacing: 3) {
                         Text(prompt).foregroundStyle(Theme.text2)
                         Button("choose a file…", action: choose)
                             .buttonStyle(.plain).foregroundStyle(Theme.accent)
                     }
-                    .font(.system(size: 11))
+                    .font(Theme.font(size: 11))
                 }
                 Spacer(minLength: 0)
                 if reading { ProgressView().controlSize(.small) }
             }
             if let error {
-                Text(error).font(.system(size: 10.5)).foregroundStyle(Theme.red)
+                Text(error).font(Theme.font(size: 10.5)).foregroundStyle(Theme.red)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let note {
-                Text(note).font(.system(size: 10.5)).foregroundStyle(Theme.text2)
+                Text(note).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -403,7 +403,7 @@ private struct PackageCard: View {
                     .frame(width: 38, height: 38)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(package.kind.rawValue.uppercased()) · \(package.url.lastPathComponent)")
-                        .font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                        .font(Theme.font(size: 13, weight: .semibold)).lineLimit(1)
                     Text(package.url.path).font(Theme.mono(10.5)).foregroundStyle(Theme.text2).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -417,7 +417,7 @@ private struct PackageCard: View {
                         Text(row.1).font(Theme.mono(11.5))
                         Spacer(minLength: 0)
                     }
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .padding(.horizontal, 15).padding(.vertical, 5)
                 }
             }
@@ -436,9 +436,9 @@ private struct PickerLabel: View {
         HStack {
             Text(value)
             Spacer()
-            Text("▾").font(.system(size: 9)).foregroundStyle(Theme.text3)
+            Text("▾").font(Theme.font(size: 9)).foregroundStyle(Theme.text3)
         }
-        .font(.system(size: 12))
+        .font(Theme.font(size: 12))
         .padding(.horizontal, 9).padding(.vertical, 6)
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6)
@@ -459,8 +459,8 @@ private struct WarningLine: View {
     let message: String
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Text("!").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.red)
-            Text(message).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+            Text("!").font(Theme.font(size: 13, weight: .bold)).foregroundStyle(Theme.red)
+            Text(message).font(Theme.font(size: 12)).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)

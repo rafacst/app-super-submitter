@@ -73,7 +73,7 @@ struct MoneyTab: View {
                                 emptyLabel: "Pick a territory")
                 }
                 Text("Other territories are converted by the stores.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 Toggle("Convert the base price for every Google region",
                        isOn: state.autoConvertPricesBinding)
                     .disabled(!state.stores.contains(.google))
@@ -97,7 +97,7 @@ struct MoneyTab: View {
                 let gap = state.priceGap ?? 0
                 HStack(spacing: 8) {
                     Text("App Store price point")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     Text("\(resolved.description) \(requested.currency)")
                         .font(Theme.mono(11.5))
                         .foregroundStyle(gap > 0.05 ? Theme.yellow : Theme.text)
@@ -109,7 +109,7 @@ struct MoneyTab: View {
                 }
             } else {
                 Text("Read the stores on the Summary tab to see the App Store price point.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
             }
         }
     }
@@ -136,7 +136,7 @@ struct MoneyTab: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 12))
+            .font(Theme.font(size: 12))
             .frame(maxHeight: .infinity, alignment: .top)
             .storePanel()
         }
@@ -239,7 +239,7 @@ struct MoneyTab: View {
                             }
                             .padding(.top, 8)
                         }
-                        .font(.system(size: 11.5))
+                        .font(Theme.font(size: 11.5))
                         OfferEditor(target: .purchase(index))
                     }.storePanel()
                 }
@@ -385,7 +385,7 @@ struct MoneyTab: View {
             }
             .frame(width: 260)
             Text("The App Store keeps one for the whole app.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             Spacer(minLength: 0)
         }
     }

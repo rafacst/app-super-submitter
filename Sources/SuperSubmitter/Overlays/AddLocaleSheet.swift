@@ -9,9 +9,9 @@ struct AddLocaleSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Add a language")
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.font(size: 15, weight: .semibold))
             Text("Pick the language of the listing. Super Submitter writes the code each store wants.")
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
 

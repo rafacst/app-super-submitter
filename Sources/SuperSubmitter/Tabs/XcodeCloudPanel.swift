@@ -32,7 +32,7 @@ struct XcodeCloudPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Apple builds the app instead of this Mac. A run spends the compute minutes on your account, and nothing gives them back.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch the workflows") { load() }
@@ -42,7 +42,7 @@ struct XcodeCloudPanel: View {
                 if let error { ErrorLine(text: error) }
                 if loaded, workflows.isEmpty {
                     Text("This app has no Xcode Cloud workflow. You create one in Xcode, and it appears here.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(workflows) { workflow in workflowRow(workflow) }
@@ -62,9 +62,9 @@ struct XcodeCloudPanel: View {
     @ViewBuilder private func workflowRow(_ workflow: XcodeCloudClient.Workflow) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 9) {
-                Text(workflow.name).font(.system(size: 12, weight: .medium))
+                Text(workflow.name).font(Theme.font(size: 12, weight: .medium))
                 Text(workflow.productName)
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 if !workflow.enabled {
                     StatePill(text: "OFF", foreground: Theme.text3, background: Theme.sunken)
                 }
@@ -91,7 +91,7 @@ struct XcodeCloudPanel: View {
             HStack(spacing: 8) {
                 Button { toggle(run) } label: {
                     Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.text3)
                         .frame(width: 14, height: 14)
                         .contentShape(.rect)
@@ -102,7 +102,7 @@ struct XcodeCloudPanel: View {
                 Text("#\(run.number.map(String.init) ?? "?")")
                     .font(Theme.mono(10)).foregroundStyle(Theme.text3)
                 Text(run.state.lowercased())
-                    .font(.system(size: 11))
+                    .font(Theme.font(size: 11))
                     .foregroundStyle(run.completionStatus == "SUCCEEDED"
                                      ? Theme.green
                                      : run.completionStatus == nil
@@ -110,7 +110,7 @@ struct XcodeCloudPanel: View {
                 Spacer(minLength: 8)
                 if let date = run.startedAt {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
             }
             if open { runDetail(run) }
@@ -124,21 +124,21 @@ struct XcodeCloudPanel: View {
         VStack(alignment: .leading, spacing: 7) {
             if steps.isEmpty {
                 Text("Apple reports no step for this run yet.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
             }
             ForEach(steps) { step in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
-                        Text(step.name).font(.system(size: 11.5, weight: .medium))
+                        Text(step.name).font(Theme.font(size: 11.5, weight: .medium))
                         Text(step.state.lowercased())
-                            .font(.system(size: 11))
+                            .font(Theme.font(size: 11))
                             .foregroundStyle(step.completionStatus == "SUCCEEDED"
                                              ? Theme.green
                                              : step.completionStatus == nil
                                                 ? Theme.yellow : Theme.red)
                         Spacer(minLength: 8)
                         if let issues = step.issues {
-                            Text(issues).font(.system(size: 10.5))
+                            Text(issues).font(Theme.font(size: 10.5))
                                 .foregroundStyle(Theme.orange)
                         }
                     }
@@ -148,7 +148,7 @@ struct XcodeCloudPanel: View {
                                 .joined(separator: "."))
                                 .font(Theme.mono(10)).foregroundStyle(Theme.red)
                             if let message = failure.message, !message.isEmpty {
-                                Text(message).font(.system(size: 10.5))
+                                Text(message).font(Theme.font(size: 10.5))
                                     .foregroundStyle(Theme.text3)
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -163,13 +163,13 @@ struct XcodeCloudPanel: View {
                         HStack(spacing: 6) {
                             if let url = artifact.downloadURL {
                                 Link(artifact.fileName, destination: url)
-                                    .font(.system(size: 10.5))
+                                    .font(Theme.font(size: 10.5))
                             } else {
-                                Text(artifact.fileName).font(.system(size: 10.5))
+                                Text(artifact.fileName).font(Theme.font(size: 10.5))
                                     .foregroundStyle(Theme.text3)
                             }
                             if let type = artifact.fileType {
-                                Text(AppleWords.title(type)).font(.system(size: 10))
+                                Text(AppleWords.title(type)).font(Theme.font(size: 10))
                                     .foregroundStyle(Theme.text3)
                             }
                             if let size = artifact.fileSize {
@@ -196,30 +196,30 @@ struct XcodeCloudPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text("The connected repositories")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 8)
                 QuietButton(title: "Fetch the repositories") { loadSources() }
                     .disabled(busy)
             }
             if repositoriesLoaded, repositories.isEmpty {
                 Text("App Store Connect has no source-control connection. You make one in Xcode when you create the first workflow.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(repositories) { repository in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Text(repository.name).font(.system(size: 11.5, weight: .medium))
+                        Text(repository.name).font(Theme.font(size: 11.5, weight: .medium))
                         if let owner = repository.owner {
-                            Text(owner).font(.system(size: 10.5))
+                            Text(owner).font(Theme.font(size: 10.5))
                                 .foregroundStyle(Theme.text3)
                         }
                         Spacer(minLength: 8)
                         Text("\(repository.references.count) branches  ·  \(repository.pullRequests.count) open pull requests")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }
                     ForEach(repository.pullRequests.prefix(5), id: \.self) { request in
-                        Text(request).font(.system(size: 10.5))
+                        Text(request).font(Theme.font(size: 10.5))
                             .foregroundStyle(Theme.text3).lineLimit(1)
                             .padding(.leading, 10)
                     }

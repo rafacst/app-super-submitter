@@ -48,7 +48,7 @@ struct GoogleTeamPanel: View {
                 if loaded {
                     if members.isEmpty {
                         Text("Google lists nobody on this developer account. Check the id above, and check that the service account may manage permissions.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     ForEach(members) { member in
@@ -88,7 +88,7 @@ struct GoogleTeamPanel: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Read who has access, change what they may do, invite somebody, or take an app away. Reading changes nothing; the three writes each ask first.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             QuietButton(title: busy ? "Fetching…" : "Fetch the team") { load() }
@@ -106,12 +106,12 @@ struct GoogleTeamPanel: View {
                     .frame(width: 220)
                 if !state.hasCredential(for: .google) {
                     Text("Connect the service account above first.")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 Spacer(minLength: 0)
             }
             Text("It is the number after /developers/ in any Play Console URL. Google offers no call that answers it. It belongs to the account, so it stays in the app’s settings and out of store.yaml.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -126,7 +126,7 @@ struct GoogleTeamPanel: View {
                     if open { expanded.remove(member.id) } else { expanded.insert(member.id) }
                 } label: {
                     Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.text3)
                         .frame(width: 14, height: 14)
                         .contentShape(.rect)
@@ -134,7 +134,7 @@ struct GoogleTeamPanel: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(open ? "Collapse \(member.email)" : "Expand \(member.email)")
 
-                Text(member.email).font(.system(size: 12, weight: .medium))
+                Text(member.email).font(Theme.font(size: 12, weight: .medium))
                     .textSelection(.enabled)
                 if let pill = Self.statePill(member) {
                     StatePill(text: pill.text, foreground: pill.tint,
@@ -142,7 +142,7 @@ struct GoogleTeamPanel: View {
                 }
                 Spacer(minLength: 8)
                 Text(Self.countLine(member))
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 if !member.partial {
                     Button("Remove") { removing = member }
                         .controlSize(.small).disabled(busy)
@@ -151,11 +151,11 @@ struct GoogleTeamPanel: View {
 
             if let expiry = member.expirationTime {
                 Text("Access ends \(expiry)")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }
             if member.partial {
                 Text("Google did not show every permission this person holds, which is what it answers for the account owner and whenever the service account cannot manage every app. Change this one in the Play Console; a write from here would drop what it cannot see.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.orange)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if open { detail(member) }
@@ -228,7 +228,7 @@ struct GoogleTeamPanel: View {
 
     private var invite: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Invite somebody").font(.system(size: 12, weight: .semibold))
+            Text("Invite somebody").font(Theme.font(size: 12, weight: .semibold))
             HStack(spacing: 8) {
                 TextField("name@example.com", text: $inviteEmail)
                     .textFieldStyle(.roundedBorder)
@@ -244,7 +244,7 @@ struct GoogleTeamPanel: View {
                 Spacer(minLength: 0)
             }
             Text("Give app-level access after they appear in the list. An invitation with no account-wide permission is normal: it is how a person who only works on one app gets in.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

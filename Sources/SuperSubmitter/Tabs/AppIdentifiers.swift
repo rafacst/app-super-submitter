@@ -20,7 +20,7 @@ struct AppIdentifiers: View {
                  anchor: "build.identifiers") {
             VStack(alignment: .leading, spacing: 12) {
                 Text("The store decides these, not you. An import fills them in. The credential that reaches them lives on the Stores tab and covers every app on the account.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if state.stores.contains(.apple) {
@@ -47,7 +47,7 @@ struct AppIdentifiers: View {
                             .labelsHidden()
                             .frame(width: 240)
                             Text("This app ships on more than one platform. The App Store keeps a separate version, listing, and set of screenshots for each one.")
-                                .font(.system(size: 11))
+                                .font(Theme.font(size: 11))
                                 .foregroundStyle(Theme.text2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -85,7 +85,7 @@ private struct IdentifierField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
+            Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             TextField(prompt, text: $value)
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))

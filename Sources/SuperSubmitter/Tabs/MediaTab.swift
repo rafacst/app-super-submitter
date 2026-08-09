@@ -74,16 +74,16 @@ struct MediaTab: View {
                 Button { open[device] = !isOpen } label: {
                     HStack(spacing: 7) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(Theme.font(size: 9, weight: .semibold))
                             .foregroundStyle(Theme.text2)
                             .rotationEffect(.degrees(isOpen ? 90 : 0))
-                        Text(name).font(.system(size: 12.5, weight: .semibold))
+                        Text(name).font(Theme.font(size: 12.5, weight: .semibold))
                         // Verbatim, so a locale that groups thousands cannot
                         // render a count as "1.242". The digits also have to
                         // hold still while the number changes, or the name
                         // beside them shuffles.
                         Text(verbatim: "\(paths.count) of \(limit)")
-                            .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                             .monospacedDigit()
                             .contentTransition(.numericText())
                     }
@@ -184,7 +184,7 @@ struct MediaTab: View {
                     }
                 }
                 Text("Google Play refuses a listing without both. The App Store needs neither: it reads the icon out of the build.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .storePanel()
@@ -195,15 +195,15 @@ struct MediaTab: View {
         let device: Manifest.DeviceClass = .phone
         let previews = state.mediaPaths(deviceClass: device, previews: true)
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Video").font(.system(size: 12.5, weight: .semibold))
+            Text("Video").font(Theme.font(size: 12.5, weight: .semibold))
                 .fieldAnchor("media.video")
             Text("Apple takes a 15 to 30 second video file. Google takes a YouTube URL.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         StoreLabel(store: .apple, size: 11.5)
-                        Text("previews").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        Text("previews").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         Spacer()
                         Button("Choose videos…") {
                             state.chooseMediaFiles(deviceClass: device, previews: true)
@@ -217,7 +217,7 @@ struct MediaTab: View {
                             Button("Remove") {
                                 state.removeMedia(path, deviceClass: device, previews: true)
                             }.controlSize(.small)
-                        }.font(.system(size: 11.5))
+                        }.font(Theme.font(size: 11.5))
                     }
                     MediaDropTile(title: "Drop .mov, .m4v, or .mp4") {
                         state.chooseMediaFiles(deviceClass: device, previews: true)
@@ -239,13 +239,13 @@ struct MediaTab: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         StoreLabel(store: .google, size: 11.5)
-                        Text("YouTube URL").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        Text("YouTube URL").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     }
                     TextField("https://youtube.com/watch?v=…",
                               text: state.listingBinding(.googleVideo))
                         .textFieldStyle(.roundedBorder)
                     Text("Leave blank to omit the video.")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                 }
                 .storePanel(padding: 14)
             }
@@ -264,12 +264,12 @@ private struct LiveMediaStrip: View {
             HStack(spacing: 5) {
                 StoreMark(store: store, size: 11)
                 Text("On \(store.storeName) now")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(Theme.font(size: 10.5, weight: .medium))
                     .foregroundStyle(Theme.text3)
                     .textCase(.uppercase)
                     .kerning(0.3)
                 Text("\(urls.count)")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 8) {
@@ -278,7 +278,7 @@ private struct LiveMediaStrip: View {
                             if isVideo {
                                 Hatched()
                                     .overlay(Image(systemName: "film")
-                                        .font(.system(size: 20))
+                                        .font(Theme.font(size: 20))
                                         .foregroundStyle(Theme.text3))
                             } else {
                                 AsyncImage(url: url) { image in
@@ -308,10 +308,10 @@ private struct LiveMediaWarning: View {
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 10.5))
+                .font(Theme.font(size: 10.5))
                 .foregroundStyle(Theme.yellow)
             Text("These are the current \(noun). If you upload new ones they will be replaced.")
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -345,21 +345,21 @@ private struct MediaTile: View {
                 // store's own picture coming back.
                 if fromStore {
                     Text("From the store")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(Theme.font(size: 9, weight: .medium))
                         .foregroundStyle(Theme.text2)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background(Theme.raised, in: Capsule())
                         .padding(5)
                 }
             }
-            Text(url.lastPathComponent).font(.system(size: 10.5)).lineLimit(1)
+            Text(url.lastPathComponent).font(Theme.font(size: 10.5)).lineLimit(1)
             if let info {
                 // Verbatim, so the numbers stay numbers. `Text("\(int)")` goes
                 // through LocalizedStringKey, which groups by locale, and a
                 // 1242 by 2208 screenshot came out as "1.242 × 2.208". No
                 // locale writes a resolution with a thousands separator.
                 Text(verbatim: "\(info.width) × \(info.height)")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
                     .monospacedDigit()
             }
             // The logos, not the words. A tile is 112 points wide and the two
@@ -407,7 +407,7 @@ private struct TileButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
+                .font(Theme.font(size: 11, weight: .medium))
                 .foregroundStyle(enabled ? tint : Theme.text3)
                 .frame(width: 24, height: 24)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 5))
@@ -430,7 +430,7 @@ private struct MediaDropTile: View {
     let choose: () -> Void
     var body: some View {
         Button(action: choose) {
-            Text(title).font(.system(size: 11)).foregroundStyle(Theme.text3)
+            Text(title).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .multilineTextAlignment(.center).padding(8)
                 .frame(maxWidth: .infinity).frame(height: height)
                 .contentShape(Rectangle())

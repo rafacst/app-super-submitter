@@ -23,7 +23,7 @@ struct ReleaseSheet: View {
             Text(isApple
                  ? "Send \(appName) to App Store review?"
                  : "Send \(appName) to Google Play review?")
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.font(size: 15, weight: .semibold))
                 .kerning(-0.15)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -34,10 +34,10 @@ struct ReleaseSheet: View {
                         Text(key)
                             .foregroundStyle(Theme.text2)
                             .frame(width: 96, alignment: .leading)
-                        Text(value).font(mono ? Theme.mono(12) : .system(size: 12))
+                        Text(value).font(mono ? Theme.mono(12) : Theme.font(size: 12))
                         Spacer(minLength: 0)
                     }
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
                 }
@@ -50,12 +50,12 @@ struct ReleaseSheet: View {
             Text(isApple
                  ? "This sends the App Store version to Apple. It takes a place in the review queue. Google Play stays a draft."
                  : "This commits the Google Play release to the \(track) track. The App Store is untouched.")
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(recovery)
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -64,7 +64,7 @@ struct ReleaseSheet: View {
                 Spacer()
                 Button { dismiss() } label: {
                     Text("Cancel")
-                        .font(.system(size: 13))
+                        .font(Theme.font(size: 13))
                         .foregroundStyle(Theme.text)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 7)
@@ -81,7 +81,7 @@ struct ReleaseSheet: View {
                     Task { await state.release(store) }
                 } label: {
                     Text(isApple ? "Send to App Store" : "Send to Google Play")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.font(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 7)

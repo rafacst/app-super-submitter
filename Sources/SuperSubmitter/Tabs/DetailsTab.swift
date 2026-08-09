@@ -82,7 +82,7 @@ struct DetailsTab: View {
         let unchanged = !live.isEmpty && live.allSatisfy { $0.value == value }
         VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(title).font(.system(size: 11.5, weight: .medium))
+                Text(title).font(Theme.font(size: 11.5, weight: .medium))
                 if let tag { Tag(tag) }
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
@@ -100,7 +100,7 @@ struct DetailsTab: View {
                     // quantity, so it takes no thousands separator: the 4000
                     // character description limit read as "4.000".
                     Text(verbatim: "\(value.count) / \(limit)")
-                        .font(.system(size: 11, weight: overLimit ? .semibold : .regular))
+                        .font(Theme.font(size: 11, weight: overLimit ? .semibold : .regular))
                         .foregroundStyle(overLimit ? Theme.red
                                          : nearLimit ? Theme.yellow : Theme.text2)
                         // The count changes on every key, so the digits have
@@ -124,7 +124,7 @@ struct DetailsTab: View {
                     .textFieldStyle(.plain)
                     .returnInsertsLineBreak()
                     .lineLimit(3...16)
-                    .font(.system(size: 13))
+                    .font(Theme.font(size: 13))
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
                     .padding(7)
                     .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
@@ -138,7 +138,7 @@ struct DetailsTab: View {
             }
             if overLimit {
                 Text("\(value.count - (limit ?? 0)) characters over the store limit. The value is not shortened automatically.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.red)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.red)
             }
             liveValues(field, live: live, current: value)
         }
@@ -187,7 +187,7 @@ struct DetailsTab: View {
             HStack(spacing: 5) {
                 StoreMark(store: store, size: 11)
                 Text(label)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(Theme.font(size: 10.5, weight: .medium))
                     .foregroundStyle(Theme.text3)
                     .textCase(.uppercase)
                     .kerning(0.3)
@@ -198,7 +198,7 @@ struct DetailsTab: View {
                 .accessibilityLabel("Use the text \(label.lowercased())")
             }
             Text(value)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(2)
                 .lineLimit(6)
@@ -231,7 +231,7 @@ struct DetailsTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Use different text for Google Play",
                        isOn: state.googleOverrideBinding(google))
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                 if state.manifest.hasGoogleOverride(locale: state.locale, field: google) {
                     editor(title, field: google,
                            limit: title == "Subtitle" ? 80 : 500,
@@ -315,7 +315,7 @@ struct Tag: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+        Text(text).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             .padding(.horizontal, 4)
             .overlay(RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
@@ -330,8 +330,8 @@ struct Tag: View {
 struct KeptTag: View {
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: "checkmark").font(.system(size: 8, weight: .bold))
-            Text("Kept").font(.system(size: 10, weight: .medium))
+            Image(systemName: "checkmark").font(Theme.font(size: 8, weight: .bold))
+            Text("Kept").font(Theme.font(size: 10, weight: .medium))
         }
         .foregroundStyle(Theme.text3)
         .padding(.horizontal, 5).padding(.vertical, 1)
@@ -348,8 +348,8 @@ struct KeptTag: View {
 struct ChangedTag: View {
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: "pencil").font(.system(size: 8, weight: .bold))
-            Text("Changed").font(.system(size: 10, weight: .medium))
+            Image(systemName: "pencil").font(Theme.font(size: 8, weight: .bold))
+            Text("Changed").font(Theme.font(size: 10, weight: .medium))
         }
         .foregroundStyle(Theme.orange)
         .padding(.horizontal, 5).padding(.vertical, 1)
@@ -370,11 +370,11 @@ private struct StoreTextPreview: View {
             HStack(spacing: 6) {
                 StoreMark(store: store, size: 13)
                 Text("\(store.storeName) · \(locale)")
-                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11, weight: .semibold)).foregroundStyle(Theme.text2)
             }
-            Text(name.isEmpty ? "Untitled app" : name).font(.system(size: 15, weight: .semibold))
-            Text(subtitle).font(.system(size: 12)).foregroundStyle(Theme.text2)
-            Text(description).font(.system(size: 11.5)).lineLimit(5)
+            Text(name.isEmpty ? "Untitled app" : name).font(Theme.font(size: 15, weight: .semibold))
+            Text(subtitle).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
+            Text(description).font(Theme.font(size: 11.5)).lineLimit(5)
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 8))

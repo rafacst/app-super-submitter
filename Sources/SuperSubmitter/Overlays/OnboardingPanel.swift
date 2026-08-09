@@ -60,7 +60,7 @@ struct OnboardingPanel: View {
         HStack(spacing: 16) {
             HStack(spacing: 9) {
                 Circle().fill(tint).frame(width: 9, height: 9)
-                Text("Super Submitter").font(.system(size: 12.5, weight: .semibold))
+                Text("Super Submitter").font(Theme.font(size: 12.5, weight: .semibold))
             }
 
             Spacer(minLength: 12)
@@ -94,7 +94,7 @@ struct OnboardingPanel: View {
             Spacer(minLength: 12)
 
             Button("Skip") { dismiss() }
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .foregroundStyle(Theme.text2)
                 .buttonStyle(.plain)
         }
@@ -114,14 +114,14 @@ struct OnboardingPanel: View {
                 HStack(spacing: 11) {
                     IconChip(symbol: content?.symbol ?? "circle", tint: tint, size: 30)
                     Text("STEP \(step + 1) OF 5")
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(Theme.font(size: 10.5, weight: .semibold))
                         .kerning(0.7)
                         .foregroundStyle(tint)
                     Rectangle().fill(Theme.sep2).frame(height: 1)
                 }
 
                 Text(content?.title ?? "")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(Theme.font(size: 30, weight: .semibold))
                     .kerning(-0.6)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -130,12 +130,12 @@ struct OnboardingPanel: View {
                     ForEach(content?.points ?? [], id: \.self) { point in
                         HStack(alignment: .top, spacing: 11) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(Theme.font(size: 9, weight: .bold))
                                 .foregroundStyle(tint)
                                 .frame(width: 15, height: 15)
                                 .background(tint.opacity(0.15), in: Circle())
                             Text(point)
-                                .font(.system(size: 13.5))
+                                .font(Theme.font(size: 13.5))
                                 .foregroundStyle(Theme.text2)
                                 .lineSpacing(5)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -173,7 +173,7 @@ struct OnboardingPanel: View {
             }
 
             Text("We prepare a draft.\nYou press release.")
-                .font(.system(size: 40, weight: .semibold))
+                .font(Theme.font(size: 40, weight: .semibold))
                 .kerning(-1.2)
                 .lineSpacing(6)
                 .multilineTextAlignment(.center)
@@ -195,7 +195,7 @@ struct OnboardingPanel: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             Text("Nothing before tab 9 can reach a customer, take a place in a review queue, or be undone by hand.")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .multilineTextAlignment(.center)
@@ -226,11 +226,11 @@ struct OnboardingPanel: View {
                 } label: {
                     HStack(spacing: 7) {
                         Text(step == 4 ? "One last thing" : step == 5 ? "Start" : "Next")
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(Theme.font(size: 12.5, weight: .semibold))
                             .lineLimit(1)
                             .fixedSize()
                         Image(systemName: step == 5 ? "checkmark" : "arrow.right")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(Theme.font(size: 10, weight: .bold))
                     }
                     .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 18)
@@ -313,9 +313,9 @@ private struct StoresScene: View {
                 Reveal(on: phase >= 5) {
                     HStack(spacing: 8) {
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 10)).foregroundStyle(Theme.green)
+                            .font(Theme.font(size: 10)).foregroundStyle(Theme.green)
                         Text("Both secrets go to the macOS Keychain.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.green)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.green)
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 11)
@@ -335,9 +335,9 @@ private struct StoreConnectCard: View {
         HStack(spacing: 11) {
             StoreMark(store: store, size: 21)
             VStack(alignment: .leading, spacing: 1) {
-                Text(store.storeName).font(.system(size: 13, weight: .semibold))
+                Text(store.storeName).font(Theme.font(size: 13, weight: .semibold))
                 Text(on ? "Connected" : "Off")
-                    .font(.system(size: 11))
+                    .font(Theme.font(size: 11))
                     .foregroundStyle(on ? Theme.green : Theme.text3)
             }
             Spacer(minLength: 0)
@@ -345,7 +345,7 @@ private struct StoreConnectCard: View {
             // that tab, and it used to draw a switch instead, so the first
             // thing the app taught was a control the app does not have.
             Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 17, weight: .medium))
+                .font(Theme.font(size: 17, weight: .medium))
                 .foregroundStyle(on ? Theme.accent : Theme.text3)
         }
         .padding(.horizontal, 13)
@@ -366,7 +366,7 @@ private struct SecretCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 9) {
                 IconChip(symbol: symbol, tint: tint, size: 24)
-                Text(caption).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(caption).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
             HStack(spacing: 7) {
@@ -397,10 +397,10 @@ private struct BuildScene: View {
                         Reveal(on: index < max(0, phase - 1) * 2, rise: 6) {
                             HStack(spacing: 10) {
                                 Image(systemName: "arrow.down.left")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(Theme.font(size: 8, weight: .bold))
                                     .foregroundStyle(Theme.purple)
                                 Text(field)
-                                    .font(.system(size: 11.5))
+                                    .font(Theme.font(size: 11.5))
                                     .foregroundStyle(Theme.text2)
                                     .frame(width: 118, alignment: .leading)
                                 Text("From the package").font(Theme.mono(11))
@@ -416,9 +416,9 @@ private struct BuildScene: View {
                 Reveal(on: phase >= 5) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 11)).foregroundStyle(Theme.green)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.green)
                         Text("Checked against the store before anything uploads.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.green)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.green)
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 14)
@@ -449,9 +449,9 @@ private struct BuildScene: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(landed ? "Package selected" : "Drop your build here")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(Theme.font(size: 12.5, weight: .semibold))
                 Text(landed ? "Metadata is read on this Mac" : ".ipa · .pkg · .aab")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 0)
         }
@@ -474,10 +474,10 @@ private struct DetailsScene: View {
                     HStack(spacing: 9) {
                         // A tick box, because the Details tab uses a tick box.
                         Image(systemName: phase >= 4 ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 14))
+                            .font(Theme.font(size: 14))
                             .foregroundStyle(phase >= 4 ? Theme.accent : Theme.text3)
                         Text("Different text for Google")
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(Theme.font(size: 11.5, weight: .medium))
                         Spacer(minLength: 0)
                     }
                 }
@@ -511,7 +511,7 @@ private struct CounterField: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
                 StoreMark(store: store, size: 13)
-                Text(label).font(.system(size: 11.5, weight: .medium))
+                Text(label).font(Theme.font(size: 11.5, weight: .medium))
                 Spacer(minLength: 0)
                 Text("\(used) / \(limit)")
                     .font(Theme.mono(11))
@@ -560,10 +560,10 @@ private struct MediaScene: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 7) {
                     IconChip(symbol: "iphone", tint: Theme.pink, size: 22)
-                    Text("Phone").font(.system(size: 12, weight: .semibold))
+                    Text("Phone").font(Theme.font(size: 12, weight: .semibold))
                     Spacer(minLength: 0)
                     Text(phase >= 3 ? "2 accepted · 1 rejected" : "\(min(phase, 2)) accepted")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                 }
 
                 HStack(alignment: .top, spacing: 9) {
@@ -584,9 +584,9 @@ private struct MediaScene: View {
                 Reveal(on: phase >= 5) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 11)).foregroundStyle(Theme.green)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.green)
                         Text("Every size is read on the drop, before anything uploads.")
-                            .font(.system(size: 11)).foregroundStyle(Theme.green)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.green)
                         Spacer(minLength: 0)
                     }
                 }
@@ -613,13 +613,13 @@ private struct ShotTile: View {
                         .overlay(RoundedRectangle(cornerRadius: 7)
                             .strokeBorder(Theme.red, lineWidth: 1.5))
                         .overlay(Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(Theme.font(size: 15, weight: .bold))
                             .foregroundStyle(Theme.red))
                 } else {
                     Hatched(cornerRadius: 7)
                         .overlay(alignment: .bottomTrailing) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 13))
+                                .font(Theme.font(size: 13))
                                 .foregroundStyle(Theme.green)
                                 .padding(5)
                         }
@@ -628,7 +628,7 @@ private struct ShotTile: View {
             .frame(height: 116)
 
             Text(rejected ? "Wrong size, rejected" : "Accepted size")
-                .font(.system(size: 10))
+                .font(Theme.font(size: 10))
                 .foregroundStyle(rejected ? Theme.red : Theme.text2)
         }
         .opacity(on ? 1 : 0)
@@ -646,11 +646,11 @@ private struct VideoChip: View {
         HStack(spacing: 8) {
             StoreMark(store: store, size: 15)
             VStack(alignment: .leading, spacing: 1) {
-                Text(store.storeName).font(.system(size: 11, weight: .semibold))
-                Text(line).font(.system(size: 10.5)).foregroundStyle(Theme.text2)
+                Text(store.storeName).font(Theme.font(size: 11, weight: .semibold))
+                Text(line).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 0)
-            Image(systemName: symbol).font(.system(size: 10)).foregroundStyle(Theme.text3)
+            Image(systemName: symbol).font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -699,10 +699,10 @@ private struct MoneyScene: View {
                     VStack(spacing: 7) {
                         HStack(spacing: 8) {
                             IconChip(symbol: "cube.fill", tint: Theme.green, size: 20)
-                            Text("One product id").font(.system(size: 11.5, weight: .medium))
+                            Text("One product id").font(Theme.font(size: 11.5, weight: .medium))
                             Spacer(minLength: 0)
                             Image(systemName: "arrow.right")
-                                .font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.text3)
+                                .font(Theme.font(size: 9, weight: .bold)).foregroundStyle(Theme.text3)
                         }
                         HStack(spacing: 7) {
                             MirrorPill { StoreLabel(store: .apple, size: 10.5) }
@@ -711,7 +711,7 @@ private struct MoneyScene: View {
                                 HStack(spacing: 6) {
                                     IconChip(symbol: "arrow.triangle.2.circlepath",
                                              tint: Theme.orange, size: 14)
-                                    Text("Provider").font(.system(size: 10.5, weight: .semibold))
+                                    Text("Provider").font(Theme.font(size: 10.5, weight: .semibold))
                                 }
                             }
                         }
@@ -740,7 +740,7 @@ private struct ResolveRow: View {
     var body: some View {
         HStack(spacing: 9) {
             IconChip(symbol: icon, tint: tint, size: 20)
-            Text(label).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             Spacer(minLength: 8)
             switch state {
             case .waiting:
@@ -755,7 +755,7 @@ private struct ResolveRow: View {
             case .done(let text):
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10)).foregroundStyle(Theme.green)
+                        .font(Theme.font(size: 10)).foregroundStyle(Theme.green)
                     Text(text).font(Theme.mono(11)).foregroundStyle(Theme.green)
                 }
             }
@@ -785,7 +785,7 @@ private struct ChipField: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(Theme.font(size: 11))
             .foregroundStyle(Theme.text2)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -806,7 +806,7 @@ private struct ProviderPill: View {
 
     var body: some View {
         Text(name)
-            .font(.system(size: 11, weight: selected ? .semibold : .regular))
+            .font(Theme.font(size: 11, weight: selected ? .semibold : .regular))
             .foregroundStyle(selected ? Theme.text : Theme.text2)
             .padding(9)
             .frame(maxWidth: .infinity)
@@ -828,11 +828,11 @@ private struct PromiseCell: View {
         VStack(alignment: .leading, spacing: 8) {
             IconChip(symbol: symbol, tint: tint, size: 26)
             Text(tag)
-                .font(.system(size: 10, weight: .semibold))
+                .font(Theme.font(size: 10, weight: .semibold))
                 .kerning(0.6)
                 .foregroundStyle(tint)
             Text(line)
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

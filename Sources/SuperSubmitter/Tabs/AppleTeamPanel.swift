@@ -43,7 +43,7 @@ struct AppleTeamPanel: View {
                 if loaded {
                     if members.isEmpty {
                         Text("Apple lists nobody. A key without the Admin or Account Holder role cannot read the team, which is a permission state and not a fault.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     ForEach(members) { member in
@@ -77,7 +77,7 @@ struct AppleTeamPanel: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Read who has access, change what they may do, invite somebody, or take their access away. Reading changes nothing; the three writes each ask first.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             QuietButton(title: busy ? "Fetching…" : "Fetch the team") { load() }
@@ -95,7 +95,7 @@ struct AppleTeamPanel: View {
                     if open { expanded.remove(member.id) } else { expanded.insert(member.id) }
                 } label: {
                     Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.text3)
                         .frame(width: 14, height: 14)
                         .contentShape(.rect)
@@ -103,10 +103,10 @@ struct AppleTeamPanel: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(open ? "Collapse \(member.email)" : "Expand \(member.email)")
 
-                Text(member.email).font(.system(size: 12, weight: .medium))
+                Text(member.email).font(Theme.font(size: 12, weight: .medium))
                     .textSelection(.enabled)
                 if !member.name.isEmpty {
-                    Text(member.name).font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    Text(member.name).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 if member.pending {
                     StatePill(text: "INVITED", foreground: Theme.yellow,
@@ -118,17 +118,17 @@ struct AppleTeamPanel: View {
                 }
                 Spacer(minLength: 8)
                 Text(Self.countLine(member))
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 Button(member.pending ? "Withdraw" : "Remove") { removing = member }
                     .controlSize(.small).disabled(busy || member.isAccountOwner)
             }
             if let expiry = member.expirationDate {
                 Text("The invitation lapses \(expiry.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }
             if member.isAccountOwner {
                 Text("Apple gives this role to the person who enrolled and refuses every change to it through the API. It is an App Store Connect job, and only they can start it.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.orange)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if open { detail(member) }
@@ -159,7 +159,7 @@ struct AppleTeamPanel: View {
                      : member.visibleApps.isEmpty
                         ? "Sees no app yet."
                         : "Sees \(member.visibleApps.count) apps.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 if !member.pending, !member.isAccountOwner {
                     if member.allAppsVisible {
                         Button("Limit them to this app") { scope(member, toThisApp: true) }
@@ -174,7 +174,7 @@ struct AppleTeamPanel: View {
             }
             if member.provisioningAllowed {
                 Text("May reach the certificates and the profiles on the Developer website.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
             }
         }
         .padding(.leading, 23)
@@ -184,7 +184,7 @@ struct AppleTeamPanel: View {
 
     private var invite: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Invite somebody").font(.system(size: 12, weight: .semibold))
+            Text("Invite somebody").font(Theme.font(size: 12, weight: .semibold))
             FieldRow {
                 LabeledField("Email", width: 220) {
                     TextField("name@example.com", text: $inviteEmail)
@@ -217,7 +217,7 @@ struct AppleTeamPanel: View {
                 Spacer(minLength: 0)
             }
             Text("Apple wants both names on an invitation. Without \"Every app\" the person starts on the app this manifest names, and the account holder widens that in App Store Connect.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

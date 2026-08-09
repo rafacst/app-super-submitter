@@ -44,7 +44,7 @@ struct ReviewInfoTab: View {
                     }
                 }
                 Text("App Store only. Google Play has no equivalent fields.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
             // The stretch happens before the panel is painted, so the two
@@ -81,7 +81,7 @@ struct ReviewInfoTab: View {
                             Text(stored.password == nil
                                  ? "The App Store holds \(stored.name) for this app. Apple does not return the password."
                                  : "The App Store holds \(stored.name) for this app.")
-                                .font(.system(size: 11.5))
+                                .font(Theme.font(size: 11.5))
                                 .foregroundStyle(Theme.text2)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 4)
@@ -90,7 +90,7 @@ struct ReviewInfoTab: View {
                     }
                 }
                 Text("Credentials stay in the macOS Keychain and never reach the repository.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
             // The stretch happens before the panel is painted, so the two
@@ -121,7 +121,7 @@ struct ReviewInfoTab: View {
                 .textFieldStyle(.plain)
                 .returnInsertsLineBreak()
                 .lineLimit(4...22)
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))

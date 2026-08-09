@@ -15,7 +15,7 @@ struct StoreMark: View {
         switch store {
         case .apple:
             Image(systemName: "apple.logo")
-                .font(.system(size: size * 0.9))
+                .font(Theme.font(size: size * 0.9))
                 .foregroundStyle(Theme.appleMark)
                 .frame(width: size, height: size)
         case .google:
@@ -135,7 +135,7 @@ struct StoreLabel: View {
         HStack(spacing: 7) {
             StoreMark(store: store, size: size + 2)
             Text(store.storeName)
-                .font(.system(size: size, weight: weight))
+                .font(Theme.font(size: size, weight: weight))
                 .foregroundStyle(color)
         }
     }
@@ -173,7 +173,7 @@ struct IconChip: View {
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: size * 0.52, weight: .semibold))
+                    .font(Theme.font(size: size * 0.52, weight: .semibold))
                     .foregroundStyle(tint)
             )
     }

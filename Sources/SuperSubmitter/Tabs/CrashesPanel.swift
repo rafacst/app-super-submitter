@@ -44,7 +44,7 @@ struct CrashesPanel: View {
     @ViewBuilder private var aggregate: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Apple groups what the released build did by the code that caused it, and each pattern carries the anonymized call stacks behind it. It needs a build that enough devices have run.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             Picker("", selection: $diagnosticType) {
@@ -62,11 +62,11 @@ struct CrashesPanel: View {
         if let error { ErrorLine(text: error) }
         if state.actualState.apple?.attachedBuildId == nil {
             Text("Apple keys these to a build. Read the stores on the Summary tab, so the app knows which build is attached.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         } else if loaded, signatures.isEmpty {
             Text("Apple reports no pattern for the attached build. That is what a fresh release looks like, and it is a state and not a fault.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         ForEach(signatures) { signature in signatureRow(signature) }
@@ -78,7 +78,7 @@ struct CrashesPanel: View {
             HStack(spacing: 9) {
                 Button { toggle(signature) } label: {
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.text3)
                         .frame(width: 14, height: 14)
                         .contentShape(.rect)
@@ -112,23 +112,23 @@ struct CrashesPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             if entries.isEmpty {
                 Text("Apple holds no log for this pattern.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
             }
             ForEach(entries) { entry in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         if let device = entry.deviceType {
-                            Text(device).font(.system(size: 11, weight: .medium))
+                            Text(device).font(Theme.font(size: 11, weight: .medium))
                         }
                         if let os = entry.osVersion {
-                            Text(os).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            Text(os).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                         }
                         if let version = entry.appVersion {
                             Text(version).font(Theme.mono(10)).foregroundStyle(Theme.text3)
                         }
                         Spacer(minLength: 8)
                         if let detail = entry.detail {
-                            Text(detail).font(.system(size: 10.5))
+                            Text(detail).font(Theme.font(size: 10.5))
                                 .foregroundStyle(Theme.text3).lineLimit(1)
                         }
                     }
@@ -153,9 +153,9 @@ struct CrashesPanel: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("What the TestFlight testers sent")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                 Text("A crash or a screenshot arrives the moment a tester sends it, with whatever they typed beside it. It is the beta half of the same question.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 12)
@@ -166,7 +166,7 @@ struct CrashesPanel: View {
         ForEach(feedbackFailures, id: \.self) { failure in ErrorLine(text: failure) }
         if feedbackLoaded, feedback.isEmpty, feedbackFailures.isEmpty {
             Text("No tester has sent anything for this app.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
         }
         ForEach(feedback) { item in feedbackRow(item) }
     }
@@ -178,18 +178,18 @@ struct CrashesPanel: View {
                           foreground: item.kind == .crash ? Theme.orange : Theme.text2,
                           background: Theme.sunken)
                 if let email = item.testerEmail {
-                    Text(email).font(.system(size: 11.5)).textSelection(.enabled)
+                    Text(email).font(Theme.font(size: 11.5)).textSelection(.enabled)
                 }
                 if let device = item.deviceModel {
-                    Text(device).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    Text(device).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
                 if let os = item.osVersion {
-                    Text(os).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    Text(os).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
                 Spacer(minLength: 8)
                 if let date = item.createdDate {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
                 // Apple puts the whole report in the resource, so the button
                 // is one call and the file is the report.
@@ -199,7 +199,7 @@ struct CrashesPanel: View {
                 }
             }
             if let comment = item.comment, !comment.isEmpty {
-                Text(comment).font(.system(size: 12)).foregroundStyle(Theme.text2)
+                Text(comment).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -207,7 +207,7 @@ struct CrashesPanel: View {
             // link opens the one Apple served with the row.
             ForEach(Array(item.screenshots.enumerated()), id: \.offset) { index, url in
                 Link("Screenshot \(index + 1) ↗", destination: url)
-                    .font(.system(size: 11))
+                    .font(Theme.font(size: 11))
             }
         }
         .padding(.vertical, 5)

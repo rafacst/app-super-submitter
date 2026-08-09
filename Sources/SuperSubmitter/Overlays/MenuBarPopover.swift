@@ -9,7 +9,7 @@ struct MenuBarPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(title).font(.system(size: 12.5, weight: .semibold))
+                Text(title).font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer()
             }
             .padding(.horizontal, 14)
@@ -25,7 +25,7 @@ struct MenuBarPopover: View {
                 NSApp.activate()
             } label: {
                 Text("Open Super Submitter")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
@@ -58,13 +58,13 @@ struct MenuBarPopover: View {
             .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(status.storeName).font(.system(size: 12))
+                Text(status.storeName).font(Theme.font(size: 12))
                 Text(checked(status))
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
             Text(status.phase.label)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(status.phase.isReleased ? Theme.yellow : Theme.text)
         }
         .padding(.horizontal, 14)

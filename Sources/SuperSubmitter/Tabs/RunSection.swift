@@ -43,7 +43,7 @@ struct RunSection: View {
                                       tint: Theme.orange, size: 16)
                     }
                     Text(group.name)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(Theme.font(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.text2)
                     Spacer()
                 }
@@ -88,25 +88,25 @@ struct RunSection: View {
             Group {
                 switch stepState {
                 case .done:
-                    Text("✓").font(.system(size: 12)).foregroundStyle(Theme.green)
+                    Text("✓").font(Theme.font(size: 12)).foregroundStyle(Theme.green)
                 case .running:
                     Spinner()
                 case .failed:
-                    Text("✕").font(.system(size: 12)).foregroundStyle(Theme.red)
+                    Text("✕").font(Theme.font(size: 12)).foregroundStyle(Theme.red)
                 case .skipped:
-                    Text("–").font(.system(size: 12)).foregroundStyle(Theme.yellow)
+                    Text("–").font(Theme.font(size: 12)).foregroundStyle(Theme.yellow)
                 case .pending:
-                    Text("·").font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    Text("·").font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
             }
             .frame(width: 16)
 
             Text(step.title)
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .foregroundStyle(stepState == .pending ? Theme.text3 : Theme.text)
             Spacer(minLength: 8)
             Text(state.stepMeta.indices.contains(index) ? state.stepMeta[index] : "")
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
         }
         .padding(.horizontal, 15)
@@ -120,10 +120,10 @@ struct RunSection: View {
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline) {
                 Text(step.title)
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(Theme.font(size: 12.5, weight: .medium))
                 Spacer(minLength: 8)
                 Text(state.runDetail)
-                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -135,7 +135,7 @@ struct RunSection: View {
             .frame(height: 6)
             HStack {
                 Text("Apple processes the build after the upload. This is the longest wait in the app.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 8)
                 QuietButton(title: "Cancel") { state.cancelRun() }
             }
@@ -167,20 +167,20 @@ struct RunSection: View {
     private func failurePanel(_ failure: RunFailure) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("The run stopped at \(state.runSteps[safe: failure.stepIndex]?.title ?? "a step").")
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(Theme.font(size: 13.5, weight: .semibold))
             Text(failure.message)
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Text(recoveryNote(failure))
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 9) {
                 Button { state.retryFromFailure() } label: {
                     Text("Retry from the failed step")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(Theme.font(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -203,13 +203,13 @@ struct RunSection: View {
     private func providerPanel(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("The provider sync failed. The store drafts are untouched.")
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(Theme.font(size: 13.5, weight: .semibold))
             Text(message)
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Text("The run skipped the provider and finished. A row for it sits on the Release tab.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
             HStack(spacing: 9) {
                 QuietButton(title: "Retry the provider sync") { state.retryProviderSync() }
@@ -229,11 +229,11 @@ struct RunSection: View {
                 state.logOpen.toggle()
             } label: {
                 HStack(spacing: 8) {
-                    Text(state.logOpen ? "▼" : "▶").font(.system(size: 8)).foregroundStyle(Theme.text2)
-                    Text("Log").font(.system(size: 12))
+                    Text(state.logOpen ? "▼" : "▶").font(Theme.font(size: 8)).foregroundStyle(Theme.text2)
+                    Text("Log").font(Theme.font(size: 12))
                     Spacer(minLength: 0)
                     Text("\(state.logLines.count) calls")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
@@ -264,12 +264,12 @@ struct RunSection: View {
             Text(state.dryRun
                  ? "The dry run ended. Nothing was sent."
                  : "The run ended. Every store holds a draft.")
-                .font(.system(size: 17, weight: .semibold))
+                .font(Theme.font(size: 17, weight: .semibold))
                 .kerning(-0.17)
             Text(state.dryRun
                  ? "Every request above was built and logged. No store received one. Turn the dry run off in the bar at the top to write the drafts."
                  : "Nothing went to review. Nothing reached a customer. Both drafts are visible in the two consoles.")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .frame(maxWidth: 560, alignment: .leading)
@@ -278,7 +278,7 @@ struct RunSection: View {
             // back is the plan itself and not another tab.
             Button { state.dryRun ? state.dismissRun() : (state.selectedTab = .release) } label: {
                 Text(state.dryRun ? "Back to the plan" : "Go to Release")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(Theme.font(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 15)
                     .padding(.vertical, 7)

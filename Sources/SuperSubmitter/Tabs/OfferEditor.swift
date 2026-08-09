@@ -73,14 +73,14 @@ struct OfferEditor: View {
                     }
                     HStack(spacing: 10) {
                         Toggle("On sale", isOn: state.offerActiveBinding(target, index: index))
-                            .font(.system(size: 11.5))
+                            .font(Theme.font(size: 11.5))
                         Text("Google creates every offer as a draft, so an offer that is not on sale reaches nobody.")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                         Spacer(minLength: 0)
                     }
                     if offer.kind == .offerCode { codes(index: index) }
                     if let hint = hint(for: offer) {
-                        Text(hint).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        Text(hint).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }
                 }
                 .padding(9)
@@ -114,7 +114,7 @@ struct OfferEditor: View {
                 Spacer(minLength: 0)
             }
             Text("A custom code is one string handed to everybody. A one-time use code works once, and Apple requires an expiry date for a batch of them. Google generates its promotion codes in the Play Console, so none of this reaches Google.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(8)

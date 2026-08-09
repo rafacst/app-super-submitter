@@ -42,7 +42,7 @@ struct AndroidArtifactsSection: View {
                     }
                     .padding(.top, 8)
                 }
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 externalApk
             }
             .storePanel()
@@ -67,7 +67,7 @@ struct AndroidArtifactsSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Externally hosted APK")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(Theme.font(size: 12, weight: .semibold))
                     Spacer(minLength: 0)
                     Button(role: .destructive) { state.removeExternalApk() } label: {
                         Image(systemName: "trash")
@@ -75,7 +75,7 @@ struct AndroidArtifactsSection: View {
                     .controlSize(.small)
                 }
                 Text("Google accepts this from a Google Play organization only. A normal account answers 403.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.yellow)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.yellow)
                 HStack {
                     TextField("https://…", text: state.externalApkBinding(.url))
                     TextField("Application label", text: state.externalApkBinding(.label))
@@ -130,7 +130,7 @@ struct GoogleTracksSection: View {
                                      emptyLabel: "The release track alone")
                 }
                 Text("The release track is the one the Release tab sends. One edit reaches every track you write.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Divider().overlay(Theme.sep)
                 LabeledField("Countries", anchor: "build.countries") {
@@ -140,7 +140,7 @@ struct GoogleTracksSection: View {
                 }
                 Toggle("Include the rest of the world", isOn: state.googleRestOfWorldBinding)
                     .disabled(state.googleCountriesBinding.wrappedValue.isEmpty)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                 testers
             }
             .storePanel()
@@ -158,7 +158,7 @@ struct GoogleTracksSection: View {
         if !closed.isEmpty {
             Divider().overlay(Theme.sep)
             VStack(alignment: .leading, spacing: 9) {
-                Text("Track testers").font(.system(size: 12, weight: .semibold))
+                Text("Track testers").font(Theme.font(size: 12, weight: .semibold))
                     .fieldAnchor("build.googleTesters")
                 ForEach(closed, id: \.self) { track in
                     LabeledField(track, note: "Google Groups, comma-separated") {
@@ -167,7 +167,7 @@ struct GoogleTracksSection: View {
                     }
                 }
                 Text("Google takes group addresses only. It keeps the single tester list in the Play Console, and it replaces the whole list on every apply.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

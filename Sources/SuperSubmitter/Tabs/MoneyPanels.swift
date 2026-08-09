@@ -32,7 +32,7 @@ struct SandboxTestersPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("A sandbox account buys the products above without spending money, and a subscription that renews yearly on the App Store renews every few minutes here. Apple creates these in App Store Connect; this reads them and changes how they behave.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch the testers") { load() }
@@ -42,7 +42,7 @@ struct SandboxTestersPanel: View {
                 if let error { ErrorLine(text: error) }
                 if loaded, testers.isEmpty {
                     Text("The account holds no sandbox tester. You add one in App Store Connect, under Users and Access.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(testers) { tester in row(tester) }
@@ -61,10 +61,10 @@ struct SandboxTestersPanel: View {
     private func row(_ tester: AppleSandboxClient.Tester) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
-                Text(tester.appleAccount).font(.system(size: 12, weight: .medium))
+                Text(tester.appleAccount).font(Theme.font(size: 12, weight: .medium))
                     .textSelection(.enabled)
                 if !tester.name.isEmpty {
-                    Text(tester.name).font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    Text(tester.name).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 if let territory = tester.territory {
                     Text(territory).font(Theme.mono(10)).foregroundStyle(Theme.text3)
@@ -80,7 +80,7 @@ struct SandboxTestersPanel: View {
                     .frame(width: 240)
                 Toggle("Interrupt the purchases",
                        isOn: interruptBinding(tester))
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                 if rateDrafts[tester.id] != nil {
                     Button("Save") { save(tester) }
                         .controlSize(.small).disabled(busy)
@@ -90,7 +90,7 @@ struct SandboxTestersPanel: View {
                 Spacer(minLength: 0)
             }
             Text("An interrupted purchase is how the failure paths get tested: an expired card, a parental approval, a Terms sheet.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
         }
         .padding(9)
         .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
@@ -163,7 +163,7 @@ struct SubscriptionDraftsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Apple keeps a metadata change in a versioned draft that carries its own state through review. The live product goes on selling under the old text until a reviewer accepts the new one.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch the drafts") { load() }
@@ -173,13 +173,13 @@ struct SubscriptionDraftsPanel: View {
                 if let error { ErrorLine(text: error) }
                 if loaded, products.isEmpty {
                     Text("Apple holds no subscription group for this app yet. Run the plan once, and the groups appear here.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(products) { product in row(product) }
                 if loaded, !products.isEmpty {
                     Text("A run still writes the live localizations. This writes the same manifest text onto the draft instead, which is where Apple wants a metadata change to go.")
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -192,7 +192,7 @@ struct SubscriptionDraftsPanel: View {
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 9) {
                 Text(product.name)
-                    .font(.system(size: 12, weight: product.kind == .group ? .semibold : .regular))
+                    .font(Theme.font(size: 12, weight: product.kind == .group ? .semibold : .regular))
                     .padding(.leading, product.kind == .group ? 0 : 14)
                 if let draft = product.draft {
                     StatePill(text: AppleWords.title(draft.state ?? "draft").uppercased(),
@@ -209,7 +209,7 @@ struct SubscriptionDraftsPanel: View {
                         .controlSize(.small).disabled(busy)
                 } else {
                     Text("\(locales.count) locales in the manifest")
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     Button("Write the manifest text") { write(product) }
                         .controlSize(.small)
                         .disabled(busy || locales.isEmpty
@@ -218,13 +218,13 @@ struct SubscriptionDraftsPanel: View {
             }
             if let draft = product.draft, !draft.localizations.isEmpty {
                 Text("The draft carries: \(draft.localizations.keys.sorted().joined(separator: ", "))")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .padding(.leading, product.kind == .group ? 0 : 14)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if product.draft?.isEditable == false {
                 Text("A submitted draft is closed to edits. Apple opens the next one after this one lands.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .padding(.leading, product.kind == .group ? 0 : 14)
             }
         }

@@ -42,9 +42,9 @@ private struct MissingLocaleView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Add the first locale")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.font(size: 14, weight: .semibold))
             Text("Details and media belong to a locale. Add the app’s real default locale before entering listing content.")
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .foregroundStyle(Theme.text2)
             Button("Add locale") { state.showAddLocale = true }
                 .buttonStyle(.borderedProminent)

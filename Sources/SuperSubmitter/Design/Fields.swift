@@ -50,12 +50,12 @@ struct ChoiceField: View {
         Button { open = true } label: {
             HStack(spacing: 6) {
                 Text(value.isEmpty ? emptyLabel : ChoiceText.label(for: value, in: choices))
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(value.isEmpty ? Theme.text3 : Theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(Theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(Theme.text3)
             }
             .padding(.horizontal, 9)
@@ -96,14 +96,14 @@ struct MultiChoiceField: View {
         Button { open = true } label: {
             HStack(alignment: .top, spacing: 6) {
                 Text(ChoiceText.summary(of: text, in: choices, empty: emptyLabel))
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(text.isEmpty ? Theme.text3 : Theme.text)
                     .multilineTextAlignment(.leading)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(Theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(Theme.text3)
                     .padding(.top, 3)
             }
@@ -172,7 +172,7 @@ private struct ChoiceList: View {
                     }
                     if shown.isEmpty {
                         Text("Nothing matches.")
-                            .font(.system(size: 12)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
                             .padding(10)
                     }
                 }
@@ -182,7 +182,7 @@ private struct ChoiceList: View {
                 Divider()
                 HStack {
                     Text("\(chosen.count) chosen")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                     Spacer()
                     Button("Clear", action: clear).controlSize(.small)
                 }
@@ -197,12 +197,12 @@ private struct ChoiceList: View {
         Button(action: action) {
             HStack(spacing: 7) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(Theme.font(size: 9, weight: .bold))
                     .foregroundStyle(Theme.accent)
                     .opacity(ticked ? 1 : 0)
                     .frame(width: 11)
                 Text(label)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(quiet ? Theme.text2 : Theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -240,7 +240,7 @@ struct PathField: View {
             }
             if let problem {
                 Label(problem, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10.5))
+                    .font(Theme.font(size: 10.5))
                     .foregroundStyle(Theme.red)
                     .accessibilityHidden(true)
             }
@@ -305,15 +305,15 @@ struct LabeledField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
-                Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
+                Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                 if let note, !noteIsHelp {
-                    Text(note).font(.system(size: 10)).foregroundStyle(Theme.text3)
+                    Text(note).font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
                 }
             }
             content.frame(minHeight: 22)
             if let note, noteIsHelp {
                 Text(note)
-                    .font(.system(size: 10.5))
+                    .font(Theme.font(size: 10.5))
                     .foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }

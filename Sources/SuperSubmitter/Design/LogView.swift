@@ -59,7 +59,7 @@ struct LogView: View {
             LazyVStack(alignment: .leading, spacing: 1) {
                 if lines.count > tail {
                     Text("\(lines.count - tail) earlier lines. Copy the log to read them.")
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                         .padding(.bottom, 4)
                 }
                 ForEach(rows, id: \.offset) { row in

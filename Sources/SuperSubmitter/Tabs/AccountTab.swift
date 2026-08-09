@@ -65,17 +65,17 @@ struct AccountTab: View {
     private func reasonCard(_ reason: PaywallTrigger) -> some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "sparkles")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(Theme.purple)
                 .padding(.top, 1)
             Text(reason.line)
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Button { state.paywallReason = nil } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Theme.font(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.text3)
                     .frame(width: 22, height: 22)
                     .contentShape(.rect)
@@ -102,16 +102,16 @@ struct AccountTab: View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .center, spacing: 13) {
                 Image(systemName: signedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                    .font(.system(size: 34, weight: .light))
+                    .font(Theme.font(size: 34, weight: .light))
                     .foregroundStyle(signedIn ? Theme.accent : Theme.text3)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(state.accountEmail ?? state.entitlement.email ?? "Not signed in")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(Theme.font(size: 16, weight: .semibold))
                         .textSelection(.enabled)
                     Text(signedIn
                          ? "The same account works on every Mac you use."
                          : "Sign in to carry your plan between Macs. Everything free works without one.")
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -125,16 +125,16 @@ struct AccountTab: View {
 
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: state.isPaid ? "sparkles" : "circle.dashed")
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(state.isPaid ? Theme.purple : Theme.text3)
                     .frame(width: 16)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(state.planLabel)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.font(size: 13, weight: .semibold))
                     if !state.entitlementLabel.isEmpty {
                         Text(state.entitlementLabel)
-                            .font(.system(size: 11.5))
+                            .font(Theme.font(size: 11.5))
                             .foregroundStyle(Theme.text2)
                             .lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
@@ -208,8 +208,8 @@ struct AccountTab: View {
                         lines: [String], locked: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(tint)
-                Text(title).font(.system(size: 12.5, weight: .semibold))
+                Image(systemName: symbol).font(Theme.font(size: 11)).foregroundStyle(tint)
+                Text(title).font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 0)
             }
             ForEach(lines, id: \.self) { line in
@@ -218,12 +218,12 @@ struct AccountTab: View {
                     // tick beside everything they do. The glyph carries the
                     // state, so the row is never told apart by hue alone.
                     Image(systemName: locked ? "lock.fill" : "checkmark")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(locked ? Theme.text3 : tint)
                         .frame(width: 11)
                         .padding(.top, 3)
                     Text(line)
-                        .font(.system(size: 11.5))
+                        .font(Theme.font(size: 11.5))
                         .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -249,7 +249,7 @@ struct AccountTab: View {
     /// reads a list, takes one choice and one code, and opens a browser.
     private var plans: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Plans").font(.system(size: 13, weight: .semibold))
+            Text("Plans").font(Theme.font(size: 13, weight: .semibold))
 
             if let available = state.billingPlans, !available.plans.isEmpty {
                 ForEach(available.plans) { plan in
@@ -261,12 +261,12 @@ struct AccountTab: View {
             } else if state.billingOperation == .loadingPlans {
                 HStack(spacing: 8) {
                     Spinner()
-                    Text("Fetching the plans…").font(.system(size: 12))
+                    Text("Fetching the plans…").font(Theme.font(size: 12))
                 }
             } else {
                 HStack(spacing: 9) {
                     Text("The plans could not be loaded. Every free feature still works.")
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
@@ -277,7 +277,7 @@ struct AccountTab: View {
             }
 
             Text("Checkout happens on Stripe, in your browser. Super Submitter never sees a card number. Access opens after Stripe confirms the payment, not when the browser returns.")
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -303,11 +303,11 @@ struct AccountTab: View {
                     .strokeBorder(selected ? tint : Theme.sep, lineWidth: selected ? 5 : 1)
                     .frame(width: 14, height: 14)
                 Image(systemName: Self.symbol(plan.id))
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(tint)
                     .frame(width: 16)
                 Text(Self.name(plan.id))
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(Theme.font(size: 12.5, weight: .medium))
                     .foregroundStyle(selected ? tint : Theme.text)
                 if !plan.available {
                     StatePill(text: "Not on sale yet", foreground: Theme.yellow,
@@ -315,7 +315,7 @@ struct AccountTab: View {
                 }
                 Spacer(minLength: 8)
                 Text(Self.price(plan, currency: currency))
-                    .font(.system(size: 12.5))
+                    .font(Theme.font(size: 12.5))
                     .foregroundStyle(Theme.text2)
             }
             .padding(.horizontal, 13)
@@ -362,7 +362,7 @@ struct AccountTab: View {
                 // person who typed it was not looking, so Apply read as a
                 // button that did nothing.
                 Label(message, systemImage: "exclamationmark.circle.fill")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.yellow)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -372,14 +372,14 @@ struct AccountTab: View {
     private func discount(_ preview: PromotionPreview) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Image(systemName: "tag.fill").font(.system(size: 10))
+                Image(systemName: "tag.fill").font(Theme.font(size: 10))
                 Text("Was \(Self.money(preview.subtotal, preview.currency)) · discount \(Self.money(preview.discount, preview.currency)) · total \(Self.money(preview.total, preview.currency))")
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(Theme.font(size: 11.5, weight: .medium))
             }
             .foregroundStyle(Theme.green)
             if preview.total == 0 {
                 Text("Complete checkout to activate access.")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.text2)
             }
         }
@@ -396,7 +396,7 @@ struct AccountTab: View {
             } label: {
                 Text(state.billingOperation == .openingCheckout
                      ? "Opening checkout…" : "Continue to secure checkout")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.font(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 7)
@@ -408,7 +408,7 @@ struct AccountTab: View {
             if state.billingOperation == .confirming {
                 Spinner()
                 Text("Payment received; still confirming. This unlocks by itself.")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 0)
@@ -445,7 +445,7 @@ struct AccountTab: View {
                 Spacer(minLength: 0)
             }
             Text("Signing out returns Super Submitter to free access. It deletes no app, no store.yaml, no build, and no store key.")
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
