@@ -145,6 +145,10 @@ struct StoreCredentialScopeTests {
     }
 
     @Test func theStoresScreenOffersGoogleOAuthAndJSON() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
@@ -155,6 +159,11 @@ struct StoreCredentialScopeTests {
 
         #expect(source.contains("Connect with Google"))
         #expect(source.contains("Service account JSON"))
+
+        let card = try String(contentsOf: root.appendingPathComponent(
+            "Sources/SuperSubmitter/Design/CredentialCard.swift"), encoding: .utf8)
+        #expect(source.components(separatedBy: "equalizedHeight: true").count == 3)
+        #expect(card.contains("maxHeight: equalizedHeight ? .infinity : nil"))
     }
 
     @Test func bothGoogleCredentialsRemainStoredWhileTheUserChoosesOne() throws {
