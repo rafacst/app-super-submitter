@@ -237,11 +237,9 @@ extension AppState {
             .createDraft(kind: product.kind, productID: product.id)
     }
 
-    /// Pushes the manifest's own names and descriptions onto a draft.
-    ///
-    /// The run writes the live localizations. This writes the same values onto
-    /// the versioned draft instead, which is where Apple wants a metadata
-    /// change to go from now on.
+    /// Pushes the manifest's own names and descriptions onto a draft manually.
+    /// Automatic apply uses the same versioned client and also removes locales
+    /// the manifest dropped.
     func writeAppleSubscriptionDraft(
         _ product: AppleSubscriptionVersionsClient.Product) async throws {
         guard let draft = product.draft else {

@@ -120,64 +120,45 @@ extension Runner {
 
     private func appleSubscriptionGroupLocalizations(
         _ group: Manifest.SubscriptionGroup, groupID: String) async throws {
-        guard let locales = group.locales, !locales.isEmpty else { return }
-        let existing = JSON(data: try await api.apple(
-            "GET",
-            "/v1/subscriptionGroups/\(groupID)/subscriptionGroupLocalizations?limit=200").data)
-        let byLocale = existing.idsByLocale
-        try await appleDropLocalizations(existing, keeping: Set(locales.keys),
-                                         path: "/v1/subscriptionGroupLocalizations")
-
-        for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
-            let name = text.name ?? group.groupName ?? group.groupId
-            if let id = byLocale[locale] {
-                try await api.apple("PATCH", "/v1/subscriptionGroupLocalizations/\(id)", body: [
-                    "data": ["type": "subscriptionGroupLocalizations", "id": id,
-                             "attributes": ["name": name]],
-                ])
-                continue
-            }
-            try await api.apple("POST", "/v1/subscriptionGroupLocalizations", body: [
-                "data": [
-                    "type": "subscriptionGroupLocalizations",
-                    "attributes": ["name": name, "locale": locale],
-                    "relationships": ["subscriptionGroup": [
-                        "data": ["type": "subscriptionGroups", "id": groupID]]],
-                ],
-            ])
-        }
+        guard let locales = group.locales else { return }
+        let client = AppleSubscriptionVersionsClient(api: api)
+        let draft = try await appleEditableSubscriptionVersion(
+            client: client, kind: .group, productID: groupID,
+            name: group.groupName ?? group.groupId)
+        try await client.writeLocalizations(
+            kind: .group, draftID: draft.id,
+            locales: locales.mapValues { ($0.name ?? group.groupName ?? group.groupId, nil) },
+            deleteMissing: true)
     }
 
     private func appleSubscriptionLocalizations(_ plan: Manifest.SubscriptionGroup.Plan,
                                                 subscriptionID: String) async throws {
-        guard let locales = plan.locales, !locales.isEmpty else { return }
-        let existing = JSON(data: try await api.apple(
-            "GET",
-            "/v1/subscriptions/\(subscriptionID)/subscriptionLocalizations?limit=200").data)
-        let byLocale = existing.idsByLocale
-        try await appleDropLocalizations(existing, keeping: Set(locales.keys),
-                                         path: "/v1/subscriptionLocalizations")
+        guard let locales = plan.locales else { return }
+        let client = AppleSubscriptionVersionsClient(api: api)
+        let draft = try await appleEditableSubscriptionVersion(
+            client: client, kind: .subscription, productID: subscriptionID, name: plan.id)
+        try await client.writeLocalizations(
+            kind: .subscription, draftID: draft.id,
+            locales: locales.mapValues { ($0.name ?? plan.id, $0.description) },
+            deleteMissing: true)
+    }
 
-        for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
-            var attributes: [String: Any] = ["name": text.name ?? plan.id]
-            put(&attributes, "description", text.description ?? "")
-            if let id = byLocale[locale] {
-                try await api.apple("PATCH", "/v1/subscriptionLocalizations/\(id)", body: [
-                    "data": ["type": "subscriptionLocalizations", "id": id,
-                             "attributes": attributes],
-                ])
-                continue
+    /// Reuse the open draft, create the next one after a terminal version, and
+    /// refuse to mutate metadata that is already in review.
+    private func appleEditableSubscriptionVersion(
+        client: AppleSubscriptionVersionsClient,
+        kind: AppleSubscriptionVersionsClient.Product.Kind,
+        productID: String, name: String) async throws
+        -> AppleSubscriptionVersionsClient.Draft {
+        if let current = try await client.latestVersion(kind: kind, productID: productID) {
+            if current.isEditable { return current }
+            if ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW"]
+                .contains(current.state ?? "") {
+                throw ConnectionError.http(
+                    409, "The subscription metadata for \(name) is already in review.")
             }
-            attributes["locale"] = locale
-            try await api.apple("POST", "/v1/subscriptionLocalizations", body: [
-                "data": [
-                    "type": "subscriptionLocalizations",
-                    "attributes": attributes,
-                    "relationships": ["subscription": [
-                        "data": ["type": "subscriptions", "id": subscriptionID]]],
-                ],
-            ])
         }
+        return try await client.createDraft(kind: kind, productID: productID)
     }
 
     /// Apple sells at a price point, never at the amount you asked for. This
@@ -219,23 +200,39 @@ extension Runner {
         ])
     }
 
-    /// The territories that sell this subscription.
-    ///
-    /// A one-time purchase already had this through
-    /// `inAppPurchaseAvailabilities`. Apple gives a subscription its own
-    /// resource with the same shape, so the two halves now match.
+    /// The territories for one explicit Apple billing plan type.
     private func appleSubscriptionAvailability(_ plan: Manifest.SubscriptionGroup.Plan,
                                                subscriptionID: String) async throws {
-        guard let territories = plan.availableTerritories, !territories.isEmpty else { return }
-        try await api.apple("POST", "/v1/subscriptionAvailabilities", body: [
+        guard let territories = plan.availableTerritories, !territories.isEmpty,
+              let planType = plan.applePlanType else { return }
+        let held = JSON(data: try await api.apple(
+            "GET", "/v1/subscriptions/\(subscriptionID)/planAvailabilities"
+                + "?include=availableTerritories&limit=200").data)
+        let existingID = held["data"].array.first {
+            $0["attributes"]["planType"].string == planType.rawValue
+        }?["id"].string
+        let territoryData = territories.map { ["type": "territories", "id": $0] }
+
+        if let existingID {
+            try await api.apple("PATCH", "/v1/subscriptionPlanAvailabilities/\(existingID)",
+                                body: [
+                "data": [
+                    "type": "subscriptionPlanAvailabilities",
+                    "id": existingID,
+                    "attributes": ["availableInNewTerritories": false],
+                    "relationships": ["availableTerritories": ["data": territoryData]],
+                ],
+            ])
+            return
+        }
+        try await api.apple("POST", "/v1/subscriptionPlanAvailabilities", body: [
             "data": [
-                "type": "subscriptionAvailabilities",
-                "attributes": ["availableInNewTerritories": false],
+                "type": "subscriptionPlanAvailabilities",
+                "attributes": ["availableInNewTerritories": false,
+                               "planType": planType.rawValue],
                 "relationships": [
                     "subscription": ["data": ["type": "subscriptions", "id": subscriptionID]],
-                    "availableTerritories": ["data": territories.map {
-                        ["type": "territories", "id": $0]
-                    }],
+                    "availableTerritories": ["data": territoryData],
                 ],
             ],
         ])

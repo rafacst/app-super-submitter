@@ -29,13 +29,12 @@ extension AppState {
     }
 
     /// **This publishes public text under the listing.** The panel confirms it
-    /// first. Apple takes one response per review, so a review that already
-    /// carries one is patched and the reply never lands twice.
-    func replyToAppleReview(id: String, responseId: String?, text: String) async throws {
+    /// first. Apple's create endpoint overwrites the review's existing reply.
+    func replyToAppleReview(id: String, text: String) async throws {
         guard appleActionAppID != nil else {
             throw ConnectionError.http(400, "Connect App Store Connect on the Stores tab first.")
         }
-        try await appleActions().replyToReview(reviewId: id, responseId: responseId, text: text)
+        try await appleActions().replyToReview(reviewId: id, text: text)
     }
 
     /// Takes a published reply down. The review itself stays.

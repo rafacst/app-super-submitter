@@ -209,7 +209,8 @@ public enum Planner {
                         ? "" : "  ·  with a document"),
                 title: "Write the export compliance declaration",
                 requests: [RequestSketch("POST", "/v1/appEncryptionDeclarations"),
-                           RequestSketch("POST", "/v1/appEncryptionDeclarationDocuments")],
+                           RequestSketch("POST", "/v1/appEncryptionDeclarationDocuments"),
+                           RequestSketch("PATCH", "/v1/builds/{id}")],
                 operation: .appleEncryptionDeclaration,
                 // Apple keeps one declaration per submission and offers no
                 // read that says whether this one matches.
@@ -287,8 +288,15 @@ public enum Planner {
                     title: "Write \(planCount) subscriptions",
                     requests: [RequestSketch("POST", "/v1/subscriptionGroups"),
                                RequestSketch("POST", "/v1/subscriptions"),
-                               RequestSketch("POST", "/v1/subscriptionLocalizations"),
-                               RequestSketch("POST", "/v1/subscriptionPrices")],
+                               RequestSketch("POST", "/v1/subscriptionVersions"),
+                               RequestSketch("POST", "/v2/subscriptionLocalizations"),
+                               RequestSketch("DELETE", "/v2/subscriptionLocalizations/{id}"),
+                               RequestSketch("POST", "/v1/subscriptionGroupVersions"),
+                               RequestSketch("POST", "/v2/subscriptionGroupLocalizations"),
+                               RequestSketch("DELETE", "/v2/subscriptionGroupLocalizations/{id}"),
+                               RequestSketch("POST", "/v1/subscriptionPrices"),
+                               RequestSketch("POST", "/v1/subscriptionPlanAvailabilities"),
+                               RequestSketch("PATCH", "/v1/subscriptionPlanAvailabilities/{id}")],
                     operation: .appleSubscriptions,
                     comparison: diff.verified ? .verified : .unverified))
             }
@@ -1103,11 +1111,20 @@ public enum Planner {
                 return
             }
             var fields: [String] = []
-            for (locale, text) in wanted.locales.sorted(by: { $0.key < $1.key }) {
-                let current = live.locales[locale]
-                if text.name != current?.name { fields.append("name") }
-                if let detail = text.description, detail != (current?.description ?? "") {
-                    fields.append("description")
+            if wanted.managesLocales && !live.localesRead {
+                verified = false
+                fields.append("localizations unread")
+            } else {
+                if wanted.managesLocales,
+                   Set(wanted.locales.keys) != Set(live.locales.keys) {
+                    fields.append("locales")
+                }
+                for (locale, text) in wanted.locales.sorted(by: { $0.key < $1.key }) {
+                    let current = live.locales[locale]
+                    if text.name != current?.name { fields.append("name") }
+                    if let detail = text.description, detail != (current?.description ?? "") {
+                        fields.append("description")
+                    }
                 }
             }
             for (territory, price) in wanted.prices
@@ -1117,6 +1134,15 @@ public enum Planner {
             if !wanted.availableTerritories.isEmpty,
                wanted.availableTerritories != live.availableTerritories {
                 fields.append("territories")
+            }
+            if !wanted.subscriptionPlanTerritories.isEmpty {
+                if !live.subscriptionPlanAvailabilityRead {
+                    verified = false
+                    fields.append("plan availability unread")
+                } else if wanted.subscriptionPlanTerritories
+                    != live.subscriptionPlanTerritories {
+                    fields.append("territories")
+                }
             }
             if let promoted = wanted.promoted, promoted != live.promoted {
                 fields.append("promoted")
@@ -1137,6 +1163,7 @@ public enum Planner {
                 var wanted = ActualState.Apple.CatalogProduct()
                 wanted.productId = purchase.id
                 wanted.locales = appleWantedLocales(purchase.locales, fallbackName: purchase.id)
+                wanted.managesLocales = true
                 if let price = purchase.price {
                     wanted.prices[applePriceTerritory(price)] = applePriceText(price)
                 }
@@ -1181,11 +1208,15 @@ public enum Planner {
                     // The writer skips the localizations when the plan names
                     // none, so the diff skips them too.
                     wanted.locales = appleWantedLocales(plan.locales, fallbackName: plan.id)
+                    wanted.managesLocales = plan.locales != nil
                     if let price = plan.price {
                         wanted.prices[applePriceTerritory(price)] = applePriceText(price)
                     }
                     wanted.duration = plan.duration
-                    wanted.availableTerritories = Set(plan.availableTerritories ?? [])
+                    if let type = plan.applePlanType,
+                       let territories = plan.availableTerritories, !territories.isEmpty {
+                        wanted.subscriptionPlanTerritories[type] = Set(territories)
+                    }
                     compare(id: plan.id,
                             exists: actual?.subscriptionIds.contains(plan.id) ?? false,
                             wanted: wanted)

@@ -224,7 +224,23 @@
     "subscriptions": {
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "applePlanType": {
+                  "enum": [
+                    "MONTHLY",
+                    "UPFRONT"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "entitlements": {

@@ -42,6 +42,7 @@ private func livePurchase(price: String = "4.99") -> ActualState.Apple.CatalogPr
     product.productId = "com.example.pro"
     product.id = "6001"
     product.locales = ["en-US": appleLocale(name: "Pro", description: "Everything.")]
+    product.localesRead = true
     product.prices = ["USA": price]
     product.promoted = false
     return product
@@ -113,6 +114,7 @@ private func liveSubscription(duration: String = "P1M")
     product.productId = "pro.monthly"
     product.id = "7001"
     product.locales = ["en-US": appleLocale(name: "Pro monthly", description: "")]
+    product.localesRead = true
     product.prices = ["USA": "9.99"]
     product.duration = duration
     product.offerCount = 0

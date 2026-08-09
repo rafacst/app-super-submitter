@@ -235,6 +235,11 @@ public enum StoreValues {
         Choice("P3M", "3 months"), Choice("P6M", "6 months"), Choice("P1Y", "1 year"),
     ]
 
+    public static let appleSubscriptionPlanTypes: [Choice] = [
+        Choice("MONTHLY", "Monthly with a 12-month commitment"),
+        Choice("UPFRONT", "Paid in full up front"),
+    ]
+
     /// An offer runs for a shorter span than a plan, so a trial adds the days.
     public static let offerDurations: [Choice] = [
         Choice("P3D", "3 days"), Choice("P1W", "1 week"), Choice("P2W", "2 weeks"),

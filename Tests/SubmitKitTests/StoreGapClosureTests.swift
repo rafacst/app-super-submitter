@@ -172,7 +172,8 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
     manifest.subscriptions = [Manifest.SubscriptionGroup(
         groupId: "pro", groupName: "Pro",
         plans: [Manifest.SubscriptionGroup.Plan(
-            id: "pro.monthly", duration: "P1M", availableTerritories: ["USA", "DEU"])])]
+            id: "pro.monthly", duration: "P1M", availableTerritories: ["USA", "DEU"],
+            applePlanType: .monthly)])]
 
     var apple = ActualState.Apple()
     apple.subscriptionIds = ["pro.monthly"]
@@ -180,7 +181,8 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
     var product = ActualState.Apple.CatalogProduct()
     product.productId = "pro.monthly"
     product.duration = "P1M"
-    product.availableTerritories = ["USA", "DEU"]
+    product.subscriptionPlanTerritories[.monthly] = ["USA", "DEU"]
+    product.subscriptionPlanAvailabilityRead = true
     apple.catalog = ["pro.monthly": product]
     var actual = ActualState()
     actual.apple = apple
@@ -189,7 +191,7 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
         .contains { $0.id == "apple.subscriptions" })
 
     // One territory less on the store side, and the step returns.
-    apple.catalog["pro.monthly"]?.availableTerritories = ["USA"]
+    apple.catalog["pro.monthly"]?.subscriptionPlanTerritories[.monthly] = ["USA"]
     actual.apple = apple
     #expect(Planner.plan(input(manifest, actual: actual)).steps(for: .apple)
         .contains { $0.id == "apple.subscriptions" })
@@ -202,7 +204,7 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
         plans: [Manifest.SubscriptionGroup.Plan(
             id: "pro.monthly", duration: "P1M",
             reviewScreenshot: "metadata/review.png",
-            availableTerritories: ["USA"])])]
+            availableTerritories: ["USA"], applePlanType: .monthly)])]
     manifest.release = Manifest.Release(apple: Manifest.Release.AppleRelease(
         testFlight: Manifest.Release.TestFlight(
             localizations: ["en-US": Manifest.Release.TestFlight.Localization(
@@ -213,6 +215,7 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
 
     #expect(plan?.reviewScreenshot == "metadata/review.png")
     #expect(plan?.availableTerritories == ["USA"])
+    #expect(plan?.applePlanType == .monthly)
     #expect(decoded.release?.apple?.testFlight?.localizations?["en-US"]?.feedbackEmail
         == "beta@example.com")
 }
@@ -235,7 +238,7 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
     #expect(apply.contains("appleDropMediaSets"))
     // The subscription half of the review controls.
     #expect(subscriptions.contains("/v1/subscriptionAppStoreReviewScreenshots"))
-    #expect(subscriptions.contains("/v1/subscriptionAvailabilities"))
+    #expect(subscriptions.contains("/v1/subscriptionPlanAvailabilities"))
     // The offers reconcile instead of stacking a duplicate every apply.
     #expect(subscriptions.contains("appleDropOffers"))
     #expect(subscriptions.contains("DELETE\", \"/v1/subscriptionPrices/"))
@@ -243,8 +246,8 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
     #expect(testFlight.contains("/v1/betaAppLocalizations"))
     #expect(testFlight.contains("/v1/betaAppReviewDetails/"))
     // The subscriptions and the marketing items reach the review queue.
-    #expect(release.contains("/v1/subscriptionSubmissions"))
-    #expect(release.contains("/v1/subscriptionGroupSubmissions"))
+    #expect(release.contains("subscriptionVersion"))
+    #expect(release.contains("subscriptionGroupVersion"))
     #expect(release.contains("appCustomProductPageVersion"))
     #expect(release.contains("appStoreVersionExperimentV2"))
     #expect(release.contains("\"appEvent\""))

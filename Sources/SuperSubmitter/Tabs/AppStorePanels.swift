@@ -169,8 +169,7 @@ private struct AppleReviewsPanel: View {
         let text = (drafts[review.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         run {
-            try await state.replyToAppleReview(id: review.id, responseId: review.responseId,
-                                               text: text)
+            try await state.replyToAppleReview(id: review.id, text: text)
             drafts[review.id] = ""
         }
     }

@@ -590,6 +590,16 @@ public enum Validator {
                     message: "The App Store offers no \(plan.duration) subscription duration.",
                     location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
             }
+            if input.stores.contains(.apple) {
+                for plan in group.plans
+                where plan.availableTerritories?.isEmpty == false
+                    && plan.applePlanType == nil {
+                    result.append(Finding(
+                        id: "money.applePlanType.\(plan.id)", severity: .error,
+                        message: "The Apple subscription \(plan.id) has territories but no applePlanType. Choose MONTHLY or UPFRONT; billing semantics cannot be inferred.",
+                        location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
+                }
+            }
         }
 
         if input.stores.count == 2 {

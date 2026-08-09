@@ -7,10 +7,8 @@ import Foundation
 /// review, so the name a customer reads today survives while the new one waits
 /// for a reviewer, and a rejection costs the live product nothing.
 ///
-/// The run still writes the live localizations, because that is what an account
-/// without a draft takes and it is what every existing manifest expects. This
-/// is the other path, on a button: create the draft, push the manifest's own
-/// names and descriptions onto it, and watch its state.
+/// Automatic apply and the manual panel share this client. Apply reconciles a
+/// desired draft, including deletions; the panel can make a narrower write.
 ///
 /// `// ponytail: reads and two writes, no plan rows. A draft is a submission
 /// // workflow and not a desired state, so the planner has nothing to diff.`
@@ -54,10 +52,10 @@ public struct AppleSubscriptionVersionsClient: Sendable {
         public var state: String?
         /// The locales the draft already carries, with the name each one
         /// holds, so the panel can say what a reviewer will read.
-        public var localizations: [String: String] = [:]
+        public var localizations: [String: Localization] = [:]
 
         public init(id: String, version: Int? = nil, state: String? = nil,
-                    localizations: [String: String] = [:]) {
+                    localizations: [String: Localization] = [:]) {
             self.id = id
             self.version = version
             self.state = state
@@ -68,6 +66,16 @@ public struct AppleSubscriptionVersionsClient: Sendable {
         /// on that one alone, so it is what the buttons check.
         public var isEditable: Bool {
             state == nil || state == "PREPARE_FOR_SUBMISSION"
+        }
+    }
+
+    public struct Localization: Sendable, Equatable {
+        public var name: String?
+        public var description: String?
+
+        public init(name: String? = nil, description: String? = nil) {
+            self.name = name
+            self.description = description
         }
     }
 
@@ -130,13 +138,21 @@ public struct AppleSubscriptionVersionsClient: Sendable {
     /// Apple returns the versions oldest first, so the newest is the last one
     /// with the highest version number.
     private func newestDraft(kind: Product.Kind, productID: String) async -> Draft? {
+        try? await latestVersion(kind: kind, productID: productID)
+    }
+
+    /// The same preferred version used by apply, catalog, and release: the
+    /// newest editable draft when one exists, otherwise the newest readable
+    /// version.
+    public func latestVersion(kind: Product.Kind, productID: String) async throws -> Draft? {
         let path = kind == .group
             ? "/v1/subscriptionGroups/\(productID)/versions"
             : "/v1/subscriptions/\(productID)/versions"
-        guard let response = try? await api.apple(
-            "GET", path, query: [URLQueryItem(name: "limit", value: "200")]) else { return nil }
-        let versions = JSON(data: response.data)["data"].array.compactMap(Self.parseDraft)
-        guard var newest = versions.max(by: { ($0.version ?? 0) < ($1.version ?? 0) }) else {
+        let response = try await api.apple(
+            "GET", path, query: [URLQueryItem(name: "limit", value: "200")])
+        let items = JSON(data: response.data)["data"].array
+        guard let item = AppleVersionSelection.preferred(items),
+              var newest = Self.parseDraft(item) else {
             return nil
         }
         newest.localizations = await localizations(kind: kind, draftID: newest.id)
@@ -144,16 +160,23 @@ public struct AppleSubscriptionVersionsClient: Sendable {
     }
 
     /// The locales a draft carries, with the name each one shows.
-    public func localizations(kind: Product.Kind, draftID: String) async -> [String: String] {
+    public func localizations(kind: Product.Kind, draftID: String)
+        async -> [String: Localization] {
+        (try? await localizationMetadata(kind: kind, draftID: draftID)) ?? [:]
+    }
+
+    public func localizationMetadata(kind: Product.Kind, draftID: String) async throws
+        -> [String: Localization] {
         let path = kind == .group
             ? "/v1/subscriptionGroupVersions/\(draftID)/localizations"
             : "/v1/subscriptionVersions/\(draftID)/localizations"
-        guard let response = try? await api.apple(
-            "GET", path, query: [URLQueryItem(name: "limit", value: "200")]) else { return [:] }
-        return JSON(data: response.data)["data"].array
-            .reduce(into: [:]) { result, item in
+        let response = try await api.apple(
+            "GET", path, query: [URLQueryItem(name: "limit", value: "200")])
+        return JSON(data: response.data)["data"].array.reduce(into: [:]) { result, item in
                 guard let locale = item["attributes"]["locale"].string else { return }
-                result[locale] = item["attributes"]["name"].string ?? ""
+                result[locale] = Localization(
+                    name: item["attributes"]["name"].string,
+                    description: item["attributes"]["description"].string)
             }
     }
 
@@ -187,13 +210,12 @@ public struct AppleSubscriptionVersionsClient: Sendable {
     /// Writes the localized metadata onto a draft, from what the manifest says.
     ///
     /// A locale the draft already carries is patched, and one it does not is
-    /// created, which is the rule every other localization in this app follows.
-    /// Nothing is deleted: a locale the manifest dropped stays on the draft,
-    /// because a draft is a submission and not a desired state.
+    /// created. Automatic apply also deletes locales absent from the manifest;
+    /// the manual panel leaves them alone unless it explicitly asks to sync.
     public func writeLocalizations(kind: Product.Kind, draftID: String,
-                                   locales: [String: (name: String, description: String?)])
+                                   locales: [String: (name: String, description: String?)],
+                                   deleteMissing: Bool = false)
         async throws {
-        guard !locales.isEmpty else { return }
         let listPath = kind == .group
             ? "/v1/subscriptionGroupVersions/\(draftID)/localizations"
             : "/v1/subscriptionVersions/\(draftID)/localizations"
@@ -207,6 +229,11 @@ public struct AppleSubscriptionVersionsClient: Sendable {
         let existing = JSON(data: try await api.apple(
             "GET", listPath, query: [URLQueryItem(name: "limit", value: "200")]).data)
         let byLocale = existing.idsByLocale
+        if deleteMissing {
+            for (locale, id) in byLocale where locales[locale] == nil {
+                try await api.apple("DELETE", "\(createPath)/\(id)")
+            }
+        }
 
         for (locale, text) in locales.sorted(by: { $0.key < $1.key }) {
             var attributes: [String: Any] = ["name": text.name]

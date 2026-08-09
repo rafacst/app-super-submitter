@@ -1,5 +1,35 @@
 import Foundation
 
+/// The one version rule shared by apply, catalog, and release.
+///
+/// Prefer the newest editable draft. When none exists, the newest version is
+/// still the truthful catalog read, but only an editable one can be changed or
+/// added to a review submission.
+enum AppleVersionSelection {
+    static func preferred(_ items: [JSON]) -> JSON? {
+        newest(items.filter(isEditable)) ?? newest(items)
+    }
+
+    static func editable(_ items: [JSON]) -> JSON? {
+        newest(items.filter(isEditable))
+    }
+
+    static func isEditable(_ item: JSON) -> Bool {
+        let state = item["attributes"]["state"].string
+        return state == nil || state == "PREPARE_FOR_SUBMISSION"
+    }
+
+    static func blocksEdits(_ item: JSON) -> Bool {
+        ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW"]
+            .contains(item["attributes"]["state"].string ?? "")
+    }
+
+    private static func newest(_ items: [JSON]) -> JSON? {
+        items.max { ($0["attributes"]["version"].int ?? 0)
+            < ($1["attributes"]["version"].int ?? 0) }
+    }
+}
+
 /// Reads one App Store paid product at a time.
 ///
 /// The list endpoints answer "which products exist" and nothing else, so the
@@ -52,9 +82,15 @@ public struct AppleCatalogClient: Sendable {
     /// showing a diff that nobody read.
     private func fillPurchase(_ product: inout ActualState.Apple.CatalogProduct,
                               id: String) async {
-        if let response = try? await api.apple(
-            "GET", "/v2/inAppPurchases/\(id)/inAppPurchaseLocalizations?limit=200") {
+        if let versions = try? await api.apple(
+            "GET", "/v2/inAppPurchases/\(id)/versions?limit=200"),
+           let version = AppleVersionSelection.preferred(
+            JSON(data: versions.data)["data"].array),
+           let versionID = version["id"].string,
+           let response = try? await api.apple(
+            "GET", "/v1/inAppPurchaseVersions/\(versionID)/localizations?limit=200") {
             product.locales = Self.localizations(JSON(data: response.data))
+            product.localesRead = true
         }
         if let response = try? await api.apple(
             "GET", "/v2/inAppPurchases/\(id)/iapPriceSchedule"
@@ -100,6 +136,7 @@ public struct AppleCatalogClient: Sendable {
             "GET", "/v1/apps/\(appID)/subscriptionGroups?include=subscriptions&limit=200").data)
         var result: [String: ActualState.Apple.CatalogProduct] = [:]
         var groups = Groups()
+        let versions = AppleSubscriptionVersionsClient(api: api)
         let wanted = Set(productIds)
         let wantedGroups = Set(groupNames)
 
@@ -111,10 +148,10 @@ public struct AppleCatalogClient: Sendable {
             guard let name = item["attributes"]["referenceName"].string else { continue }
             groups.names.insert(name)
             guard wantedGroups.contains(name), let id = item["id"].string,
-                  let response = try? await api.apple(
-                    "GET", "/v1/subscriptionGroups/\(id)"
-                        + "/subscriptionGroupLocalizations?limit=200") else { continue }
-            groups.locales[name] = Self.localizations(JSON(data: response.data))
+                  let draft = try? await versions.latestVersion(kind: .group, productID: id),
+                  let localizations = try? await versions.localizationMetadata(
+                    kind: .group, draftID: draft.id) else { continue }
+            groups.locales[name] = Self.catalogLocalizations(localizations)
         }
         for productId in wanted {
             guard var product = result[productId], let id = product.id else { continue }
@@ -126,22 +163,30 @@ public struct AppleCatalogClient: Sendable {
 
     private func fillSubscription(_ product: inout ActualState.Apple.CatalogProduct,
                                   id: String) async {
-        if let response = try? await api.apple(
-            "GET", "/v1/subscriptions/\(id)/subscriptionLocalizations?limit=200") {
-            product.locales = Self.localizations(JSON(data: response.data))
+        let versions = AppleSubscriptionVersionsClient(api: api)
+        if let draft = try? await versions.latestVersion(kind: .subscription, productID: id),
+           let localizations = try? await versions.localizationMetadata(
+            kind: .subscription, draftID: draft.id) {
+            product.locales = Self.catalogLocalizations(localizations)
+            product.localesRead = true
         }
         if let response = try? await api.apple(
             "GET", "/v1/subscriptions/\(id)/prices"
                 + "?include=subscriptionPricePoint,territory&limit=200") {
             product.prices = Self.subscriptionPrices(JSON(data: response.data))
         }
-        // The territory list of a subscription, on the twin of the purchase
-        // availability read above. Apple answers 404 for a subscription that
-        // sells everywhere, which is a state and not a failure.
         if let response = try? await api.apple(
-            "GET", "/v1/subscriptions/\(id)/subscriptionAvailability"
+            "GET", "/v1/subscriptions/\(id)/planAvailabilities"
                 + "?include=availableTerritories&limit=200") {
-            product.availableTerritories = Self.territories(JSON(data: response.data))
+            let payload = JSON(data: response.data)
+            for item in payload["data"].array {
+                guard let raw = item["attributes"]["planType"].string,
+                      let type = Manifest.ApplePlanType(rawValue: raw) else { continue }
+                product.subscriptionPlanTerritories[type] = Set(
+                    item["relationships"]["availableTerritories"]["data"].array
+                        .compactMap { $0["id"].string })
+            }
+            product.subscriptionPlanAvailabilityRead = true
         }
         // The three offer kinds live on three collections. The count only
         // means something when all three answered, so one failure leaves it
@@ -219,6 +264,17 @@ public struct AppleCatalogClient: Sendable {
             result[locale] = value
         }
         return result
+    }
+
+    private static func catalogLocalizations(
+        _ localizations: [String: AppleSubscriptionVersionsClient.Localization])
+        -> [String: ActualState.Apple.CatalogProduct.ProductLocale] {
+        localizations.mapValues { text in
+            var value = ActualState.Apple.CatalogProduct.ProductLocale()
+            value.name = text.name
+            value.description = text.description
+            return value
+        }
     }
 
     /// The manual prices of a price schedule, as territory to customer price.
