@@ -151,8 +151,7 @@ public struct StateReader: Sendable {
         result.platforms = StoreImportReader.applePlatformStandings(everyPlatform)
         let versions = StoreImportReader.applePlatformVersions(everyPlatform,
                                                                platform: platform)
-        let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
-                                  "REJECTED", "METADATA_REJECTED"])
+        let editableStates = AppleVersionState.editable
         func versionState(_ version: JSON) -> String {
             version["attributes"]["appVersionState"].string
                 ?? version["attributes"]["appStoreState"].string ?? ""

@@ -84,8 +84,7 @@ public struct StoreImportReader: Sendable {
         let allVersions = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
         let versions = Self.applePlatformVersions(allVersions, platform: platform)
-        let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
-                                  "REJECTED", "METADATA_REJECTED"])
+        let editableStates = AppleVersionState.editable
         // The same set `StateReader` calls released. A version pulled from
         // sale still shipped, and its text is still the text the app had.
         let releasedStates = Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION",

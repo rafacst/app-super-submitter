@@ -1,5 +1,29 @@
 import Foundation
 
+/// Which `AppVersionState` values still take a write.
+///
+/// One list, because three places had their own and one of them disagreed.
+/// The two readers picked a withdrawn or rejected version as the version to
+/// write to, which is right: App Store Connect hands the version back to the
+/// developer, and it takes new metadata and a new build under the same
+/// number. The validator asked for `PREPARE_FOR_SUBMISSION` and nothing else,
+/// so it blocked the apply against the version the readers had just chosen,
+/// and a developer who cancelled a submission could not send the rebuilt
+/// binary at all.
+///
+/// `INVALID_BINARY` belongs here for the same reason and is the plainest case
+/// of it: Apple refused the binary and is waiting for another one.
+///
+/// Only these. A version in review, approved, or on sale takes no write, and
+/// the error that says so is the one that stops a developer editing a listing
+/// customers are already reading.
+public enum AppleVersionState {
+    public static let editable: Set<String> = [
+        "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+        "METADATA_REJECTED", "INVALID_BINARY",
+    ]
+}
+
 /// What the stores hold right now.
 ///
 /// The plan reads this, compares it to the manifest, and writes nothing.
