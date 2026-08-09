@@ -165,6 +165,10 @@ public struct ActualState: Sendable, Equatable {
         /// App Store. The field stays a plain text field then: a developer with
         /// no credentials still has to be able to name a price.
         public var pricePoints: [Decimal] = []
+        /// The territory `pricePoints` was read for. A ladder read for one
+        /// territory names prices that do not exist in another, so the field
+        /// only offers the list while the base territory still matches.
+        public var pricePointTerritory: String?
         public var currentPriceAmount: Decimal?
         public var priceCurrency: String?
         public var territoryCount: Int?

@@ -852,10 +852,10 @@ extension Runner {
         }
         if let price = purchase.price {
             let territory = price.territory ?? "USA"
-            let points = JSON(data: try await api.apple(
-                "GET", "/v2/inAppPurchases/\(purchaseID)/pricePoints"
-                    + "?filter%5Bterritory%5D=\(territory)&limit=200").data)
-            if let point = Self.nearestPricePoint(points, to: price.amount) {
+            let points = try await ApplePricePoints.all(
+                api, path: "/v2/inAppPurchases/\(purchaseID)/pricePoints"
+                    + "?filter%5Bterritory%5D=\(territory)")
+            if let point = ApplePricePoints.nearest(points, to: price.amount)?.id {
                 let priceID = "price-\(UUID().uuidString)"
                 try await api.apple("POST", "/v1/inAppPurchasePriceSchedules", body: [
                     "data": [
@@ -1034,10 +1034,9 @@ extension Runner {
     func appleAppPrice() async throws {
         guard let price = manifest.pricing?.base else { return }
         let territory = price.territory ?? "USA"
-        let points = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appleAppID)/appPricePoints"
-                + "?filter%5Bterritory%5D=\(territory)&limit=200").data)
-        guard let point = Self.nearestPricePoint(points, to: price.amount) else { return }
+        let points = try await ApplePricePoints.app(api, appID: appleAppID,
+                                                    territory: territory)
+        guard let point = ApplePricePoints.nearest(points, to: price.amount)?.id else { return }
         let appPriceID = "price-\(UUID().uuidString)"
         try await api.apple("POST", "/v1/appPriceSchedules", body: [
             "data": [

@@ -79,8 +79,10 @@ private func plan(_ manifest: Manifest, duration: String = "P1M",
         ]}
         """.utf8))
 
-    #expect(Runner.nearestPricePoint(payload, to: 5) == "b")
-    #expect(Runner.nearestPricePoint(payload, to: 100) == "c")
+    let points = ApplePricePoints.points(in: payload)
+    #expect(ApplePricePoints.nearest(points, to: 5)?.id == "b")
+    #expect(ApplePricePoints.nearest(points, to: 100)?.id == "c")
+    #expect(ApplePricePoints.nearest([], to: 5) == nil)
 }
 
 // MARK: - The Apple marketing resources
