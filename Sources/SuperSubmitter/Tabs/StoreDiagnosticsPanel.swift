@@ -22,10 +22,7 @@ struct StoreDiagnosticsPanel: View {
     var body: some View {
         Section_("Store diagnostics", icon: "stethoscope", tint: Theme.teal) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Inspect generated artifacts and store reference data without changing a draft.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    Spacer()
+                NoteWithAction("Inspect generated artifacts and store reference data without changing a draft.") {
                     QuietButton(title: loading ? "Fetching…" : "Fetch diagnostics") { load() }
                         .disabled(loading)
                 }
