@@ -1732,12 +1732,10 @@ final class AppState {
 
     /// The prices Apple sells at, as the picker's rows.
     ///
-    /// Empty whenever the app must not constrain the field: the App Store is
-    /// not a chosen store, nobody has read it yet, or the developer moved the
-    /// base territory after the read. The Amount field falls back to free text
-    /// then, because a developer who has not connected a key still has to be
-    /// able to name a price, and a picker with no rows is a field that cannot
-    /// be filled at all.
+    /// Empty whenever the App Store is not chosen, nobody has read it yet, or
+    /// the developer moved the base territory after the read. The Amount
+    /// picker is unavailable in those states rather than accepting a value the
+    /// store may not sell at.
     ///
     /// The territory has to match. A ladder is one country's money, so São
     /// Paulo's prices offered against a United States base price are the wrong

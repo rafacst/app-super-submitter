@@ -53,15 +53,15 @@ struct MoneyTab: View {
                         anchor: "money.basePrice") {
             VStack(alignment: .leading, spacing: 9) {
                 FieldRow {
-                    // The app's own ladder, which carries the free row that a
-                    // purchase below must not offer. See `amountField`.
-                    LabeledField("Amount", width: 120) {
-                        amountField($state.priceAmount, points: state.applePricePoints)
-                    }
-                    LabeledField("Currency") {
+                    LabeledField("Currency", width: 120) {
                         ChoiceField(value: $state.priceCurrency,
                                     choices: StoreValues.currencies,
                                     emptyLabel: "Pick a currency", allowsNone: false)
+                    }
+                    // The app's own ladder, which carries the free row that a
+                    // purchase below must not offer. See `amountField`.
+                    LabeledField("Amount") {
+                        amountField($state.priceAmount, points: state.applePricePoints)
                     }
                 }
                 LabeledField("Base territory", anchor: "money.baseTerritory") {
@@ -91,20 +91,16 @@ struct MoneyTab: View {
     /// to the nearest point behind the developer's back, and the app was the
     /// only place where 4.95 looked like a price you could charge.
     ///
-    /// It stays a text field only while the ladder is unknown, which now means
-    /// a project with no App Store key: the tab fetches the prices when it
-    /// opens. A picker with no rows is a field that cannot be filled, and a
-    /// developer with no key still has to be able to name a price.
+    /// If the ladder is unavailable, the picker stays visible but unavailable.
+    /// Arbitrary text would promise a price the store may refuse.
     @ViewBuilder
     private func amountField(_ value: Binding<String>,
                              points: [StoreValues.Choice]? = nil) -> some View {
         let points = points ?? state.appleProductPricePoints
-        if points.isEmpty {
-            TextField("0.00", text: value)
-        } else {
-            ChoiceField(value: value, choices: points,
-                        emptyLabel: "Pick a price", allowsNone: false)
-        }
+        ChoiceField(value: value, choices: points,
+                    emptyLabel: points.isEmpty ? "Prices unavailable" : "Pick a price",
+                    allowsNone: false)
+            .disabled(points.isEmpty)
     }
 
     /// Apple sells at a price point, never at the amount you typed. The panel

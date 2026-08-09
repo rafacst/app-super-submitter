@@ -5,6 +5,18 @@ import SubmitKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum BuildSidebarStatus: Equatable {
+    case building, succeeded, failed
+
+    var spoken: String {
+        switch self {
+        case .building: "Build in progress"
+        case .succeeded: "Build succeeded"
+        case .failed: "Build failed"
+        }
+    }
+}
+
 /// Build from Project. upload-spec sections 5 and 10.
 ///
 /// The state machine lives in `UploadRun`; this type moves it and holds what
@@ -71,6 +83,23 @@ final class BuildFlow {
 
     var state: UploadState { run.state }
     var isBusy: Bool { run.state.isActive }
+
+    /// The archive result shown beside Build in the sidebar. `startedAt` keeps
+    /// discovery and preflight from looking like a build the user started.
+    var sidebarStatus: BuildSidebarStatus? {
+        guard startedAt != nil else { return nil }
+        switch state {
+        case .building, .inspectingArtifact, .cancelling:
+            return .building
+        case .needsUploadConfirmation, .uploading, .processingOrValidating,
+             .recoveryRequired, .complete:
+            return .succeeded
+        case .failed:
+            return .failed
+        default:
+            return nil
+        }
+    }
 
     var platform: BuildPlatform {
         get { run.platform }

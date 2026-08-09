@@ -120,6 +120,7 @@ struct CredentialFoldTests {
 /// SwiftUI's field editor can keep showing rejected characters while its
 /// binding already holds the capped value. The draft itself must be normalized
 /// so the 37th character disappears from the focused field too.
+@MainActor
 @Test func theIssuerIdEditorCapsItsVisibleDraft() {
     let pasted = "fc9538f3-8694-455f-b34f-50a9053d4d4abvf\n"
     let normalized = EditableField.normalized(pasted,

@@ -262,6 +262,17 @@ private struct DestinationRow: View {
     /// top of that is a colour fighting a fill.
     private var marksTheHazard: Bool { destination.tab == .release && !selected }
 
+    private var buildStatus: BuildSidebarStatus? {
+        destination.tab == .build ? state.buildFlow.sidebarStatus : nil
+    }
+
+    private var accessibilityValue: String {
+        [buildStatus?.spoken, state.badge(for: destination.tab)?.spoken]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
+
     private var iconStyle: AnyShapeStyle {
         if marksTheHazard { return AnyShapeStyle(Theme.red) }
         if selected { return AnyShapeStyle(Theme.accentText) }
@@ -271,7 +282,13 @@ private struct DestinationRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Label {
-                Text(destination.title)
+                HStack(spacing: 6) {
+                    Text(destination.title)
+                    if let buildStatus {
+                        BuildSidebarStatusView(status: buildStatus)
+                            .accessibilityHidden(true)
+                    }
+                }
             } icon: {
                 Image(systemName: destination.tab.symbol)
                     .foregroundStyle(iconStyle)
@@ -282,7 +299,25 @@ private struct DestinationRow: View {
             }
         }
         .tag(destination)
-        .accessibilityValue(state.badge(for: destination.tab)?.spoken ?? "")
+        .accessibilityValue(accessibilityValue)
+    }
+}
+
+private struct BuildSidebarStatusView: View {
+    let status: BuildSidebarStatus
+
+    @ViewBuilder
+    var body: some View {
+        switch status {
+        case .building:
+            Spinner()
+        case .succeeded:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Theme.green)
+        case .failed:
+            Image(systemName: "xmark.octagon.fill")
+                .foregroundStyle(Theme.red)
+        }
     }
 }
 
