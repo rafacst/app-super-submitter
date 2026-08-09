@@ -785,10 +785,16 @@ extension BuildFlow {
     /// the last flush; the buffer is the whole run.
     var logText: String { logBuffer.joined(separator: "\n") }
 
+    /// How long the run took, and how long it has taken so far.
+    ///
+    /// The end is the run's own finish and not the clock. Reading the clock
+    /// after the build was over kept the number climbing for as long as the
+    /// result stayed on screen, so a two minute build read four minutes by the
+    /// time anybody looked at it.
     var elapsed: String {
         guard let startedAt else { return "" }
-        let seconds = Int(Date().timeIntervalSince(startedAt))
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+        let seconds = Int((run.finishedAt ?? Date()).timeIntervalSince(startedAt))
+        return String(format: "%d:%02d", max(0, seconds) / 60, max(0, seconds) % 60)
     }
 
     func reveal(_ path: String) {

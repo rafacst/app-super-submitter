@@ -62,6 +62,17 @@ import Testing
     #expect(run.state.isTerminal)
 }
 
+@Test func theNextBuildDoesNotInheritTheLastOnesFinishTime() {
+    var run = UploadRun(platform: .android)
+    run.move(to: .discovering)
+    run.move(to: .failed)
+    // The same run is reused for the next build. A finish left over from the
+    // last one made the Build tab read the new build as already over, and the
+    // elapsed time sat at 0:00 for as long as it ran.
+    run.moveToPreflight()
+    #expect(run.finishedAt == nil)
+}
+
 // MARK: - Run identity
 
 @Test func theLogicalIdentityHoldsEveryDistinguishingField() {

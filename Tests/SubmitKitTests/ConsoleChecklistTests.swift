@@ -123,3 +123,54 @@ private func manifest(provider: Manifest.Provider = .none) -> Manifest {
     #expect(!StoreStatus.Phase.live.needsPolling)
     #expect(!StoreStatus.Phase.rejected.needsPolling)
 }
+
+/// A row the app can finish is not a console step.
+///
+/// `appleCategories` writes both categories through the API and the Details
+/// tab holds the pickers, so a category named in the manifest settles this
+/// row. It read the store alone, so a developer who had just chosen a category
+/// was told Apple reports none and sent to App Store Connect to redo it.
+@Test func aCategoryNamedInTheManifestClosesTheAppInformationRow() throws {
+    var named = manifest()
+    named.review = Manifest.Review(applePrimaryCategory: "SOCIAL_NETWORKING")
+
+    let row = try #require(ConsoleChecklist.rows(manifest: named, actual: ActualState(),
+                                                 stores: [.apple]).first { $0.id == "apple.info" })
+    #expect(row.state == .done)
+    #expect(row.reason.contains("SOCIAL_NETWORKING"))
+
+    // Nothing named and nothing stored is still a real gap.
+    let bare = try #require(ConsoleChecklist.rows(manifest: manifest(), actual: ActualState(),
+                                                 stores: [.apple]).first { $0.id == "apple.info" })
+    #expect(bare.state == .needed)
+}
+
+/// The read already fetches the country list, so the row shows it.
+///
+/// It used to say "Console only" and send the developer to look up a list the
+/// app was holding. Google answers 404 for a track that sells everywhere,
+/// which is why `restOfWorld` counts as an answer and not as silence.
+@Test func theCountryRowShowsTheAvailabilityTheReadAlreadyHolds() throws {
+    func row(_ build: (inout ActualState.Google.Track) -> Void) throws -> ConsoleRow {
+        var track = ActualState.Google.Track()
+        build(&track)
+        var google = ActualState.Google()
+        google.tracks["production"] = track
+        var actual = ActualState()
+        actual.google = google
+        return try #require(ConsoleChecklist.rows(manifest: manifest(), actual: actual,
+                                                  stores: [.google])
+            .first { $0.id == "google.countries" })
+    }
+
+    let listed = try row { $0.countries = ["BR", "US", "DE"] }
+    #expect(listed.state == .done)
+    #expect(listed.reason.contains("3 countries"))
+
+    let everywhere = try row { $0.restOfWorld = true }
+    #expect(everywhere.state == .done)
+
+    // Nothing read stays unknown, so the developer can still tick it by hand.
+    let unread = try row { _ in }
+    #expect(unread.state == .unknown)
+}

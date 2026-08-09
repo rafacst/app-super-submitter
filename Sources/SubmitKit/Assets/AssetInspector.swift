@@ -188,6 +188,18 @@ public enum AssetInspector {
         return Double(size[0]) / Double(size[1])
     }
 
+    /// Every pixel size the App Store takes for one device class, widest
+    /// first, as "1290 × 2796".
+    ///
+    /// The same catalog the upload validates against, so a size named on the
+    /// screen is a size the app will accept. Empty for a class the App Store
+    /// does not carry, which is the small Android tablet.
+    public static func appleSizeLabels(for deviceClass: Manifest.DeviceClass) -> [String] {
+        ((try? appleSizes())?[deviceClass.rawValue] ?? [])
+            .filter { $0.count == 2 }
+            .map { "\($0[0]) × \($0[1])" }
+    }
+
     /// The Google `imageType`. Google sorts by device class, so this needs no
     /// dimensions. Spec section 6.3.
     public static func googleImageType(for deviceClass: Manifest.DeviceClass) -> String? {

@@ -164,6 +164,26 @@ extension Runner {
 
     // MARK: - The reservation upload, section 7.5
 
+    /// Every screenshot bucket the manifest names for one locale.
+    ///
+    /// The display type comes from the image's own pixels, the same way the
+    /// plan picks it, so this and the upload can never disagree about which
+    /// bucket a file belongs in. It reads image headers and no pixel data.
+    func appleWantedBuckets(locale: String) -> Set<String> {
+        var result: Set<String> = []
+        for deviceClass in Manifest.DeviceClass.allCases {
+            for path in manifest.mediaPaths(locale: locale, deviceClass: deviceClass) {
+                guard let url = resolve(path),
+                      let info = try? AssetInspector.image(at: url),
+                      let bucket = try? AssetInspector.appleDisplayType(for: info,
+                                                                        deviceClass: deviceClass)
+                else { continue }
+                result.insert(bucket)
+            }
+        }
+        return result
+    }
+
     func appleScreenshots(locale: String, files: [MediaUpload], index: Int) async throws {
         guard let localizationID = appleVersionLocalizationIDs[locale] else {
             throw RunError.missingLocalization(locale)
@@ -178,10 +198,16 @@ extension Runner {
         // A device class the manifest dropped leaves a whole set behind, and
         // the loop below never visits it. Apple keeps showing those
         // screenshots, so the set goes before anything else runs.
+        //
+        // What it keeps is every bucket the manifest names, and not this
+        // step's. One step is planned per device class, so keeping only its
+        // own buckets meant the phone step deleted the iPad set and the iPad
+        // step deleted the phone set: an app with screenshots for two device
+        // classes published whichever class the run happened to write last.
         try await appleDropMediaSets(
             localizationID: localizationID, collection: "appScreenshotSets",
             typeKey: "screenshotDisplayType", path: "/v1/appScreenshotSets",
-            keeping: wantedBuckets)
+            keeping: appleWantedBuckets(locale: locale))
 
         for bucket in wantedBuckets {
             let setID = try await appleScreenshotSet(displayType: bucket,
