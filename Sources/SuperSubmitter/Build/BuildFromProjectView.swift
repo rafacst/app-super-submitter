@@ -16,15 +16,17 @@ struct BuildFromProjectView: View {
                 linkCard
             } else {
                 if flow.project != nil {
-                    projectCard
                     if !flow.containers.isEmpty, flow.state == .needsSelection {
-                        containerChooser
+                        pair(projectCard, containerChooser)
+                        selectionRow
+                    } else {
+                        pair(projectCard, selectionRow)
                     }
-                    selectionRow
                 }
-                preflightCard
                 if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
-                    liveRun
+                    pair(preflightCard, liveRun)
+                } else {
+                    preflightCard
                 }
                 if let candidate = flow.candidate { artifactCard(candidate) }
                 if let failure = flow.failure { errorPanel(failure) }
@@ -39,6 +41,29 @@ struct BuildFromProjectView: View {
         }
         .sheet(isPresented: Bindable(flow).showBuildConfirmation) { buildConfirmation }
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
+    }
+
+    /// Two cards on one row, and one under the other when the window is too
+    /// narrow to hold both.
+    ///
+    /// An app that ships on one store builds one platform, and this screen is
+    /// then a single column of full-width cards with the whole right half of
+    /// the window empty beside it. The pairs are the ones that answer one
+    /// question together: what will be built, and how the run is going.
+    private func pair(_ first: some View, _ second: some View) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 14) {
+                first.frame(minWidth: 380, maxWidth: .infinity,
+                            maxHeight: .infinity, alignment: .top)
+                second.frame(minWidth: 380, maxWidth: .infinity,
+                             maxHeight: .infinity, alignment: .top)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 16) {
+                first
+                second
+            }
+        }
     }
 
     // MARK: - Linking
@@ -469,44 +494,31 @@ struct BuildFromProjectView: View {
     private var actionRow: some View {
         HStack(spacing: 10) {
             if flow.state == .readyToBuild || flow.state == .failed {
-                Button { flow.showBuildConfirmation = true } label: {
-                    Text(flow.project?.platform == .android
-                         ? "Build App Bundle" : "Build Archive")
-                        .font(Theme.font(size: 13, weight: .semibold))
-                        .foregroundStyle(flow.canBuild ? Theme.accentText : Theme.text3)
-                        .padding(.horizontal, 20).padding(.vertical, 9)
-                        .background(flow.canBuild ? Theme.accent : Theme.sep2,
-                                    in: RoundedRectangle(cornerRadius: 8))
+                // Building is free. Only the send is paid, so this one wears
+                // no lock however the account stands.
+                ActionButton(title: flow.project?.platform == .android
+                             ? "Build App Bundle" : "Build Archive",
+                             enabled: flow.canBuild) {
+                    flow.showBuildConfirmation = true
                 }
-                .buttonStyle(.plain)
-                .disabled(!flow.canBuild)
             }
             if flow.state == .needsUploadConfirmation {
-                Button { flow.showUploadConfirmation = true } label: {
-                    Text("Upload to the store")
-                        .font(Theme.font(size: 13, weight: .semibold))
-                        .foregroundStyle(flow.canUpload ? Theme.accentText : Theme.text3)
-                        .padding(.horizontal, 20).padding(.vertical, 9)
-                        .background(flow.canUpload ? Theme.accent : Theme.sep2,
-                                    in: RoundedRectangle(cornerRadius: 8))
+                ActionButton(title: "Upload to the store", enabled: flow.canUpload,
+                             paid: (.storeUpload, .upload)) {
+                    flow.showUploadConfirmation = true
                 }
-                .buttonStyle(.plain)
-                .disabled(!flow.canUpload)
-                QuietButton(title: "Keep the artifact and stop") { flow.keepArtifact() }
+                ActionButton(title: "Keep the artifact and stop", kind: .secondary) {
+                    flow.keepArtifact()
+                }
             }
             // The way back from a finished run. Without it the tab allowed one
             // build per session: the Build button asks for `readyToBuild`, and
             // the two states a run ends in are not it.
             if flow.project != nil, flow.state == .complete || flow.state == .cancelled {
-                Button { flow.buildAgain() } label: {
-                    Text(flow.project?.platform == .android
-                         ? "Build a new App Bundle" : "Build a new archive")
-                        .font(Theme.font(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.accentText)
-                        .padding(.horizontal, 20).padding(.vertical, 9)
-                        .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8))
+                ActionButton(title: flow.project?.platform == .android
+                             ? "Build a new App Bundle" : "Build a new archive") {
+                    flow.buildAgain()
                 }
-                .buttonStyle(.plain)
             }
             if flow.project?.platform == .android, !flow.state.isActive {
                 QuietButton(title: "Choose Built AAB") { flow.chooseBuiltBundle() }

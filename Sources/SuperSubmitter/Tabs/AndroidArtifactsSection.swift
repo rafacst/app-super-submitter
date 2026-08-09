@@ -27,9 +27,19 @@ struct AndroidArtifactsSection: View {
     /// path nobody can find again.
     @State private var showRare = false
 
+    /// The same rule one level up. The block itself folds now, so a release
+    /// that already names a mapping file opens on it rather than hiding it
+    /// behind a chevron the developer has no reason to press.
+    private var hasAnyPath: Bool {
+        (Self.common + Self.rare).contains {
+            !state.artifactBinding($0).wrappedValue.isEmpty
+        }
+    }
+
     var body: some View {
         Section_("Android artifacts", icon: "shippingbox.fill", tint: Theme.playGreen,
-                 anchor: "build.androidArtifacts") {
+                 anchor: "build.androidArtifacts", folds: true, startsOpen: hasAnyPath,
+                 note: "Mapping file, native symbols, and the rest of the edit") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Self.common, id: \.self) { field in
                     pathRow(field)
@@ -115,9 +125,17 @@ struct AndroidArtifactsSection: View {
 struct GoogleTracksSection: View {
     @Environment(AppState.self) private var state
 
+    /// What the fold says while it is shut. The release track is the one fact
+    /// a developer checks on the way past, so a closed block still carries it.
+    private var trackNote: String {
+        let track = state.googlePrimaryTrackBinding.wrappedValue
+        return track.isEmpty ? "No release track picked yet" : "Releasing to \(track)"
+    }
+
     var body: some View {
         Section_("Google tracks and rollout", icon: "chart.line.uptrend.xyaxis",
-                 tint: Theme.playBlue, anchor: "build.googleTracks") {
+                 tint: Theme.playBlue, anchor: "build.googleTracks",
+                 folds: true, note: trackNote) {
             VStack(alignment: .leading, spacing: 11) {
                 LabeledField("Release track", anchor: "build.releaseTrack") {
                     ChoiceField(value: state.googlePrimaryTrackBinding,

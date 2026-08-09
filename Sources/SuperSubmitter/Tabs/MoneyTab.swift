@@ -472,41 +472,4 @@ struct MoneyTab: View {
     }
 }
 
-/// A titled block on a tab. The glyph carries the block faster than the words,
-/// so a long tab reads as a column of pictures first.
-struct Section_<Content: View>: View {
-    let title: String
-    var icon: String?
-    var tint: Color = Theme.accent
-    /// The `FieldIndex` id. A section is what the search jumps to when the
-    /// fields under it repeat, which is every list of purchases, plans,
-    /// offers, and pages.
-    var anchor: String?
-    @ViewBuilder let content: Content
-
-    init(_ title: String, icon: String? = nil, tint: Color = Theme.accent,
-         anchor: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.tint = tint
-        self.anchor = anchor
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                if let icon { IconChip(symbol: icon, tint: tint, size: 21) }
-                // Sentence case, not ALL CAPS with kerning. Capitals cost
-                // scan speed, because a word set in them loses the shape the
-                // eye reads it by, and no macOS form heads its groups that
-                // way. One struct, so this reaches every tab.
-                Text(title).font(Theme.sectionHeader)
-                    .foregroundStyle(icon == nil ? Theme.text3 : Theme.text2)
-            }
-            content
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fieldAnchor(anchor)
-    }
-}
+// `Section_` moved to Design/Section.swift when it learned to fold.

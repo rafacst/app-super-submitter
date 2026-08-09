@@ -85,20 +85,6 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(section.contains(".disabled(points.isEmpty)"))
 }
 
-/// The Build row reflects the archive run even while the developer works on
-/// another tab, and it distinguishes progress, success, and failure.
-@MainActor
-@Test func buildArchiveStateReachesTheSidebar() {
-    let flow = BuildFlow(app: nil)
-    #expect(flow.sidebarStatus == nil)
-
-    flow.startedAt = Date()
-    flow.run.state = .building
-    #expect(flow.sidebarStatus == .building)
-
-    flow.run.state = .needsUploadConfirmation
-    #expect(flow.sidebarStatus == .succeeded)
-
-    flow.run.state = .failed
-    #expect(flow.sidebarStatus == .failed)
-}
+// The Build row reflects the run even while the developer works on another
+// tab. It reports the archive and the upload apart, so
+// `BuildScreenReviewTests` owns those assertions now.
