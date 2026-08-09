@@ -50,6 +50,7 @@ struct MediaTab: View {
             if state.mode == .managing { DirectApplyBar(target: .media) }
             if let error = state.mediaError { WarningNote(error) }
             flowNote
+            queueNote
             // Grouped by the store that asks for the size. Seven device
             // classes in one column said nothing about which store wanted
             // which, so a developer had to know the two catalogues already to
@@ -248,6 +249,55 @@ struct MediaTab: View {
     }
 
 
+
+    /// What this store calls the slot, and how many it takes.
+    ///
+    /// Apple sorts by pixel size and takes 10 per display type; Play sorts by
+    /// device class under a name of its own and takes 8. The design asked for
+    /// each store's own words, and these are the ones the two APIs use.
+    private static func slot(_ device: Manifest.DeviceClass, store: Store?) -> String {
+        switch store {
+        case .apple:
+            AssetInspector.appleSizeLabels(for: device).isEmpty ? "" : " of 10"
+        case .google:
+            AssetInspector.googleImageType(for: device).map { " of 8 · \($0)" } ?? ""
+        case nil:
+            ""
+        }
+    }
+
+    /// The files this language would send, and what they weigh.
+    ///
+    /// Every picture on this tab is an upload, and the tab never said how many
+    /// or how large. The plan says it for the whole release; this says it for
+    /// the language on screen, while the pictures are being chosen.
+    @ViewBuilder
+    private var queueNote: some View {
+        let files = Manifest.DeviceClass.allCases.flatMap { device in
+            (state.stores.isEmpty ? [nil] : Store.allCases.filter(state.stores.contains).map { $0 })
+                .flatMap { state.mediaPaths(deviceClass: device, store: $0) }
+        }
+        if !files.isEmpty {
+            let bytes = files.reduce(Int64(0)) { total, path in
+                let values = try? state.mediaURL(for: path)
+                    .resourceValues(forKeys: [.fileSizeKey])
+                return total + Int64(values?.fileSize ?? 0)
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.teal)
+                Text(verbatim: "\(files.count) \(files.count == 1 ? "upload" : "uploads") queued")
+                    .font(Theme.font(size: 11.5, weight: .medium))
+                    .monospacedDigit()
+                if bytes > 0 {
+                    Text("· \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
     /// One store's pictures for one size, or the shared list when the size
     /// holds a single one.
     @ViewBuilder
@@ -260,7 +310,7 @@ struct MediaTab: View {
                     StoreMark(store: store, size: 13)
                     Text(store.storeName).font(Theme.font(size: 11.5, weight: .medium))
                         .foregroundStyle(Theme.text2)
-                    Text(verbatim: "\(paths.count)")
+                    Text(verbatim: "\(paths.count)\(Self.slot(device, store: store))")
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         .monospacedDigit()
                     // The pixel sizes this store takes for this size, beside
@@ -275,7 +325,12 @@ struct MediaTab: View {
                     ForEach(Array(paths.enumerated()), id: \.element) { index, path in
                         MediaTile(path: path, size: tile,
                                   info: state.imageInfo(for: path),
-                                  stores: state.imageStores(for: path, deviceClass: device),
+                                  // A row that is already one store's says so
+                                  // in its header. Repeating it under every
+                                  // tile is the same fact twice.
+                                  stores: store == nil
+                                      ? state.imageStores(for: path, deviceClass: device)
+                                      : [],
                                   url: state.mediaURL(for: path),
                                   fromStore: AppState.isImported(path),
                                   canMoveEarlier: index > 0,
