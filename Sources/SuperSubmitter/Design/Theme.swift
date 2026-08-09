@@ -189,14 +189,13 @@ enum Theme {
     /// next redraw rather than the instant it crosses. Move to
     /// `@Environment(\.pixelLength)` at the call sites if that ever shows.
     static var hairline: CGFloat {
-        // Deterministic, and never "whichever window the array listed first".
-        // A background app has no key window and no main window, and the array
-        // carries panels and the Dock tile beside the one window that matters.
-        // `canBecomeMain` is what tells a document window from those.
-        let window = NSApp?.keyWindow ?? NSApp?.mainWindow
-            ?? NSApp?.windows.first { $0.isVisible && $0.canBecomeMain }
-        return 1 / (window?.backingScaleFactor
-                    ?? NSScreen.main?.backingScaleFactor ?? 2)
+        MainActor.assumeIsolated {
+            // Deterministic, and never "whichever window the array listed first".
+            let window = NSApp?.keyWindow ?? NSApp?.mainWindow
+                ?? NSApp?.windows.first { $0.isVisible && $0.canBecomeMain }
+            return 1 / (window?.backingScaleFactor
+                        ?? NSScreen.main?.backingScaleFactor ?? 2)
+        }
     }
 
 }
@@ -603,15 +602,9 @@ struct Hairline: View {
 
 /// The title bar of a panel that opens as a sheet.
 ///
-/// A sheet has no title bar of its own, so this draws one: the title in the
-/// middle and the three lights on the left, where a Mac window keeps them.
-/// Only the red one does anything, because closing is the only thing a sheet
-/// can do. The other two are drawn in the separator grey rather than in yellow
-/// and green, so nothing offers a minimise that will not happen.
-///
-/// The geometry is the system's: 12 point lights, 8 points apart, 20 points in
-/// from the leading edge. Two panels drew this by hand and the second copy was
-/// already 7 points out from the first.
+/// A sheet has no title bar of its own, so this draws a title and one real close
+/// control. Window traffic lights would promise minimise and zoom actions a
+/// sheet cannot perform.
 ///
 /// `// ponytail: one bar, two panels. A third sheet gets it for free.`
 struct PanelTitleBar: View {
@@ -623,23 +616,19 @@ struct PanelTitleBar: View {
     var body: some View {
         ZStack {
             Text(title).font(Theme.font(size: 13, weight: .semibold))
-            HStack(spacing: 8) {
+            HStack {
+                Spacer(minLength: 0)
                 Button(action: close) {
-                    Circle().fill(Color(hex: 0xFF5F57)).frame(width: 12, height: 12)
+                    Image(systemName: "xmark")
+                        .font(Theme.font(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.text2)
+                        .frame(width: 24, height: 24)
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close \(title)")
-                Circle().fill(Theme.sep).frame(width: 12, height: 12)
-                Circle().fill(Theme.sep).frame(width: 12, height: 12)
-                Spacer(minLength: 0)
             }
-            .padding(.leading, 20)
-            .padding(.trailing, 13)
-            // The two dead lights are decoration. A reader that announced
-            // three buttons on a panel with one action would be describing a
-            // window this is not.
-            .accessibilityElement(children: .contain)
+            .padding(.trailing, 14)
         }
         .frame(height: Self.height)
         .background(Theme.raised)
@@ -744,13 +733,15 @@ struct QuietButton: View {
         if #available(macOS 26.0, *), glass {
             // The style draws the capsule, so the label carries no fill and
             // no border of its own. Two chromes on one button is a double edge.
-            Button(action: action) { label }
+            Button(action: action) {
+                label.foregroundStyle(prominent ? Theme.accentText : Theme.text)
+            }
                 .buttonStyle(prominent ? AnyButtonStyle(.glassProminent)
                                        : AnyButtonStyle(.glass))
                 // Only the prominent one takes a tint. Plain glass reads the tint
                 // as a fill, so tinting both would paint the whole cluster accent
                 // and lose the very distinction this flag exists to make.
-                .tint(prominent ? Theme.accent : nil)
+                .tint(prominent ? Theme.accentFill : nil)
         } else {
             Button(action: action) { flatLabel }
                 .buttonStyle(.plain)

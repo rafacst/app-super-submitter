@@ -266,11 +266,48 @@ enum ScreenshotMode {
         // whatever moved it, so the whole class of drift stops mattering.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             window.setFrame(NSRect(origin: origin, size: size), display: true)
-            print("CAPTURE_WINDOW \(window.windowNumber)")
-            fflush(stdout)
+            announceWhenActive(window)
         }
         #endif
     }
+
+    #if DEBUG
+    /// Prints the capture line only once the window is really the key window of
+    /// a really active app.
+    ///
+    /// `NSApp.activate()` is a request and not a result: it returns before the
+    /// activation lands, and the line below used to follow it after a fixed
+    /// delay. Every dark capture lost that race, and an inactive Mac window is
+    /// a different picture from the one being reviewed — grey traffic lights, a
+    /// grey sidebar selection instead of the accent one, and glass buttons dim
+    /// enough to read as disabled.
+    ///
+    /// Each turn asks again, because the activation can also be taken away
+    /// between two turns by whatever the developer clicks while this runs.
+    @MainActor
+    private static func announceWhenActive(_ window: NSWindow, attempt: Int = 0) {
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+
+        let isKey = window.isKeyWindow || window.attachedSheet?.isKeyWindow == true
+        if NSApp.isActive, isKey {
+            print("CAPTURE_WINDOW \(window.windowNumber)")
+            fflush(stdout)
+            return
+        }
+        // Five seconds. Then say so rather than print the capture line: a
+        // picture of an inactive window is worse than no picture, because
+        // nothing downstream can tell the two apart.
+        guard attempt < 50 else {
+            print("CAPTURE_INACTIVE app=\(NSApp.isActive) key=\(isKey)")
+            fflush(stdout)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            announceWhenActive(window, attempt: attempt + 1)
+        }
+    }
+    #endif
 
     private static func letters(_ text: String) -> String {
         text.filter(\.isLetter).lowercased()

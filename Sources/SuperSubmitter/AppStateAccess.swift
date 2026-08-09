@@ -194,7 +194,9 @@ extension AppState {
         return entitlement.grants(capability)
     }
 
-    var isPaid: Bool { can(.storeWrite) }
+    /// What Account presents. Debug's unconfigured-service bypass authorizes
+    /// local writes, but it is not a purchase and must not paint paid UI.
+    var isPaid: Bool { entitlement.isPaid }
 
     /// The gate a button calls. It returns false and opens the pricing sheet,
     /// so the caller stops without inventing its own message.

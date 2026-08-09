@@ -94,10 +94,16 @@ struct BuildTab: View {
         VStack(alignment: .leading, spacing: 20) {
             // One row, one height. Each box stretches to the taller of the
             // two, so the rule between them runs the whole way down.
-            HStack(alignment: .top, spacing: 14) {
-                submitBuilds
-                Rectangle().fill(Theme.sep2).frame(width: 1)
-                updateExistingApp
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 14) {
+                    submitBuilds
+                    Rectangle().fill(Theme.sep2).frame(width: 1)
+                    updateExistingApp
+                }
+                VStack(alignment: .leading, spacing: 14) {
+                    submitBuilds
+                    updateExistingApp
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
 
@@ -114,9 +120,15 @@ struct BuildTab: View {
             // Side by side. Both answer "what goes into the Google edit", and
             // stacked they left the right half of a 980 point tab empty.
             if state.stores.contains(.google) {
-                HStack(alignment: .top, spacing: 14) {
-                    AndroidArtifactsSection()
-                    GoogleTracksSection().frame(width: 330)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 14) {
+                        AndroidArtifactsSection()
+                        GoogleTracksSection().frame(width: 330)
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        AndroidArtifactsSection()
+                        GoogleTracksSection()
+                    }
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }

@@ -197,7 +197,7 @@ struct CredentialCard<Content: View>: View {
             case .connected: "Reconnect"
             default: "Connect to the store"
             }
-            QuietButton(title: title, glass: true,
+            QuietButton(title: title,
                         prominent: !(status?.isConnected ?? false), action: connect)
                 .disabled(status == .connecting)
             Text(keychainNote).font(Theme.font(size: 11.5))

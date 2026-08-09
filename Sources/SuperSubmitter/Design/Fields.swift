@@ -391,11 +391,10 @@ struct LabeledField<Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        // `minWidth`, not `width`. The number is the column this field wants,
-        // and it was written at the default type scale; a field whose label or
-        // control needs more than that at a larger scale takes it instead of
-        // clipping. Rows still line up, because nothing asks for less.
-        .frame(minWidth: width.map(Theme.scaled))
+        // `minWidth`, not `width`. Intrinsic label and control sizes already
+        // grow with the type scale; scaling the minimum too made wide form
+        // rows grow twice and run past the window.
+        .frame(minWidth: width)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         .fieldAnchor(anchor)
         // The note is help for the field, so a reader meets it while it is on
