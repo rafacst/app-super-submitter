@@ -38,6 +38,7 @@ struct CredentialCard<Content: View>: View {
     /// connects from somewhere else.
     var connect: (() -> Void)?
     var keychainNote: String = ""
+    var equalizedHeight = false
     @ViewBuilder let content: Content
 
     /// True for the third of a second the fields spend shaking. See `body`.
@@ -76,7 +77,9 @@ struct CredentialCard<Content: View>: View {
                 .padding(.bottom, 14)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity,
+               maxHeight: equalizedHeight ? .infinity : nil,
+               alignment: .topLeading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))

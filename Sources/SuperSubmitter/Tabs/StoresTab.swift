@@ -119,7 +119,8 @@ private struct AppleCredentialPanel: View {
             guideOpen: state.appleGuideOpen,
             toggleGuide: { state.appleGuideOpen.toggle() },
             connect: state.connectAppleStore,
-            keychainNote: "One key for the whole App Store Connect account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied."
+            keychainNote: "One key for the whole App Store Connect account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied.",
+            equalizedHeight: true
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 FileWell(
@@ -175,7 +176,8 @@ private struct GoogleCredentialPanel: View {
             connect: state.connectGoogleStore,
             keychainNote: state.googleCredentialChoice == .oauth
                 ? "Google's refresh token is stored in the macOS Keychain and used by every app you open here."
-                : "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and the original file is not copied."
+                : "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and the original file is not copied.",
+            equalizedHeight: true
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 Picker("Google credential", selection: $state.googleCredentialChoice) {

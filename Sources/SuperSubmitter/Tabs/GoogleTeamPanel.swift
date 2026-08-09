@@ -59,6 +59,7 @@ struct GoogleTeamPanel: View {
                     invite
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
             .storePanel(padding: 14)
         }
         .confirmationDialog("Invite this person?", isPresented: $confirmingInvite) {
