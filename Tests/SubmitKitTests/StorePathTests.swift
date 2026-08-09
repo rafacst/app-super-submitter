@@ -85,3 +85,113 @@ private func everySource() throws -> String {
     #expect(warning?.severity == .warning)
     #expect(warning?.message.contains("no longer uploads hosted content") == true)
 }
+
+// MARK: - The reads that came back empty and were believed
+//
+// Each of these asked App Store Connect a real question and threw the answer
+// away. None of them failed loudly: a `try?`, a missing `data` member, and a
+// local flag stood in for the store, so the app reported "nothing there"
+// about state the store was holding the whole time.
+
+@Test func theAttachedBuildIsReadFromTheLinkageAndNotFromTheListRow() throws {
+    let reader = try source("Sources/SubmitKit/Plan/StateReader.swift")
+    // A list row carries `links` under every relationship and no `data`, so
+    // this spelling read nil for every version of every app.
+    #expect(!reader.contains("version[\"relationships\"][\"build\"][\"data\"]"))
+    #expect(reader.contains("/relationships/build"))
+}
+
+@Test func onePricePointIsReadOnTheVersionAppleDeclares() throws {
+    let text = try everySource()
+    // Reading one point by id is v3. The v1 spelling answered 404, `try?` ate
+    // it, and the price schedule was rewritten on every apply.
+    #expect(!text.contains("/v1/appPricePoints/"))
+    #expect(text.contains("manualPrices"))
+    #expect(text.contains("filter%5Bterritory%5D="))
+}
+
+@Test func theCurrentPriceIsTheRowWithNoEndDate() {
+    // Two territories and a price that stopped last month, which is what a
+    // real schedule looks like. Only USA is asked for, and only the open row
+    // is the price a customer pays.
+    let payload = JSON(data: Data("""
+    {"data":[
+      {"type":"appPrices","attributes":{"endDate":"2026-02-28"},
+       "relationships":{"appPricePoint":{"data":{"id":"old"}}}},
+      {"type":"appPrices","attributes":{"endDate":null},
+       "relationships":{"appPricePoint":{"data":{"id":"now"}}}}],
+     "included":[
+      {"type":"appPricePoints","id":"old","attributes":{"customerPrice":"9.99"}},
+      {"type":"appPricePoints","id":"now","attributes":{"customerPrice":"4.99"}}]}
+    """.utf8))
+
+    #expect(StateReader.currentPrice(payload) == Decimal(string: "4.99"))
+}
+
+@Test func aPriceTheStoreAlreadySellsAtPlansNoWrite() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    // Apple sells at a point, so the apply writes 4.99 for this. Comparing
+    // the 4.90 that was asked for planned a write that changed nothing, on
+    // every run, forever.
+    manifest.pricing = Manifest.Pricing(base: .init(amount: Decimal(string: "4.90")!,
+                                                    currency: "USD", territory: "USA"))
+    var apple = ActualState.Apple()
+    apple.priceAmount = Decimal(string: "4.99")
+    apple.currentPriceAmount = Decimal(string: "4.99")
+    var actual = ActualState()
+    actual.apple = apple
+
+    let plan = Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+
+    #expect(!plan.steps.contains { $0.id == "apple.appPrice" })
+}
+
+@Test func aFreeAppThatIsAlreadyFreePlansNoPriceWrite() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    manifest.pricing = Manifest.Pricing(base: .init(amount: 0, currency: "BRL",
+                                                    territory: "BRA"))
+    var apple = ActualState.Apple()
+    apple.priceAmount = 0
+    apple.currentPriceAmount = 0
+    var actual = ActualState()
+    actual.apple = apple
+
+    let plan = Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+
+    #expect(!plan.steps.contains { $0.id == "apple.appPrice" })
+}
+
+@Test func aPriceTheStoreDoesNotHoldStillPlansTheWrite() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    manifest.pricing = Manifest.Pricing(base: .init(amount: 4.90, currency: "USD",
+                                                    territory: "USA"))
+    var apple = ActualState.Apple()
+    apple.priceAmount = Decimal(string: "4.99")
+    apple.currentPriceAmount = Decimal(string: "9.99")
+    var actual = ActualState()
+    actual.apple = apple
+
+    let plan = Planner.plan(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+
+    #expect(plan.steps.contains { $0.id == "apple.appPrice" })
+}
+
+@Test func anAttachedBuildClosesTheReleaseChecklistRow() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    var apple = ActualState.Apple()
+    apple.versionString = "1.5"
+    apple.liveVersionString = "1.4"
+    apple.attachedBuildId = "build-id"
+    var actual = ActualState()
+    actual.apple = apple
+
+    let rows = ConsoleChecklist.rows(manifest: manifest, actual: actual, stores: [.apple])
+    let build = rows.first { $0.id == "apple.updateBuild" }
+
+    #expect(build?.state == .done)
+    #expect(build?.reason.contains("a build is attached") == true)
+}

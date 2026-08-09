@@ -100,4 +100,80 @@ struct ExistingAppAssetTests {
         #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone, previews: true)
             == ["Store Import/apple/en-US/APP_IPHONE_69/trailer.mov"])
     }
+
+    @MainActor
+    @Test func storeAssetPathsStayInsideTheImportFolder() async throws {
+        URLProtocol.registerClass(AssetStubProtocol.self)
+        defer { URLProtocol.unregisterClass(AssetStubProtocol.self) }
+        AssetStubProtocol.status = 200
+        let folder = try scratchFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let escapeName = "escape-\(UUID().uuidString)"
+        let outside = folder.deletingLastPathComponent().appendingPathComponent(escapeName)
+        let malicious = ImportedStoreAsset(
+            locale: "../../../\(escapeName)", kind: ".",
+            url: URL(string: "https://assets.example.com/agent.plist")!,
+            fileName: "agent.plist")
+        let state = AppState()
+        var manifest = Manifest()
+
+        let failures = await state.materializeImportedAssets(
+            [malicious], store: .apple, root: folder, manifest: &manifest)
+
+        #expect(failures.isEmpty)
+        #expect(!FileManager.default.fileExists(
+            atPath: outside.appendingPathComponent("agent.plist").path))
+        let importFolder = folder.appendingPathComponent(AppState.importFolder)
+        let files = FileManager.default.enumerator(at: importFolder,
+                                                    includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { !$0.hasDirectoryPath } ?? []
+        #expect(files.count == 1)
+        #expect(files[0].standardizedFileURL.path.hasPrefix(
+            importFolder.standardizedFileURL.path + "/"))
+    }
+
+    @MainActor
+    @Test func aFileURLIsNotAnImportedAsset() async throws {
+        let folder = try scratchFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let state = AppState()
+        var manifest = Manifest()
+        let local = ImportedStoreAsset(locale: "en-US", kind: "icon",
+                                       url: URL(fileURLWithPath: "/etc/hosts"),
+                                       fileName: "hosts")
+
+        let failures = await state.materializeImportedAssets(
+            [local], store: .apple, root: folder, manifest: &manifest)
+
+        #expect(failures.count == 1)
+        #expect(!FileManager.default.fileExists(
+            atPath: folder.appendingPathComponent("Store Import/apple/en-US/icon/hosts").path))
+    }
+
+    @MainActor
+    @Test func aPreexistingSymlinkCannotRedirectAnImportedAsset() async throws {
+        URLProtocol.registerClass(AssetStubProtocol.self)
+        defer { URLProtocol.unregisterClass(AssetStubProtocol.self) }
+        AssetStubProtocol.status = 200
+        let folder = try scratchFolder()
+        let outside = try scratchFolder()
+        defer {
+            try? FileManager.default.removeItem(at: folder)
+            try? FileManager.default.removeItem(at: outside)
+        }
+        let parent = folder.appendingPathComponent("Store Import/apple/en-US")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: parent.appendingPathComponent("icon"), withDestinationURL: outside)
+        let state = AppState()
+        var manifest = Manifest()
+
+        let failures = await state.materializeImportedAssets(
+            [asset("icon", "agent.plist")], store: .apple, root: folder, manifest: &manifest)
+
+        #expect(failures.count == 1)
+        #expect(!FileManager.default.fileExists(
+            atPath: outside.appendingPathComponent("agent.plist").path))
+    }
 }

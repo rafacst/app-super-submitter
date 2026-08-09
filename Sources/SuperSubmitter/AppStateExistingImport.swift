@@ -217,13 +217,21 @@ extension AppState {
                                    root: URL, manifest: inout Manifest) async -> [String] {
         var failures: [String] = []
         for asset in assets {
-            let safeName = asset.fileName
-                .components(separatedBy: CharacterSet(charactersIn: "/:"))
-                .joined(separator: "-")
-            let relative = "\(Self.importFolder)/\(store.rawValue)/\(asset.locale)"
-                + "/\(asset.kind)/\(safeName)"
+            let components = [Self.importFolder, store.rawValue,
+                              Self.safeComponent(asset.locale),
+                              Self.safeComponent(asset.kind),
+                              Self.safeComponent(asset.fileName)]
+            let relative = components.joined(separator: "/")
+            let folder = root.appendingPathComponent(Self.importFolder).standardizedFileURL
+            let destination = components.dropFirst().reduce(folder) {
+                $0.appendingPathComponent($1)
+            }.standardizedFileURL
+            guard Self.isSafeImportDestination(destination, root: root) else {
+                failures.append("\(store.storeName) \(asset.kind): the store named a path outside the import folder.")
+                continue
+            }
             do {
-                try await download(asset, to: root.appendingPathComponent(relative))
+                try await download(asset, to: destination, root: root)
             } catch {
                 failures.append("\(store.storeName) \(asset.kind) \(asset.fileName): "
                     + error.localizedDescription)
@@ -250,15 +258,58 @@ extension AppState {
         return failures
     }
 
-    private func download(_ asset: ImportedStoreAsset, to destination: URL) async throws {
+    private func download(_ asset: ImportedStoreAsset, to destination: URL,
+                          root: URL) async throws {
+        guard asset.url.scheme?.lowercased() == "https" else {
+            throw ConnectionError.invalidResponse
+        }
+        guard Self.isSafeImportDestination(destination, root: root) else {
+            throw ConnectionError.invalidResponse
+        }
         try FileManager.default.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard Self.isSafeImportDestination(destination, root: root) else {
+            throw ConnectionError.invalidResponse
+        }
         guard !FileManager.default.fileExists(atPath: destination.path) else { return }
         let (data, response) = try await URLSession.shared.data(from: asset.url)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        guard let http = response as? HTTPURLResponse,
+              response.url?.scheme?.lowercased() == "https" else {
+            throw ConnectionError.invalidResponse
+        }
+        if !(200..<300).contains(http.statusCode) {
             throw ConnectionError.http(http.statusCode, "The store refused the file.")
         }
+        guard Self.isSafeImportDestination(destination, root: root) else {
+            throw ConnectionError.invalidResponse
+        }
         try data.write(to: destination, options: .atomic)
+    }
+
+    private static func isSafeImportDestination(_ destination: URL, root: URL) -> Bool {
+        let root = root.standardizedFileURL
+        let folder = root.appendingPathComponent(importFolder).standardizedFileURL
+        let destination = destination.standardizedFileURL
+        guard destination.path.hasPrefix(folder.path + "/") else { return false }
+
+        var current = root
+        for component in destination.pathComponents.dropFirst(root.pathComponents.count) {
+            current.appendPathComponent(component)
+            if (try? current.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+                return false
+            }
+        }
+        let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
+        let resolved = destination.resolvingSymlinksInPath().standardizedFileURL
+        return resolved.path.hasPrefix(
+            resolvedRoot.appendingPathComponent(importFolder).path + "/")
+    }
+
+    static func safeComponent(_ raw: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(
+            CharacterSet(charactersIn: "-_."))
+        let cleaned = raw.components(separatedBy: allowed.inverted).joined(separator: "-")
+        return cleaned.isEmpty || cleaned == "." || cleaned == ".." ? "unnamed" : cleaned
     }
 
     /// Where the import puts what it downloads, relative to `store.yaml`.

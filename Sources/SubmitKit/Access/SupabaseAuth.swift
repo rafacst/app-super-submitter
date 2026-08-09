@@ -29,7 +29,7 @@ public enum SupabaseAuthError: Error, LocalizedError, Sendable, Equatable {
 
     /// The account service speaks its own dialect. These are the answers a
     /// developer actually meets, said the way a person would say them.
-    static func humanize(_ message: String) -> String {
+    public static func humanize(_ message: String) -> String {
         let plain = message.replacingOccurrences(of: "—", with: "-")
         let lower = plain.lowercased()
         if lower.contains("invalid login credentials") {
@@ -151,6 +151,12 @@ public actor SupabaseAuth {
     /// instead of failing at the first store call.
     @discardableResult
     public func adopt(callback: URL) async throws -> String {
+        try adopt(session: await resolve(callback: callback))
+    }
+
+    /// Resolves a confirmation token without changing the signed-in account.
+    /// The app can show the returned email address before it adopts the session.
+    public func resolve(callback: URL) async throws -> SupabaseSession {
         let parts = Self.parameters(in: callback)
         if let message = parts["error_description"] ?? parts["error"] {
             throw SupabaseAuthError.service(message)
@@ -158,7 +164,15 @@ public actor SupabaseAuth {
         guard let refreshToken = parts["refresh_token"] else {
             throw SupabaseAuthError.invalidResponse
         }
-        return try await refresh(refreshToken).email
+        let session = try await refreshedSession(refreshToken, fallbackEmail: "")
+        guard !session.email.isEmpty else { throw SupabaseAuthError.invalidResponse }
+        return session
+    }
+
+    @discardableResult
+    public func adopt(session: SupabaseSession) throws -> String {
+        try remember(session)
+        return session.email
     }
 
     /// The query and the fragment of a callback, in one dictionary.
@@ -203,11 +217,17 @@ public actor SupabaseAuth {
     }
 
     private func refresh(_ refreshToken: String) async throws -> SupabaseSession {
-        let response = try await request("auth/v1/token", query: "grant_type=refresh_token",
-                                         body: ["refresh_token": refreshToken])
-        let session = try storedSession(from: response, fallbackEmail: self.session?.email ?? "")
+        let session = try await refreshedSession(refreshToken)
         try remember(session)
         return session
+    }
+
+    private func refreshedSession(_ refreshToken: String,
+                                  fallbackEmail: String? = nil) async throws -> SupabaseSession {
+        let response = try await request("auth/v1/token", query: "grant_type=refresh_token",
+                                         body: ["refresh_token": refreshToken])
+        return try storedSession(from: response,
+                                 fallbackEmail: fallbackEmail ?? session?.email ?? "")
     }
 
     private func remember(_ session: SupabaseSession) throws {

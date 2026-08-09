@@ -355,8 +355,15 @@ public enum Planner {
                 requests: [RequestSketch("POST", "/v1/appStoreVersionPhasedReleases")],
                 operation: .applePhasedRelease))
         }
+        // The resolved point, not the amount that was asked for. Apple sells
+        // at a point, so `appleAppPrice` writes the nearest one: a manifest
+        // that says 4.90 against a store that holds 4.99 is the same price,
+        // and comparing the raw amount planned a write that changed nothing.
+        // `priceAmount` is that same nearest point, and it is nil only when
+        // the ladder read failed, which is when the raw amount is the honest
+        // thing to compare.
         if let pricing = manifest.pricing,
-           pricing.base.amount != actual?.currentPriceAmount {
+           (actual?.priceAmount ?? pricing.base.amount) != actual?.currentPriceAmount {
             steps.append(PlanStep(
                 id: "apple.appPrice", system: .apple, kind: .change,
                 summary: "app price schedule",

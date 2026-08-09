@@ -208,13 +208,22 @@ public enum ConsoleChecklist {
                     link: "\(base)/info",
                     state: apple?.ageRating.isEmpty == false || published ? .done : .unknown,
                     onEditingTab: true),
+                // The store first, the manifest second, the same order as the
+                // category row above. This read the manifest alone, so it
+                // confirmed the number the developer had typed against itself:
+                // "Confirmed: 0 BRL" sat here while the plan queued a price
+                // write, because only the plan was asking the store.
                 ConsoleRow(
                     id: "apple.pricing", system: "App Store", title: "Pricing and availability",
-                    reason: manifest.pricing.map {
-                        "Confirmed: \($0.base.amount) \($0.base.currency)."
+                    reason: apple?.currentPriceAmount.map {
+                        "Confirmed: the App Store sells at \($0)"
+                            + (apple?.pricePointTerritory.map { " in \($0)" } ?? "") + "."
+                    } ?? manifest.pricing.map {
+                        "The Monetization tab names \($0.base.amount) \($0.base.currency). The apply writes it, so this needs no console visit."
                     } ?? (published ? Self.assumed : "The manifest names no base price."),
                     link: "\(base)/pricing",
-                    state: manifest.pricing == nil && !published ? .needed : .done),
+                    state: apple?.currentPriceAmount == nil && manifest.pricing == nil && !published
+                        ? .needed : .done),
                 // `versionString` names the version the app may write to, and
                 // a live version is not one. Reading any version here would
                 // report the released number as confirmed while the apply was

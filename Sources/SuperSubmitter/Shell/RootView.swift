@@ -788,6 +788,16 @@ struct AppMessage: ViewModifier {
         } message: {
             Text(state.errorMessage ?? "")
         }
+        .alert("Sign in as \(state.pendingAccountEmail ?? "this account")?",
+               isPresented: Binding(
+                get: { state.pendingAccountEmail != nil },
+                set: { if !$0 { state.cancelPendingAccount() } }
+               )) {
+            Button("Cancel", role: .cancel) { state.cancelPendingAccount() }
+            Button("Sign In") { state.confirmPendingAccount() }
+        } message: {
+            Text("This confirmation link will replace the account currently signed in to Super Submitter.")
+        }
     }
 }
 

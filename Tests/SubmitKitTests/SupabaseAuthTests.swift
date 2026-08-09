@@ -110,3 +110,27 @@ private final class AuthStubProtocol: URLProtocol, @unchecked Sendable {
         try await auth.adopt(callback: URL(string: "supersubmitter://auth-callback")!)
     }
 }
+
+@Test func resolvingAConfirmationDoesNotReplaceTheStoredSession() async throws {
+    let old = SupabaseSession(accessToken: "old", refreshToken: "old-refresh",
+                              expiresAt: .distantFuture, email: "owner@example.com")
+    let store = AuthSessionStore(old)
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [AuthStubProtocol.self]
+    let network = URLSession(configuration: configuration)
+    defer { network.invalidateAndCancel() }
+    let auth = SupabaseAuth(
+        configuration: .init(baseURL: URL(string: "https://project.supabase.co")!,
+                             publishableKey: "public-key"),
+        urlSession: network, store: store)
+    let callback = URL(string: "supersubmitter://auth-callback#refresh_token=attacker")!
+
+    let pending = try await auth.resolve(callback: callback)
+
+    #expect(pending.email == "dev@example.com")
+    #expect(try store.load()?.email == "owner@example.com")
+    #expect(await auth.email == "owner@example.com")
+
+    #expect(try await auth.adopt(session: pending) == "dev@example.com")
+    #expect(try store.load()?.email == "dev@example.com")
+}

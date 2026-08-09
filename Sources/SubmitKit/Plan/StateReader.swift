@@ -196,9 +196,26 @@ public struct StateReader: Sendable {
             result.versionState = version["attributes"]["appVersionState"].string
                 ?? version["attributes"]["appStoreState"].string
             result.releaseType = version["attributes"]["releaseType"].string
-            result.attachedBuildId = version["relationships"]["build"]["data"]["id"].string
 
             if let versionID {
+                // The linkage, and not the row this list already returned.
+                //
+                // App Store Connect fills `data` under a relationship only on
+                // the side an `include` asked for. A list row carries `links`
+                // and nothing else, which the icon read next door learned the
+                // same way. So `relationships.build.data.id` read nil for
+                // every version of every app, forever: the release checklist
+                // said "a build is uploaded and no version holds it" about a
+                // version that held one, the plan queued the attach on every
+                // run, and What to test, the beta state, the build bundles and
+                // the crash panel all sat behind the same nil.
+                //
+                // A version with no build answers 404, which is a state and
+                // not a failure, so this stays a `try?`.
+                if let linkage = try? await api.apple(
+                    "GET", "/v1/appStoreVersions/\(versionID)/relationships/build") {
+                    result.attachedBuildId = JSON(data: linkage.data)["data"]["id"].string
+                }
                 let phased = JSON(data: try await api.apple(
                     "GET", "/v1/appStoreVersions/\(versionID)/appStoreVersionPhasedRelease").data)
                 result.phasedReleaseId = phased["data"]["id"].string
@@ -403,20 +420,30 @@ public struct StateReader: Sendable {
             }
         }
 
-        // `manualPrices.appPricePoint` reads like a nested include and Apple
-        // refuses it: "not a valid relationship name". The schedule names the
-        // price, the price names its point, and the point is fetched by id.
+        // The price the store holds today, in the territory the manifest
+        // prices in.
+        //
+        // Three things were wrong with reading it off the schedule's own
+        // include. The schedule holds one row per territory, so `first` read
+        // Brazil's money as the United States' as often as not. It holds the
+        // price that ended last month beside the one on sale, so `first` read
+        // a dead row. And the point was then fetched by id off version one of
+        // the price point resource, which does not exist: that read is a v3
+        // route. Apple answered 404, `try?` swallowed it, and
+        // `currentPriceAmount` came back nil for every app that has ever run
+        // this. The plan wrote the price schedule on every single apply.
+        //
+        // `manualPrices` takes the territory filter and carries the point back
+        // in the same response, so the fix is one request and no second hop.
         if let response = try? await api.apple(
-            "GET", "/v1/apps/\(appID)/appPriceSchedule?include=baseTerritory,manualPrices") {
-            let schedule = JSON(data: response.data)
-            let price = schedule["included"].array
-                .first { $0["type"].string == "appPrices" }
-            let pointID = price?["relationships"]["appPricePoint"]["data"]["id"].string
-            if let pointID, let point = try? await api.apple(
-                "GET", "/v1/appPricePoints/\(pointID)") {
-                result.currentPriceAmount = JSON(data: point.data)["data"]["attributes"]["customerPrice"]
-                    .string.flatMap { Decimal(string: $0) }
-            }
+            "GET", "/v1/apps/\(appID)/appPriceSchedule"),
+           let scheduleID = JSON(data: response.data)["data"]["id"].string,
+           let prices = try? await api.apple(
+            "GET", "/v1/appPriceSchedules/\(Self.escape(scheduleID))/manualPrices"
+                + "?limit=200&include=appPricePoint"
+                + "&fields%5BappPricePoints%5D=customerPrice"
+                + "&filter%5Bterritory%5D=\(Self.escape(territory))") {
+            result.currentPriceAmount = Self.currentPrice(JSON(data: prices.data))
         }
 
         if let response = try? await api.apple(
@@ -951,5 +978,25 @@ public struct StateReader: Sendable {
     /// price by itself; it reports what Apple actually resolved.
     static func nearest(to amount: Decimal, in points: [Decimal]) -> Decimal? {
         points.min { abs($0 - amount) < abs($1 - amount) }
+    }
+
+    /// The price in force now, out of a manual price list.
+    ///
+    /// A schedule carries the price that ended last month and the one that
+    /// starts next quarter beside the one a customer pays today. The row with
+    /// no end date is the one on sale, which is also the shape the apply
+    /// writes: `startDate` and `endDate` both null.
+    static func currentPrice(_ payload: JSON) -> Decimal? {
+        var amounts: [String: Decimal] = [:]
+        for item in payload["included"].array where item["type"].string == "appPricePoints" {
+            guard let id = item["id"].string,
+                  let amount = item["attributes"]["customerPrice"].string
+                    .flatMap({ Decimal(string: $0) }) else { continue }
+            amounts[id] = amount
+        }
+        let rows = payload["data"].array
+        let live = rows.first { $0["attributes"]["endDate"].string == nil } ?? rows.first
+        return live?["relationships"]["appPricePoint"]["data"]["id"].string
+            .flatMap { amounts[$0] }
     }
 }

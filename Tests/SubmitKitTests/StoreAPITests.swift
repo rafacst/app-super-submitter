@@ -118,6 +118,26 @@ struct StoreAPIRetryTests {
         // headers here and the throttle disappears.
         #expect(Date().timeIntervalSince(started) > 0.5)
     }
+
+    @Test func appPaginationNeverForwardsTheAppleTokenToAnotherHost() async throws {
+        StubURLProtocol.state.configure { request, count in
+            #expect(request.url?.host == "api.appstoreconnect.apple.com")
+            #expect(request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true)
+            let body = Data(#"{"data":[],"links":{"next":"https://evil.example/v1/apps?cursor=stolen"}}"#.utf8)
+            return (HTTPURLResponse(url: request.url!, statusCode: 200,
+                                    httpVersion: nil, headerFields: nil)!, body)
+        }
+        let credential = AppleCredential(
+            keyID: "ABCD123456", issuerID: "issuer",
+            privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation,
+            fileName: "AuthKey_ABCD123456.p8")
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+
+        #expect(try await StoreConnectionClient(session: session)
+            .appleApps(credential: credential).isEmpty)
+        #expect(StubURLProtocol.state.requestCount == 1)
+    }
 }
 
 private func base64URLDecoded(_ value: String) -> Data? {

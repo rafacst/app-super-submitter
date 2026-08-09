@@ -98,48 +98,49 @@ struct RunSection: View {
         }
     }
 
+    @ViewBuilder
     private func row(_ index: Int) -> some View {
-        let step = state.runSteps[index]
-        let stepState = state.stepStates.indices.contains(index)
-            ? state.stepStates[index] : .pending
-        let glyph = Self.glyph(stepState)
-        return HStack(spacing: 11) {
-            Group {
-                if stepState == .running {
-                    Spinner()
-                } else {
-                    Image(systemName: glyph.name)
-                        .font(Theme.font(size: 12))
-                        .foregroundStyle(glyph.tint)
-                        // The dotted circle dissolves into the tick rather than
-                        // being replaced by it.
-                        .contentTransition(.symbolEffect(.replace))
-                        // One bounce, and only on the state worth marking. A
-                        // bounce on every transition would fire on `pending`
-                        // as the run resets and read as noise.
-                        .symbolEffect(.bounce, value: stepState == .done)
+        if let step = state.runSteps[safe: index] {
+            let stepState = state.stepStates[safe: index] ?? .pending
+            let glyph = Self.glyph(stepState)
+            HStack(spacing: 11) {
+                Group {
+                    if stepState == .running {
+                        Spinner()
+                    } else {
+                        Image(systemName: glyph.name)
+                            .font(Theme.font(size: 12))
+                            .foregroundStyle(glyph.tint)
+                            // The dotted circle dissolves into the tick rather than
+                            // being replaced by it.
+                            .contentTransition(.symbolEffect(.replace))
+                            // One bounce, and only on the state worth marking. A
+                            // bounce on every transition would fire on `pending`
+                            // as the run resets and read as noise.
+                            .symbolEffect(.bounce, value: stepState == .done)
+                    }
                 }
-            }
-            .frame(width: 16)
+                .frame(width: 16)
 
-            Text(step.title)
-                .font(Theme.font(size: 12.5))
-                .foregroundStyle(stepState == .pending ? Theme.text3 : Theme.text)
-            Spacer(minLength: 8)
-            Text(state.stepMeta.indices.contains(index) ? state.stepMeta[index] : "")
-                .font(Theme.font(size: 11))
-                .foregroundStyle(Theme.text2)
-                // The meta arrives when the step ends ("3 screenshots", "2.1
-                // MB"), so it appears mid-run and shifted the row when it did.
-                .contentTransition(.opacity)
+                Text(step.title)
+                    .font(Theme.font(size: 12.5))
+                    .foregroundStyle(stepState == .pending ? Theme.text3 : Theme.text)
+                Spacer(minLength: 8)
+                Text(state.stepMeta[safe: index] ?? "")
+                    .font(Theme.font(size: 11))
+                    .foregroundStyle(Theme.text2)
+                    // The meta arrives when the step ends ("3 screenshots", "2.1
+                    // MB"), so it appears mid-run and shifted the row when it did.
+                    .contentTransition(.opacity)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+            // The row being worked on, marked behind the text. A list of twenty
+            // steps gave no answer to "which one is it on now" except the size of
+            // one spinner in a 16 point column.
+            .background(stepState == .running ? Theme.accent.opacity(0.07) : .clear)
+            .motion(.snappy(duration: 0.22), value: stepState)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 8)
-        // The row being worked on, marked behind the text. A list of twenty
-        // steps gave no answer to "which one is it on now" except the size of
-        // one spinner in a 16 point column.
-        .background(stepState == .running ? Theme.accent.opacity(0.07) : .clear)
-        .motion(.snappy(duration: 0.22), value: stepState)
     }
 
     /// The longest wait in the app. It needs a real bar, a clock, and a way
