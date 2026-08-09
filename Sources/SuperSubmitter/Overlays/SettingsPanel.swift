@@ -56,8 +56,8 @@ struct SettingsPanel: View {
                 Button { section = item } label: {
                     VStack(spacing: 3) {
                         Image(systemName: item.symbol)
-                            .font(.system(size: 16, weight: selected ? .semibold : .regular))
-                        Text(item.title).font(.system(size: 11.5,
+                            .font(Theme.font(size: 16, weight: selected ? .semibold : .regular))
+                        Text(item.title).font(Theme.font(size: 11.5,
                                                       weight: selected ? .semibold : .regular))
                     }
                     .foregroundStyle(selected ? Theme.accentText : Theme.text2)
@@ -102,7 +102,7 @@ struct SettingsPanel: View {
             SettingRow("Start over", symbol: "exclamationmark.octagon", alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Erase everything Super Submitter knows and return to the first-run screen.")
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .frame(width: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Note("This forgets every linked app, every key and password you entered, your account, and the archives, logs and settings Super Submitter wrote. It deletes no store.yaml anywhere, including the one a managed app keeps here. Your projects, your developer accounts, and everything already published are untouched.")
@@ -202,7 +202,7 @@ struct SettingsPanel: View {
             SettingRow("Build storage", symbol: "internaldrive", alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(state.buildStorageSummary)
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .frame(width: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Note("Archives and App Bundles are kept outside your repository. Deleting run data removes the logs and the temporary files. It never deletes a retained archive or a bundle, and it never touches your project.")
@@ -240,7 +240,7 @@ struct SettingsPanel: View {
             Hairline()
 
             Text("The App Store and Google Play keys live on the Stores tab, next to the connection that needs them.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -264,7 +264,7 @@ struct SettingsPanel: View {
             Note("The key is stored only in the macOS Keychain. It never reaches store.yaml.")
             Link("Create a RevenueCat account ↗",
                  destination: URL(string: "https://app.revenuecat.com/signup")!)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
         }
         .frame(width: Self.controlWidth, alignment: .leading)
     }
@@ -281,7 +281,7 @@ struct SettingsPanel: View {
             }
             Link("Create an Adapty account ↗",
                  destination: URL(string: "https://app.adapty.io/registration")!)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
         }
         .frame(width: Self.controlWidth, alignment: .leading)
     }
@@ -301,7 +301,7 @@ struct SettingsPanel: View {
                     Text(status.label)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(status.isConnected ? Theme.green : Theme.text2)
                 .frame(width: Self.controlWidth, alignment: .leading)
             }
@@ -374,13 +374,13 @@ private struct SettingRow<Content: View>: View {
         HStack(alignment: alignment, spacing: 14) {
             HStack(spacing: 7) {
                 Image(systemName: symbol)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(Theme.text3)
                     // A fixed column, or a wide glyph pushes its own label out
                     // of line with the one above it.
                     .frame(width: 16)
                 Text(label)
-                    .font(.system(size: 12.5))
+                    .font(Theme.font(size: 12.5))
                     .foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
@@ -414,7 +414,7 @@ private struct Check: View {
         VStack(alignment: .leading, spacing: 5) {
             Toggle(title, isOn: $isOn)
                 .toggleStyle(.checkbox)
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
             Note(note)
         }
         .frame(width: SettingsPanel.controlWidth, alignment: .leading)
@@ -428,7 +428,7 @@ private struct Note: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(Theme.font(size: 11))
             .foregroundStyle(Theme.text2)
             .lineSpacing(3)
             .frame(width: SettingsPanel.controlWidth, alignment: .leading)

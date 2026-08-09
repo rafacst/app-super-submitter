@@ -26,7 +26,7 @@ struct AppTagsPanel: View {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Apple derives these from what the app is, and they steer where the store shows it. You cannot add one, and nothing deletes one; you can take a wrong one off the product page and put it back.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch the tags") { load() }
@@ -36,11 +36,11 @@ struct AppTagsPanel: View {
                 if let error { ErrorLine(text: error) }
                 if loaded, tags.isEmpty {
                     Text("Apple has put no tag on this app.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 ForEach(tags) { tag in
                     HStack(spacing: 9) {
-                        Text(tag.name).font(.system(size: 12))
+                        Text(tag.name).font(Theme.font(size: 12))
                         if !tag.visibleInAppStore {
                             StatePill(text: "HIDDEN", foreground: Theme.text3,
                                       background: Theme.sunken)

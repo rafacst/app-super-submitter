@@ -56,16 +56,16 @@ struct PlanTab: View {
         HStack(spacing: 11) {
             Spinner()
             Text("Reading both stores. This writes nothing.")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(Theme.text2)
         }
     }
 
     private var notReadYet: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Nothing read yet.").font(.system(size: 15, weight: .semibold))
+            Text("Nothing read yet.").font(Theme.font(size: 15, weight: .semibold))
             Text("The plan reads every store and compares it to these tabs. It opens no Google edit, it creates no Apple resource, and it writes nothing.")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .frame(maxWidth: 520, alignment: .leading)
@@ -84,13 +84,13 @@ struct PlanTab: View {
                 Circle()
                     .fill(Theme.greenBg)
                     .frame(width: 26, height: 26)
-                    .overlay(Text("✓").font(.system(size: 13)).foregroundStyle(Theme.green))
+                    .overlay(Text("✓").font(Theme.font(size: 13)).foregroundStyle(Theme.green))
                 Text("Nothing to change.")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(Theme.font(size: 17, weight: .semibold))
                     .kerning(-0.17)
             }
             Text("Both stores match what these tabs hold. The last read ran at \(readTime). A second apply would write nothing.")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -100,11 +100,11 @@ struct PlanTab: View {
                     if index > 0 { Hairline(color: Theme.sep2) }
                     HStack(spacing: 12) {
                         Text(row.system)
-                            .font(.system(size: 12.5, weight: .medium))
+                            .font(Theme.font(size: 12.5, weight: .medium))
                             .frame(width: 110, alignment: .leading)
-                        Text(row.line).font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+                        Text(row.line).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2)
                         Spacer(minLength: 8)
-                        Text("In sync").font(.system(size: 11.5)).foregroundStyle(Theme.green)
+                        Text("In sync").font(Theme.font(size: 11.5)).foregroundStyle(Theme.green)
                     }
                     .padding(.horizontal, 15)
                     .padding(.vertical, 10)
@@ -120,7 +120,7 @@ struct PlanTab: View {
                 }
                 Button { state.selectedTab = .release } label: {
                     Text("Go to Release")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(Theme.font(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -200,7 +200,7 @@ struct PlanTab: View {
                 if index > 0 { Hairline(color: Theme.red.opacity(0.3)) }
                 HStack(alignment: .top, spacing: 9) {
                     Text(message)
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
@@ -239,7 +239,7 @@ struct PlanTab: View {
             // The apply row below already says where this ends. Saying it
             // twice on one screen is what made the page long.
             Text("Ends in a draft. Nothing reaches a customer.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .padding(.leading, 4)
             Spacer(minLength: 0)
@@ -252,13 +252,13 @@ struct PlanTab: View {
         return VStack(spacing: 0) {
             HStack(spacing: 9) {
                 Text(headline(plan))
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(Theme.font(size: 12.5, weight: .semibold))
                     .foregroundStyle(accent)
                 // Only the blocking case needs a sentence. Every warning row
                 // carries its own "Acknowledge", which says the rest.
                 if blocked {
                     Text("Fix the errors to unlock the apply.")
-                        .font(.system(size: 11.5))
+                        .font(Theme.font(size: 11.5))
                         .foregroundStyle(Theme.text2)
                 }
                 Spacer(minLength: 0)
@@ -310,9 +310,9 @@ struct PlanTab: View {
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 mark(for: system)
-                Text(name(for: system)).font(.system(size: 12.5, weight: .semibold))
+                Text(name(for: system)).font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 8)
-                Text(summary(steps)).font(.system(size: 11)).foregroundStyle(Theme.text2)
+                Text(summary(steps)).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
@@ -406,7 +406,7 @@ struct PlanTab: View {
                 .disabled(blocked)
 
                 Text(applyNote(plan))
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(Theme.text2)
                     .lineSpacing(3)
                     .frame(maxWidth: 520, alignment: .leading)
@@ -445,13 +445,13 @@ struct PlanTab: View {
                         .frame(maxWidth: 520, alignment: .leading)
                     }
                 }
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .padding(.top, 7)
             } label: {
                 // Verbatim, so the count keeps its digits in every locale.
                 Text(verbatim: "\(accepted.count) \(accepted.count == 1 ? "warning" : "warnings") acknowledged")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.text2)
                     .monospacedDigit()
                     .contentTransition(.numericText())
@@ -520,18 +520,18 @@ private struct StatCard: View {
                 .fill(badge)
                 .frame(width: 30, height: 30)
                 .overlay(Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.font(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.accentText))
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(Theme.font(size: 22, weight: .semibold))
                     .kerning(-0.44)
                     // Every read of the stores moves these, and proportional
                     // digits shuffled the words underneath when they moved.
                     .monospacedDigit()
                     .contentTransition(.numericText())
                 Text(detail.map { "\(label) · \($0)" } ?? label)
-                    .font(.system(size: 11))
+                    .font(Theme.font(size: 11))
                     .foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 0)
@@ -561,9 +561,9 @@ private struct ValidationRow: View {
                 .frame(width: 58, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 Text(finding.message)
-                    .font(.system(size: 12.5))
+                    .font(Theme.font(size: 12.5))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(finding.location).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(finding.location).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
             if !isError {
@@ -579,12 +579,12 @@ private struct ValidationRow: View {
                             .overlay(RoundedRectangle(cornerRadius: 3)
                                 .strokeBorder(Theme.sep, lineWidth: 1))
                             .overlay(Text(acked ? "✓" : "")
-                                .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
+                                .font(Theme.font(size: 8, weight: .bold)).foregroundStyle(.white))
                         // "Acknowledge", not "I accept this". The first person
                         // and the word "accept" read as a consent form, and
                         // this dismisses a warning. It is also the word the
                         // state already uses: `acknowledged`.
-                        Text("Acknowledge").font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        Text("Acknowledge").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     }
                     .contentShape(.rect)
                 }

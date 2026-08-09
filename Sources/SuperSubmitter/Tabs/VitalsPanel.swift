@@ -27,7 +27,7 @@ struct VitalsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Apple reports the power and performance of the attached build. Google reports the crash rate and the ANR rate of the last 28 days. Both are reads.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch the vitals") { load() }
@@ -36,12 +36,12 @@ struct VitalsPanel: View {
 
                 ForEach(failures, id: \.self) { failure in
                     Label(failure, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if loaded, apple.isEmpty, google.isEmpty, failures.isEmpty {
                     Text("Neither store reports a measurement yet. Both need a release that enough devices have run.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !apple.isEmpty { metricBlock(.apple, apple) }
@@ -62,10 +62,10 @@ struct VitalsPanel: View {
             StoreLabel(store: store, size: 12.5)
             ForEach(metrics) { metric in
                 HStack(spacing: 9) {
-                    Text(metric.name).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    Text(metric.name).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     Spacer(minLength: 8)
                     if let detail = metric.detail {
-                        Text(detail).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        Text(detail).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }
                     Text(metric.value).font(Theme.mono(11))
                 }
@@ -82,28 +82,28 @@ struct VitalsPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Refunds and chargebacks")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 8)
                 QuietButton(title: "Fetch the voided purchases") { loadVoided() }
                     .disabled(busy || state.googleActionPackage == nil)
             }
             Text("Super Submitter reads these and issues none. A refund moves money to a customer, so you do that in the Play Console.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             if let voidedError {
                 Label(voidedError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.orange)
             }
             ForEach(voided) { entry in
                 HStack(spacing: 9) {
                     Text(entry.orderId ?? entry.id).font(Theme.mono(10)).lineLimit(1)
                     Spacer(minLength: 8)
                     if let reason = entry.reason {
-                        Text(reason).font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        Text(reason).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                     }
                     if let date = entry.voidedAt {
                         Text(date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }
                 }
             }
@@ -122,9 +122,9 @@ struct VitalsPanel: View {
         Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
         VStack(alignment: .leading, spacing: 7) {
             Text("Look an order or a purchase up")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.font(size: 12, weight: .semibold))
             Text("Paste what the customer sent: an order id, several of them, or a purchase token. This reads. It issues no refund and it cancels nothing.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 TextField("GPA.1234-5678-9012-34567, or a purchase token",
@@ -142,32 +142,32 @@ struct VitalsPanel: View {
                 Spacer(minLength: 0)
             }
             Text("Leave the product id empty to read a token as a subscription. Fill it to read the token as a one-time purchase.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let lookupError { ErrorLine(text: lookupError) }
             if let lookup {
                 ForEach(lookup.notes, id: \.self) { note in
                     Label(note, systemImage: "info.circle")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if lookup.blocks.isEmpty, lookup.notes.isEmpty {
                     Text("Google answered nothing for that. Check the id, and check that it belongs to this app.")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(lookup.blocks) { block in
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(block.title).font(.system(size: 11.5, weight: .medium))
+                        Text(block.title).font(Theme.font(size: 11.5, weight: .medium))
                             .textSelection(.enabled)
                         ForEach(block.rows) { row in
                             HStack(alignment: .firstTextBaseline, spacing: 9) {
                                 Text(row.name)
-                                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                                 Spacer(minLength: 8)
                                 if let detail = row.detail {
-                                    Text(detail).font(.system(size: 10.5))
+                                    Text(detail).font(Theme.font(size: 10.5))
                                         .foregroundStyle(Theme.text3)
                                         .multilineTextAlignment(.trailing)
                                 }

@@ -38,8 +38,8 @@ struct ExistingAppImportSheet: View {
         HStack(spacing: 12) {
             IconChip(symbol: "arrow.triangle.2.circlepath", tint: Theme.teal, size: 34)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Update existing apps").font(.system(size: 17, weight: .semibold))
-                Text(stepLabel).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text("Update existing apps").font(Theme.font(size: 17, weight: .semibold))
+                Text(stepLabel).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer()
             HStack(spacing: 5) {
@@ -58,9 +58,9 @@ struct ExistingAppImportSheet: View {
     private var credentialsStep: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 7) {
-                Text("Connect the stores first").font(.system(size: 22, weight: .semibold))
+                Text("Connect the stores first").font(Theme.font(size: 22, weight: .semibold))
                 Text("You enter these once. The key covers every app in your developer account, and it goes to the macOS Keychain when the import starts.")
-                    .font(.system(size: 13)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
             }
             // The Stores tab layout, because this asks the Stores tab question:
             // each credential card in the column under the store it belongs to.
@@ -147,9 +147,9 @@ struct ExistingAppImportSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Choose the apps to update").font(.system(size: 22, weight: .semibold))
+                    Text("Choose the apps to update").font(Theme.font(size: 22, weight: .semibold))
                     Text("Select as many apps as you want. Matching Apple and Google identifiers become one workspace.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
                 }
                 Spacer()
                 Button("Select all") { model.selection.selectAll(model.candidates) }
@@ -158,9 +158,9 @@ struct ExistingAppImportSheet: View {
 
             if model.stores.contains(.google) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Google Play package names").font(.system(size: 13, weight: .semibold))
+                    Text("Google Play package names").font(Theme.font(size: 13, weight: .semibold))
                     Text("Apps are listed through the Play Developer Reporting API. You can also paste package names when that API is not enabled; each is permission-checked before import.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     HStack(alignment: .top) {
                         TextField("company.product, company.otherproduct", text: $model.googlePackages,
                                   axis: .vertical)
@@ -180,7 +180,7 @@ struct ExistingAppImportSheet: View {
                     Image(systemName: "photo.badge.exclamationmark")
                         .foregroundStyle(Theme.text3)
                     Text(note)
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -207,9 +207,9 @@ struct ExistingAppImportSheet: View {
     private var importingStep: some View {
         VStack(spacing: 18) {
             ProgressView().controlSize(.large)
-            Text("Importing current store data…").font(.system(size: 18, weight: .semibold))
+            Text("Importing current store data…").font(Theme.font(size: 18, weight: .semibold))
             Text("Super Submitter is creating local workspaces, downloading available listing metadata, and saving the credentials in the Keychain.")
-                .font(.system(size: 13)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center).frame(maxWidth: 520)
             errorView
         }
@@ -219,9 +219,9 @@ struct ExistingAppImportSheet: View {
     private var completeStep: some View {
         VStack(alignment: .leading, spacing: 26) {
             Label(completeTitle, systemImage: "checkmark.circle.fill")
-                .font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.green)
+                .font(Theme.font(size: 22, weight: .semibold)).foregroundStyle(Theme.green)
             Text(completeDetail)
-                .font(.system(size: 13)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 16)], spacing: 24) {
                 ForEach(Array(model.selectedCandidates.enumerated()), id: \.element.id) { index, candidate in
                     ImportedMark(candidate: candidate, icon: model.icons[candidate.id],
@@ -284,7 +284,7 @@ struct ExistingAppImportSheet: View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "info.circle.fill").foregroundStyle(Theme.teal)
             Text("Apple lists apps through App Store Connect. Google lists them through the Play Developer Reporting API; package-name entry remains available as a fallback.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
         }
         .padding(12).background(Theme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
     }
@@ -292,7 +292,7 @@ struct ExistingAppImportSheet: View {
     @ViewBuilder private var errorView: some View {
         if let error = model.error {
             Label(error, systemImage: "exclamationmark.triangle.fill")
-                .font(.system(size: 12)).foregroundStyle(Theme.red)
+                .font(Theme.font(size: 12)).foregroundStyle(Theme.red)
         }
     }
 
@@ -348,7 +348,7 @@ struct ExistingAppImportSheet: View {
             HStack(spacing: 8) {
                 StoreLabel(store: store, size: 12.5)
                 Text("\(apps.count)")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.font(size: 11, weight: .medium))
                     .foregroundStyle(Theme.text2)
                     .padding(.horizontal, 6).padding(.vertical, 1)
                     .background(Theme.sunken, in: Capsule())
@@ -436,7 +436,7 @@ private struct ImportedMark: View {
             .frame(width: 72, height: 72)
 
             Text(candidate.name)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(Theme.font(size: 11.5, weight: .medium))
                 .foregroundStyle(Theme.text2)
                 .lineLimit(1).truncationMode(.tail)
                 .frame(maxWidth: 104)
@@ -461,7 +461,7 @@ private struct CandidateTile: View {
                 mark
                 VStack(spacing: 2) {
                     Text(candidate.name)
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(Theme.font(size: 11.5, weight: .medium))
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .frame(height: 28, alignment: .top)
@@ -475,7 +475,7 @@ private struct CandidateTile: View {
                     // already looks unlike its neighbours here. This says why.
                     if let label = candidate.platformLabel {
                         Text(label)
-                            .font(.system(size: 9, weight: .medium))
+                            .font(Theme.font(size: 9, weight: .medium))
                             .foregroundStyle(Theme.text2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(Theme.sunken, in: Capsule())
@@ -513,7 +513,7 @@ private struct CandidateTile: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
         .overlay(alignment: .topTrailing) {
             Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 15))
+                .font(Theme.font(size: 15))
                 .foregroundStyle(selected ? Theme.teal : Theme.text3)
                 .background(Circle().fill(Theme.content).padding(1.5))
                 .offset(x: 6, y: -6)

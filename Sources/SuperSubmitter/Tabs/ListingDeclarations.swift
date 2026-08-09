@@ -65,7 +65,7 @@ struct ListingDeclarations: View {
                 .rowChip()
                 VStack(alignment: .leading, spacing: 9) {
                     Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                     // The toggle above is what creates the need for this, so
                     // the paperwork appears with the answer that owes it and
                     // stays out of the way of every app that does not.
@@ -116,7 +116,7 @@ private struct ExportCompliance: View {
         VStack(alignment: .leading, spacing: 8) {
             if state.hasEncryptionDeclaration {
                 HStack {
-                    Text("Export compliance").font(.system(size: 11.5, weight: .semibold))
+                    Text("Export compliance").font(Theme.font(size: 11.5, weight: .semibold))
                     Spacer(minLength: 8)
                     Button(role: .destructive) { state.removeEncryptionDeclaration() } label: {
                         Image(systemName: "trash")
@@ -125,7 +125,7 @@ private struct ExportCompliance: View {
                 }
                 ForEach(AppState.EncryptionFlag.allCases, id: \.self) { flag in
                     Toggle(flag.label, isOn: state.encryptionFlagBinding(flag))
-                        .font(.system(size: 11.5))
+                        .font(Theme.font(size: 11.5))
                 }
                 LabeledField("Regulator code", note: "when Apple has issued one") {
                     TextField("", text: state.encryptionTextBinding(.codeValue))
@@ -141,11 +141,11 @@ private struct ExportCompliance: View {
                     }
                 }
                 Text("The run creates the declaration in the review state and uploads the document with it.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("An app that uses non-exempt encryption and claims no exemption also owes Apple this declaration.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Add the export declaration") { state.addEncryptionDeclaration() }
                     .controlSize(.small)
@@ -189,14 +189,14 @@ struct ConsoleStepsPanel: View {
                 if rows.isEmpty {
                     HStack {
                         Text("Read the stores on the Summary tab to fill this list.")
-                            .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                            .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                         Spacer()
                     }
                     .padding(.horizontal, 14).padding(.vertical, 11)
                 } else {
                     HStack(spacing: 8) {
                         Text(verbatim: "The \(rows.count) of the \(state.consoleRows.count) console steps that belong to the listing.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         Spacer(minLength: 8)
                         QuietButton(title: "See them all") { state.selectedTab = .release }
                     }
@@ -229,7 +229,7 @@ private struct ConsoleChecklistRow: View {
                         .overlay(RoundedRectangle(cornerRadius: 3)
                             .strokeBorder(Theme.sep, lineWidth: 1))
                         .overlay(Text(marked ? "✓" : "")
-                            .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
+                            .font(Theme.font(size: 8, weight: .bold)).foregroundStyle(.white))
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -240,14 +240,14 @@ private struct ConsoleChecklistRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).font(.system(size: 12.5, weight: .medium))
-                Text(row.reason).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(row.title).font(Theme.font(size: 12.5, weight: .medium))
+                Text(row.reason).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
             StatePill(text: shown.label, foreground: ReleaseTab.color(shown),
                       background: ReleaseTab.background(shown))
             Button { state.open(row.link) } label: {
-                Text("Open ↗").font(.system(size: 11.5)).foregroundStyle(Theme.accent)
+                Text("Open ↗").font(Theme.font(size: 11.5)).foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
         }
@@ -262,8 +262,8 @@ private struct ActionRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 12.5, weight: .medium))
-                Text(detail).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(title).font(Theme.font(size: 12.5, weight: .medium))
+                Text(detail).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer()
             Button("Review", action: action)
@@ -283,7 +283,7 @@ private struct AgeRatingSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Age rating").font(.title2.weight(.semibold))
+            Text("Age rating").font(Theme.font(size: 17, weight: .semibold))
             if state.ageRatingFields.isEmpty {
                 Text("Read the stores to load the questionnaire. Apple owns these fields, so the app asks App Store Connect for them instead of keeping its own list.")
                     .foregroundStyle(Theme.text2)
@@ -324,7 +324,7 @@ private struct AgeRatingRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(field.key)
-                .font(.system(size: 11.5, design: .monospaced))
+                .font(Theme.font(size: 11.5, design: .monospaced))
                 .frame(width: 250, alignment: .leading)
             switch field.held {
             case .flag:
@@ -335,9 +335,9 @@ private struct AgeRatingRow: View {
                     .frame(width: 170)
             }
             if field.changed {
-                Text("changed").font(.system(size: 10)).foregroundStyle(Theme.yellow)
+                Text("changed").font(Theme.font(size: 10)).foregroundStyle(Theme.yellow)
             } else {
-                Text("keeps").font(.system(size: 10)).foregroundStyle(Theme.text3)
+                Text("keeps").font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
             }
             Spacer(minLength: 0)
         }
@@ -356,14 +356,14 @@ private struct DataSafetySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Google data safety").font(.title2.weight(.semibold))
+            Text("Google data safety").font(Theme.font(size: 17, weight: .semibold))
             Text("Export the current CSV from Play Console and select it here. The file is sent unchanged, because Google owns its columns and its question ids. Without the file, nothing is written and Play Console keeps the declaration it has.")
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             TextField("Data safety CSV path", text: state.reviewMetadataBinding("dataSafetyCSV"))
             if !state.staleDataSafetyAnswers.isEmpty {
                 Text("This manifest carries \(state.staleDataSafetyAnswers.count) older answers that used question ids Google does not publish. They are never sent.")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.yellow)
                     .fixedSize(horizontal: false, vertical: true)
                 QuietButton(title: "Remove them") { state.removeDataSafetyAnswers() }

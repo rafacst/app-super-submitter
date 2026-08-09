@@ -24,7 +24,7 @@ struct StoreDiagnosticsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Inspect generated artifacts and store reference data without changing a draft.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     Spacer()
                     QuietButton(title: loading ? "Fetching…" : "Fetch diagnostics") { load() }
                         .disabled(loading)
@@ -32,7 +32,7 @@ struct StoreDiagnosticsPanel: View {
 
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.orange)
                 } else if loaded {
                     diagnosticsGrid
                     if !apks.isEmpty { generatedApks }
@@ -58,7 +58,7 @@ struct StoreDiagnosticsPanel: View {
             diagnosticRow("App Store territories", value: territories.count)
             diagnosticRow("App Store categories", value: categories.count)
         }
-        .font(.system(size: 12))
+        .font(Theme.font(size: 12))
     }
 
     private func diagnosticRow(_ label: String, value: Int) -> some View {
@@ -70,7 +70,7 @@ struct StoreDiagnosticsPanel: View {
 
     private var generatedApks: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Google generated APKs").font(.system(size: 12, weight: .semibold))
+            Text("Google generated APKs").font(Theme.font(size: 12, weight: .semibold))
             ForEach(apks) { apk in
                 HStack {
                     Text(apk.kind).frame(width: 80, alignment: .leading)
@@ -78,14 +78,14 @@ struct StoreDiagnosticsPanel: View {
                     Spacer()
                     Button("Download") { download(apk) }.controlSize(.small)
                 }
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
             }
         }
     }
 
     private var buildBundles: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Apple build contents").font(.system(size: 12, weight: .semibold))
+            Text("Apple build contents").font(Theme.font(size: 12, weight: .semibold))
             ForEach(bundles) { bundle in
                 HStack {
                     Text(bundle.name ?? bundle.id).textSelection(.enabled)
@@ -96,7 +96,7 @@ struct StoreDiagnosticsPanel: View {
                             .foregroundStyle(Theme.text2)
                     }
                 }
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
             }
         }
     }
@@ -104,7 +104,7 @@ struct StoreDiagnosticsPanel: View {
     private var deviceTiers: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text("Google device tier configurations")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.font(size: 12, weight: .semibold))
             ForEach(Array(tiers.enumerated()), id: \.element.id) { position, tier in
                 HStack(spacing: 8) {
                     Text("\(tier.id) · \(tier.groupCount) groups")
@@ -112,7 +112,7 @@ struct StoreDiagnosticsPanel: View {
                     // Google orders them newest first, and the newest is the
                     // one in force.
                     if position == 0 {
-                        Text("in force").font(.system(size: 10))
+                        Text("in force").font(Theme.font(size: 10))
                             .foregroundStyle(Theme.text3)
                     }
                 }
@@ -124,7 +124,7 @@ struct StoreDiagnosticsPanel: View {
                 Text(tierMatch
                     ? "Your file matches the one in force. The next apply creates nothing."
                     : "Your file differs from the one in force. The next apply creates a new configuration, and Google assigns its id.")
-                    .font(.system(size: 11)).foregroundStyle(tierMatch ? Theme.text3 : Theme.yellow)
+                    .font(Theme.font(size: 11)).foregroundStyle(tierMatch ? Theme.text3 : Theme.yellow)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -132,10 +132,10 @@ struct StoreDiagnosticsPanel: View {
 
     private var buildIcons: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Apple build icons").font(.system(size: 12, weight: .semibold))
+            Text("Apple build icons").font(Theme.font(size: 12, weight: .semibold))
             ForEach(icons, id: \.self) { value in
                 if let url = URL(string: value) {
-                    Link(value, destination: url).font(.system(size: 11))
+                    Link(value, destination: url).font(Theme.font(size: 11))
                 } else {
                     Text(value).font(Theme.mono(11)).textSelection(.enabled)
                 }
@@ -148,14 +148,14 @@ struct StoreDiagnosticsPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if !territories.isEmpty {
-                        Text("Territories").font(.system(size: 11.5, weight: .semibold))
+                        Text("Territories").font(Theme.font(size: 11.5, weight: .semibold))
                         Text(territories.map { territory in
                             territory.currency.map { "\(territory.id) (\($0))" } ?? territory.id
                         }.joined(separator: ", "))
                         .font(Theme.mono(10.5)).textSelection(.enabled)
                     }
                     if !categories.isEmpty {
-                        Text("Categories").font(.system(size: 11.5, weight: .semibold))
+                        Text("Categories").font(Theme.font(size: 11.5, weight: .semibold))
                         Text(categories.map(\.id).joined(separator: ", "))
                             .font(Theme.mono(10.5)).textSelection(.enabled)
                     }
@@ -164,7 +164,7 @@ struct StoreDiagnosticsPanel: View {
             }
             .frame(maxHeight: 150)
         }
-        .font(.system(size: 11.5))
+        .font(Theme.font(size: 11.5))
     }
 
     private func load() {

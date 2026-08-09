@@ -64,7 +64,7 @@ private struct ManagingEmptyState: View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: "info.circle.fill").foregroundStyle(Theme.teal)
             Text(line)
-                .font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

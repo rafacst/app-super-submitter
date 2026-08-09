@@ -38,7 +38,7 @@ struct TestFlightSection: View {
     private var empty: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Nothing goes to a tester until this block exists. An external group invites real addresses, so the plan shows every invitation before the run sends one.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Set up TestFlight") { state.addTestFlight() }.controlSize(.small)
         }
@@ -50,10 +50,10 @@ struct TestFlightSection: View {
     private var groups: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("Groups").font(.system(size: 12, weight: .semibold))
+                Text("Groups").font(Theme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 8)
                 Button(role: .destructive) { state.removeTestFlight() } label: {
-                    Text("Remove TestFlight").font(.system(size: 11))
+                    Text("Remove TestFlight").font(Theme.font(size: 11))
                 }
                 .controlSize(.small)
             }
@@ -90,9 +90,9 @@ struct TestFlightSection: View {
                        isOn: state.betaGroupFlagBinding(index: index, flag: .automaticBuilds))
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 11.5))
+            .font(Theme.font(size: 11.5))
             Text("Apple emails each address the first time it appears here. The plan counts the new ones, so a second apply invites nobody twice.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(9)
@@ -111,13 +111,13 @@ struct TestFlightSection: View {
                     .lineLimit(2...8)
             }
             Text("Apple keys this to the build, so every upload carries it again.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
         }
     }
 
     private var page: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TestFlight page").font(.system(size: 12, weight: .semibold))
+            Text("TestFlight page").font(Theme.font(size: 12, weight: .semibold))
                 .fieldAnchor("build.testFlightPage")
             LabeledField("Description", note: state.locale) {
                 TextField("", text: state.testFlightPageBinding(locale: state.locale,
@@ -141,7 +141,7 @@ struct TestFlightSection: View {
                 }
             }
             Text("This belongs to the app, not to one build, so it survives every upload.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
         }
     }
 
@@ -152,15 +152,15 @@ struct TestFlightSection: View {
     /// surely as a missing build does.
     private var licence: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("Beta licence agreement").font(.system(size: 12, weight: .semibold))
+            Text("Beta licence agreement").font(Theme.font(size: 12, weight: .semibold))
                 .fieldAnchor("build.betaLicence")
             TextEditor(text: state.betaLicenseAgreementBinding)
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .frame(height: 90)
                 .scrollContentBackground(.hidden)
                 .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
             Text("Leave it empty and Apple's own standard licence stays. Every external tester accepts whatever is here before they install the build.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -182,9 +182,9 @@ struct TestFlightSection: View {
                 Spacer(minLength: 0)
             }
             Text("An external group cannot receive a build until Apple has reviewed it. The plan shows this row before the run performs it.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .font(.system(size: 12))
+        .font(Theme.font(size: 12))
     }
 }

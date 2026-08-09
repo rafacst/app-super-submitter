@@ -72,16 +72,16 @@ private struct StoreSelectionCard: View {
                     .background(store.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
                 VStack(alignment: .leading, spacing: 5) {
                     Text(store.storeName)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(Theme.font(size: 17, weight: .semibold))
                     Text(store.selectionDescription)
-                        .font(.system(size: 12.5))
+                        .font(Theme.font(size: 12.5))
                         .foregroundStyle(Theme.text2)
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21, weight: .medium))
+                    .font(Theme.font(size: 21, weight: .medium))
                     .foregroundStyle(selected ? Theme.accent : Theme.text3)
             }
             .padding(.horizontal, 18)

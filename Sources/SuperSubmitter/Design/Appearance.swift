@@ -101,7 +101,7 @@ struct AppearanceSwitch: View {
                     .fill(.white)
                     .frame(width: 16, height: 16)
                     .overlay(Image(systemName: isDark ? "moon.fill" : "sun.max.fill")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(Theme.font(size: 9, weight: .bold))
                         // Both glyphs resolve in the appearance they name, so
                         // the sun is only ever the light-mode amber and the
                         // moon only ever the dark-mode blue. Each clears 3 to 1

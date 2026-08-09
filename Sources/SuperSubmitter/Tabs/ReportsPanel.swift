@@ -62,7 +62,7 @@ struct ReportsPanel: View {
     @ViewBuilder private var analytics: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Apple produces an analytics report only after you ask for a feed. The first report appears a day or two later, which is a state and not a fault.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             QuietButton(title: busy ? "Fetching…" : "Fetch the feeds") { load() }
@@ -73,7 +73,7 @@ struct ReportsPanel: View {
         if loaded, feeds.isEmpty {
             HStack(alignment: .firstTextBaseline) {
                 Text("This app has no report feed.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 Spacer(minLength: 8)
                 Button("Start a report feed") { confirmingRequest = true }
                     .controlSize(.small)
@@ -87,7 +87,7 @@ struct ReportsPanel: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 9) {
                 Text(feed.accessType == "ONGOING" ? "Ongoing" : "One snapshot")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Theme.font(size: 12, weight: .medium))
                 if feed.stoppedDueToInactivity {
                     StatePill(text: "STOPPED", foreground: Theme.orange,
                               background: Theme.sunken)
@@ -99,16 +99,16 @@ struct ReportsPanel: View {
             }
             if feed.stoppedDueToInactivity {
                 Text("Apple stopped this feed because nothing read it. Start a new one to resume.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(reports[feed.id] ?? []) { report in
                 HStack(spacing: 8) {
-                    Text(report.name).font(.system(size: 11)).foregroundStyle(Theme.text2)
+                    Text(report.name).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                     Spacer(minLength: 8)
                     if let category = report.category {
                         Text(AppleWords.title(category))
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }
                 }
             }
@@ -122,9 +122,9 @@ struct ReportsPanel: View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 8) {
             Text("Sales")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.font(size: 12, weight: .semibold))
             Text("The vendor number is on the Payments and Financial Reports page of App Store Connect. It belongs to the account and not to the app, so it stays out of store.yaml.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 TextField("Vendor number", text: $state.appleVendorNumber)
@@ -144,7 +144,7 @@ struct ReportsPanel: View {
             }
             if let salesNote {
                 Text(salesNote)
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !salesRows.isEmpty { table(salesRows) }
@@ -158,9 +158,9 @@ struct ReportsPanel: View {
     /// and only for a month Apple has closed.
     @ViewBuilder private var finance: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Finance").font(.system(size: 12, weight: .semibold))
+            Text("Finance").font(Theme.font(size: 12, weight: .semibold))
             Text("The same vendor number as the sales report above. A finance report is monthly, and Apple closes a month a few weeks after it ends, so the newest one is usually two months back.")
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 TextField("YYYY-MM", text: $financeMonth)
@@ -182,11 +182,11 @@ struct ReportsPanel: View {
                 Spacer(minLength: 0)
             }
             Text("ZZ is the one region code that consolidates every region into a single report. A three-letter code, for example USA, gives that region on its own.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             if let financeNote {
                 Text(financeNote)
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !financeRows.isEmpty { table(financeRows) }
