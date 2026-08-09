@@ -67,12 +67,12 @@ private func freshState(account: String) -> AppState {
 /// The sidebar has said for a while that these two work with no app. The rows
 /// were greyed anyway, so the one screen that can undo a credential was shut
 /// exactly when a developer went looking for it.
-@Test func theFooterTabsWorkWithNoAppLinked() {
+@Test func theStandAloneTabsWorkWithNoAppLinked() {
     #expect(Tab.stores.standsAlone)
     #expect(Tab.account.standsAlone)
-    // As a set: `footer` is in the order the sidebar draws them, and
-    // `allCases` is in the order of the work.
-    #expect(Set(Tab.allCases.filter(\.standsAlone)) == Set(Tab.footer))
+    // These two and no others. The sidebar draws them outside the work column,
+    // so a third one added here would go missing rather than show up twice.
+    #expect(Set(Tab.allCases.filter(\.standsAlone)) == [.stores, .account])
     // Everything else edits or reads one app.
     #expect(!Tab.build.standsAlone)
     #expect(!Tab.details.standsAlone)

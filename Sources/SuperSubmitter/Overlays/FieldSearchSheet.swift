@@ -136,7 +136,7 @@ struct FieldSearchSheet: View {
         // you can press.
         Button { open(entry) } label: {
             HStack(spacing: 9) {
-                Image(systemName: entry.tab.symbol(selected: false))
+                Image(systemName: entry.tab.symbol)
                     .font(.system(size: 12))
                     .foregroundStyle(selected ? Theme.accent : Theme.text3)
                     .frame(width: 17)

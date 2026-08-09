@@ -6,9 +6,11 @@ import Testing
 
 /// A misspelled symbol name draws nothing and says nothing. The sidebar would
 /// then show a row with no icon, so every name is resolved here instead.
-@Test func everyTabSymbolResolvesInBothStates() {
-    let names = Tab.allCases.flatMap { [$0.symbol(selected: false), $0.symbol(selected: true)] }
-        + ["gearshape.2", "gearshape.2.fill"]
+@Test func everyTabSymbolResolves() {
+    // The tabs, plus the three glyphs the sidebar writes as literals: the app
+    // switcher with no app open, and the account control.
+    let names = Tab.allCases.map(\.symbol)
+        + ["square.stack.3d.up", "person.crop.circle", "checkmark"]
     for name in names {
         #expect(NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil,
                 "The symbol \(name) is not available.")
@@ -29,6 +31,63 @@ import Testing
     // Nothing writes to a store before the tab that shows the diff.
     #expect(Tab.tabs(in: .publishing).firstIndex(of: .plan)!
         < Tab.tabs(in: .publishing).firstIndex(of: .release)!)
+}
+
+/// The shape of the sidebar, which is the shape of the app.
+///
+/// The rows used to be split across a Publishing and Managing switch that sat
+/// above the column: half the destinations existed at a time, and the control
+/// that hid the other half named neither. Every row is in the list now, in a
+/// section that says which job it belongs to.
+@Test func theSidebarListsEveryDestinationInItsSection() {
+    #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
+        == ["Stores", "Build", "Details", "Media", "Monetization", "Review info"])
+    #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
+        == ["Summary", "Release"])
+    #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
+        == ["Live listing", "Live media", "Marketing", "Live app"])
+
+    // Publish and Send are the manifest against the stores: everything that
+    // only edits `store.yaml`, then the two screens that talk to a store.
+    #expect(Destination.rows(in: .publish, hasApp: true).allSatisfy { $0.tab.zone == .edits })
+    #expect(Destination.rows(in: .send, hasApp: true).allSatisfy { $0.tab.zone != .edits })
+
+    // Nothing was lost with the switch. Account is the one tab off the list,
+    // and the control at the foot of the sidebar opens it.
+    let listed = Set(Destination.all(hasApp: true).map(\.tab))
+    #expect(Set(Tab.allCases).subtracting(listed) == [.account])
+    // One key for the whole account, so Stores is listed once.
+    #expect(Destination.all(hasApp: true).filter { $0.tab == .stores }.count == 1)
+}
+
+/// With no app linked there is nothing to edit, and a row that edits nothing
+/// used to show greyed. Stores survives, because it holds the keys the rest
+/// waits on and because "Forget" is the only way to remove one on purpose.
+@Test func anEmptyWindowKeepsStoresAndNothingElse() {
+    #expect(Destination.all(hasApp: false).map(\.title) == ["Stores"])
+    #expect(Destination.rows(in: .send, hasApp: false).isEmpty)
+    #expect(Destination.rows(in: .manage, hasApp: false).isEmpty)
+}
+
+/// The sidebar's selection is `mode` and `selectedTab`, and nothing else.
+///
+/// Both have a `didSet` that moves the other: choosing a tab of the other mode
+/// switches the mode, and switching the mode moves off a tab it does not hold.
+/// Writing them in the wrong order lands the user on a row they did not pick,
+/// so every row is round-tripped here.
+@MainActor
+@Test func everySidebarRowSelectsItselfAndStaysThere() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+
+    for destination in Destination.all(hasApp: true) {
+        // The order the sidebar's binding writes them in.
+        state.mode = destination.mode
+        state.selectedTab = destination.tab
+
+        #expect(Destination(tab: state.selectedTab, mode: state.mode) == destination,
+                "\(destination.title) selected \(state.selectedTab.title(in: state.mode))")
+    }
 }
 
 /// The two modes describe two jobs. A publisher never wants a crash rate on
@@ -117,11 +176,12 @@ import Testing
     #expect(state.moneyError == nil)
 }
 
-/// The sidebar pins these two under the work and draws every other tab above
-/// them. A tab added to `footer` and not to a mode, or the other way round,
-/// leaves a row the sidebar draws twice or not at all.
-@Test func theFooterTabsBelongToEveryMode() {
-    for tab in Tab.footer {
+/// The sidebar draws these outside the work column, at a fixed place that does
+/// not depend on the mode: Stores at the head, Account in the group about this
+/// program. One that belonged to a single mode would keep its place in the
+/// other one and open a tab that mode does not hold.
+@Test func theStandAloneTabsBelongToEveryMode() {
+    for tab in Tab.allCases.filter(\.standsAlone) {
         #expect(tab.modes == Set(Mode.allCases), "\(tab.title) is missing from a mode.")
     }
 }

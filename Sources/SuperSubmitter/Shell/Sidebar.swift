@@ -1,380 +1,306 @@
 import SubmitKit
 import SwiftUI
 
-/// The sidebar. 240 points, the Apps list on top, the nine tabs below, and
-/// Settings at the foot.
+/// The sidebar: an app switcher, a `List` of destinations in sections, and an
+/// account control at the foot.
+///
+/// It was a hand-built column — a `VStack` of custom buttons, each drawing its
+/// own selected band, inside a floating panel with the window buttons nudged
+/// in by hand. Every part of that had a system equivalent that already
+/// behaves the way a Mac user expects, so this is a `List` in its sidebar
+/// style inside a `NavigationSplitView`, and the system draws the selection,
+/// the section headers, the vibrancy, the row metrics, the divider, and the
+/// collapse.
+///
+/// Three controls went with it, each because it was a navigation system
+/// competing with this one:
+///
+/// - The Publishing and Managing switch decided which rows existed, so half
+///   the app lived behind a control that named neither half. The rows are all
+///   here now, under `SidebarSection`.
+/// - Settings and About were rows of the work that changed nothing about an
+///   app. They are in the app menu, where every Mac keeps them, at ⌘, and
+///   under About Super Submitter.
+/// - "Saved to store.yaml" was a status line at the bottom of a navigation
+///   column. It is a save confirmation in the content header now, and Show
+///   store.yaml in Finder is in the File menu.
 struct Sidebar: View {
     @Environment(AppState.self) private var state
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // The traffic lights are drawn over the top of this panel. This
-            // row is the space they need, so the Apps header clears them.
-            Color.clear.frame(height: 42)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Apps")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .kerning(0.5)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Theme.text3)
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-                    .padding(.bottom, 6)
-
-                // No "No apps linked" row. The Add app row below is already
-                // the whole story when the list is empty.
-                ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
-                    Button {
-                        state.selectApp(at: index)
-                    } label: {
-                        AppRow(app: app, selected: index == state.selectedAppIndex)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Update from the stores…") {
-                            state.showExistingAppImport = true
-                        }
-                        Button("Remove from Super Submitter…", role: .destructive) {
-                            state.askToRemoveApp(at: index)
-                        }
-                    }
-                    .accessibilityLabel(app.name)
-                    .accessibilityValue(app.storeSummary)
-                    .accessibilityAddTraits(index == state.selectedAppIndex ? .isSelected : [])
-                }
-                // The entry screen, not a folder picker. "Add app" is the
-                // question "what do I want to do", and the entry screen is
-                // where that question is already answered three ways.
-                Button { state.showEntryScreen = true } label: { NewAppRow() }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Add app")
-            }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 10)
-
-            Hairline().padding(.horizontal, 12).padding(.bottom, 8)
-
-            ModeSwitch().padding(.horizontal, 8).padding(.bottom, 10)
-
-            VStack(alignment: .leading, spacing: 1) {
-                // Every one of these edits an app, so with no app open there
-                // is nothing for them to edit. They used to show greyed, which
-                // reads as nine places you have not earned yet rather than
-                // nine places that do not apply. Stores and Settings stay:
-                // one key covers the whole account, so both work with no app.
-                if !state.hasNoOpenApp {
-                    ForEach(Tab.tabs(in: state.mode)
-                        .filter { !Tab.footer.contains($0) }) { tab in
-                        // A rule before tab 7 and before tab 9. It marks where
-                        // the app stops editing a file and starts touching a
-                        // store.
-                        if tab.startsZone {
-                            Color.clear.frame(height: 6)
-                            Hairline().padding(.horizontal, 8)
-                            Color.clear.frame(height: 6)
-                        }
-                        TabRow(tab: tab)
-                    }
-                    Color.clear.frame(height: 6)
-                }
-                SettingsRow()
-            }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 12)
-
-            Spacer(minLength: 0)
-
-            // Account and Stores sit at the foot and not at the head of the
-            // work. One account and one set of credentials cover every app, so
-            // the two answer "who am I" and "which stores" once and then stay
-            // out of the way. The steps above them are the ones a release
-            // actually walks through.
-            //
-            // About sits under both, in the quiet weight the Settings row
-            // uses. It is the only row here that opens no tab.
-            VStack(alignment: .leading, spacing: 1) {
-                ForEach(Tab.footer) { TabRow(tab: $0) }
-                AboutRow()
-            }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
-
-            if state.manifestURL != nil {
-                Hairline().padding(.horizontal, 12)
-                SavedChip()
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-            }
-        }
-        .frame(width: Theme.sidebarWidth)
-        .frame(maxHeight: .infinity)
-        // No fill of its own. The sidebar is the window surface, and the
-        // content panel is the thing that floats on it.
-    }
-}
-
-private struct AppRow: View {
-    let app: AppSummary
-    let selected: Bool
-
-    var body: some View {
-        HStack(spacing: 9) {
-            AppIconBadge(icon: app.icon, initials: app.initials, size: 26)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(app.name)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .lineLimit(1)
-                HStack(spacing: 5) {
-                    if let apple = app.apple { HealthChip(store: .apple, health: apple) }
-                    if let google = app.google { HealthChip(store: .google, health: google) }
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(selected ? Theme.sep2 : .clear, in: RoundedRectangle(cornerRadius: 6))
-        .contentShape(.rect)
-    }
-}
-
-private struct NewAppRow: View {
-    var body: some View {
-        HStack(spacing: 9) {
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.sep, style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
-                .frame(width: 26, height: 26)
-                .overlay(Image(systemName: "folder.badge.plus")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3))
-            Text("Add app").font(.system(size: 12.5))
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(Theme.text2)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .contentShape(.rect)
-    }
-}
-
-private struct TabRow: View {
-    @Environment(AppState.self) private var state
-    let tab: Tab
-
-    private var selected: Bool { state.selectedTab == tab }
-
-    /// Quiet until you are standing on it.
+    /// The selection, as the two properties that already hold it.
     ///
-    /// Release keeps its red at all times. The warning is the whole point, and
-    /// a warning you only see once you have arrived is not a warning.
-    private var iconColour: Color {
-        if tab == .release { return Theme.red }
-        return selected ? tab.tint : Theme.text2
+    /// No new state. `selectedTab` and `mode` are the app's own navigation and
+    /// they are what the rest of the shell reads, so the list writes them.
+    /// The mode goes first: `selectedTab` moves itself into the mode that owns
+    /// it, and setting the mode first means that rule never has to fire.
+    private var selection: Binding<Destination?> {
+        Binding(get: { [state] in Destination(tab: state.selectedTab, mode: state.mode) },
+                set: { [state] destination in
+                    guard let destination else { return }
+                    state.mode = destination.mode
+                    state.selectedTab = destination.tab
+                })
     }
 
     var body: some View {
-        Button {
-            state.selectedTab = tab
+        // The `List` is the column, and nothing wraps it and nothing insets it.
+        //
+        // Both of the obvious ways to pin a header and a footer to a sidebar
+        // break this one, and each breaks it the same way: the column draws
+        // nothing at all — not a row, not a plain `Text` put first as a probe —
+        // and the detail pane loses its header off the top of the window. A
+        // `VStack` around the list does it. A `safeAreaInset` on the list does
+        // it too, with any content and any menu style. Both were tried and
+        // photographed. `NavigationSplitView` gives its sidebar column to a
+        // list and to nothing else.
+        //
+        // So the two ends are rows. They scroll with the destinations, which
+        // is the one thing lost, and there are eleven rows at most.
+        List(selection: selection) {
+            // Neither end carries a tag, so neither is selectable: the
+            // selection means "the destination you are on", and the app you
+            // are working on and the account you are signed in as are two
+            // other levels of the same hierarchy.
+            AppSwitcher()
+                .listRowSeparator(.hidden)
+
+            ForEach(SidebarSection.allCases) { section in
+                let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
+                if !rows.isEmpty {
+                    Section(section.title) {
+                        ForEach(rows) { DestinationRow(destination: $0) }
+                    }
+                }
+            }
+
+            Section {
+                if state.showsUpgradeCard {
+                    UpgradeCard().listRowSeparator(.hidden)
+                }
+                AccountControl().listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+}
+
+/// One navigation row: a symbol, a label, and the counts that block an apply.
+///
+/// No fill, no border, no tint of its own. The band this used to draw was a
+/// second selected state next to the system's, and the two never agreed about
+/// the accent colour, the focus ring, or what a row looks like when the window
+/// is not key. `List` answers all three.
+private struct DestinationRow: View {
+    @Environment(AppState.self) private var state
+    let destination: Destination
+
+    private var selected: Bool {
+        destination == Destination(tab: state.selectedTab, mode: state.mode)
+    }
+
+    /// Red on Release, and the system's own tint on every other row.
+    ///
+    /// Red says irreversible everywhere in this app and Release is the row
+    /// that is, so the hazard is marked before you arrive rather than after.
+    /// It steps aside while the row is selected: `List` draws a selected row
+    /// in the accent colour and turns its label white, and a red glyph left on
+    /// top of that is a colour fighting a fill.
+    private var marksTheHazard: Bool { destination.tab == .release && !selected }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Label {
+                Text(destination.title)
+            } icon: {
+                Image(systemName: destination.tab.symbol)
+                    .foregroundStyle(marksTheHazard ? AnyShapeStyle(Theme.red)
+                                                    : AnyShapeStyle(.tint))
+            }
+            Spacer(minLength: 8)
+            if let badge = state.badge(for: destination.tab) {
+                BadgeView(badge: badge, size: 16)
+            }
+        }
+        .tag(destination)
+        .accessibilityValue(state.badge(for: destination.tab)?.spoken ?? "")
+    }
+}
+
+/// The app being worked on, and the way to any other.
+///
+/// It replaced an "Apps" heading, a two-line card for the open app, and a
+/// separate "Add app" row: three rows of chrome, at the top of the column, to
+/// say one thing. The card also wore the same selected fill as a navigation
+/// row, so the app and the destination competed for the one thing that fill
+/// means.
+///
+/// A pull-down is what the Mac uses for "this one, of these": the current
+/// choice on the button, the rest in the menu, a tick beside the one you are
+/// on. The list, the tick, and Add App… are the same three actions the three
+/// rows carried, and they all call what they always called.
+private struct AppSwitcher: View {
+    @Environment(AppState.self) private var state
+
+    private var current: AppSummary? { state.currentApp }
+
+    var body: some View {
+        Menu {
+            // A `Picker`, so the tick beside the current app is AppKit's own
+            // and looks like every other "one of these" menu on the Mac.
+            Picker("App", selection: Binding(get: { [state] in state.selectedAppIndex },
+                                             set: { [state] in state.selectApp(at: $0) })) {
+                ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
+                    Text(app.name).tag(index)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            if !state.appRows.isEmpty { Divider() }
+            // The entry screen, not a folder picker. "Add App" is the question
+            // "what do I want to do", and the entry screen is where that
+            // question is already answered three ways.
+            Button("Add App…") { state.showEntryScreen = true }
+            if state.currentApp != nil {
+                Button("Update from the Stores…") { state.showExistingAppImport = true }
+                Divider()
+                Button("Remove from Super Submitter…") {
+                    state.askToRemoveApp(at: state.selectedAppIndex)
+                }
+            }
         } label: {
-            HStack(spacing: 9) {
-                Image(systemName: tab.symbol(selected: selected))
-                    .font(.system(size: 15, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(iconColour)
-                    .frame(width: 20)
-                Text(tab.title(in: state.mode))
-                    .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? tab.tint : Theme.text)
-                Spacer(minLength: 0)
-                if let badge = state.badge(for: tab) {
-                    BadgeView(badge: badge, size: 16)
+            HStack(spacing: 7) {
+                if let current {
+                    AppIconBadge(icon: current.icon, initials: current.initials, size: 18)
+                    Text(current.name).lineLimit(1)
+                } else {
+                    Image(systemName: "square.stack.3d.up")
+                        .foregroundStyle(.secondary)
+                    Text("No app").foregroundStyle(.secondary)
                 }
             }
-            // A wash rather than a solid fill, so the label keeps the text
-            // colour it already reads well in.
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(selected ? tab.tint.opacity(0.16) : .clear,
-                        in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(selected ? tab.tint.opacity(0.45) : .clear,
-                              lineWidth: Theme.hairline))
-            .contentShape(.rect)
+            .font(.system(size: 13, weight: .semibold))
         }
-        .buttonStyle(.plain)
-        // Account works with no app open. It says who you are and what you
-        // have paid for, and a developer signs in before there is anything to
-        // sign in for.
-        .disabled(state.manifestURL == nil && !tab.standsAlone)
-        .accessibilityLabel(tab.title(in: state.mode))
-        // The button's label hides the pills from the reader, and the two of
-        // them are told apart by hue alone, so the count has to be said.
-        .accessibilityValue(state.badge(for: tab)?.spoken ?? "")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        // The system's own pull-down. It was `.borderlessButton`, and a
+        // borderless menu in a safe area inset of a sidebar list took the
+        // whole column down with it: the list drew no rows and the detail pane
+        // lost its header off the top of the window.
+        .menuIndicator(.visible)
+        .controlSize(.small)
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .accessibilityLabel("Current app")
+        .accessibilityValue(current?.name ?? "No app")
     }
 }
 
-private struct SettingsRow: View {
+
+/// Who is signed in, and the actions that belong to them.
+///
+/// It replaced a "Super Submitter" heading over an Account row, a Settings row
+/// and an About row. The heading was the name of this program over three rows
+/// that had only that in common, and two of the three were not destinations at
+/// all: they opened panels. Settings and About are in the app menu now.
+///
+/// The button says the account, because that is the level of the hierarchy it
+/// sits at. The Account screen is still a screen, and this is the way in.
+private struct AccountControl: View {
     @Environment(AppState.self) private var state
 
-    var body: some View {
-        QuietSidebarRow(
-            symbol: state.showSettings ? "gearshape.2.fill" : "gearshape.2",
-            title: "Settings…") { state.showSettings = true }
-    }
-}
-
-/// What the app is, who makes it, and how to reach a person.
-///
-/// It opens a panel rather than a tab. Nine tabs are the work; this is the
-/// label on the tin, and a row of the work that changes nothing about an app
-/// would be the only one of its kind.
-private struct AboutRow: View {
-    @Environment(AppState.self) private var state
+    private var label: String { state.accountEmail ?? "Not signed in" }
 
     var body: some View {
-        QuietSidebarRow(symbol: state.showAbout ? "info.circle.fill" : "info.circle",
-                        title: "About") { state.showAbout = true }
-    }
-}
-
-/// A sidebar row that opens a panel instead of a tab.
-///
-/// It carries no tint and no selected fill on purpose. A tab row says where
-/// you are standing, and neither of these is somewhere you stand.
-private struct QuietSidebarRow: View {
-    let symbol: String
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: symbol)
+        Menu {
+            Button("Account") { state.selectedTab = .account }
+            if state.showsUpgradeCard {
+                Button("See the Plans…") { state.openPaywall(.settings) }
+            }
+            if state.accountEmail != nil {
+                Divider()
+                Button("Sign Out") { state.signOutOfBilling() }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "person.crop.circle")
                     .font(.system(size: 15))
-                    .frame(width: 20)
-                Text(title).font(.system(size: 13.5))
-                Spacer(minLength: 0)
+                    .foregroundStyle(.secondary)
+                Text(label).lineLimit(1).truncationMode(.middle)
             }
-            .foregroundStyle(Theme.text2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .contentShape(.rect)
+            .font(.system(size: 12.5))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title.replacingOccurrences(of: "…", with: ""))
+        .controlSize(.small)
+        .accessibilityLabel("Account")
+        .accessibilityValue(label)
     }
 }
 
-/// The two jobs, as one control.
+/// The offer at the foot of the column, for a free account and for no other.
 ///
-/// It sits above the tabs, because it decides which tabs exist. A publisher
-/// sends a version; a manager runs the app that is already out there.
-struct ModeSwitch: View {
+/// Both references end their sidebar this way, and the two cards are not the
+/// same card. Veltrix sells: a headline, a sentence, a price. Vocalyn shows a
+/// real number first — 40% of 100 minutes — and lets the offer follow it.
+/// Vocalyn's is the better card, because it is worth reading on the days
+/// nobody buys anything.
+///
+/// This app meters nothing, so there is no quota to show. It does have a real
+/// number: the plan. Once the stores have been read, the card says how many
+/// writes are waiting, which is exactly what paid access unlocks and exactly
+/// the work the developer has already done.
+///
+/// It shows for `.free` and never for `.expired`, `.grace` or `.revoked`.
+/// Somebody who has paid before is not somebody who never has, and the two may
+/// not be sold to in the same words.
+///
+/// It is present whenever the account is free, and not only while a plan
+/// exists. `invalidatePlan` fires on every edit, so a card gated on the plan
+/// would appear and vanish as the developer typed, and a sidebar is not a place
+/// where things may flicker.
+///
+/// No countdown, no scarcity, no red badge, and nothing that comes back after
+/// it is dismissed. It is a standing offer at the foot of a column.
+private struct UpgradeCard: View {
     @Environment(AppState.self) private var state
-    /// The pill is one view that moves between the two halves, so the switch
-    /// slides instead of blinking from one fill to another.
-    @Namespace private var pill
+
+    /// `AppState.upgradeCardLine`. It lives there so a test can read it.
+    private var line: String { state.upgradeCardLine }
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Mode.allCases) { mode in
-                let selected = state.mode == mode
-                Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-                        state.mode = mode
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: mode.symbol)
-                            .font(.system(size: 10.5))
-                        Text(mode.title)
-                            .font(.system(size: 12,
-                                          weight: selected ? .semibold : .regular))
-                    }
-                    .foregroundStyle(selected ? Theme.accentText : Theme.text2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .frame(maxWidth: .infinity)
-                    .background {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(mode.tint)
-                                .matchedGeometryEffect(id: "modePill", in: pill)
-                                .shadow(color: mode.tint.opacity(0.45), radius: 3, y: 1)
-                        }
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(mode.title)
-                .accessibilityHint(mode.line)
-                .accessibilityAddTraits(selected ? .isSelected : [])
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                IconChip(symbol: "bolt.fill", tint: Theme.accent, size: 20)
+                Text("Super Submitter Pro").font(.system(size: 12.5, weight: .semibold))
+                Spacer(minLength: 0)
             }
+            Text(line)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.text2)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+            // The route the gates already use. It does not introduce a second
+            // purchase path.
+            Button { state.openPaywall(.settings) } label: {
+                Text("See the plans")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(Theme.accentFill, in: RoundedRectangle(cornerRadius: 7))
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(2)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+        .padding(11)
+        // The one place a tint is allowed to be decoration, because the tint is
+        // what separates an offer from the navigation above it. Accent, not
+        // red, which means irreversible, and not green, which is a status.
+        .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(Theme.accent.opacity(0.30), lineWidth: Theme.hairline))
+        .accessibilityElement(children: .contain)
     }
 }
 
 // MARK: - The shared small parts
-
-/// States that the work is on disk, and opens the file that holds it.
-///
-/// The app has no unsaved state to warn about: every field writes `store.yaml`
-/// when it changes. This says so, because a form with no Save button reads as
-/// a form that keeps nothing.
-struct SavedChip: View {
-    @Environment(AppState.self) private var state
-    /// Whether a save happened recently enough to still be news.
-    ///
-    /// The green tick used to burn at all times. Reassurance that is always on
-    /// is reassurance nobody reads: it stops being the answer to "did that
-    /// save?" and becomes part of the furniture, and then the one moment it
-    /// matters looks exactly like every other moment. The tick now marks a
-    /// save and fades; the row itself stays, because it is also the way to
-    /// open the file.
-    @State private var recentlySaved = false
-
-    private var line: String {
-        guard let date = state.lastSavedAt else { return "Saved to store.yaml" }
-        return "Saved \(date.formatted(date: .omitted, time: .shortened))"
-    }
-
-    var body: some View {
-        Button { state.revealManifest() } label: {
-            HStack(spacing: 6) {
-                Image(systemName: recentlySaved ? "checkmark.circle.fill" : "doc.text")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(recentlySaved ? Theme.green : Theme.text3)
-                    .contentTransition(.symbolEffect(.replace))
-                Text(line)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text2)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-        }
-        // `task(id:)` and not `onChange`, because this has to be cancelled.
-        // `onChange` started a three second timer per save and cancelled
-        // none of them, so a burst of saves left a queue of them and each
-        // one turned the tick off at its own three second mark while later
-        // saves turned it back on. It read as a blink.
-        .task(id: state.lastSavedAt) {
-            guard state.lastSavedAt != nil else { return }
-            withAnimation(.smooth(duration: 0.2)) { recentlySaved = true }
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            withAnimation(.smooth(duration: 0.4)) { recentlySaved = false }
-        }
-        .buttonStyle(.plain)
-        .help("Every change is written as you type. Click to show store.yaml in the Finder.")
-        .accessibilityLabel(line)
-        .accessibilityHint("Shows store.yaml in the Finder")
-    }
-}
 
 struct InitialsBadge: View {
     let text: String
@@ -445,14 +371,13 @@ struct HealthChip: View {
     }
 }
 
-/// The counts on a tab row: what blocks the apply, then what does not.
+/// The counts on a sidebar row: what blocks the apply, then what does not.
 ///
 /// Two pills and not one number. The errors come first because they are the
 /// ones that stop the work, and a tab with only warnings draws the yellow pill
 /// alone, so red still never appears where there is no error.
 ///
-/// Each pill keeps its severity colour whether the row is selected or not: the
-/// row is a wash now, not a solid fill, so there is nothing to invert against.
+/// Each pill keeps its severity colour whether the row is selected or not.
 struct BadgeView: View {
     let badge: TabBadge
     var size: CGFloat
@@ -476,4 +401,3 @@ struct BadgeView: View {
             .background(severity.background, in: Capsule())
     }
 }
-

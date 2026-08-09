@@ -527,6 +527,32 @@ extension AppState {
         return text == planLabel ? nil : text
     }
 
+    /// Whether the sidebar ends with the upgrade offer.
+    ///
+    /// `.status` and not `.plan`, and only `.free`. `.expired` is somebody who
+    /// paid and stopped, `.grace` is somebody whose card failed, and `.revoked`
+    /// is a refund or a dispute. All three have their own line on the Account
+    /// tab, and none of them may be sold to in the words written for a person
+    /// who has never paid at all.
+    ///
+    /// Here rather than in the view so it can be asserted. A card that shows to
+    /// a paying customer is the one failure this needs a test for, and a
+    /// boolean is cheaper to assert than to photograph.
+    var showsUpgradeCard: Bool { entitlement.status == .free }
+
+    /// The one line on that card.
+    ///
+    /// It reads the plan when there is one, which is the Vocalyn shape: a real
+    /// number first, and the offer after it. It must stay true against
+    /// `entitlementLabel` below, which already promises a free user that
+    /// editing, validation, builds, reads, plans and dry runs cost nothing.
+    var upgradeCardLine: String {
+        guard let plan, plan.writeCount > 0 else {
+            return "Editing, builds, plans and dry runs are free. Sending them to a store is not."
+        }
+        return "\(plan.writeCount) writes are ready. Sending them to a store needs a plan."
+    }
+
     var entitlementLabel: String {
         switch entitlement.status {
         case .free:

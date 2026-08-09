@@ -99,7 +99,7 @@ struct SettingsPanel: View {
     private var nuclear: some View {
         @Bindable var state = state
         return VStack(alignment: .leading, spacing: 13) {
-            SettingRow("Start over", alignment: .top) {
+            SettingRow("Start over", symbol: "exclamationmark.octagon", alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Erase everything Super Submitter knows and return to the first-run screen.")
                         .font(.system(size: 12))
@@ -140,7 +140,7 @@ struct SettingsPanel: View {
 
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 13) {
-            SettingRow("Appearance") {
+            SettingRow("Appearance", symbol: "circle.lefthalf.filled") {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(Appearance.allCases) { Text($0.label).tag($0) }
                 }
@@ -150,7 +150,7 @@ struct SettingsPanel: View {
                 .onChange(of: appearance) { appearance.apply() }
             }
 
-            SettingRow("Poll interval") {
+            SettingRow("Poll interval", symbol: "timer") {
                 Picker("Poll interval", selection: $pollMinutes) {
                     ForEach(Self.intervals, id: \.self) { Text("\($0) minutes").tag($0) }
                 }
@@ -161,7 +161,7 @@ struct SettingsPanel: View {
                 .onChange(of: pollMinutes) { state.startPolling() }
             }
 
-            SettingRow("Raw YAML", alignment: .top) {
+            SettingRow("Raw YAML", symbol: "curlybraces", alignment: .top) {
                 Check("Show the YAML toggle on every tab", isOn: $showYAMLToggle,
                       note: "The toggle opens the block of store.yaml behind the tab you are on.")
                     // A hidden toggle must not leave a tab stuck in YAML.
@@ -170,7 +170,7 @@ struct SettingsPanel: View {
                     }
             }
 
-            SettingRow("Dry run", alignment: .top) {
+            SettingRow("Dry run", symbol: "testtube.2", alignment: .top) {
                 Check("On by default for a new app", isOn: $dryRun,
                       note: "A dry run logs every request and sends none.")
             }
@@ -179,7 +179,7 @@ struct SettingsPanel: View {
 
     private var files: some View {
         VStack(alignment: .leading, spacing: 13) {
-            SettingRow("Manifest path", alignment: .top) {
+            SettingRow("Manifest path", symbol: "doc.text", alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(state.manifestURL?.path ?? "No app is open.")
                         .font(Theme.mono(11))
@@ -199,7 +199,7 @@ struct SettingsPanel: View {
                 }
             }
 
-            SettingRow("Build storage", alignment: .top) {
+            SettingRow("Build storage", symbol: "internaldrive", alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(state.buildStorageSummary)
                         .font(.system(size: 12))
@@ -219,7 +219,7 @@ struct SettingsPanel: View {
 
     private var provider: some View {
         VStack(alignment: .leading, spacing: 13) {
-            SettingRow("Provider", alignment: .top) {
+            SettingRow("Provider", symbol: "arrow.triangle.2.circlepath", alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("Provider", selection: Binding(
                         get: { state.provider },
@@ -345,27 +345,53 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     }
 }
 
+/// One setting: a glyph, a word, and the control.
+///
+/// The glyph is C1 of the design refresh, and it comes from Vocalyn, which
+/// puts one before every field label in its inspector. A settings panel is a
+/// column of unrelated switches, and the glyph is what a reader finds a row by
+/// on the second visit — the word is what they read on the first.
+///
+/// Not taken with it: the ⓘ Vocalyn puts *after* each label, which hides the
+/// explanation behind a click. Several notes in this panel are the only
+/// statement of a rule the developer has to know, and a note behind a glyph is
+/// a note nobody opens.
 private struct SettingRow<Content: View>: View {
     let label: String
+    let symbol: String
     var alignment: VerticalAlignment = .center
     @ViewBuilder let content: Content
 
-    init(_ label: String, alignment: VerticalAlignment = .center,
+    init(_ label: String, symbol: String, alignment: VerticalAlignment = .center,
          @ViewBuilder content: () -> Content) {
         self.label = label
+        self.symbol = symbol
         self.alignment = alignment
         self.content = content()
     }
 
     var body: some View {
         HStack(alignment: alignment, spacing: 14) {
-            Text(label)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Theme.text2)
-                .frame(width: SettingsPanel.labelWidth, alignment: .leading)
-                // The label sits on the first line of a tall row, not in the
-                // middle of it.
-                .padding(.top, alignment == .top ? 1 : 0)
+            HStack(spacing: 7) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.text3)
+                    // A fixed column, or a wide glyph pushes its own label out
+                    // of line with the one above it.
+                    .frame(width: 16)
+                Text(label)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.text2)
+                Spacer(minLength: 0)
+            }
+            .frame(width: SettingsPanel.labelWidth, alignment: .leading)
+            // The label sits on the first line of a tall row, not in the
+            // middle of it.
+            .padding(.top, alignment == .top ? 1 : 0)
+            // The glyph repeats the word beside it, so a reader hears the row
+            // named once.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(label)
             content
             Spacer(minLength: 0)
         }
