@@ -229,3 +229,35 @@ private func differentGoogleDescription() -> ImportedStoreListing {
     free.wrappedValue = String(repeating: "x", count: 5_000)
     #expect(value.count == 5_000)
 }
+
+/// A store id holds one line, and the field that takes one refuses a break.
+///
+/// Return puts a line break into a SwiftUI text field on macOS rather than
+/// ending the edit, and an id copied out of a web console arrives with one on
+/// the end. Either way the field editor scrolls to a second, empty line and the
+/// id reads as cut in half, and the store receives a credential with a break
+/// in it.
+///
+/// The order is the half that is easy to get wrong, so it is the half this
+/// pins: the break comes out first, and the length is counted after. The other
+/// way round, a 36 character issuer id pasted with a newline is 37 characters
+/// and the limit refuses the whole paste.
+@Test func anIdFieldTakesOneLineAndCountsItAfterTheBreakIsGone() {
+    var value = ""
+    let field = Binding(get: { value }, set: { value = $0 })
+    let entry = field.limited(to: AppleCredential.issuerIDLength).oneLine
+
+    // A Return pressed in the middle of an issuer id.
+    entry.wrappedValue = "fc9538f3-8694\n"
+    #expect(value == "fc9538f3-8694")
+
+    // The paste the limit alone used to refuse whole: 36 characters of issuer
+    // id, and a newline the console put on the end.
+    entry.wrappedValue = "fc9538f3-8694-455f-b34f-50a9053d4d4a\n"
+    #expect(value == "fc9538f3-8694-455f-b34f-50a9053d4d4a")
+    #expect(value.count == AppleCredential.issuerIDLength)
+
+    // The limit still holds for real text past it.
+    entry.wrappedValue = "fc9538f3-8694-455f-b34f-50a9053d4d4a0"
+    #expect(value == "fc9538f3-8694-455f-b34f-50a9053d4d4a")
+}

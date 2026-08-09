@@ -368,10 +368,15 @@ private struct PackageDropWell: View {
         .overlay(RoundedRectangle(cornerRadius: 8)
             .strokeBorder(targeted ? Theme.accent : Theme.controlEdge,
                           style: StrokeStyle(lineWidth: targeted ? 1.5 : 1, dash: [3, 3])))
+        .motion(.easeOut(duration: 0.12), value: targeted)
         .dropDestination(for: URL.self) { urls, _ in
             let accepted = urls.filter { extensions.contains($0.pathExtension.lowercased()) }
+            // A wrong extension is refused here, so the tick has to sit after
+            // the filter and not before it. Three wells stand in a column and
+            // an .aab dropped on the .ipa one is the common slip.
             guard !accepted.isEmpty else { return false }
             accept(accepted)
+            Haptic.drop()
             return true
         } isTargeted: { targeted = $0 }
     }

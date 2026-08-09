@@ -9,6 +9,12 @@ struct MediaTab: View {
     /// is missing here follows what it holds, so an import that fills a bucket
     /// opens it and nothing has to be told about the new files.
     @State private var open: [Manifest.DeviceClass: Bool] = [:]
+    /// The tile a dragged screenshot would land in front of.
+    ///
+    /// One value for the whole tab and not one per group. A drag has one
+    /// pointer, so only one tile can ever be targeted, and a flag per group
+    /// would leave a stale line behind in the group the pointer left.
+    @State private var dropTarget: String?
 
     private var groups: [(String, Manifest.DeviceClass)] {
         var values: [(String, Manifest.DeviceClass)] = [("Phone", .phone)]
@@ -112,6 +118,7 @@ struct MediaTab: View {
                                       fromStore: AppState.isImported(path),
                                       canMoveEarlier: index > 0,
                                       canMoveLater: index < paths.count - 1,
+                                      insertBefore: dropTarget == path,
                                       move: { offset in
                                           state.moveMedia(path, by: offset, deviceClass: device)
                                       }) {
@@ -123,25 +130,27 @@ struct MediaTab: View {
                             // have to write.
                             .draggable(path)
                             .dropDestination(for: String.self) { dropped, _ in
+                                dropTarget = nil
                                 guard let moved = dropped.first else { return false }
                                 state.moveMedia(moved, before: path, deviceClass: device)
+                                Haptic.drop()
                                 return true
+                            } isTargeted: { inside in
+                                // The tile itself draws the insertion line, so
+                                // this only has to name which one is targeted.
+                                dropTarget = inside ? path : nil
                             }
                         }
                         MediaDropTile(title: "Drop images\nor choose files",
-                                      width: tile.width, height: tile.height) {
-                            state.chooseMediaFiles(deviceClass: device)
-                        }
-                        .dropDestination(for: URL.self) { urls, _ in
-                            state.addMediaFiles(urls, deviceClass: device)
-                            return true
-                        }
+                                      width: tile.width, height: tile.height,
+                                      choose: { state.chooseMediaFiles(deviceClass: device) },
+                                      accept: { state.addMediaFiles($0, deviceClass: device) })
                     }
                 }
                 liveScreenshots(live)
             }
         }
-        .animation(.snappy(duration: 0.18), value: isOpen)
+        .motion(.snappy(duration: 0.18), value: isOpen)
     }
 
     /// What each store shows today. It is faded and it takes no input, because
@@ -219,14 +228,13 @@ struct MediaTab: View {
                             }.controlSize(.small)
                         }.font(Theme.font(size: 11.5))
                     }
-                    MediaDropTile(title: "Drop .mov, .m4v, or .mp4") {
-                        state.chooseMediaFiles(deviceClass: device, previews: true)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .dropDestination(for: URL.self) { urls, _ in
-                        state.addMediaFiles(urls, deviceClass: device, previews: true)
-                        return true
-                    }
+                    MediaDropTile(
+                        title: "Drop .mov, .m4v, or .mp4",
+                        choose: { state.chooseMediaFiles(deviceClass: device, previews: true) },
+                        accept: {
+                            state.addMediaFiles($0, deviceClass: device, previews: true)
+                        })
+                        .frame(maxWidth: .infinity)
                     let live = state.storeSnapshot.previews(locale: state.locale,
                                                             deviceClass: device)
                     if !live.isEmpty {
@@ -327,8 +335,32 @@ private struct MediaTile: View {
     var fromStore = false
     var canMoveEarlier = false
     var canMoveLater = false
+    /// True while another tile is being dragged onto this one. The caller owns
+    /// it, because only the caller knows which tile the pointer is over.
+    var insertBefore = false
     var move: (Int) -> Void = { _ in }
     let remove: () -> Void
+
+    /// Whether the pointer is on this tile. See the button row below, and the
+    /// cursor in `hover(_:)`.
+    @State private var hovering = false
+
+    /// The pointer says the picture opens, and puts itself back afterwards.
+    ///
+    /// `NSCursor` is a stack, so every push owes a pop. A bare push and pop in
+    /// `onHover` leaks one: pressing the trash button removes the tile while
+    /// the pointer is still on it, `onHover(false)` never arrives, and the
+    /// pointing hand is left on the whole app until something else pushes over
+    /// it. Deleting a screenshot you are hovering is the ordinary way to
+    /// delete one, so that is the common path and not the edge case.
+    ///
+    /// The flag is what makes the pop safe: it says whether this tile owns a
+    /// push, so `onDisappear` can return the one it took and no more.
+    private func hover(_ inside: Bool) {
+        guard inside != hovering else { return }
+        hovering = inside
+        if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -380,6 +412,17 @@ private struct MediaTile: View {
             // carries the two moves next to the removal.
             // WCAG 2.5.2 asks 24 by 24. A mini button is about 22 by 16, and
             // these are the controls that reorder what both stores show.
+            //
+            // They fade in under the pointer. Ten tiles drew thirty buttons at
+            // all times, which is a wall of chrome across a tab that is meant
+            // to be read as pictures.
+            //
+            // `.opacity` and not an `if`. Removing them from the hierarchy
+            // would resize every tile as the pointer crossed it, take them out
+            // of the keyboard order, and hide them from VoiceOver, and the
+            // report is firm that hover may never be the only route. They stay
+            // present, focusable and spoken; only the ink comes and goes. The
+            // context menu below is the third route.
             HStack(spacing: 4) {
                 TileButton(symbol: "arrow.left", label: "Move earlier",
                            enabled: canMoveEarlier) { move(-1) }
@@ -388,7 +431,46 @@ private struct MediaTile: View {
                 TileButton(symbol: "trash", label: "Remove", enabled: true,
                            tint: Theme.red, action: remove)
             }
-        }.frame(width: size.width, alignment: .leading)
+            .opacity(hovering ? 1 : 0)
+        }
+        .frame(width: size.width, alignment: .leading)
+        .onHover(perform: hover)
+        .onDisappear {
+            // The tile can be removed while the pointer is on it. See `hover`.
+            if hovering { NSCursor.pop(); hovering = false }
+        }
+        .motion(.easeOut(duration: 0.12), value: hovering)
+        // Quick Look, the way Finder does it. The tab holds real image files
+        // and a developer checking one used to open Finder to find it.
+        .onTapGesture(count: 2) { QuickLook.show(url) }
+        // Every hover action, plus the preview, on a route that needs no
+        // pointer skill and no hover at all.
+        .contextMenu {
+            Button("Quick Look") { QuickLook.show(url) }
+            Divider()
+            Button("Move Earlier") { move(-1) }.disabled(!canMoveEarlier)
+            Button("Move Later") { move(1) }.disabled(!canMoveLater)
+            Divider()
+            Button("Show in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+            Button("Remove", role: .destructive, action: remove)
+        }
+        // Where a dragged tile would land. The order of these tiles is the
+        // order both stores put on the listing page, so "before this one" is
+        // the whole point of the drag and it was invisible until it finished.
+        .overlay(alignment: .leading) {
+            if insertBefore {
+                Capsule()
+                    .fill(Theme.accent)
+                    .frame(width: 3)
+                    .offset(x: -6.5)
+            }
+        }
+        .motion(.snappy(duration: 0.15), value: insertBefore)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(url.lastPathComponent)
+        .accessibilityHint("Double click to preview")
     }
 }
 
@@ -422,23 +504,45 @@ private struct TileButton: View {
     }
 }
 
+/// The dashed target at the end of a row of screenshots.
+///
+/// It owns its drop rather than leaving the caller to attach one, which is how
+/// `FileWell` and `PackageDropWell` already work. Both callers used to hang a
+/// `.dropDestination` on the outside, so the tile could not know it was being
+/// dragged onto and the one target on the tab whose whole purpose is to accept
+/// a drop was the only one that never lit up.
 private struct MediaDropTile: View {
     let title: String
     /// Nil lets the caller size it, which the video section does.
     var width: CGFloat?
     var height: CGFloat = 82
     let choose: () -> Void
+    let accept: ([URL]) -> Void
+
+    @State private var targeted = false
+
     var body: some View {
         Button(action: choose) {
-            Text(title).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+            Text(title)
+                .font(Theme.font(size: 11))
+                .foregroundStyle(targeted ? Theme.accent : Theme.text3)
                 .multilineTextAlignment(.center).padding(8)
                 .frame(maxWidth: .infinity).frame(height: height)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .frame(width: width)
+        .background(targeted ? Theme.accent.opacity(0.08) : .clear,
+                    in: RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6)
-            .strokeBorder(Theme.controlEdge, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            .strokeBorder(targeted ? Theme.accent : Theme.controlEdge,
+                          style: StrokeStyle(lineWidth: targeted ? 1.5 : 1, dash: [3, 3])))
+        .motion(.easeOut(duration: 0.12), value: targeted)
+        .dropDestination(for: URL.self) { urls, _ in
+            accept(urls)
+            Haptic.drop()
+            return true
+        } isTargeted: { targeted = $0 }
     }
 }
 

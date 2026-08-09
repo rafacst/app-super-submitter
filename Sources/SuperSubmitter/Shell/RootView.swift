@@ -27,16 +27,47 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             ContentArea()
-                // No title in the title bar. It said "Super Submitter" on every
-                // screen, over a band that already names the screen you are on,
-                // so the app spent its loudest row repeating the one fact a
-                // user never has to be told. The name is on the menu bar, in
-                // the Dock, and in About.
+                // The app being edited, and never the name of this program.
                 //
-                // The band below is the title now, on every tab.
-                .navigationTitle("")
+                // The title used to be empty, because it said "Super Submitter"
+                // on every screen over a band that already names the screen you
+                // are on: the app spent its loudest row repeating the one fact a
+                // user never has to be told. That objection was to the program
+                // name and it still stands. The program name is on the menu bar,
+                // in the Dock, and in About.
+                //
+                // This is a different fact. A window that edits a file names
+                // the file, which is what every document window on the Mac
+                // does, and it is what makes the line below work.
+                .navigationTitle(state.currentApp?.name ?? "Super Submitter")
+                // The proxy icon. `store.yaml` is a real file that the app
+                // writes on every keystroke, so this window is a document
+                // window and had none of the affordances of one.
+                //
+                // With this, the title bar carries a draggable icon of the
+                // manifest: drop it in Finder, in Mail, in a terminal. A
+                // Command-click on the title opens the path back to the volume,
+                // which is how a Mac developer checks where a file actually
+                // lives. Both were reachable only through the File menu before.
+                //
+                // `navigationDocument` and not `NSWindow.representedURL`
+                // through an `NSViewRepresentable`. SwiftUI owns this window,
+                // and a view reaching around it for the `NSWindow` would fight
+                // the framework on every layout pass.
+                .documentURL(state.manifestURL)
         }
         .navigationSplitViewStyle(.balanced)
+        // One title bar, in one colour, across all three columns.
+        //
+        // The window keeps a real title bar, because `NavigationSplitView`
+        // cannot draw a sidebar without one. Nothing painted the strip it
+        // occupies, so each column showed whatever was behind it: the content
+        // column its own page colour, the inspector column the window's darker
+        // backing. The join between the two ran as a hard vertical seam from
+        // the top of the window down to the header band, which is why the
+        // inspector read as a panel sitting on top of the tab rather than
+        // beside it.
+        .toolbarBackground(Theme.content, for: .windowToolbar)
         .background(Theme.content)
         .foregroundStyle(Theme.text)
         .font(Theme.font(size: 13))
@@ -88,6 +119,8 @@ private struct ContentArea: View {
     @AppStorage("detailsInspector") private var detailsInspectorOpen = true
     /// The same, for the reference boxes beside the build.
     @AppStorage("buildInspector") private var buildInspectorOpen = true
+    /// For the jump-to-field scroll, which is a command and not a state flag.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,14 +131,34 @@ private struct ContentArea: View {
             // room.
             if !state.showsEntryScreen { ContentHeader(scrolled: scrolled) }
             if state.showsLiveWriteWarning { LiveWriteBar(); Hairline() }
-            if state.showsEntryScreen {
-                EmptyAppView()
-            } else {
-                tabScroll
+            // The payoff of the whole onboarding: the two doors give way to
+            // the app they opened. It used to happen between one frame and the
+            // next, so the moment a developer's first app arrived looked
+            // exactly like a screen being replaced by another screen.
+            //
+            // The entry screen fades, and the tab comes up from 98% behind it.
+            // Nothing slides and nothing travels: the report's rule is that
+            // the new content stays in the same spatial context, so the reader
+            // understands the tab as what their choice produced.
+            //
+            // `.animation(value:)` and never `withAnimation`. This flag turns
+            // over in the same pass that builds the sidebar, the header and
+            // the tab for the first time, and a global transaction there is
+            // the exact bug recorded twice below: in `HeaderSurface` and in
+            // `SavedChip`.
+            ZStack {
+                if state.showsEntryScreen {
+                    EmptyAppView()
+                        .transition(.opacity)
+                } else {
+                    tabScroll
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
+        .motion(.smooth(duration: 0.28), value: state.showsEntryScreen)
         // A new tab starts at the top, so the rule starts off.
         .onChange(of: state.selectedTab) { scrolled = false }
     }
@@ -134,7 +187,12 @@ private struct ContentArea: View {
                 // anchor exists. Scrolling into a tab that has not rendered
                 // does nothing, silently.
                 Task { @MainActor in
-                    withAnimation(.easeOut(duration: 0.2)) {
+                    // A command and not a state flag, so it keeps
+                    // `withAnimation`. Under Reduce Motion the scroll jumps
+                    // straight to the field: this is a long travel down a tab
+                    // of forty rows, and it is the largest single movement the
+                    // app makes.
+                    withMotion(reduceMotion, .easeOut(duration: 0.2)) {
                         proxy.scrollTo(FieldAnchor(id: target), anchor: .top)
                     }
                 }
@@ -248,14 +306,10 @@ private struct EmptyAppView: View {
             }
             .padding(.bottom, 26)
 
-            Text(state.mode == .publishing
-                 ? "Point Super Submitter at your app"
-                 : "Bring in the app you want to manage")
+            Text("Which app are you working on?")
                 .font(Theme.font(size: 25, weight: .semibold))
                 .kerning(-0.4)
-            Text(state.mode == .publishing
-                 ? "Pick the folder your app is built in. We read the build and keep one small file beside it."
-                 : "Managing works on a live app. Connect your store accounts and import the one you want to look after.")
+            Text("Point Super Submitter at a project folder to prepare a new submission, or connect your store accounts and bring in an app you already ship.")
                 .font(Theme.font(size: 15))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
@@ -263,15 +317,30 @@ private struct EmptyAppView: View {
                 .frame(maxWidth: 520)
                 .padding(.top, 9)
 
-            // Both doors import an app; the mode decides what the app then
-            // shows. A manager needs the live one, so that door comes first
-            // and the new-app door does not appear at all.
+            // Both doors, in both modes.
+            //
+            // The new-app door used to appear only while the mode was
+            // Publishing, and the mode outlives a launch: a developer who last
+            // worked in Managing opened this screen, found one door, and had no
+            // way at all to start a submission. The mode is navigation. It
+            // decides which tabs the sidebar lists, and it has no business
+            // deciding which apps may be added.
+            //
+            // So the door sets the mode instead of being hidden by it. Choosing
+            // "Submit a new app" is choosing the publishing job, and the sidebar
+            // that meets the developer afterwards is the one with Build, Summary
+            // and Release in it.
             HStack(spacing: 18) {
-                if state.mode == .publishing {
-                    EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
-                                  detail: "Choose its project folder and prepare a fresh store submission.",
-                                  tint: Theme.accent, action: state.chooseAppFolder)
+                EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
+                              detail: "Choose its project folder and prepare a fresh store submission.",
+                              tint: Theme.accent) {
+                    state.mode = .publishing
+                    state.chooseAppFolder()
                 }
+                // This one keeps the mode it is opened in: the import writes
+                // `store.yaml` beside the developer's source for a publisher and
+                // into its own workspace for a manager, and the sheet reads the
+                // mode to tell those apart.
                 EntryModeCard(symbol: "arrow.triangle.2.circlepath",
                               title: state.mode == .publishing
                                   ? "Update existing apps" : "Bring in a live app",
@@ -282,7 +351,7 @@ private struct EmptyAppView: View {
                     state.showExistingAppImport = true
                 }
             }
-            .frame(maxWidth: state.mode == .publishing ? 760 : 380)
+            .frame(maxWidth: 760)
             .padding(.top, 32)
 
             // What the app cannot do, before the developer invests a folder in
@@ -373,7 +442,7 @@ private struct EntryModeCard: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.smooth(duration: 0.18), value: hovering)
+        .motion(.smooth(duration: 0.18), value: hovering)
         .accessibilityHint(detail)
     }
 }
@@ -396,6 +465,14 @@ private struct ContentHeader: View {
     /// that the next apply stops being a rehearsal and starts writing to two
     /// live stores.
     @State private var armingLiveWrites = false
+    /// Raised on each press of a header command, so its glyph bounces once.
+    ///
+    /// Three counters and not one. Two commands sit in the same cluster on the
+    /// Release tab, and a shared counter would bounce both glyphs every time
+    /// either was pressed.
+    @State private var readTick = 0
+    @State private var recheckTick = 0
+    @State private var copyTick = 0
 
     var body: some View {
         @Bindable var state = state
@@ -485,6 +562,10 @@ private struct ContentHeader: View {
                         Image(systemName: "sidebar.trailing")
                             .font(Theme.font(size: 13))
                             .foregroundStyle(buildInspectorOpen ? Theme.accent : Theme.text2)
+                            // The column slides in beside the content, and the
+                            // glyph that opened it now says so rather than only
+                            // changing colour.
+                            .symbolEffect(.bounce, value: buildInspectorOpen)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
                     }
@@ -500,6 +581,7 @@ private struct ContentHeader: View {
                         Image(systemName: "sidebar.trailing")
                             .font(Theme.font(size: 13))
                             .foregroundStyle(detailsInspectorOpen ? Theme.accent : Theme.text2)
+                            .symbolEffect(.bounce, value: detailsInspectorOpen)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
                     }
@@ -523,7 +605,9 @@ private struct ContentHeader: View {
                         // No spinner here. The tab body already says "Reading
                         // both stores" beside one, and two spinners for one
                         // read read as two reads.
-                        QuietButton(title: "Read the stores again", glass: true) {
+                        QuietButton(title: "Read the stores again", glass: true,
+                                    symbol: "arrow.clockwise", tick: readTick) {
+                            readTick += 1
                             Task { await state.readStores() }
                         }
                     }
@@ -544,8 +628,19 @@ private struct ContentHeader: View {
             case .release:
                 HeaderCluster(morphOn: shape) {
                     if state.rechecking { Spinner() }
-                    QuietButton(title: "Copy as checklist", glass: true) { state.copyChecklist() }
-                    QuietButton(title: "Re-check", glass: true) { Task { await state.recheck() } }
+                    // A copy to the pasteboard is the one command in the app
+                    // whose whole result is invisible: the screen is identical
+                    // before and after. The glyph is the only report there is.
+                    QuietButton(title: "Copy as checklist", glass: true,
+                                symbol: "doc.on.doc", tick: copyTick) {
+                        copyTick += 1
+                        state.copyChecklist()
+                    }
+                    QuietButton(title: "Re-check", glass: true,
+                                symbol: "arrow.clockwise", tick: recheckTick) {
+                        recheckTick += 1
+                        Task { await state.recheck() }
+                    }
                 }
                 // The tab asks "shall I send it?" in its own subtitle, and the
                 // buttons that answer it sit below the fold. This says they
@@ -756,6 +851,6 @@ struct SavedChip: View {
             guard !Task.isCancelled else { return }
             recentlySaved = false
         }
-        .animation(.smooth(duration: recentlySaved ? 0.2 : 0.4), value: recentlySaved)
+        .motion(.smooth(duration: recentlySaved ? 0.2 : 0.4), value: recentlySaved)
     }
 }

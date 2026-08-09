@@ -40,13 +40,22 @@ struct CredentialCard<Content: View>: View {
     var keychainNote: String = ""
     @ViewBuilder let content: Content
 
+    /// True for the third of a second the fields spend shaking. See `body`.
+    @State private var shaking = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
             if open {
                 VStack(alignment: .leading, spacing: 12) {
+                    // The fields, and only the fields, take the shake. The
+                    // header above and the message below have to hold still:
+                    // the whole card moving would say "this card" where the
+                    // point is to say "these values".
                     content
+                        .offset(x: shaking ? -7 : 0)
 
                     Button(action: toggleGuide) {
                         HStack(spacing: 6) {
@@ -71,7 +80,34 @@ struct CredentialCard<Content: View>: View {
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-        .animation(.snappy(duration: 0.18), value: open)
+        .motion(.snappy(duration: 0.18), value: open)
+        // The shake itself. Reduce Motion is honoured by hand here rather than
+        // through `.motion`, because the answer is not a shorter animation but
+        // no movement at all: `shaking` is never set, so the offset never
+        // leaves zero and the field stays where it is. The colour, the words
+        // and the focus below do the whole job on their own.
+        .animation(reduceMotion ? nil
+                   : .linear(duration: 0.06).repeatCount(5, autoreverses: true),
+                   value: shaking)
+        // A refused key is the most common failure in the product, and it
+        // reported itself by dropping a line of text under a button, below the
+        // fold, while the two fields that caused it sat above unchanged.
+        //
+        // Motion alone is never the message. The report is explicit: pair it
+        // with specific text and a path to recovery. The text is the store's
+        // own refusal in `connectFooter`, and the card is already open because
+        // a connection can only be attempted from inside it.
+        .onChange(of: status) { _, new in
+            guard new?.isFailed == true, !reduceMotion else { return }
+            shaking = true
+            Task { @MainActor in
+                // 5 repeats at 0.06 seconds, and then back to rest. Without
+                // this the offset stays at -7 and the fields sit seven points
+                // to the left for as long as the card is open.
+                try? await Task.sleep(for: .milliseconds(320))
+                shaking = false
+            }
+        }
     }
 
     /// The row that stays whatever the card is doing, and the control that
@@ -108,10 +144,21 @@ struct CredentialCard<Content: View>: View {
                 // like the state they had not reached.
                 if let status {
                     HStack(spacing: 5) {
-                        Image(systemName: Self.symbol(status)).font(Theme.font(size: 11))
+                        Image(systemName: Self.symbol(status))
+                            .font(Theme.font(size: 11))
+                            // The dashed circle becomes a clock becomes a tick,
+                            // in place. This is the result of a call the
+                            // developer just made and waited seconds for, and
+                            // the answer used to arrive as a swapped glyph.
+                            .contentTransition(.symbolEffect(.replace))
+                            // Only on the good end. A refusal is marked by the
+                            // fields shaking below, and two motions for one
+                            // event is two events.
+                            .symbolEffect(.bounce, value: status.isConnected)
                         Text(Self.word(status)).font(Theme.font(size: 11.5)).fixedSize()
                     }
                     .foregroundStyle(Self.colour(status))
+                    .motion(.smooth(duration: 0.2), value: status)
                 }
             }
             .padding(.horizontal, 16)
@@ -326,8 +373,16 @@ struct FileWell: View {
         .overlay(RoundedRectangle(cornerRadius: 8)
             .strokeBorder(targeted ? Theme.accent : Theme.sep,
                           style: StrokeStyle(lineWidth: targeted ? 1.5 : 1, dash: [3, 3])))
+        // The well brightened on entry in one frame. This is the target a
+        // developer aims a dragged .p8 at, and the border going from hairline
+        // to 1.5 points instantly reads as a redraw rather than a response.
+        .motion(.easeOut(duration: 0.12), value: targeted)
         .dropDestination(for: URL.self) { urls, _ in
-            accept(urls)
+            let accepted = accept(urls)
+            // Only on the accepted drop. A .json dropped on the Apple well is
+            // refused, and a tick there would say it landed.
+            if accepted { Haptic.drop() }
+            return accepted
         } isTargeted: { targeted = $0 }
     }
 }
@@ -343,7 +398,18 @@ struct EditableField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
-            TextField(prompt, text: $value.limited(to: limit))
+            // `oneLine` outside `limited`, and the order is the whole point: the
+            // break is taken out first, then the length is counted. A key id
+            // copied out of App Store Connect arrives with a newline on the end,
+            // which is 37 characters against a limit of 36, and the limit alone
+            // refused the whole paste. A Return typed into the field did the
+            // same damage from the other side: the value grew a line, the field
+            // editor scrolled to the empty second one, and the id a developer
+            // had just entered was cut in half on the screen.
+            //
+            // Every field this draws holds a store id. None of them has a
+            // second line, so this belongs here and not at the four call sites.
+            TextField(prompt, text: $value.limited(to: limit).oneLine)
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))
                 .padding(.horizontal, 8)

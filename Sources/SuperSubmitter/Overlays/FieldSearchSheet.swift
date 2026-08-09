@@ -47,7 +47,7 @@ struct FieldSearchSheet: View {
         }
         .frame(width: 520)
         .frame(minHeight: results.isEmpty ? 150 : 0)
-        .animation(.smooth(duration: 0.22), value: results.count)
+        .motion(.smooth(duration: 0.22), value: results.count)
         .background(Theme.content)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12)

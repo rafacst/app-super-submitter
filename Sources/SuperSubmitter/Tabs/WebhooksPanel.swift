@@ -131,7 +131,7 @@ struct WebhooksPanel: View {
                         .font(Theme.font(size: 11))
                         .foregroundStyle(delivery.state == "SUCCEEDED" ? Theme.green
                                          : delivery.state == "PENDING" ? Theme.yellow : Theme.red)
-                        .frame(width: 70, alignment: .leading)
+                        .frame(width: Theme.scaled(70), alignment: .leading)
                     if let status = delivery.responseStatus {
                         Text("HTTP \(status)").font(Theme.mono(10))
                             .foregroundStyle(Theme.text3)

@@ -29,6 +29,10 @@ struct PlanTab: View {
                 notReadYet
             }
         }
+        // The placeholders dissolve into the plan they were standing in for.
+        // The geometry already matches, so a crossfade is the whole transition
+        // this needs: nothing has to travel because nothing has moved.
+        .motion(.smooth(duration: 0.25), value: state.planReading)
         .task(id: state.manifestURL) {
             // The app never skips the plan. Without it, the app writes to a
             // live listing on a guess.
@@ -52,13 +56,81 @@ struct PlanTab: View {
 
     // MARK: - Before the read
 
+    /// One line and a spinner, over the shape of the answer.
+    ///
+    /// The read takes seconds against two APIs, and the tab drew a single line
+    /// on an empty page for all of it. When the plan landed, a grid of columns
+    /// and two counters appeared where there had been nothing, and the page
+    /// jumped by most of its own height.
+    ///
+    /// The placeholders match the real grid: the same adaptive 320 point
+    /// columns, the same card, the same header row, so nothing moves sideways
+    /// when the real thing replaces them. One card per store being read, and
+    /// never a fixed number, because a developer with one store connected must
+    /// not watch two columns load.
+    ///
+    /// `.redacted(reason: .placeholder)` and not a hand-drawn shimmer. It is
+    /// the system's own treatment, it needs no loop, and the report warns that
+    /// a conspicuous repeating shimmer is the wrong thing in dense desktop
+    /// work. The spinner above already says the app is busy.
     private var reading: some View {
-        HStack(spacing: 11) {
-            Spinner()
-            Text("Reading both stores. This writes nothing.")
-                .font(Theme.font(size: 13))
-                .foregroundStyle(Theme.text2)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 11) {
+                Spinner()
+                Text("Reading both stores. This writes nothing.")
+                    .font(Theme.font(size: 13))
+                    .foregroundStyle(Theme.text2)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14,
+                                         alignment: .top)],
+                      alignment: .leading, spacing: 14) {
+                ForEach(Store.allCases.filter { state.stores.contains($0) }) { store in
+                    placeholderColumn(store)
+                }
+            }
+            .redacted(reason: .placeholder)
+            // Not spoken. A reader would otherwise hear four lines of dummy
+            // text as though they were the plan. The line above says what is
+            // happening, and it is the only thing here worth hearing.
+            .accessibilityHidden(true)
         }
+    }
+
+    /// One store's column, at the size the real one will be.
+    private func placeholderColumn(_ store: Store) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                StoreMark(store: store, size: 16)
+                Text(store.storeName).font(Theme.font(size: 12.5, weight: .semibold))
+                Spacer(minLength: 8)
+                Text("0 writes").font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+
+            VStack(alignment: .leading, spacing: 0) {
+                // Four rows, of three lengths. Every row at one width reads as
+                // a bar chart rather than as text that has not arrived.
+                ForEach(["Reading the listing for every language",
+                         "Reading the media",
+                         "Reading the prices and the purchases",
+                         "Reading the release"], id: \.self) { line in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("~").font(Theme.mono(11.5, weight: .bold))
+                        Text(line).font(Theme.mono(11.5))
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 4)
+                }
+            }
+            .padding(.vertical, 5)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     private var notReadYet: some View {
@@ -101,7 +173,7 @@ struct PlanTab: View {
                     HStack(spacing: 12) {
                         Text(row.system)
                             .font(Theme.font(size: 12.5, weight: .medium))
-                            .frame(width: 110, alignment: .leading)
+                            .frame(width: Theme.scaled(110), alignment: .leading)
                         Text(row.line).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2)
                         Spacer(minLength: 8)
                         Text("In sync").font(Theme.font(size: 11.5)).foregroundStyle(Theme.green)
@@ -323,7 +395,7 @@ struct PlanTab: View {
                         Text(step.kind.rawValue)
                             .font(Theme.mono(11.5, weight: .bold))
                             .foregroundStyle(color(step.kind))
-                            .frame(width: 9, alignment: .leading)
+                            .frame(width: Theme.scaled(9), alignment: .leading)
                         Text(step.summary)
                             .font(Theme.mono(11.5))
                             .foregroundStyle(color(step.kind))
@@ -558,7 +630,10 @@ private struct ValidationRow: View {
             StatePill(text: isError ? "Error" : "Warning",
                       foreground: isError ? Theme.red : Theme.yellow,
                       background: isError ? Theme.redBg : Theme.yellowBg)
-                .frame(width: 58, alignment: .leading)
+                // Through `Theme.scaled`, because the pill inside it is text.
+                // Left at a flat 58 the column held "Error" and cut "Warning"
+                // in half, and it will do it again on the next type change.
+                .frame(width: Theme.scaled(64), alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 Text(finding.message)
                     .font(Theme.font(size: 12.5))

@@ -1,4 +1,5 @@
 import AppKit
+import QuickLookUI
 import SwiftUI
 
 
@@ -131,7 +132,17 @@ struct SuperSubmitterApp: App {
             }
         }
 
-        MenuBarExtra("Super Submitter", systemImage: "paperplane") {
+        // The symbol says whether the app is working. It was `paperplane` at
+        // all times, so the one item in the whole menu bar that could report a
+        // running apply reported nothing.
+        //
+        // A state change and not a loop. The menu bar is permanent visual
+        // territory that the developer cannot dismiss, and a glyph that
+        // animates continuously up there wears out in a morning. The filled
+        // plane is legible standing still, which is the test: this has to read
+        // correctly in a screenshot.
+        MenuBarExtra("Super Submitter",
+                     systemImage: state.isRunning ? "paperplane.fill" : "paperplane") {
             MenuBarPopover().environment(state)
         }
         .menuBarExtraStyle(.window)
@@ -165,4 +176,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
+
+    // MARK: - The Quick Look panel
+    //
+    // `QLPreviewPanel` is one app-wide panel and it refuses a data source from
+    // whoever asks for one. It walks the responder chain for the first object
+    // that accepts control, and hands the panel to that object alone.
+    //
+    // The delegate is the right place for it. It sits behind every window in
+    // the chain, so a preview opened from the Media tab keeps working
+    // whichever window is key, and no view in the SwiftUI hierarchy could hold
+    // this without an `NSViewRepresentable` existing only to be a responder.
+    //
+    // `override` because these three are an Objective-C informal protocol: a
+    // category on `NSObject`, so every object already has them and this
+    // replaces the inherited versions.
+    //
+    // `MainActor.assumeIsolated` because that category predates concurrency
+    // and so the methods import without isolation. AppKit calls them on the
+    // main thread, which is what the assumption asserts, and it traps rather
+    // than corrupting anything if that is ever untrue.
+    //
+    // `// ponytail: three methods on the delegate the app already has.`
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { panel.dataSource = QuickLook.shared }
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { panel.dataSource = nil }
+    }
 }
+

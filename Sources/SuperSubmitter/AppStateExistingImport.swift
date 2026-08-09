@@ -11,6 +11,12 @@ extension AppState {
         let client = StoreConnectionClient()
         var importedURLs: [URL] = []
         var skipped: [String] = []
+        // The stores this import actually called, so the Stores tab can stop
+        // asking for a connection it has already watched succeed. Collected
+        // rather than read off the two credentials: the sheet seeds itself from
+        // the Keychain, so it can hold an Apple key on an import of Google apps
+        // alone, and a key nothing called proves nothing.
+        var reached: Set<Store> = []
 
         for group in groups {
             // Super Submitter keeps `store.yaml` beside the app, so one app
@@ -55,6 +61,7 @@ extension AppState {
                     skipped += await materializeImportedAssets(
                         listing.assets, store: .apple, root: folder,
                         manifest: &importedManifest)
+                    reached.insert(.apple)
                 case .google:
                     guard let googleCredential else { continue }
                     _ = try await client.testGoogle(credential: googleCredential,
@@ -68,6 +75,7 @@ extension AppState {
                     skipped += await materializeImportedAssets(
                         listing.assets, store: .google, root: folder,
                         manifest: &importedManifest)
+                    reached.insert(.google)
                 }
             }
 
@@ -93,6 +101,27 @@ extension AppState {
             // time. Read it again now it is there.
             loadCredentials()
             importedURLs.append(manifestURL)
+        }
+        // The import is the connection. It signed a token with this key, listed
+        // the apps, and read a whole listing back, which is strictly more than
+        // the Connect button on the Stores tab ever does.
+        //
+        // Without these lines that tab said "Not connected" under a Connect
+        // button, so a developer who had just imported an app through the key
+        // was asked to prove the same key a second time, by hand, on the next
+        // screen they opened. `loadCredentials` above is what cleared it: the
+        // fields went from empty to the imported key, and a key that changes is
+        // exactly what invalidates a connection everywhere else in the app.
+        //
+        // After the loop, so the last `loadCredentials` of the run cannot
+        // undo it.
+        for store in reached {
+            switch store {
+            case .apple:
+                appleConnection = .connected("Connected · the import used this key")
+            case .google:
+                googleConnection = .connected("Connected · the import used this service account")
+            }
         }
         // A publisher lands on the build they are about to send. A manager has
         // nothing to build, so they land on the reviews of the live app.

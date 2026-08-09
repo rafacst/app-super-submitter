@@ -73,7 +73,7 @@ struct StoreDiagnosticsPanel: View {
             Text("Google generated APKs").font(Theme.font(size: 12, weight: .semibold))
             ForEach(apks) { apk in
                 HStack {
-                    Text(apk.kind).frame(width: 80, alignment: .leading)
+                    Text(apk.kind).frame(width: Theme.scaled(80), alignment: .leading)
                     Text(apk.downloadId).fontDesign(.monospaced).textSelection(.enabled)
                     Spacer()
                     Button("Download") { download(apk) }.controlSize(.small)

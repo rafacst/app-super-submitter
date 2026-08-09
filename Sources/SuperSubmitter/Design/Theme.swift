@@ -227,6 +227,23 @@ extension Binding where Value == String {
                 wrappedValue = new
             })
     }
+
+    /// Takes the line breaks out of whatever arrives.
+    ///
+    /// For a field that holds one line by definition: a key id, an issuer id,
+    /// a package name. Return puts a break into a SwiftUI text field on macOS
+    /// rather than ending the edit, and a value copied out of a web console
+    /// carries one on the end. Either way the field editor then scrolls to a
+    /// second, empty line and the value reads as cut in half, and the store
+    /// receives an id with a break in it.
+    ///
+    /// It goes outside `limited(to:)`, so the break is gone before the length
+    /// is counted. The other order refuses a 36 character id that arrives with
+    /// a newline as 37 characters, which reads as a paste that did nothing.
+    var oneLine: Binding<String> {
+        Binding(get: { wrappedValue },
+                set: { wrappedValue = $0.filter { !$0.isNewline } })
+    }
 }
 
 extension Optional {
@@ -338,6 +355,110 @@ extension View {
     func floatingSurface(cornerRadius: CGFloat = 14) -> some View {
         modifier(FloatingSurface(cornerRadius: cornerRadius))
     }
+
+    /// The file this window edits, for the title-bar proxy icon.
+    ///
+    /// `navigationDocument` takes a `URL` and not an optional, and the app has
+    /// no manifest open until one is linked, so the branch lives here rather
+    /// than at the call site.
+    ///
+    /// Nothing sets `isDocumentEdited`, and nothing should. Every field writes
+    /// `store.yaml` as it is typed, so the app has no unsaved state to warn
+    /// about, and a dot in the title bar would claim one. The report is firm
+    /// on this: edited-document state must match what is safely stored.
+    /// `SavedChip` in the header is what reports the write, at the moment it
+    /// is news.
+    @ViewBuilder
+    func documentURL(_ url: URL?) -> some View {
+        if let url {
+            self.navigationDocument(url)
+        } else {
+            self
+        }
+    }
+
+    /// The app's animation, and nothing at all under Reduce Motion.
+    ///
+    /// Every animation in the app goes through here, so the accessibility
+    /// setting is honoured in one place rather than in fifty call sites that
+    /// would drift apart. It reads `accessibilityReduceMotion`, which follows
+    /// System Settings, Accessibility, Display, Reduce motion.
+    ///
+    /// `.animation(value:)` and never `withAnimation`. `withAnimation` opens a
+    /// global transaction that animates every view SwiftUI updates in that
+    /// pass, not the property in the braces, and this app has been bitten by
+    /// that twice: see `HeaderSurface` and `SavedChip`.
+    ///
+    /// Reduce Motion means no movement, not no feedback. A view that moves
+    /// under this modifier still changes state instantly, so nothing that the
+    /// motion was reporting is lost.
+    /// The animation is optional, because a caller may already have a reason
+    /// of its own to stay still. `StoreSelectionGrid` passes nil until a card
+    /// has been pressed, so the grid does not play its selection spring over
+    /// the arrival of the whole tab on a first launch.
+    func motion<V: Equatable>(_ animation: Animation?, value: V) -> some View {
+        modifier(Motion(animation: animation, value: value))
+    }
+
+    /// The same, for a transition on an insertion or a removal.
+    ///
+    /// A transition needs the animation to reach it through the transaction
+    /// that inserts the view, so this pairs the two rather than leaving a
+    /// caller to remember both halves.
+    func motionTransition<V: Equatable>(_ transition: AnyTransition,
+                                        _ animation: Animation,
+                                        value: V) -> some View {
+        modifier(MotionTransition(transition: transition,
+                                  animation: animation, value: value))
+    }
+}
+
+// MARK: - Reduce Motion
+
+/// Reads the accessibility setting once, for `View.motion`.
+private struct Motion<V: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let animation: Animation?
+    let value: V
+
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? nil : animation, value: value)
+    }
+}
+
+/// The same rule, for the imperative calls.
+///
+/// Most animation in the app is a state flag that a view watches, and
+/// `View.motion` covers those. A few are commands with no flag behind them: a
+/// scroll to an anchor, a step of the onboarding. Those still need
+/// `withAnimation`, and this is how they ask for the setting.
+///
+/// Read it from `@Environment(\.accessibilityReduceMotion)` and pass it here,
+/// rather than reading `NSWorkspace` at the call site: the environment value
+/// updates the view when the setting changes, and a direct read would leave
+/// the app on whatever the setting was when it launched.
+@MainActor
+func withMotion(_ reduceMotion: Bool, _ animation: Animation,
+                _ body: () -> Void) {
+    withAnimation(reduceMotion ? nil : animation, body)
+}
+
+/// A transition that becomes a plain fade under Reduce Motion.
+///
+/// A fade and not nothing. The report's rule is that large movement and
+/// simulated depth become opacity, and that the feedback survives: a row that
+/// appears with no mark at all is a row the reader never saw arrive.
+private struct MotionTransition<V: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let transition: AnyTransition
+    let animation: Animation
+    let value: V
+
+    func body(content: Content) -> some View {
+        content
+            .transition(reduceMotion ? .opacity : transition)
+            .animation(reduceMotion ? .easeOut(duration: 0.15) : animation, value: value)
+    }
 }
 
 // MARK: - The floating materials
@@ -374,7 +495,7 @@ private struct HeaderSurface: ViewModifier {
                 // `scrolled`. That one was a global transaction and swept the
                 // whole first-run layout in with it. This animates the rule and
                 // the fill, which is all the state was ever for.
-                .animation(.easeOut(duration: 0.14), value: scrolled)
+                .motion(.easeOut(duration: 0.14), value: scrolled)
         }
     }
 }
@@ -397,7 +518,7 @@ private struct GlassCluster<Token: Equatable>: ViewModifier {
                 // The morph is the point. Without it the lozenge jumps to its
                 // new width on the frame a control appears, which is the one
                 // thing this material is meant not to do.
-                .animation(.smooth(duration: 0.28), value: token)
+                .motion(.smooth(duration: 0.28), value: token)
         } else {
             content
         }
@@ -499,6 +620,15 @@ struct StatePill: View {
         Text(text)
             .font(Theme.font(size: 10.5, weight: .medium))
             .foregroundStyle(foreground)
+            // One word, on one line, in whatever column it is put in.
+            //
+            // "Warning" came out as "Warnin / g" on the Summary tab: the column
+            // beside it reserves a width in points, the type scale grew, and the
+            // pill wrapped inside a box that had stopped fitting it. A state
+            // pill broken across two lines is worse than no pill, and it is one
+            // word: it has no business wrapping anywhere.
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(background, in: RoundedRectangle(cornerRadius: 5))
@@ -556,29 +686,59 @@ struct QuietButton: View {
     /// the answer to the question in the tab's own subtitle: three buttons at
     /// one weight say the tab has three equal errands and no answer.
     var prominent = false
+    /// An SF Symbol before the title, which bounces once each time the command
+    /// runs.
+    ///
+    /// The header commands used to fire in silence. "Read the stores again"
+    /// starts a pass over two APIs that takes seconds, and pressing it moved
+    /// nothing on screen, so the developer pressed it twice. The symbol is the
+    /// acknowledgement, and it is the whole of it: the work itself reports
+    /// through the spinner and the counters, as it always did.
+    ///
+    /// `.bounce` and not `.rotate`. This app floors at macOS 14 and `.rotate`
+    /// arrived in 15, so a rotating refresh glyph would need a branch on every
+    /// call site for an effect that says the same thing.
+    var symbol: String?
+    /// Raised by the caller on each press. `.symbolEffect` fires on a change
+    /// of value, so a `Bool` would only ever animate the first two presses.
+    var tick = 0
     var action: () -> Void = {}
 
     var body: some View {
         if #available(macOS 26.0, *), glass {
             // The style draws the capsule, so the label carries no fill and
             // no border of its own. Two chromes on one button is a double edge.
-            Button(action: action) {
-                Text(title).font(Theme.font(size: 12, weight: prominent ? .semibold : .regular))
-            }
-            .buttonStyle(prominent ? AnyButtonStyle(.glassProminent) : AnyButtonStyle(.glass))
-            // Only the prominent one takes a tint. Plain glass reads the tint
-            // as a fill, so tinting both would paint the whole cluster accent
-            // and lose the very distinction this flag exists to make.
-            .tint(prominent ? Theme.accent : nil)
+            Button(action: action) { label }
+                .buttonStyle(prominent ? AnyButtonStyle(.glassProminent)
+                                       : AnyButtonStyle(.glass))
+                // Only the prominent one takes a tint. Plain glass reads the tint
+                // as a fill, so tinting both would paint the whole cluster accent
+                // and lose the very distinction this flag exists to make.
+                .tint(prominent ? Theme.accent : nil)
         } else {
             Button(action: action) { flatLabel }
                 .buttonStyle(.plain)
         }
     }
 
+    /// The title, with the symbol in front of it when there is one.
+    @ViewBuilder
+    private var label: some View {
+        let font = Theme.font(size: 12, weight: prominent ? .semibold : .regular)
+        if let symbol {
+            HStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .symbolEffect(.bounce, value: tick)
+                Text(title)
+            }
+            .font(font)
+        } else {
+            Text(title).font(font)
+        }
+    }
+
     private var flatLabel: some View {
-        Text(title)
-            .font(Theme.font(size: 12, weight: prominent ? .semibold : .regular))
+        label
             .foregroundStyle(prominent ? Theme.accentText : Theme.text)
             .padding(.horizontal, 11)
             .padding(.vertical, 4)
@@ -645,7 +805,13 @@ struct SmallToggle: View {
 
     var body: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.12)) { isOn.toggle() }
+            // A bare assignment. The `.motion` on the stack below is what
+            // animates the knob, and it honours Reduce Motion, which the
+            // `withAnimation` that used to be here did not. That call was also
+            // a global transaction: it animated every view SwiftUI updated in
+            // the same pass, not the flag in its braces. See `SavedChip` and
+            // `HeaderSurface` for the two bugs that came of exactly this.
+            isOn.toggle()
         } label: {
             // An offset and a centred stack. See `AppearanceSwitch`: the
             // alignment this used to swap has nothing between its two values
@@ -665,7 +831,7 @@ struct SmallToggle: View {
             .frame(width: 34, height: 20)
             .padding(2)
             .contentShape(.rect)
-            .animation(.easeOut(duration: 0.12), value: isOn)
+            .motion(.easeOut(duration: 0.12), value: isOn)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Dry run")

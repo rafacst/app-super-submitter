@@ -44,7 +44,7 @@ struct AccountTab: View {
             }
             Spacer(minLength: 0)
         }
-        .animation(.smooth(duration: 0.22), value: state.showSignIn)
+        .motion(.smooth(duration: 0.22), value: state.showSignIn)
         .task { await state.loadBillingPlans() }
     }
 
