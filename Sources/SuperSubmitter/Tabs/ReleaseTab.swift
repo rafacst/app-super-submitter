@@ -82,19 +82,33 @@ struct ReleaseTab: View {
         return result
     }
 
+    /// The fraction, and the bar that draws it.
+    ///
+    /// The count said "1 of 14 steps are done" in words and drew nothing. It is
+    /// the only true progress in this app, and a fraction in words is the one
+    /// number a reader has to do arithmetic on before it means anything.
+    ///
+    /// Green once every step is done, accent while any remains. The colour is
+    /// the answer to the only question the bar is asked: is this store finished.
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            // Verbatim and monospaced, for the reason the Summary counters
-            // are: a localized "\(int)" carries the locale's grouping
-            // separator, and proportional digits shuffle the words after them
-            // every time a step is ticked.
-            Text(verbatim: "\(state.consoleDone) of \(state.consoleRows.count) steps are done")
-                .font(.system(size: 14, weight: .semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-            Text("Every row below happens in a console. No API performs it.")
-                .font(.system(size: 12)).foregroundStyle(Theme.text2)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                // Verbatim and monospaced, for the reason the Summary counters
+                // are: a localized "\(int)" carries the locale's grouping
+                // separator, and proportional digits shuffle the words after them
+                // every time a step is ticked.
+                Text(verbatim: "\(state.consoleDone) of \(state.consoleRows.count) steps are done")
+                    .font(.system(size: 14, weight: .semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text("Every row below happens in a console. No API performs it.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                Spacer(minLength: 0)
+            }
+            if !state.consoleRows.isEmpty {
+                StepBar(done: state.consoleDone, total: state.consoleRows.count)
+                    .frame(maxWidth: 340)
+            }
         }
     }
 
@@ -131,23 +145,41 @@ struct ReleaseTab: View {
         }
     }
 
+    /// One store, as a route.
+    ///
+    /// The logo at the head is where the journey starts and the last row is
+    /// where it ends, so a dotted rail runs between them and every step sits on
+    /// it. Evoque draws a flight this way, and this app had already chosen the
+    /// same metaphor: `Tab.symbol` gives Release an `airplane`.
+    ///
+    /// The rail is uniform and never draws a travelled half. These steps have
+    /// no order — a developer can do content rating before app privacy or after
+    /// it — and a solid-then-dotted rail would claim a sequence that does not
+    /// exist. The nodes carry the state; the line only carries the shape.
+    ///
+    /// The rules between rows went with it. Two separators for one list is one
+    /// too many, and the rail is the stronger of the two.
     private func checklistCard(_ card: (name: String, rows: [ConsoleRow])) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                SystemMark(name: card.name)
-                Text(card.name).font(.system(size: 12.5, weight: .semibold))
-                Spacer(minLength: 8)
-                Text(verbatim: "\(card.rows.filter { state.markedState($0) == .done }.count) of \(card.rows.count)")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text2)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+        let done = card.rows.filter { state.markedState($0) == .done }.count
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    SystemMark(name: card.name)
+                    Text(card.name).font(.system(size: 12.5, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text(verbatim: "\(done) of \(card.rows.count)")
+                        .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                }
+                StepBar(done: done, total: card.rows.count, thickness: 3)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
 
-            ForEach(card.rows) { row in
-                Hairline(color: Theme.sep2)
-                ChecklistRow(row: row)
+            ForEach(Array(card.rows.enumerated()), id: \.element.id) { index, row in
+                ChecklistRow(row: row, isLast: index == card.rows.count - 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -303,9 +335,52 @@ struct ReleaseTab: View {
     }
 }
 
+/// The bar under a fraction.
+///
+/// Two capsules, and this started as `ProgressView(value:total:)`. The linear
+/// style on macOS is an `NSProgressIndicator`, which takes its colour from the
+/// system accent and ignores SwiftUI's `.tint` entirely — so every bar drew
+/// grey and the one thing this item exists for, green once a store is finished,
+/// could not be said. The platform control does not do the job, so it goes.
+///
+/// ponytail: a `GeometryReader` and two shapes. Drop it the day `.tint` reaches
+/// the linear style.
+private struct StepBar: View {
+    let done: Int
+    let total: Int
+    var thickness: CGFloat = 4
+
+    private var fraction: Double {
+        guard total > 0 else { return 0 }
+        return Double(done) / Double(total)
+    }
+
+    /// Green is "this store is finished", which is the only question a reader
+    /// asks a bar on this tab. An empty card is not finished, so a card with no
+    /// rows never reads as done.
+    private var fill: Color { total > 0 && done == total ? Theme.green : Theme.accent }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.sep)
+                Capsule().fill(fill).frame(width: geometry.size.width * fraction)
+            }
+        }
+        .frame(height: thickness)
+        .animation(.smooth(duration: 0.3), value: done)
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(done) of \(total) done")
+    }
+}
+
 private struct ChecklistRow: View {
     @Environment(AppState.self) private var state
     let row: ConsoleRow
+    /// Whether the rail stops here. The last node of a card is the
+    /// destination, so no line leaves it.
+    let isLast: Bool
 
     var body: some View {
         let shown = state.markedState(row)
@@ -313,40 +388,18 @@ private struct ChecklistRow: View {
             // Only an Unknown row takes a hand-made mark. No API can read it,
             // so the developer is the only source.
             //
-            // The other rows keep an empty column, and an empty column is a
-            // rule you cannot see: two rows side by side, one tickable and one
-            // not, with nothing to say why. They now carry the reason. A tick
-            // box on an API-read row would be worse than missing — it would
-            // let the developer mark a step done that the store says is not,
-            // on the one screen in the app that may never overstate a state.
-            Group {
-                if row.state == .unknown {
-                    let marked = state.consoleMarks.contains(row.id)
-                    Button {
-                        state.toggleConsoleMark(row.id)
-                    } label: {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(marked ? Theme.accent : .clear)
-                            .frame(width: 14, height: 14)
-                            .overlay(RoundedRectangle(cornerRadius: 3)
-                                .strokeBorder(Theme.controlEdge, lineWidth: 1))
-                            .overlay(Text(marked ? "✓" : "")
-                                .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(row.title)
-                    .accessibilityValue(marked ? "Confirmed" : "Not confirmed")
-                } else {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Theme.text3)
-                        .frame(width: 14, height: 14)
-                        .help("The store reports this one. There is nothing to tick.")
-                        .accessibilityLabel("Reported by the store")
-                }
-            }
-            .frame(width: 15)
+            // The other rows keep the antenna, and it carries the reason: a
+            // tick box on an API-read row would let the developer mark a step
+            // done that the store says is not, on the one screen in the app
+            // that may never overstate a state.
+            //
+            // The card's fill sits behind the mark, so the rail behind the row
+            // stops at its edge rather than show through a checkbox that is
+            // mostly empty.
+            mark
+                .padding(.vertical, 2)
+                .background(Theme.raised)
+                .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
@@ -372,6 +425,66 @@ private struct ChecklistRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        // Behind the padded row, and not a column inside it. A rail placed
+        // among the stack's children can only span the content, so it stopped
+        // 10 points short at each end and left a 20 point break between every
+        // pair of nodes — a dotted line with the dots missing where it mattered.
+        // A background is offered the row's whole frame, padding included, so
+        // the segments meet and the route reads as one line.
+        .background(alignment: .topLeading) { rail }
+    }
+
+    /// The line the nodes stand on.
+    ///
+    /// It stops at the node on the last row, because that node is where the
+    /// route ends. `19` is the centre of the mark: 10 points of row padding and
+    /// half of the 18 point mark above it.
+    private var rail: some View {
+        RailLine()
+            .stroke(Theme.sep, style: StrokeStyle(lineWidth: 1.2, dash: [2, 3]))
+            .frame(width: 18)
+            .padding(.leading, 14)
+            .frame(maxHeight: isLast ? 19 : .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        if row.state == .unknown {
+            let marked = state.consoleMarks.contains(row.id)
+            Button {
+                state.toggleConsoleMark(row.id)
+            } label: {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(marked ? Theme.accent : Theme.raised)
+                    .frame(width: 14, height: 14)
+                    .overlay(RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Theme.controlEdge, lineWidth: 1))
+                    .overlay(Text(marked ? "✓" : "")
+                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(row.title)
+            .accessibilityValue(marked ? "Confirmed" : "Not confirmed")
+        } else {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: 9))
+                .foregroundStyle(Theme.text3)
+                .frame(width: 14, height: 14)
+                .help("The store reports this one. There is nothing to tick.")
+                .accessibilityLabel("Reported by the store")
+        }
+    }
+}
+
+/// The dotted rail down a checklist card. One line, drawn down the middle of
+/// whatever it is given.
+private struct RailLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        return path
     }
 }
 
@@ -406,6 +519,34 @@ extension ReleaseTab {
         case .notApplicable: .clear
         }
     }
+
+    /// The colour a release phase has earned, or nil where it has earned none.
+    ///
+    /// A phase is coloured only once the store has taken a position on it.
+    /// Green says the store is finished with this version, yellow says the
+    /// store is holding it, and red says the store refused it — the same red
+    /// the failure card below already uses when a store says no.
+    ///
+    /// `noDraft` and `draft` stay untinted. Nothing has been sent, so there is
+    /// no state of the store's to report, and a colour there would be the app
+    /// commenting on the developer's own progress rather than the store's.
+    static func phaseColour(_ phase: StoreStatus.Phase) -> Color? {
+        switch phase {
+        case .noDraft, .draft: nil
+        case .inQueue, .inReview: Theme.yellow
+        case .approved, .live: Theme.green
+        case .rejected: Theme.red
+        }
+    }
+
+    static func phaseBackground(_ phase: StoreStatus.Phase) -> Color? {
+        switch phase {
+        case .noDraft, .draft: nil
+        case .inQueue, .inReview: Theme.yellowBg
+        case .approved, .live: Theme.greenBg
+        case .rejected: Theme.redBg
+        }
+    }
 }
 
 private struct StatusCard: View {
@@ -414,6 +555,7 @@ private struct StatusCard: View {
     var body: some View {
         HStack(spacing: 11) {
             StoreMark(store: status.store, size: 20)
+
 
             // A round dot is a draft. A square dot is in a queue. The two
             // read apart with no colour.
@@ -433,9 +575,11 @@ private struct StatusCard: View {
             Spacer(minLength: 8)
             Text(status.phase.label)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(status.phase.isReleased ? Theme.yellow : Theme.text)
+                .foregroundStyle(ReleaseTab.phaseColour(status.phase) ?? Theme.text)
         }
-        .storePanel(padding: 12, horizontal: 15)
+        .storePanel(padding: 12, horizontal: 15,
+                    background: ReleaseTab.phaseBackground(status.phase) ?? Theme.raised,
+                    border: ReleaseTab.phaseColour(status.phase)?.opacity(0.45) ?? Theme.sep)
     }
 
     private var detail: String {
@@ -504,10 +648,13 @@ private struct ReleaseColumn: View {
 private struct SystemMark: View {
     let name: String
 
+    /// 18 points, and the same for all three. It is the head of the rail that
+    /// runs down the card, so its centre has to sit on the line: a 16 point
+    /// logo put the origin one point off every node below it.
     var body: some View {
         switch name {
-        case "App Store": StoreMark(store: .apple, size: 16)
-        case "Google Play": StoreMark(store: .google, size: 16)
+        case "App Store": StoreMark(store: .apple, size: 18)
+        case "Google Play": StoreMark(store: .google, size: 18)
         default: IconChip(symbol: "arrow.triangle.2.circlepath", tint: Theme.orange, size: 18)
         }
     }

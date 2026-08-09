@@ -79,15 +79,32 @@ enum ScreenshotMode {
         isActive ? "screenshots-no-credentials" : "store-credentials"
     }
 
-    /// Points the credential vault at a service of its own.
+    /// Keeps the credential vault out of the Keychain entirely.
     ///
     /// It runs before the first read of the process, so nothing has opened the
     /// real item by the time this lands.
+    ///
+    /// This used to point the vault at a Keychain service of its own, which
+    /// was not enough. macOS grants Keychain access to a *binary*, and a
+    /// `swift build` binary is a new one every compile, so the run after each
+    /// build read an item the previous build had written and raised "allow
+    /// access" — a password, on the main thread, on every build. An isolated
+    /// run has nothing worth keeping between launches, so it keeps its
+    /// credentials in memory and opens no Keychain item at all.
+    /// Every `swift build` binary is isolated, not only `--demo`.
+    ///
+    /// The package target builds a plain unsigned executable and exists for
+    /// `swift test` and for checking a change on screen. It is a new binary
+    /// on every compile, so it is a new owner to the Keychain on every
+    /// compile, and the real vault asks for a password each time. The shipping
+    /// build is the Xcode project, it is signed, it keeps one identity across
+    /// versions, and it is the only build that opens the real vault.
     static func isolateCredentials() {
-        #if DEBUG
+        #if SWIFT_PACKAGE
+        KeychainCredentials.useMemoryVault()
+        #elseif DEBUG
         guard isActive else { return }
-        KeychainCredentials.useIsolatedService(
-            "com.rafacst.SuperSubmitter.credentials.demo")
+        KeychainCredentials.useMemoryVault()
         #endif
     }
 

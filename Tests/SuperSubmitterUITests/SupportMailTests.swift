@@ -48,6 +48,26 @@ import Testing
         #expect(body.contains("Apple silicon") || body.contains("Intel"))
     }
 
+    /// The panel may not call the product "unknown".
+    ///
+    /// It did, in every build that is not the Xcode app. A SwiftPM executable
+    /// carries no Info.plist, so `Bundle.main` answered nothing and the panel
+    /// printed the fallback as the name of the app, as its copyright, and in
+    /// the support subject. The package build is the one `tools/screenshots.sh`
+    /// runs, so that was the About panel on the website.
+    ///
+    /// The test runs in exactly that bundle, which is what makes it worth
+    /// having: it is the case that was broken.
+    @Test func theNameAndTheCopyrightAreNeverUnknown() {
+        #expect(AboutPanel.appName == "Super Submitter")
+        #expect(!AboutPanel.copyright.isEmpty)
+        #expect(!AboutPanel.copyright.lowercased().contains("unknown"))
+        // The version is a fact of the build, not of the product, so a package
+        // build is allowed to have none. It may not guess at one.
+        #expect(!AboutPanel.version.lowercased().contains("unknown"))
+        #expect(!AboutPanel.build.lowercased().contains("unknown"))
+    }
+
     /// The report is diagnostics and nothing else. A support mail the user has
     /// not read yet must not carry an account, a path, or a key out of the
     /// machine, so the shapes that would carry one are named here.

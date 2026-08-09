@@ -3,28 +3,35 @@ import SwiftUI
 
 /// The shell. Spec section 16.1.
 ///
-/// The content is the window surface, and the sidebar is a panel floating on
-/// it, so the two read apart with a gap instead of a rule.
+/// A `NavigationSplitView`, and it was an `HStack` of a floating panel and a
+/// pane. The panel was the reason for three pieces of hand-work that have all
+/// gone with it: the window buttons had to be nudged in by a `NSViewRepresentable`
+/// because the panel was inset from the corner they pin to, the top safe area
+/// had to be ignored so the panel could carry them, and the sidebar had a
+/// width in points rather than a range a user may drag.
+///
+/// The split view gives the divider, the drag, the collapse, the vibrancy, and
+/// the window buttons in the place AppKit already puts them.
 struct RootView: View {
     @Environment(AppState.self) private var state
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    /// The sidebar may be hidden, and the shell remembers whether it is.
+    @State private var columns = NavigationSplitViewVisibility.automatic
 
     var body: some View {
         @Bindable var state = state
-        HStack(spacing: 0) {
+        NavigationSplitView(columnVisibility: $columns) {
             Sidebar()
-                .panelSurface()
-                .padding(Theme.panelGap)
+                // A range, not a number. The old column was 240 points and no
+                // other width was reachable.
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+        } detail: {
             ContentArea()
         }
+        .navigationSplitViewStyle(.balanced)
         .background(Theme.content)
         .foregroundStyle(Theme.text)
         .font(.system(size: 13))
-        .background(TrafficLightInset(inset: Theme.panelGap).frame(width: 0, height: 0))
-        // The window hides its title bar, but SwiftUI still insets for it.
-        // Without this the panel starts below the traffic lights instead of
-        // carrying them, and the shell reads as a bar above a panel.
-        .ignoresSafeArea(.container, edges: .top)
         // Every sheet carries the message alert. See AppMessage: an alert on
         // this view alone cannot appear while a sheet covers it.
         .sheet(isPresented: $state.showSettings) { SettingsPanel().appMessage() }
@@ -164,7 +171,20 @@ private struct ContentArea: View {
                 geometry.contentOffset.y > 2
             } action: { _, isScrolled in
                 guard scrolled != isScrolled else { return }
-                withAnimation(.easeOut(duration: 0.14)) { scrolled = isScrolled }
+                // A bare assignment, and `HeaderSurface` animates the one thing
+                // that reads it.
+                //
+                // This was `withAnimation`, which is a *global* transaction: it
+                // animates every view SwiftUI updates in that pass, not the
+                // property in the braces. It fires the instant a scroll view
+                // first reports its geometry, which on a first run is the same
+                // pass that inserts the whole tab — the app has no linked app
+                // at launch, links one, and rebuilds the sidebar, the header
+                // and the tab together. All of it went into a 0.14 second
+                // animation and slid into place from wherever SwiftUI had last
+                // measured it, which is why panel contents rose up the screen
+                // on first launch and never again.
+                scrolled = isScrolled
             }
         } else {
             scroll.onAppear { scrolled = true }
@@ -407,10 +427,24 @@ private struct ContentHeader: View {
                 .accessibilityValue(state.showYAML ? "On" : "Off")
             }
 
+            // The save, where a save belongs: beside the work, for as long as
+            // it is news. It used to be a permanent line at the foot of the
+            // navigation column, which gave a status the weight of a
+            // destination and told you at every moment about a moment that had
+            // passed.
+            SavedChip()
+
             let shape = HeaderShape(tab: state.selectedTab, busy: state.rechecking,
                                     readFailed: state.planError != nil,
                                     pendingRelease: state.hasPendingRelease,
                                     locales: state.locales.count)
+
+            // Light and dark, one click away, on every screen. It sits before
+            // the search glyph and outside the `manifestURL` guard below:
+            // reading a screen is the one thing a person does whether an app is
+            // linked or not, so the control that decides how a screen reads
+            // cannot depend on one.
+            HeaderCluster(morphOn: shape) { AppearanceSwitch() }
 
             // The palette, with a way in that is not the menu bar.
             //
@@ -650,4 +684,68 @@ struct AppMessage: ViewModifier {
 
 extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
+}
+
+/// States that the work is on disk, for as long as that is news.
+///
+/// The app has no unsaved state to warn about: every field writes `store.yaml`
+/// when it changes. This says so, because a form with no Save button reads as
+/// a form that keeps nothing.
+///
+/// It used to be a row pinned to the foot of the sidebar, under a rule, at all
+/// times. That is a status with the weight of a destination, and reassurance
+/// that is always on is reassurance nobody reads: it stops being the answer to
+/// "did that save?" and becomes furniture, and then the one moment it matters
+/// looks like every other moment. It appears on a save and it goes.
+///
+/// The way to the file went with it and did not disappear: Show store.yaml in
+/// Finder is in the File menu, and Settings keeps its own button.
+struct SavedChip: View {
+    @Environment(AppState.self) private var state
+    @State private var recentlySaved = false
+
+    private var line: String {
+        guard let date = state.lastSavedAt else { return "Saved" }
+        return "Saved \(date.formatted(date: .omitted, time: .shortened))"
+    }
+
+    var body: some View {
+        Group {
+            if recentlySaved {
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.green)
+                    Text(line)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.text2)
+                        .lineLimit(1)
+                }
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(line)
+            }
+        }
+        // `task(id:)` and not `onChange`, because this has to be cancelled.
+        // `onChange` started a three second timer per save and cancelled
+        // none of them, so a burst of saves left a queue of them and each
+        // one turned the tick off at its own three second mark while later
+        // saves turned it back on. It read as a blink.
+        //
+        // Bare assignments, with the animation scoped below. These were two
+        // `withAnimation` calls, which animate every view SwiftUI updates in
+        // the same pass and not the flag in the braces. Linking the first app
+        // writes the manifest, so `lastSavedAt` is set at the exact moment the
+        // sidebar, the header and the tab are all being built for the first
+        // time, and the whole window animated in behind a tick nobody was
+        // looking at.
+        .task(id: state.lastSavedAt) {
+            guard state.lastSavedAt != nil else { return }
+            recentlySaved = true
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            recentlySaved = false
+        }
+        .animation(.smooth(duration: recentlySaved ? 0.2 : 0.4), value: recentlySaved)
+    }
 }

@@ -61,9 +61,15 @@ struct AboutPanel: View {
         var size = 0
         sysctlbyname("hw.model", nil, &size, nil, 0)
         guard size > 0 else { return "unknown Mac" }
-        var value = [CChar](repeating: 0, count: size)
+        var value = [UInt8](repeating: 0, count: size)
         sysctlbyname("hw.model", &value, &size, nil, 0)
-        return String(cString: value)
+        // `firstIndex(of:)` and not `prefix(while:)`. The panel is a `View`, so
+        // it is main-actor isolated and so is any closure written inside it;
+        // handing that closure to a non-isolated `prefix` makes the runtime
+        // check the executor, and this getter is read from a test off the main
+        // actor. It trapped. This form takes no closure at all.
+        let end = value.firstIndex(of: 0) ?? value.endIndex
+        return String(decoding: value[..<end], as: UTF8.self)
     }
 
     /// The slice that is actually running, which is the useful half. A
@@ -123,7 +129,7 @@ struct AboutPanel: View {
                     Text(Self.appName)
                         .font(.system(size: 21, weight: .semibold))
                         .kerning(-0.25)
-                    Text("Version \(Self.version) (build \(Self.build))")
+                    Text(Self.versionLine)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.text2)
                         .textSelection(.enabled)
@@ -213,12 +219,56 @@ struct AboutPanel: View {
     }
 
     /// Read from the bundle, so the panel can never disagree with the build.
-    private static func plist(_ key: String) -> String {
-        Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "unknown"
+    ///
+    /// It answers nil rather than "unknown". A key that is missing and a key
+    /// that is empty are the same fact, and the caller is the only place that
+    /// knows what to say instead.
+    private static func plist(_ key: String) -> String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+              !value.isEmpty else { return nil }
+        return value
     }
 
-    static var appName: String { plist("CFBundleDisplayName") }
-    static var version: String { plist("CFBundleShortVersionString") }
-    static var build: String { plist("CFBundleVersion") }
-    static var copyright: String { plist("NSHumanReadableCopyright") }
+    /// The name, and it may never be "unknown".
+    ///
+    /// It was, in every build that is not the Xcode app. A SwiftPM executable
+    /// carries no Info.plist, so `Bundle.main` answered nothing for all four
+    /// values below and the panel read "unknown" four times — as the name of
+    /// the product, as its version, as its build, and as its copyright. The
+    /// package build is what `tools/screenshots.sh` runs, so that is the About
+    /// panel every website screenshot has ever shown.
+    ///
+    /// The name and the copyright are facts of the product and not of the
+    /// build, so they fall back to the product. `CFBundleName` sits between,
+    /// for a bundle that set the short name and not the display one.
+    ///
+    /// ponytail: two literals that also live in `project.yml`. Change them in
+    /// both. A generated constant would be a build phase, a generated file and
+    /// a .gitignore entry, to keep two strings in step that change once a year.
+    static var appName: String {
+        plist("CFBundleDisplayName") ?? plist("CFBundleName") ?? "Super Submitter"
+    }
+
+    static var copyright: String {
+        plist("NSHumanReadableCopyright") ?? "Copyright © 2026 Rafa CST"
+    }
+
+    /// The version, which is a fact of the build and not of the product.
+    ///
+    /// So this one does not invent a number. A package build genuinely has no
+    /// version, and a support email that quotes an invented one sends the
+    /// reader looking for a release that was never cut. It says which kind of
+    /// build it is instead, which is the useful half of the answer.
+    static var version: String { plist("CFBundleShortVersionString") ?? "—" }
+    static var build: String { plist("CFBundleVersion") ?? "development" }
+
+    /// The line under the name.
+    ///
+    /// A build with no version says so in one phrase rather than read "Version
+    /// — (build development)", which is three punctuation marks arranged around
+    /// an absence.
+    static var versionLine: String {
+        guard plist("CFBundleShortVersionString") != nil else { return "Development build" }
+        return "Version \(version) (build \(build))"
+    }
 }

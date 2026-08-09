@@ -18,14 +18,22 @@ struct AccountTab: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let reason = state.paywallReason { reasonCard(reason) }
                 identity
                 if !state.accountServiceReady {
                     WarningNote(AppState.noAccountService, width: Self.column)
                 }
-                capabilities
-                if !state.isPaid { plans }
+                // What it costs and what it covers, on one row rather than
+                // stacked. The tab was a single 620 point column in a pane half
+                // as wide again, so it spent a third of the width on nothing
+                // and ran off the bottom of a default window. Both halves are
+                // read together anyway: the question is what the money buys.
+                HStack(alignment: .top, spacing: 12) {
+                    if !state.isPaid { plans.frame(maxWidth: .infinity) }
+                    capabilities.frame(maxWidth: .infinity)
+                }
+                .fixedSize(horizontal: false, vertical: true)
                 actions
             }
             .frame(maxWidth: Self.column, alignment: .leading)
@@ -41,7 +49,12 @@ struct AccountTab: View {
     }
 
     /// One width for the whole column, so every card shares two edges.
-    static let column: CGFloat = 620
+    ///
+    /// It is the content width of the narrowest window the app allows: 1120,
+    /// less the sidebar and its gap, less the 20 point pad the shell puts round
+    /// every tab. So the column fills a small window and holds its measure on a
+    /// large one, and the two inner columns stay wide enough to read.
+    static let column: CGFloat = 820
 
     private var signedIn: Bool { state.accountEmail != nil }
 
@@ -154,20 +167,27 @@ struct AccountTab: View {
 
     // MARK: - What it covers
 
-    /// The free half and the paid half, side by side and the same height.
+    /// The free half and the paid half, always the same height as each other.
     ///
-    /// `equalHeight` is what keeps them level. Two cards of different lengths
-    /// in an HStack sit on one top edge and two bottom edges, which reads as
-    /// one of them being unfinished.
+    /// The `maxHeight` in `column` is what keeps them level. Two cards of
+    /// different lengths sit on one top edge and two bottom edges, which reads
+    /// as one of them being unfinished.
+    ///
+    /// They lie side by side when they own the row and stack when the plans
+    /// card is beside them. Three cards abreast in this width leaves each one
+    /// too narrow to hold a line of the list, and a wrapped list item reads as
+    /// two items.
+    @ViewBuilder
     private var capabilities: some View {
-        HStack(alignment: .top, spacing: 12) {
-            column(title: "Free, always", tint: Theme.green,
-                   symbol: "checkmark.seal.fill", lines: Self.free)
-            column(title: "Paid access", tint: Theme.purple,
-                   symbol: "sparkles", lines: Self.paid, locked: !state.isPaid)
+        let free = column(title: "Free, always", tint: Theme.green,
+                          symbol: "checkmark.seal.fill", lines: Self.free)
+        let paid = column(title: "Paid access", tint: Theme.purple,
+                          symbol: "sparkles", lines: Self.paid, locked: !state.isPaid)
+        if state.isPaid {
+            HStack(alignment: .top, spacing: 12) { free; paid }
+        } else {
+            VStack(alignment: .leading, spacing: 12) { free; paid }
         }
-        .frame(maxWidth: .infinity)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     static let free = [
