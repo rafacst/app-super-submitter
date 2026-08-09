@@ -26,6 +26,24 @@ struct MediaTab: View {
         return values
     }
 
+    /// The stores that take a device class.
+    ///
+    /// A fact of the two catalogues rather than a layout choice, so it is
+    /// answered once: Play alone reads a 7 inch tablet, Apple alone reads a
+    /// Mac screen and a Vision one, and everything else goes to both.
+    ///
+    /// One image set per device class, and never one per store. Both stores
+    /// read the same file, the manifest holds one list, and the planner sends
+    /// that list to whichever store takes the size. A column per store would
+    /// have to invent a second set of images for the sizes they share.
+    static func takers(_ device: Manifest.DeviceClass) -> Set<Store> {
+        switch device {
+        case .desktop, .vision: [.apple]
+        case .tablet7: [.google]
+        default: [.apple, .google]
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             // Publishing sends this tab through the Summary tab, which
@@ -33,9 +51,14 @@ struct MediaTab: View {
             if state.mode == .managing { DirectApplyBar(target: .media) }
             if let error = state.mediaError { WarningNote(error) }
             flowNote
-            ForEach(groups, id: \.1) { name, device in
-                mediaGroup(name, device: device)
-            }
+            // Grouped by the store that asks for the size. Seven device
+            // classes in one column said nothing about which store wanted
+            // which, so a developer had to know the two catalogues already to
+            // read the page.
+            band(shared, title: "Both stores take these",
+                 detail: "One set per size. Each store reads the sizes it accepts.")
+            band(only(.apple), title: "App Store only", store: .apple)
+            band(only(.google), title: "Google Play only", store: .google)
             videoSection
             if state.stores.contains(.google) { googleGraphics }
         }
@@ -43,6 +66,49 @@ struct MediaTab: View {
         // stretches to the window, which put "Choose images…" about 1400
         // points from the name of the group it belongs to.
         .frame(maxWidth: 980, alignment: .leading)
+    }
+
+    /// The sizes both selected stores read.
+    private var shared: [(String, Manifest.DeviceClass)] {
+        groups.filter { Self.takers($0.1).isSuperset(of: state.stores) && state.stores.count > 1 }
+    }
+
+    /// The sizes one selected store reads and the other does not. With a
+    /// single store picked, every size lands here, which is the truth: they
+    /// all belong to that one store.
+    private func only(_ store: Store) -> [(String, Manifest.DeviceClass)] {
+        guard state.stores.contains(store) else { return [] }
+        guard state.stores.count > 1 else {
+            return groups.filter { Self.takers($0.1).contains(store) }
+        }
+        return groups.filter { Self.takers($0.1) == [store] }
+    }
+
+    /// One store's sizes, under that store's name.
+    @ViewBuilder
+    private func band(_ entries: [(String, Manifest.DeviceClass)], title: String,
+                      store: Store? = nil, detail: String? = nil) -> some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 22) {
+                storeBand(title, store: store, detail: detail)
+                ForEach(entries, id: \.1) { name, device in
+                    mediaGroup(name, device: device)
+                }
+            }
+        }
+    }
+
+    private func storeBand(_ title: String, store: Store?, detail: String?) -> some View {
+        HStack(spacing: 8) {
+            if let store { StoreMark(store: store, size: 15) }
+            Text(title).font(Theme.font(size: 13, weight: .semibold))
+            if let detail {
+                Text(detail).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(.bottom, 7)
+        .overlay(alignment: .bottom) { Hairline() }
     }
 
     /// The tile takes the shape of the screen it shows.
