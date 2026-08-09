@@ -596,8 +596,32 @@ extension AppState {
                 "store": store == .apple ? "apple" : "google"
             ])
             releaseError = "\(store == .apple ? "App Store" : "Google Play"): \(error.localizedDescription)"
+                + Self.assumedDeclarationsNote(store: store, actual: actualState)
         }
         releasing = nil
+    }
+
+    /// The one place the checklist's assumption is allowed to speak up.
+    ///
+    /// An update never blocks on the once-per-app declarations. Apple asks
+    /// them per app, the app is already on the store, and no API reads several
+    /// of them, so the checklist assumes them and lets the developer through.
+    /// See `ConsoleChecklist.assumed`.
+    ///
+    /// A refused submission is the moment that assumption could be wrong, and
+    /// the only moment a developer can do anything about it. Apple names the
+    /// field in its own message; this names the reason the app did not ask
+    /// first, so the two read as one answer instead of a surprise.
+    ///
+    /// It rides on every Apple update failure and not on a matched error
+    /// string. Apple's wording here is not a contract, and a note that is
+    /// occasionally beside the point costs a sentence, where a missed one
+    /// costs a developer the afternoon.
+    static func assumedDeclarationsNote(store: Store, actual: ActualState) -> String {
+        guard store == .apple, actual.apple?.isUpdate == true else { return "" }
+        return "\n\nThe checklist assumed the once-per-app declarations were already answered, "
+            + "because the app is on the App Store. If Apple names one of them, answer it in "
+            + "App Store Connect and press Release again."
     }
 
     /// True while the store still accepts a take-back.

@@ -225,7 +225,6 @@ public struct StateReader: Sendable {
                             kindKey: "screenshotDisplayType")
                         for included in sets["included"].array
                         where included["type"].string == "appScreenshots" {
-                            let checksum = included["attributes"]["sourceFileChecksum"].string
                             guard let id = included["id"].string,
                                   let type = byItem[id] else { continue }
                             // The image URL rides along in the same payload.
@@ -233,11 +232,14 @@ public struct StateReader: Sendable {
                                 included["attributes"]["imageAsset"]) {
                                 result.screenshotURLs["\(locale)/\(type)", default: []].append(url)
                             }
-                            guard let checksum else { continue }
-                            result.screenshotChecksums["\(locale)/\(type)", default: []]
-                                .insert(checksum)
-                            result.screenshotChecksumOrder["\(locale)/\(type)", default: []]
-                                .append(checksum)
+                        }
+                        // The set drives the order, not the include block.
+                        // Walking `included` appended in whatever order the
+                        // payload arrived, so a set that matched the manifest
+                        // could still compare unequal and re-upload itself.
+                        for (type, checksums) in StoreImportReader.appleChecksums(sets) {
+                            result.screenshotChecksums["\(locale)/\(type)"] = Set(checksums)
+                            result.screenshotChecksumOrder["\(locale)/\(type)"] = checksums
                         }
 
                         // A missing preview set is not a read failure, and the
@@ -512,22 +514,32 @@ public struct StateReader: Sendable {
         }
     }
 
-    /// The app previews of one locale, in the shape the screenshots use.
-    /// The images and the videos one live localization shows.
+    /// The images and the videos one live localization shows: the URLs for the
+    /// screen, and the screenshot checksums for the plan.
     ///
-    /// Display only. A bucket the draft already filled is left alone, so what
+    /// A bucket the draft already filled is left alone on the URL side, so what
     /// the developer is about to send always wins the screen, and a locale the
     /// draft has not touched shows the store instead of an empty grid.
     ///
+    /// The checksums take no such care and land in a map of their own.
+    /// `startingScreenshotOrder` picks the draft first and reaches this only
+    /// when no draft exists, so there is nothing here to leave alone.
+    ///
     /// Both reads are optional. A failure costs the pictures, never the plan.
+    /// It costs the skip too: an unreadable live set reads as "no checksums",
+    /// which re-uploads a set that already matched. That is the safe way round.
     static func readLiveMedia(localizationID: String, locale: String, api: StoreAPI,
                               into result: inout ActualState.Apple) async {
         if let payload = try? await api.apple(
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
                 + "/appScreenshotSets?include=appScreenshots&limit=50") {
+            let sets = JSON(data: payload.data)
             fill(&result.screenshotURLs, locale: locale, with: StoreImportReader.appleAssets(
-                JSON(data: payload.data), locale: locale,
+                sets, locale: locale,
                 itemType: "appScreenshots", kindKey: "screenshotDisplayType"))
+            for (type, checksums) in StoreImportReader.appleChecksums(sets) {
+                result.liveScreenshotChecksumOrder["\(locale)/\(type)"] = checksums
+            }
         }
         if let payload = try? await api.apple(
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
