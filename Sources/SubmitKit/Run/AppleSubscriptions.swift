@@ -187,11 +187,10 @@ extension Runner {
                                         subscriptionID: String) async throws {
         guard let price = plan.price else { return }
         let territory = price.territory ?? "USA"
-        let points = JSON(data: try await api.apple(
-            "GET",
-            "/v1/subscriptions/\(subscriptionID)/pricePoints"
-                + "?filter%5Bterritory%5D=\(territory)&limit=200").data)
-        guard let point = Self.nearestPricePoint(points, to: price.amount) else { return }
+        let points = try await ApplePricePoints.all(
+            api, path: "/v1/subscriptions/\(subscriptionID)/pricePoints"
+                + "?filter%5Bterritory%5D=\(territory)")
+        guard let point = ApplePricePoints.nearest(points, to: price.amount)?.id else { return }
 
         // A subscription price is a schedule, so a second apply used to stack
         // a second row on top of the first. Apple keeps the manual price it
@@ -268,17 +267,6 @@ extension Runner {
                 "data": ["type": "subscriptionAppStoreReviewScreenshots", "id": id,
                          "attributes": ["uploaded": true]],
             ])
-    }
-
-    static func nearestPricePoint(_ response: JSON, to amount: Decimal) -> String? {
-        response["data"].array
-            .compactMap { item -> (String, Decimal)? in
-                guard let id = item["id"].string,
-                      let text = item["attributes"]["customerPrice"].string,
-                      let value = Decimal(string: text) else { return nil }
-                return (id, value)
-            }
-            .min { abs($0.1 - amount) < abs($1.1 - amount) }?.0
     }
 
     // MARK: - The offers

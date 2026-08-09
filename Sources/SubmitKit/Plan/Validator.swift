@@ -581,6 +581,8 @@ public enum Validator {
             }
         }
 
+        result += offLadderPrices(input)
+
         for group in manifest.subscriptions ?? [] {
             for plan in group.plans where AppleDurations.name(for: plan.duration) == nil {
                 result.append(Finding(
@@ -602,6 +604,55 @@ public enum Validator {
                         message: "The product \(id) exists in one store and not in the other.",
                         location: "Monetization · Purchases", fix: .money))
                 }
+            }
+        }
+        return result
+    }
+
+    /// Every price the manifest names, against the ladder Apple sells at.
+    ///
+    /// App Store Connect locks its price field to a menu, and the Monetization
+    /// tab offers the same menu. A value that is not on it therefore arrived by
+    /// another door: the YAML editor, an import of an app priced elsewhere, or
+    /// a price typed before anybody read the ladder. The apply resolves it to
+    /// the nearest point and says nothing, so the developer learns the real
+    /// price from the store.
+    ///
+    /// A warning and not an error. The write succeeds either way, and the
+    /// ladder in hand covers one territory: a price set in another is not
+    /// wrong, it is unchecked, and this stays quiet about it.
+    static func offLadderPrices(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple), let apple = input.actual.apple,
+              let ladderTerritory = apple.pricePointTerritory,
+              !apple.pricePoints.isEmpty else { return [] }
+        // The App Store gives the app itself away for nothing. It sells no
+        // purchase and no plan for nothing, so those two read a shorter ladder.
+        let productPoints = apple.pricePoints.filter { $0 > 0 }
+
+        func finding(_ price: Price?, points: [Decimal],
+                     id: String, location: String) -> Finding? {
+            guard let price, (price.territory ?? "USA") == ladderTerritory,
+                  !points.contains(price.amount),
+                  let nearest = StateReader.nearest(to: price.amount, in: points)
+            else { return nil }
+            return Finding(
+                id: "money.offLadder.\(id)", severity: .warning,
+                message: "The App Store has no \(price.amount) \(price.currency) price point. It would sell this at \(nearest) \(price.currency).",
+                location: location, fix: .money)
+        }
+
+        var result: [Finding] = []
+        result += [finding(input.manifest.pricing?.base, points: apple.pricePoints,
+                           id: "base", location: "Monetization · Base price")].compactMap { $0 }
+        for purchase in input.manifest.purchases ?? [] {
+            result += [finding(purchase.price, points: productPoints, id: purchase.id,
+                               location: "Monetization · \(purchase.id)")].compactMap { $0 }
+        }
+        for group in input.manifest.subscriptions ?? [] {
+            for plan in group.plans {
+                result += [finding(plan.price, points: productPoints, id: plan.id,
+                                   location: "Monetization · \(group.groupId) · \(plan.id)")]
+                    .compactMap { $0 }
             }
         }
         return result

@@ -146,6 +146,74 @@ private func has(_ list: [Finding], _ id: String) -> Bool {
     #expect(has(findings(manifest), "money.duration.com.example.p5m"))
 }
 
+/// The prices Apple sells at, in the base territory.
+private func ladder(_ values: [String], territory: String = "USA") -> ActualState {
+    appleState {
+        $0.pricePoints = values.compactMap { Decimal(string: $0) }
+        $0.pricePointTerritory = territory
+    }
+}
+
+private func priced(_ amount: String, territory: String? = nil) -> Price {
+    Price(amount: Decimal(string: amount)!, currency: "USD", territory: territory)
+}
+
+@Test func aPriceThatIsNotOnApplesLadderIsCaughtBeforeTheApplyResolvesIt() throws {
+    var manifest = base()
+    manifest.pricing = Manifest.Pricing(base: priced("4.95"))
+    manifest.purchases = [Manifest.Purchase(id: "com.example.pro", kind: .nonConsumable,
+                                            price: priced("2.50"))]
+    manifest.subscriptions = [
+        Manifest.SubscriptionGroup(groupId: "main", plans: [
+            .init(id: "com.example.month", duration: "P1M", price: priced("9.50")),
+        ]),
+    ]
+
+    let list = findings(manifest, ladder(["0", "0.99", "4.99", "9.99"]))
+    let base = try #require(list.first { $0.id == "money.offLadder.base" })
+    #expect(base.severity == .warning)
+    // The message names the price that would actually ship.
+    #expect(base.message.contains("4.99"))
+    #expect(has(list, "money.offLadder.com.example.pro"))
+    #expect(has(list, "money.offLadder.com.example.month"))
+}
+
+@Test func aPriceOnTheLadderPassesAndTheFreeRowIsTheAppsAlone() {
+    var manifest = base()
+    manifest.pricing = Manifest.Pricing(base: priced("0"))
+    manifest.purchases = [Manifest.Purchase(id: "com.example.pro", kind: .nonConsumable,
+                                            price: priced("4.99"))]
+
+    let list = findings(manifest, ladder(["0", "0.99", "4.99"]))
+    // A free app is a price point. A purchase that costs nothing is not, so
+    // the shorter ladder catches it while the app's own price passes.
+    #expect(!has(list, "money.offLadder.base"))
+    #expect(!has(list, "money.offLadder.com.example.pro"))
+    manifest.purchases = [Manifest.Purchase(id: "com.example.pro", kind: .nonConsumable,
+                                            price: priced("0"))]
+    #expect(has(findings(manifest, ladder(["0", "0.99", "4.99"])),
+                "money.offLadder.com.example.pro"))
+}
+
+@Test func aPriceSetInAnotherTerritoryIsUncheckedAndNotWrong() {
+    var manifest = base()
+    manifest.pricing = Manifest.Pricing(base: priced("6.90", territory: "BRA"))
+
+    // The ladder in hand is one country's money. Brazil's price judged against
+    // the United States ladder would be a warning about nothing.
+    #expect(!has(findings(manifest, ladder(["0.99", "4.99"])), "money.offLadder.base"))
+    #expect(has(findings(manifest, ladder(["2.90", "4.90"], territory: "BRA")),
+                "money.offLadder.base"))
+}
+
+@Test func nobodyIsHeldToALadderThatWasNeverRead() {
+    var manifest = base()
+    manifest.pricing = Manifest.Pricing(base: priced("4.95"))
+
+    #expect(!has(findings(manifest), "money.offLadder.base"))
+    #expect(!has(findings(manifest, ladder([])), "money.offLadder.base"))
+}
+
 // MARK: - 10.5 The provider
 
 @Test func aProductThatNamesAnUndeclaredEntitlementIsAnError() {
