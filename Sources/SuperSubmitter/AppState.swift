@@ -1203,8 +1203,49 @@ final class AppState {
 
     // MARK: - Media
 
-    func mediaPaths(deviceClass: Manifest.DeviceClass, previews: Bool = false) -> [String] {
-        manifest.mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+    func mediaPaths(deviceClass: Manifest.DeviceClass, previews: Bool = false,
+                    store: Store? = nil) -> [String] {
+        manifest.mediaPaths(locale: locale, deviceClass: deviceClass,
+                            previews: previews, store: store)
+    }
+
+    /// Whether this size holds one list for both stores or one each.
+    func mediaIsSplit(_ deviceClass: Manifest.DeviceClass) -> Bool {
+        Store.allCases.contains {
+            manifest.hasStoreScreenshots(locale: locale, deviceClass: deviceClass, store: $0)
+        }
+    }
+
+    func splitMedia(_ deviceClass: Manifest.DeviceClass) {
+        manifest.splitMedia(locale: locale, deviceClass: deviceClass)
+        saveManifestReportingErrors()
+    }
+
+    func mergeMedia(_ deviceClass: Manifest.DeviceClass) {
+        manifest.mergeMedia(locale: locale, deviceClass: deviceClass)
+        saveManifestReportingErrors()
+    }
+
+    /// Gives every size that holds pictures a list per store, when the app
+    /// ships on both.
+    ///
+    /// The Media tab shows a column per store, so the sizes behind it are per
+    /// store too. It runs on opening the tab and on changing language.
+    ///
+    /// Only the sizes that hold something. An override is an answer, and an
+    /// empty one says "send this store nothing for this size" — writing those
+    /// across seven device classes on a tab visit would fill the manifest with
+    /// decisions nobody made, and quietly stop a later shared edit reaching
+    /// either store.
+    func splitMediaForThisLocale() {
+        guard stores.count > 1 else { return }
+        var changed = false
+        for deviceClass in Manifest.DeviceClass.allCases
+        where !mediaPaths(deviceClass: deviceClass).isEmpty && !mediaIsSplit(deviceClass) {
+            manifest.splitMedia(locale: locale, deviceClass: deviceClass)
+            changed = true
+        }
+        if changed { saveManifestReportingErrors() }
     }
 
     /// The two graphics Google asks for and Apple does not.
@@ -1282,7 +1323,8 @@ final class AppState {
             for: info, deviceClass: deviceClass, selectedStores: stores)) ?? []
     }
 
-    func chooseMediaFiles(deviceClass: Manifest.DeviceClass, previews: Bool = false) {
+    func chooseMediaFiles(deviceClass: Manifest.DeviceClass, previews: Bool = false,
+                          store: Store? = nil) {
         let panel = NSOpenPanel()
         panel.title = previews ? "Choose app previews" : "Choose screenshots"
         panel.allowsMultipleSelection = true
@@ -1290,11 +1332,16 @@ final class AppState {
         let extensions = previews ? ["mov", "m4v", "mp4"] : ["png", "jpg", "jpeg"]
         panel.allowedContentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK else { return }
-        addMediaFiles(panel.urls, deviceClass: deviceClass, previews: previews)
+        addMediaFiles(panel.urls, deviceClass: deviceClass, previews: previews, store: store)
     }
 
     func addMediaFiles(_ urls: [URL], deviceClass: Manifest.DeviceClass,
-                       previews: Bool = false) {
+                       previews: Bool = false, store: Store? = nil) {
+        // A picture dropped on one store's column belongs to that store, so
+        // the size splits before it lands rather than reaching both.
+        if let store, !previews, stores.count > 1, !mediaIsSplit(deviceClass) {
+            manifest.splitMedia(locale: locale, deviceClass: deviceClass)
+        }
         if previews {
             Task {
                 var accepted: [String] = []
@@ -1332,7 +1379,8 @@ final class AppState {
                                                          stores: stores)
                     paths.append(manifestPath(for: url))
                 }
-                manifest.addMediaPaths(paths, locale: locale, deviceClass: deviceClass)
+                manifest.addMediaPaths(paths, locale: locale, deviceClass: deviceClass,
+                                       store: store)
                 saveManifestReportingErrors()
                 mediaError = nil
             } catch {
@@ -1342,9 +1390,9 @@ final class AppState {
     }
 
     func moveMedia(_ path: String, by offset: Int, deviceClass: Manifest.DeviceClass,
-                   previews: Bool = false) {
+                   previews: Bool = false, store: Store? = nil) {
         manifest.moveMediaPath(path, by: offset, locale: locale, deviceClass: deviceClass,
-                               previews: previews)
+                               previews: previews, store: store)
         saveManifestReportingErrors()
     }
 
@@ -1354,18 +1402,19 @@ final class AppState {
     /// `onMove` to inherit. The two arrow buttons stay: they are the keyboard
     /// route, and Full Keyboard Access cannot drag.
     func moveMedia(_ path: String, before other: String,
-                   deviceClass: Manifest.DeviceClass, previews: Bool = false) {
-        let paths = mediaPaths(deviceClass: deviceClass, previews: previews)
+                   deviceClass: Manifest.DeviceClass, previews: Bool = false,
+                   store: Store? = nil) {
+        let paths = mediaPaths(deviceClass: deviceClass, previews: previews, store: store)
         guard path != other, let target = paths.firstIndex(of: other) else { return }
         manifest.moveMediaPath(path, to: target, locale: locale, deviceClass: deviceClass,
-                               previews: previews)
+                               previews: previews, store: store)
         saveManifestReportingErrors()
     }
 
     func removeMedia(_ path: String, deviceClass: Manifest.DeviceClass,
-                     previews: Bool = false) {
+                     previews: Bool = false, store: Store? = nil) {
         manifest.removeMediaPath(path, locale: locale, deviceClass: deviceClass,
-                                 previews: previews)
+                                 previews: previews, store: store)
         saveManifestReportingErrors()
     }
 

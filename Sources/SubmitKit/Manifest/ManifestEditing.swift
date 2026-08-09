@@ -193,7 +193,7 @@ public extension Manifest {
         storeScreenshots(store)?[locale]?[deviceClass.rawValue] != nil
     }
 
-    private func storeScreenshots(_ store: Store) -> [String: [String: [String]]]? {
+    func storeScreenshots(_ store: Store) -> [String: [String: [String]]]? {
         switch store {
         case .apple: media?.appleScreenshots
         case .google: media?.googleScreenshots
@@ -232,7 +232,7 @@ public extension Manifest {
         self.media = media
     }
 
-    private mutating func setStoreScreenshots(_ values: [String], locale: String,
+    mutating func setStoreScreenshots(_ values: [String], locale: String,
                                               deviceClass: DeviceClass, store: Store) {
         var media = self.media ?? Media()
         var locales = (store == .apple ? media.appleScreenshots : media.googleScreenshots) ?? [:]
@@ -284,11 +284,13 @@ public extension Manifest {
     /// The list order is the order the stores show, so the developer needs it
     /// and no other model does.
     mutating func moveMediaPath(_ path: String, by offset: Int, locale: String,
-                                deviceClass: DeviceClass, previews: Bool = false) {
-        let values = mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+                                deviceClass: DeviceClass, previews: Bool = false,
+                                store: Store? = nil) {
+        let values = mediaPaths(locale: locale, deviceClass: deviceClass,
+                                previews: previews, store: store)
         guard let index = values.firstIndex(of: path) else { return }
         moveMediaPath(path, to: index + offset, locale: locale,
-                      deviceClass: deviceClass, previews: previews)
+                      deviceClass: deviceClass, previews: previews, store: store)
     }
 
     /// Moves one file to a place in its bucket.
@@ -298,13 +300,20 @@ public extension Manifest {
     /// drag from the first tile to the fifth is where a swap stops being a
     /// reorder and starts being two files trading places.
     mutating func moveMediaPath(_ path: String, to target: Int, locale: String,
-                                deviceClass: DeviceClass, previews: Bool = false) {
-        var values = mediaPaths(locale: locale, deviceClass: deviceClass, previews: previews)
+                                deviceClass: DeviceClass, previews: Bool = false,
+                                store: Store? = nil) {
+        var values = mediaPaths(locale: locale, deviceClass: deviceClass,
+                                previews: previews, store: store)
         guard let index = values.firstIndex(of: path),
               values.indices.contains(target), index != target else { return }
         values.remove(at: index)
         values.insert(path, at: target)
 
+        if let store, !previews,
+           hasStoreScreenshots(locale: locale, deviceClass: deviceClass, store: store) {
+            setStoreScreenshots(values, locale: locale, deviceClass: deviceClass, store: store)
+            return
+        }
         var media = self.media ?? Media()
         if previews {
             var locales = media.previews ?? [:]
@@ -323,7 +332,17 @@ public extension Manifest {
     }
 
     mutating func removeMediaPath(_ path: String, locale: String,
-                                  deviceClass: DeviceClass, previews: Bool = false) {
+                                  deviceClass: DeviceClass, previews: Bool = false,
+                                  store: Store? = nil) {
+        // A store that holds its own list takes the edit; everything else
+        // edits the shared list, which is what every caller did before.
+        if let store, !previews,
+           hasStoreScreenshots(locale: locale, deviceClass: deviceClass, store: store) {
+            var values = mediaPaths(locale: locale, deviceClass: deviceClass, store: store)
+            values.removeAll { $0 == path }
+            setStoreScreenshots(values, locale: locale, deviceClass: deviceClass, store: store)
+            return
+        }
         var media = self.media ?? Media()
         if previews {
             var locales = media.previews ?? [:]

@@ -32,10 +32,9 @@ struct MediaTab: View {
     /// answered once: Play alone reads a 7 inch tablet, Apple alone reads a
     /// Mac screen and a Vision one, and everything else goes to both.
     ///
-    /// One image set per device class, and never one per store. Both stores
-    /// read the same file, the manifest holds one list, and the planner sends
-    /// that list to whichever store takes the size. A column per store would
-    /// have to invent a second set of images for the sizes they share.
+    /// This is about which store *accepts* a size, not about whose pictures
+    /// fill it. A size both stores take still holds a list per store, because
+    /// the two listings rarely show the same eight images.
     static func takers(_ device: Manifest.DeviceClass) -> Set<Store> {
         switch device {
         case .desktop, .vision: [.apple]
@@ -55,8 +54,8 @@ struct MediaTab: View {
             // classes in one column said nothing about which store wanted
             // which, so a developer had to know the two catalogues already to
             // read the page.
-            band(shared, title: "Both stores take these",
-                 detail: "One set per size. Each store reads the sizes it accepts.")
+            band(shared, title: "Both stores take these sizes",
+                 detail: "Each store keeps its own pictures. Merge a size to send one set to both.")
             band(only(.apple), title: "App Store only", store: .apple)
             band(only(.google), title: "Google Play only", store: .google)
             videoSection
@@ -66,6 +65,10 @@ struct MediaTab: View {
         // stretches to the window, which put "Choose images…" about 1400
         // points from the name of the group it belongs to.
         .frame(maxWidth: 980, alignment: .leading)
+        // A column per store means a list per store, so the sizes that hold
+        // pictures get one on arrival and on every change of language. Only
+        // the sizes that hold something: see `splitMediaForThisLocale`.
+        .task(id: state.locale) { state.splitMediaForThisLocale() }
     }
 
     /// The sizes both selected stores read.
@@ -228,49 +231,109 @@ struct MediaTab: View {
                 }
             }
             if isOpen {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 10) {
-                        ForEach(Array(paths.enumerated()), id: \.element) { index, path in
-                            MediaTile(path: path, size: tile,
-                                      info: state.imageInfo(for: path),
-                                      stores: state.imageStores(for: path, deviceClass: device),
-                                      url: state.mediaURL(for: path),
-                                      fromStore: AppState.isImported(path),
-                                      canMoveEarlier: index > 0,
-                                      canMoveLater: index < paths.count - 1,
-                                      insertBefore: dropTarget == path,
-                                      move: { offset in
-                                          state.moveMedia(path, by: offset, deviceClass: device)
-                                      }) {
-                                state.removeMedia(path, deviceClass: device)
-                            }
-                            // Drag to reorder. The payload is the manifest
-                            // path, so a tile dragged out of the window carries
-                            // text and never a promise of a file the app would
-                            // have to write.
-                            .draggable(path)
-                            .dropDestination(for: String.self) { dropped, _ in
-                                dropTarget = nil
-                                guard let moved = dropped.first else { return false }
-                                state.moveMedia(moved, before: path, deviceClass: device)
-                                Haptic.drop()
-                                return true
-                            } isTargeted: { inside in
-                                // The tile itself draws the insertion line, so
-                                // this only has to name which one is targeted.
-                                dropTarget = inside ? path : nil
-                            }
-                        }
-                        MediaDropTile(title: "Drop images\nor choose files",
-                                      width: tile.width, height: tile.height,
-                                      choose: { state.chooseMediaFiles(deviceClass: device) },
-                                      accept: { state.addMediaFiles($0, deviceClass: device) })
-                    }
+                // One row per store when the app ships on both, because the
+                // two listings rarely show the same eight pictures. A size
+                // that holds one list for both says so and offers the split.
+                let rows: [Store?] = state.stores.count > 1 && state.mediaIsSplit(device)
+                    ? Store.allCases.filter(state.stores.contains)
+                    : [nil]
+                ForEach(rows, id: \.self) { store in
+                    tiles(device, tile: tile, store: store)
                 }
+                mergeControl(device)
                 liveScreenshots(live)
             }
         }
         .motion(.snappy(duration: 0.18), value: isOpen)
+    }
+
+
+    /// One store's pictures for one size, or the shared list when the size
+    /// holds a single one.
+    @ViewBuilder
+    private func tiles(_ device: Manifest.DeviceClass, tile: CGSize,
+                       store: Store?) -> some View {
+        let paths = state.mediaPaths(deviceClass: device, store: store)
+        VStack(alignment: .leading, spacing: 6) {
+            if let store {
+                HStack(spacing: 6) {
+                    StoreMark(store: store, size: 13)
+                    Text(store.storeName).font(Theme.font(size: 11.5, weight: .medium))
+                        .foregroundStyle(Theme.text2)
+                    Text(verbatim: "\(paths.count)")
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                        .monospacedDigit()
+                    Spacer(minLength: 0)
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(Array(paths.enumerated()), id: \.element) { index, path in
+                        MediaTile(path: path, size: tile,
+                                  info: state.imageInfo(for: path),
+                                  stores: state.imageStores(for: path, deviceClass: device),
+                                  url: state.mediaURL(for: path),
+                                  fromStore: AppState.isImported(path),
+                                  canMoveEarlier: index > 0,
+                                  canMoveLater: index < paths.count - 1,
+                                  insertBefore: dropTarget == path,
+                                  move: { offset in
+                                      state.moveMedia(path, by: offset, deviceClass: device,
+                                                      store: store)
+                                  }) {
+                            state.removeMedia(path, deviceClass: device, store: store)
+                        }
+                        // Drag to reorder. The payload is the manifest
+                        // path, so a tile dragged out of the window carries
+                        // text and never a promise of a file the app would
+                        // have to write.
+                        .draggable(path)
+                        .dropDestination(for: String.self) { dropped, _ in
+                            dropTarget = nil
+                            guard let moved = dropped.first else { return false }
+                            state.moveMedia(moved, before: path, deviceClass: device,
+                                            store: store)
+                            Haptic.drop()
+                            return true
+                        } isTargeted: { inside in
+                            // The tile itself draws the insertion line, so
+                            // this only has to name which one is targeted.
+                            dropTarget = inside ? path : nil
+                        }
+                    }
+                    MediaDropTile(title: "Drop images\nor choose files",
+                                  width: tile.width, height: tile.height,
+                                  choose: {
+                                      state.chooseMediaFiles(deviceClass: device, store: store)
+                                  },
+                                  accept: {
+                                      state.addMediaFiles($0, deviceClass: device, store: store)
+                                  })
+                }
+            }
+        }
+    }
+
+    /// The one line that says whether the two stores share this size, and the
+    /// way to change it.
+    @ViewBuilder
+    private func mergeControl(_ device: Manifest.DeviceClass) -> some View {
+        if state.stores.count > 1 {
+            let split = state.mediaIsSplit(device)
+            HStack(spacing: 6) {
+                Rectangle().fill(Theme.sep2).frame(width: 12, height: Theme.hairline)
+                Text(split ? "Each store has its own pictures · "
+                           : "Both stores get these · ")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                Button(split ? "use the same images" : "use different images") {
+                    if split { state.mergeMedia(device) } else { state.splitMedia(device) }
+                }
+                .buttonStyle(.plain)
+                .font(Theme.font(size: 11))
+                .foregroundStyle(Theme.accent)
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     /// What each store shows today. It is faded and it takes no input, because
