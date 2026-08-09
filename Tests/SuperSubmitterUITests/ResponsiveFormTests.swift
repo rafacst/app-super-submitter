@@ -24,6 +24,18 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(build.contains("Text(value)\n                .frame(maxWidth: .infinity"))
 }
 
+/// Selecting Build also presents its saved inspector. That presentation must
+/// not animate the whole split view wider and briefly push the sidebar offscreen.
+@Test func selectingATabDoesNotAnimateTheWholeSplitView() throws {
+    let sidebar = try responsiveFormSource("Sources/SuperSubmitter/Shell/Sidebar.swift")
+    let start = try #require(sidebar.range(of: "private var selection:"))
+    let end = try #require(sidebar.range(of: "private func isOpen"))
+    let selection = String(sidebar[start.lowerBound..<end.lowerBound])
+
+    #expect(selection.contains("withTransaction"))
+    #expect(selection.contains("disablesAnimations = true"))
+}
+
 /// A base amount is an App Store price point, never arbitrary text. Currency
 /// comes first because it determines which monetary values make sense.
 @Test func basePriceIsCurrencyThenPricePicker() throws {
