@@ -18,11 +18,7 @@ struct InternalSharingPanel: View {
     var body: some View {
         Section_("Internal app sharing", icon: "link.badge.plus", tint: Theme.teal) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Upload the Android build and get a private install link. This writes no draft and it uses no version code.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 12)
+                NoteWithAction("Upload the Android build and get a private install link. This writes no draft and it uses no version code.") {
                     QuietButton(title: busy ? "Uploading…" : "Upload and share") { share() }
                         .disabled(busy || artifact == nil || state.googleActionPackage == nil)
                 }

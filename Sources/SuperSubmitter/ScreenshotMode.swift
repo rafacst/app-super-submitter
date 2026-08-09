@@ -231,7 +231,12 @@ enum ScreenshotMode {
               // The MenuBarExtra owns a window too. The real one is the big one.
               let window = NSApp.windows.filter(\.isVisible)
                   .max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }),
-              let screen = window.screen ?? NSScreen.main else { return }
+              // The primary display, and never "whichever one the window
+              // opened on". `visibleFrame` shrinks by the height of the Dock,
+              // the Dock follows the pointer between displays, and the size
+              // below is derived from it: two runs of the same screen came out
+              // 820 points tall and 789 points tall on the same Mac.
+              let screen = NSScreen.screens.first ?? window.screen else { return }
 
         let visible = screen.visibleFrame
         let size = NSSize(width: min(1280, visible.width - 80),
@@ -247,13 +252,23 @@ enum ScreenshotMode {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
 
-        // `screencapture` counts from the top of the primary display, and
-        // AppKit counts from the bottom of it.
-        let frame = window.frame
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
-        let top = primaryHeight - frame.maxY
-        print("CAPTURE_RECT \(Int(frame.minX)),\(Int(top)),\(Int(frame.width)),\(Int(frame.height))")
-        fflush(stdout)
+        // The window id, and not a rectangle of the screen.
+        //
+        // `screencapture -R` photographs a place, so it only matches the
+        // window while the window stays put, and this one does not: AppKit
+        // pushes it back inside `visibleFrame` after an activate, and macOS
+        // restores a remembered frame a moment later. The script waits, the
+        // window drifted about 35 points in that gap, and the picture came out
+        // with a strip of the sidebar cut off the left. Adding a settle delay
+        // only narrowed the gap; nothing closes it.
+        //
+        // `screencapture -l` photographs a window by id, wherever it is and
+        // whatever moved it, so the whole class of drift stops mattering.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            window.setFrame(NSRect(origin: origin, size: size), display: true)
+            print("CAPTURE_WINDOW \(window.windowNumber)")
+            fflush(stdout)
+        }
         #endif
     }
 

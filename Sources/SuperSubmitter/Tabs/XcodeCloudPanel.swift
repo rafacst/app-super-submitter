@@ -30,11 +30,7 @@ struct XcodeCloudPanel: View {
     var body: some View {
         Section_("Xcode Cloud", icon: "cloud", tint: Theme.purple) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Apple builds the app instead of this Mac. A run spends the compute minutes on your account, and nothing gives them back.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 12)
+                NoteWithAction("Apple builds the app instead of this Mac. A run spends the compute minutes on your account, and nothing gives them back.") {
                     QuietButton(title: busy ? "Fetching…" : "Fetch the workflows") { load() }
                         .disabled(busy || state.appleActionAppID == nil)
                 }
