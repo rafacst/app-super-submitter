@@ -39,6 +39,16 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(build.contains("GoogleTracksSection()"))
 }
 
+@Test func theWideBuildScreenKeepsBothStoreCardsInOneRow() throws {
+    let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let start = try #require(build.range(of: "private var storeBuildColumns"))
+    let end = try #require(build.range(of: "private var appleBuildCard"))
+    let columns = String(build[start.lowerBound..<end.lowerBound])
+
+    #expect(columns.contains("HStack(alignment: .top, spacing: 14)"))
+    #expect(!columns.contains("ViewThatFits"))
+}
+
 /// Selecting Build also presents its saved inspector. That presentation must
 /// not animate the whole split view wider and briefly push the sidebar offscreen.
 @Test func selectingATabDoesNotAnimateTheWholeSplitView() throws {
