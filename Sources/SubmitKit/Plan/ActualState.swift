@@ -53,6 +53,12 @@ public struct ActualState: Sendable, Equatable {
         /// Apple already holds. An upload that matches is skipped. Spec 7.5.
         public var screenshotChecksums: [String: Set<String>] = [:]
         public var screenshotChecksumOrder: [String: [String]] = [:]
+        /// The twin of `screenshotChecksumOrder`, for the live version.
+        ///
+        /// App Store Connect fills a new version from the last released one,
+        /// pictures included, so this is what the version this run creates
+        /// starts out holding. `startingScreenshotOrder` is the only reader.
+        public var liveScreenshotChecksumOrder: [String: [String]] = [:]
         public var previewChecksums: [String: Set<String>] = [:]
         /// "locale/displayType" to the images Apple serves right now, in the
         /// order it shows them. It comes out of the same payload as the
@@ -140,6 +146,43 @@ public struct ActualState: Sendable, Equatable {
         public var phasedReleaseState: String?
 
         public init() {}
+
+        // MARK: - The update
+
+        /// True when the app is already on the App Store.
+        ///
+        /// An update is not a first publish. App Store Connect carries the
+        /// released version into the next one, so a field the developer never
+        /// touched is already there, and sending it again writes the same
+        /// bytes over the same bytes. Every rule that only holds for a shipped
+        /// app asks this one question.
+        public var isUpdate: Bool { liveVersionString != nil }
+
+        /// The listing text the version this run writes to starts out holding.
+        ///
+        /// A draft that exists answers for itself: it is the resource the run
+        /// patches, and whatever it holds is what a write would replace.
+        ///
+        /// Before it exists there is nothing to read, and comparing against
+        /// nothing made every field of an update look changed. The run creates
+        /// that version, and Apple fills a new version from the released one,
+        /// so the words the customers read today are what it will start with.
+        public func startingVersionLocale(_ code: String) -> VersionLocale? {
+            if let draft = versionLocales[code] { return draft }
+            guard isUpdate, versionId == nil else { return nil }
+            return liveVersionLocales[code]
+        }
+
+        /// The screenshots that version starts out holding, by
+        /// "locale/displayType", in the order the store shows them.
+        ///
+        /// The same rule as the text, and the one that costs real bytes: an
+        /// update re-uploaded every picture Apple had already carried over.
+        public func startingScreenshotOrder(_ key: String) -> [String]? {
+            if let draft = screenshotChecksumOrder[key] { return draft }
+            guard isUpdate, versionId == nil else { return nil }
+            return liveScreenshotChecksumOrder[key]
+        }
 
         public struct InfoLocale: Sendable, Equatable {
             public var id: String?
