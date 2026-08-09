@@ -1694,7 +1694,10 @@ public enum Planner {
 
         for code in locales {
             for deviceClass in Manifest.DeviceClass.allCases {
-                let paths = manifest.mediaPaths(locale: code, deviceClass: deviceClass)
+                // Per store, so an override sends this store its own pictures
+                // and the other store keeps the shared ones.
+                let paths = manifest.mediaPaths(locale: code, deviceClass: deviceClass,
+                                                store: store)
                 guard !paths.isEmpty else { continue }
                 let uploads = mediaUploads(paths, deviceClass: deviceClass, store: store,
                                            root: input.root)

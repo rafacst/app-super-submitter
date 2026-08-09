@@ -174,11 +174,22 @@ public enum Validator {
     static func media(_ input: Planner.Input) -> [Finding] {
         let manifest = input.manifest
         var result: [Finding] = []
-        let locales = Array(manifest.media?.screenshots?.keys ?? [:].keys).sorted()
+        // Every locale any of the three lists names. A size that only Play
+        // holds pictures for still has to have its files checked.
+        let locales = Set((manifest.media?.screenshots?.keys).map(Array.init) ?? [])
+            .union((manifest.media?.appleScreenshots?.keys).map(Array.init) ?? [])
+            .union((manifest.media?.googleScreenshots?.keys).map(Array.init) ?? [])
+            .sorted()
 
         for code in locales {
             for deviceClass in Manifest.DeviceClass.allCases {
-                let paths = manifest.mediaPaths(locale: code, deviceClass: deviceClass)
+                let applePaths = manifest.mediaPaths(locale: code, deviceClass: deviceClass,
+                                                     store: .apple)
+                let googlePaths = manifest.mediaPaths(locale: code, deviceClass: deviceClass,
+                                                      store: .google)
+                // Every file either store would send, checked once. The two
+                // lists are the same when no override holds this size.
+                let paths = applePaths + googlePaths.filter { !applePaths.contains($0) }
                 guard !paths.isEmpty else { continue }
 
                 for path in paths {
@@ -202,25 +213,25 @@ public enum Validator {
                 }
 
                 // Apple takes 10 per display type, Google takes 8 per locale.
-                if input.stores.contains(.apple), paths.count > 10 {
+                if input.stores.contains(.apple), applePaths.count > 10 {
                     result.append(Finding(
                         id: "media.count.apple.\(code).\(deviceClass.rawValue)", severity: .error,
-                        message: "\(paths.count) screenshots exceed the App Store limit of 10.",
+                        message: "\(applePaths.count) screenshots exceed the App Store limit of 10.",
                         location: "Media · \(code) · \(deviceClass.rawValue)", fix: .media))
                 }
-                if input.stores.contains(.google), paths.count > 8,
+                if input.stores.contains(.google), googlePaths.count > 8,
                    AssetInspector.googleImageType(for: deviceClass) != nil {
                     result.append(Finding(
                         id: "media.count.google.\(code).\(deviceClass.rawValue)", severity: .error,
-                        message: "\(paths.count) screenshots exceed the Google Play limit of 8.",
+                        message: "\(googlePaths.count) screenshots exceed the Google Play limit of 8.",
                         location: "Media · \(code) · \(deviceClass.rawValue)", fix: .media))
                 }
 
                 // One store has screenshots and the other has none.
                 if input.stores.count == 2 {
-                    let apple = Planner.mediaUploads(paths, deviceClass: deviceClass,
+                    let apple = Planner.mediaUploads(applePaths, deviceClass: deviceClass,
                                                      store: .apple, root: input.root)
-                    let google = Planner.mediaUploads(paths, deviceClass: deviceClass,
+                    let google = Planner.mediaUploads(googlePaths, deviceClass: deviceClass,
                                                       store: .google, root: input.root)
                     if apple.isEmpty != google.isEmpty {
                         let empty = apple.isEmpty ? "the App Store" : "Google Play"

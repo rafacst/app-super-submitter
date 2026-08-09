@@ -172,7 +172,10 @@ extension Runner {
     func appleWantedBuckets(locale: String) -> Set<String> {
         var result: Set<String> = []
         for deviceClass in Manifest.DeviceClass.allCases {
-            for path in manifest.mediaPaths(locale: locale, deviceClass: deviceClass) {
+            // Apple's own list. An override sends this store its pictures
+            // and never Play's.
+            for path in manifest.mediaPaths(locale: locale, deviceClass: deviceClass,
+                                            store: .apple) {
                 guard let url = resolve(path),
                       let info = try? AssetInspector.image(at: url),
                       let bucket = try? AssetInspector.appleDisplayType(for: info,
@@ -1149,7 +1152,8 @@ extension Runner {
                 previewTypes.insert(type)
             }
             screenshotCount += manifest.mediaPaths(locale: locale,
-                                                   deviceClass: deviceClass).count
+                                                   deviceClass: deviceClass,
+                                                   store: .apple).count
         }
 
         try await appleDropMediaSets(

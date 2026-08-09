@@ -443,16 +443,32 @@ extension Manifest {
 extension Manifest {
     public struct Media: Codable, Sendable, Equatable {
         /// locale -> device class -> file globs
+        ///
+        /// What both stores read when neither override below holds this size.
         public var screenshots: [String: [String: [String]]]?
+        /// The App Store's own pictures, where they differ from the shared set.
+        ///
+        /// An override and not a second model, so every manifest written before
+        /// per-store screenshots keeps working untouched: an absent entry means
+        /// this store reads `screenshots`, which is what it always did. A
+        /// *present* entry answers for this store even when it is empty, which
+        /// is how "send Play nothing for this size" is said.
+        public var appleScreenshots: [String: [String: [String]]]?
+        /// Google Play's own pictures. See `appleScreenshots`.
+        public var googleScreenshots: [String: [String: [String]]]?
         /// Apple only. Google takes a YouTube URL on the listing. Spec 6.3.
         public var previews: [String: [String: [String]]]?
         public var icon: String?            // Google only
         public var featureGraphic: String?  // Google only
 
         public init(screenshots: [String: [String: [String]]]? = nil,
+                    appleScreenshots: [String: [String: [String]]]? = nil,
+                    googleScreenshots: [String: [String: [String]]]? = nil,
                     previews: [String: [String: [String]]]? = nil,
                     icon: String? = nil, featureGraphic: String? = nil) {
             self.screenshots = screenshots
+            self.appleScreenshots = appleScreenshots
+            self.googleScreenshots = googleScreenshots
             self.previews = previews
             self.icon = icon
             self.featureGraphic = featureGraphic
