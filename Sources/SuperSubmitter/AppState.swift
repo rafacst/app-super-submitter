@@ -2114,8 +2114,22 @@ final class AppState {
         }
     }
 
+    /// A listing field holding characters the manifest has not seen yet.
+    ///
+    /// `ListingEditor` keeps a draft while the developer types, so that a key
+    /// redraws one field rather than the whole window. This is how the draft
+    /// reaches the manifest before anything that reads or replaces it: every
+    /// write boundary drains it first. Set while a commit is waiting and nil
+    /// the rest of the time, so the usual path costs one comparison.
+    ///
+    /// `@ObservationIgnored`, because nothing draws it.
+    @ObservationIgnored var pendingListingEdit: (() -> Void)?
+
     /// Writes whatever is waiting. It costs nothing when nothing is.
     func flushSave() {
+        // Before the guard. A draft is exactly the case where nothing is
+        // pending yet and something is about to be.
+        pendingListingEdit?()
         guard pendingSave else {
             saveTask?.cancel()
             saveTask = nil
@@ -2129,6 +2143,7 @@ final class AppState {
     /// once more and stamps the time. A Mac app answers Command-S.
     func saveNow() {
         guard manifestURL != nil else { return }
+        pendingListingEdit?()
         do { try save() }
         catch { errorMessage = "The manifest could not be saved. \(error.localizedDescription)" }
     }

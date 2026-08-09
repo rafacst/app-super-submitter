@@ -607,11 +607,16 @@ extension AppState {
     /// number first, and the offer after it. It must stay true against
     /// `entitlementLabel` below, which already promises a free user that
     /// editing, validation, builds, reads, plans and dry runs cost nothing.
+    ///
+    /// Short, because it is a call to action and not a paragraph. It listed the
+    /// four free things by name, which is the Account tab's job and reads as a
+    /// defence rather than an offer. What the developer has to know here is the
+    /// one thing that is withheld.
     var upgradeCardLine: String {
         guard let plan, plan.writeCount > 0 else {
-            return "Editing, builds, plans and dry runs are free. Sending them to a store is not."
+            return "Sending to a store needs Pro. Everything else is free."
         }
-        return "\(plan.writeCount) writes are ready. Sending them to a store needs a plan."
+        return "\(plan.writeCount) writes are ready. Sending them needs Pro."
     }
 
     var entitlementLabel: String {

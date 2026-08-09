@@ -55,6 +55,7 @@ struct BuildTab: View {
             Text("Apple refuses a version that does not climb past the one on sale. A package you import fills this in while it is empty.")
                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
+            ApplePlatformStandings()
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -66,6 +67,8 @@ struct BuildTab: View {
     /// Two ways to get a build: run the project, or import a package that
     /// something else produced. Both feed the same inspection and the same
     /// upload confirmation. upload-spec 10.1 and 13.3.
+    ///
+    /// The chips above it are `ApplePlatformStandings`.
     private var source: some View {
         HStack(spacing: 0) {
             ForEach([false, true], id: \.self) { fromProject in
@@ -511,5 +514,128 @@ struct BuildInspector: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.sunken)
+    }
+}
+
+/// Where each platform of this app id stands on the App Store.
+///
+/// One app id carries a version train per platform and they are not in step:
+/// a Mac app can be on sale while its iOS twin has never left the draft. Every
+/// other number on this tab is narrowed to the platform being submitted, so
+/// before this the developer had one line, "1.5 is live on the App Store", and
+/// no way to tell which platform it was talking about — or that the other one
+/// was not out at all.
+///
+/// It costs no request of its own. `/v1/apps/{id}/appStoreVersions` answers for
+/// every platform at once, and the state reader was already discarding all but
+/// one. See `StoreImportReader.applePlatformStandings`.
+///
+/// It draws nothing until a read has happened. A row of chips that all said
+/// "Not on the store" before the app had asked would be a wrong answer, and a
+/// wrong answer about what is live is worse than no answer.
+struct ApplePlatformStandings: View {
+    @Environment(AppState.self) private var state
+
+    /// The platforms the manifest declares, each with what the store said, and
+    /// the ones the store answered for that the manifest does not name.
+    private var rows: [(platform: Manifest.Platform,
+                        standing: ActualState.Apple.PlatformStanding?)] {
+        let read = state.actualState.apple?.platforms ?? []
+        let declared = state.manifest.apps.apple?.platforms ?? []
+        let extra = read.compactMap { Manifest.Platform(rawValue: $0.platform) }
+            .filter { !declared.contains($0) }
+        return (declared + extra).map { platform in
+            (platform, read.first { $0.platform == platform.rawValue })
+        }
+    }
+
+    var body: some View {
+        let rows = rows
+        if state.stores.contains(.apple), !(state.actualState.apple?.platforms ?? []).isEmpty,
+           !rows.isEmpty {
+            HStack(spacing: 7) {
+                Text("On the App Store")
+                    .font(Theme.font(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.text3)
+                    .textCase(.uppercase)
+                    .kerning(0.3)
+                ForEach(rows, id: \.platform) { row in
+                    let standing = AppleStanding(row.standing)
+                    StatePill(text: "\(row.platform.shortName) · \(standing.label)",
+                              foreground: standing.tint, background: standing.fill)
+                        .help(standing.detail(for: row.platform))
+                        .accessibilityLabel("\(row.platform.shortName). \(standing.detail(for: row.platform))")
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
+        }
+    }
+}
+
+/// One platform's `AppVersionState`, in the words a developer uses.
+///
+/// Apple names fifteen states and they answer a question nobody asked on this
+/// tab. What a developer wants before choosing a platform to submit is whether
+/// that platform is out, on its way, stuck, or has never shipped, so the
+/// fifteen collapse into five.
+///
+/// The live version decides the word. That is the question the chips exist for:
+/// one app id ships on two platforms and only one of them is on sale. A version
+/// on its way is the second question, and it goes in the tooltip with the
+/// numbers, where the detail belongs.
+///
+/// Green means a customer can buy it. Yellow means Apple has it. Red means it
+/// came back. Grey means nothing is on sale. No blue: blue is the accent this
+/// app uses for a choice, and none of these is one.
+struct AppleStanding {
+    let label: String
+    let tint: Color
+    let fill: Color
+    private let standing: ActualState.Apple.PlatformStanding?
+
+    init(_ standing: ActualState.Apple.PlatformStanding?) {
+        self.standing = standing
+        (label, tint, fill) = Self.words(
+            for: standing?.liveState ?? standing?.pendingState, hasVersion: standing != nil)
+    }
+
+    private static func words(for state: String?, hasVersion: Bool)
+        -> (String, Color, Color) {
+        switch state {
+        case _ where !hasVersion, nil, "":
+            ("Not on the store", Theme.text3, Theme.sunken)
+        case "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION":
+            ("Live", Theme.green, Theme.greenBg)
+        case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
+            ("Off sale", Theme.text3, Theme.sunken)
+        case "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "ACCEPTED":
+            ("Approved", Theme.green, Theme.greenBg)
+        case "WAITING_FOR_REVIEW", "IN_REVIEW", "READY_FOR_REVIEW",
+             "PROCESSING_FOR_DISTRIBUTION", "WAITING_FOR_EXPORT_COMPLIANCE":
+            ("In review", Theme.yellow, Theme.yellowBg)
+        case "REJECTED", "METADATA_REJECTED", "DEVELOPER_REJECTED", "INVALID_BINARY":
+            ("Rejected", Theme.red, Theme.redBg)
+        default:
+            // PREPARE_FOR_SUBMISSION, and anything Apple adds after this ships.
+            // A state this app has never heard of is still a draft: a version
+            // that exists and is not on sale.
+            ("Draft", Theme.text2, Theme.sunken)
+        }
+    }
+
+    /// The numbers and the version on its way. The chip carries the word.
+    func detail(for platform: Manifest.Platform) -> String {
+        guard let standing else {
+            return "\(platform.shortName) has no version on the App Store yet."
+        }
+        var parts: [String] = []
+        if let live = standing.live { parts.append("\(live) is \(label.lowercased())") }
+        if let pending = standing.pending {
+            let word = Self.words(for: standing.pendingState, hasVersion: true).0
+            parts.append("\(pending) is \(word.lowercased())")
+        }
+        if parts.isEmpty { return "\(platform.shortName): \(label)." }
+        return "\(platform.shortName). " + parts.joined(separator: ", ") + "."
     }
 }

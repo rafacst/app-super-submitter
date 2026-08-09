@@ -10,8 +10,9 @@ import SwiftUI
 /// had to be ignored so the panel could carry them, and the sidebar had a
 /// width in points rather than a range a user may drag.
 ///
-/// The split view gives the divider, the drag, the collapse, the vibrancy, and
-/// the window buttons in the place AppKit already puts them.
+/// The split view gives the drag, the collapse, the vibrancy, and the window
+/// buttons in the place AppKit already puts them. The rule between the columns
+/// is this file's, and the overlay below says why.
 struct RootView: View {
     @Environment(AppState.self) private var state
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
@@ -25,25 +26,62 @@ struct RootView: View {
                 // A range, not a number. The old column was 240 points and no
                 // other width was reachable.
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+                // The edge of the column, drawn by hand.
+                //
+                // `NavigationSplitView` separates its columns by material and
+                // not by a rule, which works while the sidebar is vibrant over
+                // the desktop. This app paints `Theme.content` behind the whole
+                // split view, so the two columns land eleven levels of grey
+                // apart in dark mode and the boundary between them measured as
+                // a tone step with no line in it at all. The column had no
+                // contour: the sidebar and the page ran together.
+                //
+                // `Divider` and not a `Theme.hairline` rectangle. Two reasons,
+                // both measured. A half-point rule lands on the split view's
+                // own column edge, which is wherever the user last dragged it
+                // and is not a whole number of points, so it covered a third of
+                // a device pixel and came out at a third of its colour: 248
+                // against a 249 page in light mode, which is no line at all.
+                // And `Theme.sep` is the edge of a card. This is the edge of a
+                // window column, which is the separator AppKit already has, and
+                // `Divider` is pixel-snapped in both modes.
+                //
+                // The `HStack` is what makes it vertical. A `Divider` takes its
+                // axis from the stack around it and draws across the width with
+                // none.
+                //
+                // `ignoresSafeArea`, so the rule runs beside the title bar as
+                // well as beside the tab. It starts under the corner the split
+                // view rounds off the top of the column, so the two meet rather
+                // than the rule stopping in mid air.
+                .overlay(alignment: .trailing) {
+                    HStack { Divider() }.ignoresSafeArea()
+                }
         } detail: {
             ContentArea()
+                // The screen you are standing on, in the title bar, where the
+                // Mac puts the name of what a window is showing.
+                //
+                // It was the name of the app being edited, over a band that
+                // carried "Stores" at 21 points a few rows below it. Two names
+                // for one screen, and the loudest one was the one the sidebar
+                // had already answered by drawing a selected row. The band
+                // keeps the question and the controls; the name of the screen
+                // moves up beside the sidebar toggle, and the app being edited
+                // follows it as the subtitle.
+                //
+                // Nothing on the entry screen, which is not a tab and names no
+                // app. It is the same test the band makes, so the title bar and
+                // the band can never disagree about which screen this is.
+                .navigationTitle(state.showsEntryScreen
+                                 ? "" : state.selectedTab.title(in: state.mode))
                 // The app being edited, and never the name of this program.
-                //
-                // The title used to be empty, because it said "Super Submitter"
-                // on every screen over a band that already names the screen you
-                // are on: the app spent its loudest row repeating the one fact a
-                // user never has to be told. That objection was to the program
-                // name and it still stands. The program name is on the menu bar,
-                // in the Dock, and in About.
-                //
-                // This is a different fact. A window that edits a file names
-                // the file, which is what every document window on the Mac
-                // does, and it is what makes the line below work.
-                //
-                // No app, no title. The fallback put the program name back on
-                // the one screen that has no file to name, which is the
-                // onboarding screen, and that is the objection above.
-                .navigationTitle(state.currentApp?.name ?? "")
+                // The program name is on the menu bar, in the Dock, and in
+                // About. This window edits a file, and a document window on the
+                // Mac names its file: that is what makes the proxy icon below
+                // work.
+                .navigationSubtitle(state.showsEntryScreen
+                                    ? "" : state.currentApp?.name ?? "")
                 // The proxy icon. `store.yaml` is a real file that the app
                 // writes on every keystroke, so this window is a document
                 // window and had none of the affordances of one.
@@ -61,17 +99,20 @@ struct RootView: View {
                 .documentURL(state.manifestURL)
         }
         .navigationSplitViewStyle(.balanced)
-        // One title bar, in one colour, across all three columns.
+        // The title bar takes its colour from the columns underneath it, and
+        // not from one fill laid over all three.
         //
-        // The window keeps a real title bar, because `NavigationSplitView`
-        // cannot draw a sidebar without one. Nothing painted the strip it
-        // occupies, so each column showed whatever was behind it: the content
-        // column its own page colour, the inspector column the window's darker
-        // backing. The join between the two ran as a hard vertical seam from
-        // the top of the window down to the header band, which is why the
-        // inspector read as a panel sitting on top of the tab rather than
-        // beside it.
-        .toolbarBackground(Theme.content, for: .windowToolbar)
+        // It used to be `.toolbarBackground(Theme.content, for: .windowToolbar)`,
+        // which paints the whole strip in the page colour. That was written to
+        // close a seam between the content column and the inspector, and it
+        // closed it by painting over the sidebar as well: the top fifty points
+        // of the column came out in the page colour, so the sidebar had no top
+        // edge and its trailing contour began halfway down the window.
+        //
+        // Each column paints its own strip instead. The content column and the
+        // inspector both carry `Theme.content` into the safe area, which is
+        // what closed the seam; the sidebar keeps the system's own material and
+        // the rule above runs the full height beside it.
         .background(Theme.content)
         .foregroundStyle(Theme.text)
         .font(Theme.font(size: 13))
@@ -173,7 +214,24 @@ private struct ContentArea: View {
             ScrollView {
                 TabContent(tab: state.selectedTab)
                     .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // `minWidth: 0`, and it is the whole of a window bug.
+                    //
+                    // A tab reports the width it cannot go under, a scroll view
+                    // passes that up, and `NavigationSplitView` adds it to the
+                    // two side columns. When the total passed the window, the
+                    // window did not grow and the columns did not shrink: the
+                    // split view drew wider than the frame it was in, so the
+                    // sidebar ran off the left edge and the inspector off the
+                    // right. The Build tab held it, because a row of five
+                    // commands there cannot wrap; the Details tab flashed it for
+                    // a frame and settled.
+                    //
+                    // A minimum of zero makes this frame the authority on width.
+                    // The tab is proposed whatever the column has and the column
+                    // stops being pushed. A tab that genuinely cannot fit now
+                    // clips at the panel edge, which is one control hidden
+                    // rather than a window laid out off screen.
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
             // The band above is glass, so it refracts whatever passes under
             // it. Without this the first line of the scroll meets that glass
@@ -481,18 +539,16 @@ private struct ContentHeader: View {
     var body: some View {
         @Bindable var state = state
         HStack(spacing: 10) {
+            // The question alone. The name of the screen is in the title bar,
+            // beside the sidebar toggle, and a band that repeats it says the
+            // one thing the selected sidebar row has already said.
+            //
             // The entry screen carries its own headline, in the size a
-            // headline wants. The band used to carry a second one over it, so
-            // one screen asked the same question twice in two voices.
+            // headline wants, so the band stays off it entirely.
             if !state.showsEntryScreen {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(state.selectedTab.title(in: state.mode))
-                        .font(Theme.screenTitle)
-                        .kerning(-0.21)
-                    Text(state.selectedTab.question)
-                        .font(Theme.screenSubtitle)
-                        .foregroundStyle(Theme.text2)
-                }
+                Text(state.selectedTab.question)
+                    .font(Theme.screenSubtitle)
+                    .foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
 

@@ -144,10 +144,13 @@ public struct StateReader: Sendable {
         // train per platform under one app id, and this endpoint returns them
         // mixed. Reading them as one list let the editable version, the live
         // version, and the media each come from a different platform.
-        let versions = StoreImportReader.applePlatformVersions(
-            JSON(data: try await api.apple(
-                "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data),
-            platform: platform)
+        let everyPlatform = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/appStoreVersions?limit=200").data)
+        // Before the narrowing, because the answer covers every platform and
+        // the Build tab asks about all of them. No second request.
+        result.platforms = StoreImportReader.applePlatformStandings(everyPlatform)
+        let versions = StoreImportReader.applePlatformVersions(everyPlatform,
+                                                               platform: platform)
         let editableStates = Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED",
                                   "REJECTED", "METADATA_REJECTED"])
         func versionState(_ version: JSON) -> String {
