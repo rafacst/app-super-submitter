@@ -11,9 +11,14 @@ import SwiftUI
 /// side puts each store's own limit over its own box and turns an override into
 /// what it is: this store takes different text from that one.
 ///
-/// A shared field is still one value. It is drawn in both columns, because each
-/// store's limit and each store's "changed since we read it" mark belong over
-/// that store's column, and typing in either box writes the same manifest key.
+/// A shared field is still one value. Split, it is drawn in both columns,
+/// because each store's limit and each store's "changed since we read it" mark
+/// belong over that store's column, and typing in either box writes the same
+/// manifest key. Merged, it is one box carrying both budgets by name, because
+/// two boxes of the same words stacked on each other is not a comparison.
+///
+/// The tab opens merged. Two columns are the study of a listing that differs by
+/// store, and a developer who wants that study asks for it.
 struct DetailsTab: View {
     @Environment(AppState.self) private var state
 
@@ -47,27 +52,17 @@ struct DetailsTab: View {
     @ViewBuilder
     private var listingRows: some View {
         VStack(alignment: .leading, spacing: 15) {
-            pair(apple: { shared(.name, in: .apple, anchor: "details.name") },
-                 google: { shared(.name, in: .google) })
-            pair(apple: { shared(.subtitle, in: .apple, anchor: "details.subtitle") },
-                 google: {
-                     override(.googleShortDescription, sharing: .subtitle,
-                              limit: 80, of: "the subtitle",
-                              anchor: "details.googleShortDescription")
-                 })
-            pair(apple: { shared(.description, in: .apple, multiline: true,
-                                 anchor: "details.description") },
-                 google: { shared(.description, in: .google, multiline: true) })
-            pair(apple: { shared(.whatsNew, in: .apple, multiline: true,
-                                 anchor: "details.whatsNew") },
-                 google: {
-                     override(.googleWhatsNew, sharing: .whatsNew, limit: 500,
-                              of: "what is new", multiline: true)
-                 })
+            sharedRow(.name, anchor: "details.name")
+            overrideRow(.subtitle, google: .googleShortDescription, limit: 80,
+                        of: "the subtitle", anchor: "details.subtitle",
+                        googleAnchor: "details.googleShortDescription")
+            sharedRow(.description, multiline: true, anchor: "details.description")
+            overrideRow(.whatsNew, google: .googleWhatsNew, limit: 500,
+                        of: "what is new", multiline: true, anchor: "details.whatsNew")
             pair(apple: {
                      appleOnly {
                          editor("Keywords", field: .keywords,
-                                limit: BindingLimits.limit(for: .keywords, in: .apple),
+                                limits: limits(.keywords, in: .apple),
                                 anchor: "details.keywords")
                      }
                  },
@@ -77,13 +72,12 @@ struct DetailsTab: View {
             pair(apple: {
                      appleOnly {
                          editor("Promotional text", field: .promotionalText,
-                                limit: BindingLimits.limit(for: .promotionalText, in: .apple),
+                                limits: limits(.promotionalText, in: .apple),
                                 anchor: "details.promotionalText")
                      }
                  },
                  google: { absent("Play has no promotional text.") })
-            pair(apple: { shared(.supportURL, in: .apple, anchor: "details.supportURL") },
-                 google: { shared(.supportURL, in: .google) })
+            sharedRow(.supportURL, anchor: "details.supportURL")
             pair(apple: {
                      appleOnly {
                          editor("Marketing URL", field: .marketingURL,
@@ -91,9 +85,7 @@ struct DetailsTab: View {
                      }
                  },
                  google: { absent("Play carries no separate marketing URL.") })
-            pair(apple: { shared(.privacyPolicyURL, in: .apple,
-                                 anchor: "details.privacyPolicyURL") },
-                 google: { shared(.privacyPolicyURL, in: .google) })
+            sharedRow(.privacyPolicyURL, anchor: "details.privacyPolicyURL")
             pair(apple: {
                      appleOnly {
                          VStack(alignment: .leading, spacing: 15) {
@@ -105,6 +97,30 @@ struct DetailsTab: View {
                      }
                  },
                  google: { absent("Play keeps both of these in the console.") })
+        }
+    }
+
+    /// One value both stores read.
+    ///
+    /// Split, it stands in both columns so each store's budget and each store's
+    /// mark sit over that store's own box. Merged, it is one box and the budgets
+    /// line up beside each other by name: two boxes of identical words stacked
+    /// on each other compare nothing and write the same key twice.
+    @ViewBuilder
+    private func sharedRow(_ field: ListingTextField, multiline: Bool = false,
+                           anchor: String? = nil) -> some View {
+        if columns {
+            HStack(alignment: .top, spacing: 14) {
+                editor(field.label, field: field, limits: limits(field, in: .apple),
+                       multiline: multiline, anchor: anchor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                editor(field.label, field: field, limits: limits(field, in: .google),
+                       multiline: multiline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            editor(field.label, field: field, limits: limits(field),
+                   multiline: multiline, anchor: anchor)
         }
     }
 
@@ -130,43 +146,87 @@ struct DetailsTab: View {
         }
     }
 
-    /// One value of the manifest, under one store's limit.
-    private func shared(_ field: ListingTextField, in store: Store,
-                        multiline: Bool = false, anchor: String? = nil) -> some View {
-        editor(field.label, field: field,
-               limit: Self.bindingField(field).flatMap {
-                   BindingLimits.limit(for: $0, in: store)
-               },
-               multiline: multiline, anchor: anchor)
+    /// The budgets to print over a box.
+    ///
+    /// One when a column already names the store, and one per store that reads
+    /// the value when nothing else does. The name is what makes a merged row
+    /// readable: Apple cuts the subtitle at 30 and Play cuts it at 80, and
+    /// "25 / 30" alone never said which of the two was in play.
+    private func limits(_ field: ListingTextField, in store: Store? = nil,
+                        excluding overridden: Set<Store> = []) -> [FieldLimit] {
+        guard let binding = Self.bindingField(field) else { return [] }
+        if let store {
+            return BindingLimits.limit(for: binding, in: store)
+                .map { [FieldLimit(store: nil, value: $0)] } ?? []
+        }
+        let stores = (state.stores.isEmpty ? [Store.apple] : Store.allCases.filter(shows))
+            .filter { !overridden.contains($0) }
+        let found = stores.compactMap { store in
+            BindingLimits.limit(for: binding, in: store).map { (store, $0) }
+        }
+        // Both stores cut the name at 30, and naming them then prints the same
+        // number twice under two labels. A name earns its place when the two
+        // differ: the subtitle stops at 30 on one store and 80 on the other.
+        let distinct = Set(found.map(\.1))
+        guard distinct.count > 1 else {
+            return distinct.first.map { [FieldLimit(store: nil, value: $0)] } ?? []
+        }
+        return found.map { FieldLimit(store: $0.0, value: $0.1) }
     }
 
-    /// The Google column of a field Google may take different text for.
+    /// A field Google may take different text for.
     ///
-    /// Off, it mirrors the shared box beside it and offers the switch. On, it
-    /// is a box of its own and offers the way back. The toggle used to sit
-    /// under the Apple field as an indented child; the column says which store
-    /// it belongs to without a word.
+    /// Split, the Google column mirrors the shared box while the override is
+    /// off and stands on its own once it is on, so each column always shows
+    /// what that store receives. Merged, an off override is one box under both
+    /// budgets: mirroring there put the same sentence in two boxes on top of
+    /// each other, under two different ceilings, both writing one key.
     @ViewBuilder
-    private func override(_ google: ListingTextField, sharing shared: ListingTextField,
-                          limit: Int, of name: String, multiline: Bool = false,
-                          anchor: String? = nil) -> some View {
+    private func overrideRow(_ shared: ListingTextField, google: ListingTextField,
+                             limit: Int, of name: String, multiline: Bool = false,
+                             anchor: String? = nil,
+                             googleAnchor: String? = nil) -> some View {
         let binding = state.googleOverrideBinding(google)
-        VStack(alignment: .leading, spacing: 5) {
-            if binding.wrappedValue {
-                editor(google.label, field: google, limit: limit,
+        let on = binding.wrappedValue
+        if columns {
+            HStack(alignment: .top, spacing: 14) {
+                editor(shared.label, field: shared, limits: limits(shared, in: .apple),
                        multiline: multiline, anchor: anchor)
-                overrideNote("Play cuts at \(limit)", action: "use the shared text") {
-                    binding.wrappedValue = false
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 5) {
+                    if on {
+                        editor(google.label, field: google,
+                               limits: [FieldLimit(store: nil, value: limit)],
+                               multiline: multiline, anchor: googleAnchor)
+                        overrideNote("Play cuts at \(limit)",
+                                     action: "use the shared text") { binding.wrappedValue = false }
+                    } else {
+                        editor(shared.label, field: shared,
+                               limits: limits(shared, in: .google), multiline: multiline)
+                        overrideNote("Play takes \(name) as it stands",
+                                     action: "use different text") { binding.wrappedValue = true }
+                    }
                 }
-            } else {
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 5) {
+                // With the override on, Google reads its own box, so the
+                // shared one is under Apple's ceiling alone.
                 editor(shared.label, field: shared,
-                       limit: Self.bindingField(shared).flatMap {
-                           BindingLimits.limit(for: $0, in: .google)
-                       },
+                       limits: limits(shared, excluding: on ? [.google] : []),
                        multiline: multiline, anchor: anchor)
-                overrideNote("Play takes \(name) as it stands",
-                             action: "use different text") {
-                    binding.wrappedValue = true
+                if shows(.google) {
+                    if on {
+                        editor(google.label, field: google,
+                               limits: [FieldLimit(store: .google, value: limit)],
+                               multiline: multiline, anchor: googleAnchor)
+                        overrideNote("Play cuts at \(limit)",
+                                     action: "use the shared text") { binding.wrappedValue = false }
+                    } else {
+                        overrideNote("Play takes \(name) as it stands",
+                                     action: "use different text") { binding.wrappedValue = true }
+                    }
                 }
             }
         }
@@ -331,12 +391,24 @@ struct DetailsTab: View {
         }
     }
 
-    private func editor(_ title: String, field: ListingTextField, limit: Int? = nil,
+    private func editor(_ title: String, field: ListingTextField,
+                        limits: [FieldLimit] = [],
                         multiline: Bool = false, tag: String? = nil,
                         anchor: String? = nil) -> some View {
-        ListingEditor(title: title, field: field, limit: limit,
+        ListingEditor(title: title, field: field, limits: limits,
                       multiline: multiline, tag: tag, anchor: anchor)
     }
+}
+
+/// One store's budget for one field, and the store's name when the layout no
+/// longer says it.
+///
+/// `Hashable` for the `ForEach` that prints them. Keyed by the number alone,
+/// the two stores of a field they both cut at 30 were one id twice, and SwiftUI
+/// drew the first of them twice: "App Store 15 / 30  App Store 15 / 30".
+struct FieldLimit: Hashable {
+    var store: Store?
+    var value: Int
 }
 
 /// The dot that colours a count on the bar over the columns.
@@ -376,10 +448,15 @@ private struct ListingEditor: View {
     @Environment(AppState.self) private var state
     let title: String
     let field: ListingTextField
-    var limit: Int?
+    /// Every store budget this box is under. The smallest is what the box
+    /// refuses to grow past, and each is printed so the developer can see
+    /// which store the ceiling belongs to.
+    var limits: [FieldLimit] = []
     var multiline = false
     var tag: String?
     var anchor: String?
+
+    private var limit: Int? { limits.map(\.value).min() }
 
     /// A reference and not a `@State String`, so the closures that commit it
     /// read the characters as they are now and not as they were when the body
@@ -402,28 +479,41 @@ private struct ListingEditor: View {
                 if let tag { Tag(tag) }
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
-                // Quiet until the budget is worth watching.
+                // Every budget, always, and named when more than one store
+                // reads the same words.
                 //
-                // "191 / 4000" is not information — it is a number that will
-                // never matter, printed over every field on the tab, in the
-                // same size and colour as the label it sits beside. The
-                // counter now appears at half the budget, warns at four
-                // fifths, and turns red over it, so a counter on screen means
-                // the limit is in play.
-                if let limit, Double(value.count) / Double(limit) > 0.5 {
-                    let nearLimit = Double(value.count) / Double(limit) > 0.8
-                    // A character budget is a count of characters, not a
-                    // quantity, so it takes no thousands separator: the 4000
-                    // character description limit read as "4.000".
-                    Text(verbatim: "\(value.count) / \(limit)")
-                        .font(Theme.font(size: 11, weight: overLimit ? .semibold : .regular))
-                        .foregroundStyle(overLimit ? Theme.red
-                                         : nearLimit ? Theme.yellow : Theme.text2)
-                        // The count changes on every key, so the digits have
-                        // to hold their column or the label jitters as you type.
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .accessibilityLabel("\(value.count) of \(limit) characters")
+                // The counter used to wait until the text passed half the
+                // limit, on the grounds that "191 / 4000" is a number that
+                // will never matter. It also meant a developer met the ceiling
+                // by hitting it: nothing on the screen said a subtitle stops
+                // at 30 until 16 characters were typed. It warns at four
+                // fifths and turns red over the limit, as it always did.
+                ForEach(limits, id: \.self) { limit in
+                    let near = Double(value.count) / Double(limit.value) > 0.8
+                    let over = value.count > limit.value
+                    HStack(spacing: 4) {
+                        if let store = limit.store {
+                            Text(store.storeName)
+                                .font(Theme.font(size: 10.5))
+                                .foregroundStyle(Theme.text3)
+                        }
+                        // A character budget is a count of characters, not a
+                        // quantity, so it takes no thousands separator: the
+                        // 4000 character description limit read as "4.000".
+                        Text(verbatim: "\(value.count) / \(limit.value)")
+                            .font(Theme.font(size: 11, weight: over ? .semibold : .regular))
+                            .foregroundStyle(over ? Theme.red
+                                             : near ? Theme.yellow : Theme.text2)
+                            // The count changes on every key, so the digits
+                            // have to hold their column or the label jitters
+                            // as you type.
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(limit.store.map {
+                        "\(value.count) of \(limit.value) characters for the \($0.storeName)"
+                    } ?? "\(value.count) of \(limit.value) characters")
                 }
             }
             if multiline {

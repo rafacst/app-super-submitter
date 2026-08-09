@@ -333,10 +333,11 @@ final class AppState {
     var locale = ""
     /// Whether the listing stands in one column instead of one per store.
     ///
-    /// Two columns are the point of the tab, and they need the width for it. A
-    /// developer working in half a window, or reading a description that wants
-    /// every point it can get, stacks them instead.
-    var detailsMerged = false
+    /// Merged is where the tab opens: one box per value, with every store's
+    /// budget named over it. Two columns are the study of a listing that
+    /// differs by store, they want the width, and a developer who wants them
+    /// asks.
+    var detailsMerged = true
 
     // The YAML toggle that every editing tab holds. Spec 16.1.
     var showYAML = false
