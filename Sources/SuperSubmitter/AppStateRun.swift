@@ -55,6 +55,15 @@ extension AppState {
 
     // MARK: - Tab 7. The plan
 
+    /// Takes a failed plan read to the credentials that can fix it.
+    func fixReadFailure(_ message: String) {
+        if message.hasPrefix("Provider:") {
+            showSettings = true
+        } else {
+            selectedTab = .stores
+        }
+    }
+
     var credentials: StoreCredentials {
         StoreCredentials(
             apple: applePrivateKeyPEM.isEmpty ? nil : AppleCredential(

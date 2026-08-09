@@ -28,16 +28,11 @@ struct SettingsPanel: View {
             PanelTitleBar(title: "Settings") { dismiss() }
             tabStrip
             Hairline()
-            // A fixed height, so the panel can never grow past the window and
-            // put its own close button off the top of the screen.
-            ScrollView {
-                body(of: section)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 380)
-            .background(Theme.content)
+            body(of: section)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.content)
         }
         .frame(width: 560)
         .background(Theme.bg)
