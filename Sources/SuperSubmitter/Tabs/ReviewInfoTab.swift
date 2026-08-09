@@ -64,6 +64,30 @@ struct ReviewInfoTab: View {
                 if state.manifest.review?.demoAccountRequired == true {
                     TextField("User name", text: $state.reviewerUsername)
                     SecureField("Password", text: $state.reviewerPassword)
+                    // The account the released version was approved with.
+                    //
+                    // The sign-in lives in the Keychain and never in the
+                    // manifest, and a Keychain is per machine. So an app that
+                    // has shipped three times with a demo account opened these
+                    // two fields empty on a new Mac. Apple carries the review
+                    // detail into the next version, so the store remembers what
+                    // this machine does not.
+                    //
+                    // An offer and not an autofill. It writes a credential, and
+                    // a credential that appears on its own is one nobody
+                    // decided to use.
+                    if let stored = state.storedDemoAccount {
+                        HStack(spacing: 8) {
+                            Text(stored.password == nil
+                                 ? "The App Store holds \(stored.name) for this app. Apple does not return the password."
+                                 : "The App Store holds \(stored.name) for this app.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            QuietButton(title: "Use it") { state.fillDemoAccountFromStore() }
+                        }
+                    }
                 }
                 Text("Credentials stay in the macOS Keychain and never reach the repository.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.text2)

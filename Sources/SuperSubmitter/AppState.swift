@@ -1662,6 +1662,51 @@ final class AppState {
         })
     }
 
+    /// The prices Apple sells at, as the picker's rows.
+    ///
+    /// Empty whenever the app must not constrain the field: the App Store is
+    /// not a chosen store, or nobody has read it yet. The Amount field falls
+    /// back to free text then, because a developer who has not connected a key
+    /// still has to be able to name a price, and a picker with no rows is a
+    /// field that cannot be filled at all.
+    var applePricePoints: [StoreValues.Choice] {
+        guard stores.contains(.apple) else { return [] }
+        // Sorted here and not only in the reader. The picker's order is what a
+        // person reads down, and it should not depend on which code path filled
+        // the state.
+        return (actualState.apple?.pricePoints ?? []).sorted().map {
+            // The stored value is the number the manifest writes, so the label
+            // and the value are the same string. Apple returns it already
+            // formatted for the territory.
+            let text = "\($0)"
+            return StoreValues.Choice(text, text)
+        }
+    }
+
+    /// The reviewer sign-in App Store Connect holds that this Mac does not.
+    ///
+    /// Nil when there is nothing to offer: no read, no stored name, or the
+    /// fields already hold something. It never overwrites what the developer
+    /// typed, because a store value is older than a value being typed now.
+    var storedDemoAccount: (name: String, password: String?)? {
+        guard let name = actualState.apple?.reviewDemoAccountName,
+              reviewerUsername.isEmpty, reviewerPassword.isEmpty else { return nil }
+        return (name, actualState.apple?.reviewDemoAccountPassword)
+    }
+
+    /// Takes it, and puts it where the app keeps a reviewer sign-in.
+    ///
+    /// Apple hands back the name and, on most accounts, withholds the
+    /// password. Filling the half it gave is still the useful half: the
+    /// developer confirms the account rather than remembering which one it was,
+    /// and types one field instead of two.
+    func fillDemoAccountFromStore() {
+        guard let stored = storedDemoAccount else { return }
+        reviewerUsername = stored.name
+        if let password = stored.password { reviewerPassword = password }
+        reviewerCredentialsChanged()
+    }
+
     func reviewerCredentialsChanged() {
         do {
             try KeychainCredentials.save(

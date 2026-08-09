@@ -266,6 +266,26 @@ private struct ScreenshotSet {
     #expect(set.mediaStep(actual) != nil)
 }
 
+/// A read that never happened is not a store that matches.
+///
+/// The upload still goes, because an unknown set is not a matching one. But the
+/// plan may not print it in the same green as a set it actually compared: an
+/// update whose credentials had lapsed read "replace with 5 screenshots" with
+/// no hint that nobody had checked.
+@Test func screenshotsAreMarkedUnverifiedWhenTheStoreWasNeverRead() throws {
+    let set = try ScreenshotSet()
+    defer { set.cleanUp() }
+
+    let unread = try! #require(set.mediaStep(ActualState()))
+    #expect(unread.comparison == .unverified)
+
+    // A read that happened and simply holds other pictures is verified.
+    let compared = try! #require(set.mediaStep(liveState { apple in
+        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_69"] = ["old", "older"]
+    }))
+    #expect(compared.comparison == .verified)
+}
+
 @Test func aFirstPublishAlwaysUploadsItsScreenshots() throws {
     let set = try ScreenshotSet()
     defer { set.cleanUp() }
