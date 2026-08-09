@@ -65,12 +65,15 @@ private func buildReviewState() -> AppState {
 // MARK: - Build from project uses the width
 
 /// One store means one platform, and the column of full-width cards left half
-/// the screen empty next to it.
-@Test func buildFromProjectPairsItsCards() throws {
+/// the screen empty next to it. The rows fill it, because a row shrinks and a
+/// card of five buttons on one line does not.
+@Test func buildFromProjectFillsTheWidthWithItsRows() throws {
     let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
 
     #expect(view.contains("ViewThatFits(in: .horizontal)"))
-    #expect(view.contains("private func pair"))
+    #expect(view.contains("private func twoColumns"))
+    #expect(view.contains("twoColumns(preflightRows(snapshot))"))
+    #expect(view.contains("twoColumns(artifactRows(candidate))"))
 }
 
 // MARK: - The two flows
