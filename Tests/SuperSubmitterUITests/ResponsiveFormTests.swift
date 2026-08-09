@@ -32,7 +32,7 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     let end = try #require(money.range(of: "private var resolvedPoint"))
     let section = String(money[start.lowerBound..<end.lowerBound])
 
-    let currency = try #require(section.range(of: "LabeledField(\"Currency\")"))
+    let currency = try #require(section.range(of: "LabeledField(\"Currency\""))
     let amount = try #require(section.range(of: "LabeledField(\"Amount\""))
     #expect(currency.lowerBound < amount.lowerBound)
     #expect(!section.contains("TextField(\"0.00\""))
