@@ -394,27 +394,36 @@ struct EditableField: View {
     /// The length the store issues, where it issues a fixed one. Nil means the
     /// field takes whatever the developer has.
     var limit: Int?
+    @State private var draft: String
+
+    init(label: String, value: Binding<String>, prompt: String, limit: Int? = nil) {
+        self.label = label
+        _value = value
+        self.prompt = prompt
+        self.limit = limit
+        _draft = State(initialValue: Self.normalized(value.wrappedValue, limit: limit))
+    }
+
+    static func normalized(_ value: String, limit: Int?) -> String {
+        let oneLine = value.filter { !$0.isNewline }
+        guard let limit else { return oneLine }
+        return String(oneLine.prefix(limit))
+    }
+
+    private func accept(_ value: String) {
+        let normalized = Self.normalized(value, limit: limit)
+        if draft != normalized { draft = normalized }
+        if self.value != normalized { self.value = normalized }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
-            // `oneLine` outside `limited`, and the order is the whole point: the
-            // break is taken out first, then the length is counted. A key id
-            // copied out of App Store Connect arrives with a newline on the end,
-            // which is 37 characters against a limit of 36, and the limit alone
-            // refused the whole paste. A Return typed into the field did the
-            // same damage from the other side: the value grew a line, the field
-            // editor scrolled to the empty second one, and the id a developer
-            // had just entered was cut in half on the screen.
-            //
-            // Every field this draws holds a store id. None of them has a
-            // second line, so this belongs here and not at the four call sites.
-            //
-            // `capped` and not `limited`. Refusing growth leaves a value that
-            // arrived from the Keychain or from an import over length exactly
-            // as long as it was, and an issuer id is 36 characters or it is
-            // not an issuer id. The store refuses the 37th, so the field does.
-            TextField(prompt, text: $value.capped(to: limit).oneLine)
+            // Keep a real draft. AppKit's focused field editor can keep showing
+            // a character that a transformed binding rejected because the
+            // stored value did not change. Normalizing the draft itself removes
+            // the extra character on screen as well as from the model.
+            TextField(prompt, text: $draft)
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))
                 .padding(.horizontal, 8)
@@ -423,6 +432,9 @@ struct EditableField: View {
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                .onAppear { accept(value) }
+                .onChange(of: draft) { _, value in accept(value) }
+                .onChange(of: value) { _, value in accept(value) }
         }
     }
 }
