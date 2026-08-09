@@ -153,7 +153,7 @@ private func testFlightManifest(
 
     for text in ["", "   ", tooLong] {
         do {
-            _ = try await client.replyToReview(reviewId: "r1", responseId: nil, text: text)
+            _ = try await client.replyToReview(reviewId: "r1", text: text)
             Issue.record("The reply \(text.count) characters long should be refused.")
         } catch ConnectionError.http(let status, _) {
             #expect(status == 400)

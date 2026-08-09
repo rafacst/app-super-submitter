@@ -302,9 +302,19 @@ public struct ActualState: Sendable, Equatable {
             public var reviewNote: String?
             /// The locale to the store name and description.
             public var locales: [String: ProductLocale] = [:]
+            /// True on a desired-state value when absence from `locales`
+            /// means delete it. Store reads leave this false.
+            public var managesLocales = false
+            /// False means no usable metadata version was available or its
+            /// localization read failed. An empty successful read is true.
+            public var localesRead = false
             /// The territory to the customer price, as `"USD 4.99"`.
             public var prices: [String: String] = [:]
             public var availableTerritories: Set<String> = []
+            /// Subscription territories stay separated by Apple's billing
+            /// plan type. Combining these sets would compare unlike plans.
+            public var subscriptionPlanTerritories: [Manifest.ApplePlanType: Set<String>] = [:]
+            public var subscriptionPlanAvailabilityRead = false
             public var promoted: Bool?
             /// The offer ids that Apple holds on this product. An introductory
             /// offer carries no id of its own, so it never lands here.

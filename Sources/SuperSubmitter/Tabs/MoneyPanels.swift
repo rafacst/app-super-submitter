@@ -178,7 +178,7 @@ struct SubscriptionDraftsPanel: View {
                 }
                 ForEach(products) { product in row(product) }
                 if loaded, !products.isEmpty {
-                    Text("A run still writes the live localizations. This writes the same manifest text onto the draft instead, which is where Apple wants a metadata change to go.")
+                    Text("Apply reconciles these versioned drafts automatically. These buttons remain for a deliberate manual draft write.")
                         .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }

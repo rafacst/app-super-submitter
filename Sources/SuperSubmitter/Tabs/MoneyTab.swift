@@ -314,6 +314,13 @@ struct MoneyTab: View {
                                     LabeledField("Base plan id", note: "Google", width: 130) {
                                         TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .basePlanID))
                                     }
+                                    LabeledField("Plan type", note: "Apple", width: 180) {
+                                        ChoiceField(
+                                            value: state.planBinding(groupIndex: groupIndex,
+                                                                     planIndex: planIndex,
+                                                                     field: .applePlanType),
+                                            choices: StoreValues.appleSubscriptionPlanTypes)
+                                    }
                                     Button(role: .destructive) { state.removePlan(groupIndex: groupIndex, planIndex: planIndex) } label: {
                                         Image(systemName: "minus.circle")
                                     }

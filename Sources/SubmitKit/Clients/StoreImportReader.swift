@@ -203,6 +203,27 @@ public struct StoreImportReader: Sendable {
                 "/v1/apps/\(appID)/subscriptionGroups?include=subscriptions&limit=200").data)
         }) {
             result.subscriptions = Self.appleSubscriptionGroups(groups)
+            let productIDs = result.subscriptions.flatMap { $0.plans.map(\.id) }
+            let groupNames = result.subscriptions.map { $0.groupName ?? $0.groupId }
+            if let catalog = await attempt("App Store subscription details", &failures, {
+                try await AppleCatalogClient(api: api).subscriptions(
+                    appID: appID, productIds: productIDs, groupNames: groupNames)
+            }) {
+                for groupIndex in result.subscriptions.indices {
+                    for planIndex in result.subscriptions[groupIndex].plans.indices {
+                        let id = result.subscriptions[groupIndex].plans[planIndex].id
+                        guard let product = catalog.products[id],
+                              product.subscriptionPlanAvailabilityRead,
+                              product.subscriptionPlanTerritories.count == 1,
+                              let availability = product.subscriptionPlanTerritories.first
+                        else { continue }
+                        result.subscriptions[groupIndex].plans[planIndex].applePlanType =
+                            availability.key
+                        result.subscriptions[groupIndex].plans[planIndex].availableTerritories =
+                            availability.value.isEmpty ? nil : availability.value.sorted()
+                    }
+                }
+            }
         }
 
         result.failures = failures

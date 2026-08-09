@@ -48,15 +48,16 @@ public struct ReleaseClient: Sendable {
         let purchases = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/inAppPurchasesV2?limit=200").data)
         for purchase in purchases["data"].array {
-            guard let versionId = purchase["relationships"]["inAppPurchaseVersion"]["data"]["id"]
-                .string else { continue }
-            await addItem(to: submissionID, relationship: "inAppPurchaseV2",
-                          type: "inAppPurchases", id: versionId)
+            guard let purchaseID = purchase["id"].string,
+                  let versionID = await editableVersionID(
+                    path: "/v2/inAppPurchases/\(purchaseID)/versions") else { continue }
+            await addItem(to: submissionID, relationship: "inAppPurchaseVersion",
+                          type: "inAppPurchaseVersions", id: versionID)
         }
 
         await addMarketingItems(appID: appID, versionID: versionID,
                                 submissionID: submissionID)
-        await submitSubscriptions(appID: appID)
+        await addSubscriptionItems(appID: appID, submissionID: submissionID)
 
         try await api.apple("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: [
             "data": ["type": "reviewSubmissions", "id": submissionID,
@@ -85,6 +86,13 @@ public struct ReleaseClient: Sendable {
                 ],
             ],
         ])
+    }
+
+    private func editableVersionID(path: String) async -> String? {
+        guard let response = try? await api.apple(
+            "GET", path, query: [URLQueryItem(name: "limit", value: "200")]) else { return nil }
+        return AppleVersionSelection.editable(
+            JSON(data: response.data)["data"].array)?["id"].string
     }
 
     /// The app events, the custom product pages, and the experiments.
@@ -138,43 +146,28 @@ public struct ReleaseClient: Sendable {
         }
     }
 
-    /// The subscriptions and their groups.
-    ///
-    /// Apple keeps these off `reviewSubmissionItems` and gives each one its own
-    /// submission resource, so a subscription never joins the version
-    /// submission. It reaches the same queue by its own call.
-    ///
-    /// `READY_TO_SUBMIT` is the whole window. Apple refuses every other state,
-    /// including the approved one, so the filter is what keeps the loop quiet
-    /// on a second release.
-    private func submitSubscriptions(appID: String) async {
+    /// Add editable subscription and group versions to this review submission.
+    private func addSubscriptionItems(appID: String, submissionID: String) async {
         guard let groups = try? await api.apple(
             "GET", "/v1/apps/\(appID)/subscriptionGroups?include=subscriptions&limit=200")
         else { return }
         let payload = JSON(data: groups.data)
 
         for group in payload["data"].array {
-            guard let id = group["id"].string else { continue }
-            _ = try? await api.apple("POST", "/v1/subscriptionGroupSubmissions", body: [
-                "data": [
-                    "type": "subscriptionGroupSubmissions",
-                    "relationships": ["subscriptionGroup": [
-                        "data": ["type": "subscriptionGroups", "id": id]]],
-                ],
-            ])
+            guard let id = group["id"].string,
+                  let versionID = await editableVersionID(
+                    path: "/v1/subscriptionGroups/\(id)/versions") else { continue }
+            await addItem(to: submissionID, relationship: "subscriptionGroupVersion",
+                          type: "subscriptionGroupVersions", id: versionID)
         }
 
         for subscription in payload["included"].array
-        where subscription["type"].string == "subscriptions"
-            && subscription["attributes"]["state"].string == "READY_TO_SUBMIT" {
-            guard let id = subscription["id"].string else { continue }
-            _ = try? await api.apple("POST", "/v1/subscriptionSubmissions", body: [
-                "data": [
-                    "type": "subscriptionSubmissions",
-                    "relationships": ["subscription": [
-                        "data": ["type": "subscriptions", "id": id]]],
-                ],
-            ])
+        where subscription["type"].string == "subscriptions" {
+            guard let id = subscription["id"].string,
+                  let versionID = await editableVersionID(
+                    path: "/v1/subscriptions/\(id)/versions") else { continue }
+            await addItem(to: submissionID, relationship: "subscriptionVersion",
+                          type: "subscriptionVersions", id: versionID)
         }
     }
 

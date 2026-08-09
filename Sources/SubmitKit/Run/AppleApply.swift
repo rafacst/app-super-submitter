@@ -531,8 +531,16 @@ extension Runner {
         // The declaration only means something once a build carries it.
         if let buildID = appleTargetBuildID {
             try await api.apple(
-                "POST", "/v1/appEncryptionDeclarations/\(declarationID)/relationships/builds",
-                body: ["data": [["type": "builds", "id": buildID]]])
+                "PATCH", "/v1/builds/\(buildID)", body: [
+                    "data": [
+                        "type": "builds",
+                        "id": buildID,
+                        "relationships": ["appEncryptionDeclaration": [
+                            "data": ["type": "appEncryptionDeclarations",
+                                     "id": declarationID],
+                        ]],
+                    ],
+                ])
         }
     }
 
@@ -831,7 +839,15 @@ extension Runner {
                                       purchaseID: String) async throws {
         let versions = JSON(data: try await api.apple(
             "GET", "/v2/inAppPurchases/\(purchaseID)/versions?limit=50").data)
-        var purchaseVersionID = versions["data"].array.first?["id"].string
+        let heldVersions = versions["data"].array
+        var purchaseVersionID = AppleVersionSelection.editable(heldVersions)?["id"].string
+        if purchaseVersionID == nil,
+           let current = AppleVersionSelection.preferred(heldVersions),
+           AppleVersionSelection.blocksEdits(current),
+           purchase.locales?.isEmpty == false {
+            throw ConnectionError.http(
+                409, "The in-app purchase \(purchase.id) has metadata in review and cannot be edited.")
+        }
         if purchaseVersionID == nil, purchase.locales?.isEmpty == false {
             let created = JSON(data: try await api.apple(
                 "POST", "/v1/inAppPurchaseVersions", body: [
@@ -847,7 +863,7 @@ extension Runner {
         if let purchaseVersionID {
             let existing = JSON(data: try await api.apple(
                 "GET", "/v1/inAppPurchaseVersions/\(purchaseVersionID)"
-                    + "/inAppPurchaseLocalizations?limit=200").data)
+                    + "/localizations?limit=200").data)
             for item in existing["data"].array {
                 if let locale = item["attributes"]["locale"].string,
                    let id = item["id"].string { localizationIDs[locale] = id }
@@ -869,7 +885,7 @@ extension Runner {
                     "data": [
                         "type": "inAppPurchaseLocalizations",
                         "attributes": attributes,
-                        "relationships": ["inAppPurchaseVersion": [
+                        "relationships": ["version": [
                             "data": ["type": "inAppPurchaseVersions",
                                      "id": purchaseVersionID]]],
                     ],

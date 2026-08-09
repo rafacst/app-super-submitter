@@ -29,8 +29,8 @@ public struct AppleActionsClient: Sendable {
         public var territory: String?
         public var lastModified: Date?
         public var developerReply: String?
-        /// The id of the existing response, so an edit patches it instead of
-        /// making a second one.
+        /// The id of the existing response. Creating or replacing uses the
+        /// review id; this id remains necessary for deleting the response.
         public var responseId: String?
 
         public init(id: String, authorName: String? = nil, title: String? = nil,
@@ -81,11 +81,10 @@ public struct AppleActionsClient: Sendable {
     /// visitor reads it, and a second reply replaces the first one. Confirm
     /// the text with the developer before this runs.
     ///
-    /// Apple takes one response per review. A review that already carries one
-    /// is patched, so the reply never lands twice.
+    /// Apple takes one response per review. The create endpoint also replaces
+    /// an existing response, so both actions use the review relationship.
     @discardableResult
-    public func replyToReview(reviewId: String, responseId: String?,
-                              text: String) async throws -> String {
+    public func replyToReview(reviewId: String, text: String) async throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw ConnectionError.http(400, "A review reply cannot be empty.")
@@ -95,22 +94,15 @@ public struct AppleActionsClient: Sendable {
                 400,
                 "Apple accepts \(Self.replyLimit) characters in a review reply. This one has \(trimmed.count).")
         }
-        if let responseId {
-            try await api.apple("PATCH", "/v1/customerReviewResponses/\(responseId)", body: [
-                "data": ["type": "customerReviewResponses", "id": responseId,
-                         "attributes": ["responseBody": trimmed]],
-            ])
-        } else {
-            try await api.apple("POST", "/v1/customerReviewResponses", body: [
-                "data": [
-                    "type": "customerReviewResponses",
-                    "attributes": ["responseBody": trimmed],
-                    "relationships": [
-                        "review": ["data": ["type": "customerReviews", "id": reviewId]],
-                    ],
+        try await api.apple("POST", "/v1/customerReviewResponses", body: [
+            "data": [
+                "type": "customerReviewResponses",
+                "attributes": ["responseBody": trimmed],
+                "relationships": [
+                    "review": ["data": ["type": "customerReviews", "id": reviewId]],
                 ],
-            ])
-        }
+            ],
+        ])
         return trimmed
     }
 

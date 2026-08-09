@@ -38,7 +38,9 @@ enum ConnectionStatus: Equatable {
 }
 
 enum PurchaseTextField { case id, name, amount, currency, entitlement }
-enum PlanTextField { case id, duration, basePlanID, amount, currency, entitlement, packageKey }
+enum PlanTextField {
+    case id, duration, basePlanID, applePlanType, amount, currency, entitlement, packageKey
+}
 
 struct CatalogPriceInput {
     var amount: String
@@ -1519,6 +1521,7 @@ final class AppState {
             case .id: plan.id
             case .duration: plan.duration
             case .basePlanID: plan.basePlanId ?? ""
+            case .applePlanType: plan.applePlanType?.rawValue ?? ""
             case .amount: self.planPriceInput(groupIndex, planIndex).amount
             case .currency: self.planPriceInput(groupIndex, planIndex).currency
             case .entitlement: plan.entitlements?.joined(separator: ",") ?? ""
@@ -1531,6 +1534,9 @@ final class AppState {
             case .id: self.manifest.subscriptions?[groupIndex].plans[planIndex].id = value
             case .duration: self.manifest.subscriptions?[groupIndex].plans[planIndex].duration = value
             case .basePlanID: self.manifest.subscriptions?[groupIndex].plans[planIndex].basePlanId = value
+            case .applePlanType:
+                self.manifest.subscriptions?[groupIndex].plans[planIndex].applePlanType =
+                    Manifest.ApplePlanType(rawValue: value)
             case .amount:
                 var input = self.planPriceInput(groupIndex, planIndex)
                 input.amount = value

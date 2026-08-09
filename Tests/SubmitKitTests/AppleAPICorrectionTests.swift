@@ -39,7 +39,12 @@ private final class CorrectionCallLog: @unchecked Sendable {
 }
 
 private final class CorrectionStubProtocol: URLProtocol, @unchecked Sendable {
-    enum Scenario { case reviews, purchase, release, encryption, subscriptionLocales }
+    enum Scenario {
+        case reviews, purchase, release, encryption
+        case subscriptionLocales, groupLocales
+        case availabilityExisting, availabilityMissing, subscriptionCatalog
+        case subscriptionDraftExisting, subscriptionDraftMissing, subscriptionDraftInReview
+    }
 
     nonisolated(unsafe) static var scenario = Scenario.reviews
     nonisolated(unsafe) static var log = CorrectionCallLog()
@@ -104,8 +109,82 @@ private final class CorrectionStubProtocol: URLProtocol, @unchecked Sendable {
                     {"type":"subscriptionLocalizations","id":"locale-en","attributes":{"locale":"en-US"}},
                     {"type":"subscriptionLocalizations","id":"locale-fr","attributes":{"locale":"fr-FR"}}
                   ]}
+                """
+                : #"{"data":{}}"#
+
+        case .groupLocales:
+            body = method == "GET"
+                ? """
+                  {"data":[
+                    {"type":"subscriptionGroupLocalizations","id":"group-locale-en","attributes":{"locale":"en-US"}},
+                    {"type":"subscriptionGroupLocalizations","id":"group-locale-fr","attributes":{"locale":"fr-FR"}}
+                  ]}
                   """
                 : #"{"data":{}}"#
+
+        case .availabilityExisting, .availabilityMissing:
+            switch (method, path) {
+            case ("GET", "/v1/apps/app-1/subscriptionGroups"):
+                body = #"{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Pro"}}]}"#
+            case ("GET", "/v1/subscriptionGroups/group-1/subscriptions"):
+                body = #"{"data":[{"type":"subscriptions","id":"subscription-1","attributes":{"productId":"pro.monthly"}}]}"#
+            case ("GET", "/v1/subscriptions/subscription-1/planAvailabilities"):
+                body = Self.scenario == .availabilityExisting
+                    ? #"{"data":[{"type":"subscriptionPlanAvailabilities","id":"availability-1","attributes":{"planType":"MONTHLY"}}]}"#
+                    : #"{"data":[]}"#
+            default:
+                body = #"{"data":{}}"#
+            }
+
+        case .subscriptionCatalog:
+            switch (method, path) {
+            case ("GET", "/v1/apps/app-1/subscriptionGroups"):
+                body = """
+                {"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Pro"}}],
+                 "included":[{"type":"subscriptions","id":"subscription-1",
+                              "attributes":{"productId":"pro.monthly","subscriptionPeriod":"ONE_MONTH"}}]}
+                """
+            case ("GET", "/v1/subscriptions/subscription-1/versions"):
+                body = #"{"data":[{"type":"subscriptionVersions","id":"subscription-version-1","attributes":{"version":1,"state":"PREPARE_FOR_SUBMISSION"}}]}"#
+            case ("GET", "/v1/subscriptionVersions/subscription-version-1/localizations"):
+                body = #"{"data":[]}"#
+            case ("GET", "/v1/subscriptions/subscription-1/planAvailabilities"):
+                body = """
+                {"data":[
+                  {"type":"subscriptionPlanAvailabilities","id":"monthly","attributes":{"planType":"MONTHLY"},
+                   "relationships":{"availableTerritories":{"data":[{"type":"territories","id":"USA"}]}}},
+                  {"type":"subscriptionPlanAvailabilities","id":"upfront","attributes":{"planType":"UPFRONT"},
+                   "relationships":{"availableTerritories":{"data":[{"type":"territories","id":"DEU"}]}}}
+                ]}
+                """
+            default:
+                body = #"{"data":[]}"#
+            }
+
+        case .subscriptionDraftExisting, .subscriptionDraftMissing,
+             .subscriptionDraftInReview:
+            switch (method, path) {
+            case ("GET", "/v1/apps/app-1/subscriptionGroups"):
+                body = #"{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Pro"}}]}"#
+            case ("GET", "/v1/subscriptionGroups/group-1/subscriptions"):
+                body = #"{"data":[{"type":"subscriptions","id":"subscription-1","attributes":{"productId":"pro.monthly"}}]}"#
+            case ("GET", "/v1/subscriptions/subscription-1/versions"):
+                switch Self.scenario {
+                case .subscriptionDraftExisting:
+                    body = #"{"data":[{"type":"subscriptionVersions","id":"subscription-version-1","attributes":{"version":1,"state":"PREPARE_FOR_SUBMISSION"}}]}"#
+                case .subscriptionDraftInReview:
+                    body = #"{"data":[{"type":"subscriptionVersions","id":"subscription-version-1","attributes":{"version":1,"state":"IN_REVIEW"}}]}"#
+                default:
+                    body = #"{"data":[]}"#
+                }
+            case ("POST", "/v1/subscriptionVersions"):
+                body = #"{"data":{"type":"subscriptionVersions","id":"subscription-version-new","attributes":{"version":2,"state":"PREPARE_FOR_SUBMISSION"}}}"#
+            case ("GET", "/v1/subscriptionVersions/subscription-version-1/localizations"),
+                 ("GET", "/v1/subscriptionVersions/subscription-version-new/localizations"):
+                body = #"{"data":[{"type":"subscriptionLocalizations","id":"locale-fr","attributes":{"locale":"fr-FR","name":"Ancien"}}]}"#
+            default:
+                body = #"{"data":{}}"#
+            }
         }
 
         let response = HTTPURLResponse(url: request.url!, statusCode: 200,
@@ -131,6 +210,24 @@ private func correctionAPI(_ scenario: CorrectionStubProtocol.Scenario) -> Store
                     session: URLSession(configuration: configuration))
 }
 
+private func correctionRunner(_ scenario: CorrectionStubProtocol.Scenario,
+                              manifest: Manifest, actual: ActualState = ActualState()) -> Runner {
+    CorrectionStubProtocol.scenario = scenario
+    CorrectionStubProtocol.log = CorrectionCallLog()
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CorrectionStubProtocol.self]
+    let credential = AppleCredential(
+        keyID: "ABCD123456", issuerID: "issuer",
+        privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation,
+        fileName: "AuthKey_ABCD123456.p8")
+    var manifest = manifest
+    manifest.apps.apple?.appId = "app-1"
+    return Runner(plan: PlanResult(), manifest: manifest, actual: actual, root: nil,
+                  credentials: StoreCredentials(apple: credential), dryRun: false,
+                  access: GrantAll(), session: URLSession(configuration: configuration),
+                  emit: { _ in })
+}
+
 private func relationship(_ name: String, in call: CorrectionCallLog.Call,
                           type: String, id: String) -> Bool {
     guard let data = call.body["data"] as? [String: Any],
@@ -148,10 +245,8 @@ struct AppleAPICorrectionTests {
         async throws {
         let client = AppleActionsClient(api: correctionAPI(.reviews))
 
-        _ = try await client.replyToReview(reviewId: "review-1", responseId: nil,
-                                           text: "  Thank you.  ")
-        _ = try await client.replyToReview(reviewId: "review-1", responseId: "response-1",
-                                           text: "Updated reply")
+        _ = try await client.replyToReview(reviewId: "review-1", text: "  Thank you.  ")
+        _ = try await client.replyToReview(reviewId: "review-1", text: "Updated reply")
 
         let calls = CorrectionStubProtocol.log.all
         #expect(calls.count == 2)
@@ -213,19 +308,16 @@ struct AppleAPICorrectionTests {
         var actual = ActualState()
         actual.apple = ActualState.Apple()
         actual.apple?.attachedBuildId = "build-1"
-        let runner = Runner(plan: PlanResult(), manifest: manifest, actual: actual, root: nil,
-                            credentials: StoreCredentials(), dryRun: false,
-                            access: GrantAll(), emit: { _ in })
+        let runner = correctionRunner(.encryption, manifest: manifest, actual: actual)
 
-        // Use the stubbed API through a runner with signed credentials.
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [CorrectionStubProtocol.self]
-        _ = runner
-        _ = configuration
+        try await runner.appleEncryptionDeclaration()
 
-        let source = try source("Sources/SubmitKit/Run/AppleApply.swift")
-        #expect(source.contains("PATCH\", \"/v1/builds/\\(buildID)\""))
-        #expect(!source.contains("/relationships/builds"))
+        let attachment = try #require(CorrectionStubProtocol.log.all.first {
+            $0.method == "PATCH" && $0.path == "/v1/builds/build-1"
+        })
+        #expect(relationship("appEncryptionDeclaration", in: attachment,
+                             type: "appEncryptionDeclarations", id: "declaration-1"))
+        #expect(!CorrectionStubProtocol.log.all.contains { $0.path.contains("relationships/builds") })
     }
 
     @Test func versionedSubscriptionWritesDeleteDroppedLocales() async throws {
@@ -233,13 +325,182 @@ struct AppleAPICorrectionTests {
 
         try await client.writeLocalizations(
             kind: .subscription, draftID: "subscription-version-1",
-            locales: ["en-US": (name: "Pro", description: "Full access")])
+            locales: ["en-US": (name: "Pro", description: "Full access"),
+                      "de-DE": (name: "Pro", description: "Vollzugriff")],
+            deleteMissing: true)
 
         #expect(CorrectionStubProtocol.log.all.contains {
             $0.method == "PATCH" && $0.path == "/v2/subscriptionLocalizations/locale-en"
         })
         #expect(CorrectionStubProtocol.log.all.contains {
             $0.method == "DELETE" && $0.path == "/v2/subscriptionLocalizations/locale-fr"
+        })
+        #expect(CorrectionStubProtocol.log.all.contains {
+            $0.method == "POST" && $0.path == "/v2/subscriptionLocalizations"
+        })
+    }
+
+    @Test func versionedGroupWritesUseV2CreatePatchAndDelete() async throws {
+        let client = AppleSubscriptionVersionsClient(api: correctionAPI(.groupLocales))
+
+        try await client.writeLocalizations(
+            kind: .group, draftID: "group-version-1",
+            locales: ["en-US": (name: "Pro", description: nil),
+                      "de-DE": (name: "Pro", description: nil)],
+            deleteMissing: true)
+
+        let calls = CorrectionStubProtocol.log.all
+        #expect(calls.contains {
+            $0.method == "PATCH"
+                && $0.path == "/v2/subscriptionGroupLocalizations/group-locale-en"
+        })
+        #expect(calls.contains {
+            $0.method == "POST" && $0.path == "/v2/subscriptionGroupLocalizations"
+        })
+        #expect(calls.contains {
+            $0.method == "DELETE"
+                && $0.path == "/v2/subscriptionGroupLocalizations/group-locale-fr"
+        })
+    }
+
+    @Test func planAvailabilityPatchesTheMatchingTypeAndDoesNotDuplicateOnASecondApply()
+        async throws {
+        var manifest = appleManifest()
+        manifest.subscriptions = [Manifest.SubscriptionGroup(
+            groupId: "Pro", groupName: "Pro",
+            plans: [Manifest.SubscriptionGroup.Plan(
+                id: "pro.monthly", duration: "P1M",
+                availableTerritories: ["USA", "DEU"], applePlanType: .monthly)])]
+        let runner = correctionRunner(.availabilityExisting, manifest: manifest)
+
+        try await runner.appleSubscriptions()
+        try await runner.appleSubscriptions()
+
+        let calls = CorrectionStubProtocol.log.all
+        #expect(calls.filter {
+            $0.method == "PATCH"
+                && $0.path == "/v1/subscriptionPlanAvailabilities/availability-1"
+        }.count == 2)
+        #expect(!calls.contains {
+            $0.method == "POST" && $0.path == "/v1/subscriptionPlanAvailabilities"
+        })
+    }
+
+    @Test func planAvailabilityPostsWhenTheRequestedTypeDoesNotExist() async throws {
+        var manifest = appleManifest()
+        manifest.subscriptions = [Manifest.SubscriptionGroup(
+            groupId: "Pro", groupName: "Pro",
+            plans: [Manifest.SubscriptionGroup.Plan(
+                id: "pro.monthly", duration: "P1M",
+                availableTerritories: ["USA"], applePlanType: .monthly)])]
+        let runner = correctionRunner(.availabilityMissing, manifest: manifest)
+
+        try await runner.appleSubscriptions()
+
+        let call = try #require(CorrectionStubProtocol.log.all.first {
+            $0.method == "POST" && $0.path == "/v1/subscriptionPlanAvailabilities"
+        })
+        let data = try #require(call.body["data"] as? [String: Any])
+        let attributes = try #require(data["attributes"] as? [String: Any])
+        #expect(attributes["planType"] as? String == "MONTHLY")
+        #expect(relationship("subscription", in: call,
+                             type: "subscriptions", id: "subscription-1"))
+    }
+
+    @Test func catalogKeepsTerritoriesSeparatedByPlanType() async throws {
+        let catalog = AppleCatalogClient(api: correctionAPI(.subscriptionCatalog))
+
+        let result = try await catalog.subscriptions(
+            appID: "app-1", productIds: ["pro.monthly"])
+        let product = try #require(result.products["pro.monthly"])
+
+        #expect(product.subscriptionPlanTerritories[.monthly] == ["USA"])
+        #expect(product.subscriptionPlanTerritories[.upfront] == ["DEU"])
+        #expect(product.subscriptionPlanAvailabilityRead)
+    }
+
+    @Test func applePlanTypesDecodeAndMissingTypeValidationIsAppleOnly() throws {
+        let monthly = try ManifestFile.decode("""
+        version: 1
+        apps:
+          apple:
+            appId: app-1
+            platforms: [IOS]
+            bundleId: com.example.app
+        subscriptions:
+          - groupId: pro
+            plans:
+              - id: pro.monthly
+                duration: P1M
+                applePlanType: MONTHLY
+        """)
+        let upfront = try ManifestFile.decode("""
+        version: 1
+        apps:
+          apple:
+            appId: app-1
+            platforms: [IOS]
+            bundleId: com.example.app
+        subscriptions:
+          - groupId: pro
+            plans:
+              - id: pro.upfront
+                duration: P1Y
+                applePlanType: UPFRONT
+        """)
+        #expect(monthly.subscriptions?.first?.plans.first?.applePlanType == .monthly)
+        #expect(upfront.subscriptions?.first?.plans.first?.applePlanType == .upfront)
+
+        var missing = googleManifest()
+        missing.subscriptions = [Manifest.SubscriptionGroup(
+            groupId: "pro", plans: [Manifest.SubscriptionGroup.Plan(
+                id: "pro.monthly", duration: "P1M", basePlanId: "monthly",
+                availableTerritories: ["USA"])])]
+        let appleFindings = Validator.findings(Planner.Input(
+            manifest: missing, actual: ActualState(), stores: [.apple]))
+        let googleFindings = Validator.findings(Planner.Input(
+            manifest: missing, actual: ActualState(), stores: [.google]))
+        #expect(appleFindings.contains { $0.id == "money.applePlanType.pro.monthly" })
+        #expect(!googleFindings.contains { $0.id == "money.applePlanType.pro.monthly" })
+    }
+
+    @Test func automaticSubscriptionApplyReusesCreatesAndRefusesVersions() async throws {
+        func manifest() -> Manifest {
+            var value = appleManifest()
+            value.subscriptions = [Manifest.SubscriptionGroup(
+                groupId: "Pro", groupName: "Pro",
+                plans: [Manifest.SubscriptionGroup.Plan(
+                    id: "pro.monthly", duration: "P1M",
+                    locales: ["en-US": Manifest.ProductLocale(
+                        name: "Pro", description: "Full access")])])]
+            return value
+        }
+
+        let existing = correctionRunner(.subscriptionDraftExisting, manifest: manifest())
+        try await existing.appleSubscriptions()
+        #expect(!CorrectionStubProtocol.log.all.contains {
+            $0.method == "POST" && $0.path == "/v1/subscriptionVersions"
+        })
+        #expect(CorrectionStubProtocol.log.all.contains {
+            $0.method == "DELETE" && $0.path == "/v2/subscriptionLocalizations/locale-fr"
+        })
+
+        let missing = correctionRunner(.subscriptionDraftMissing, manifest: manifest())
+        try await missing.appleSubscriptions()
+        #expect(CorrectionStubProtocol.log.all.contains {
+            $0.method == "POST" && $0.path == "/v1/subscriptionVersions"
+        })
+
+        let inReview = correctionRunner(.subscriptionDraftInReview, manifest: manifest())
+        do {
+            try await inReview.appleSubscriptions()
+            Issue.record("Metadata already in review should not be mutated.")
+        } catch ConnectionError.http(let status, _) {
+            #expect(status == 409)
+        }
+        #expect(!CorrectionStubProtocol.log.all.contains {
+            ($0.method == "POST" || $0.method == "PATCH" || $0.method == "DELETE")
+                && $0.path.hasPrefix("/v2/subscriptionLocalizations")
         })
     }
 

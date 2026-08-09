@@ -606,6 +606,9 @@ extension Manifest {
             /// list on a subscription, on its own pair of resources.
             public var reviewScreenshot: String?
             public var availableTerritories: [String]?
+            /// Apple's billing commitment for this territory set. It cannot
+            /// be inferred from duration or price.
+            public var applePlanType: ApplePlanType?
             /// The promotional image the App Store shows for this
             /// subscription. Apple asks for 1024 by 1024 pixels. Google
             /// offers no equivalent.
@@ -619,6 +622,7 @@ extension Manifest {
                         migrateExistingSubscribers: Bool? = nil,
                         reviewScreenshot: String? = nil,
                         availableTerritories: [String]? = nil,
+                        applePlanType: ApplePlanType? = nil,
                         promotionalImage: String? = nil) {
                 self.id = id
                 self.duration = duration
@@ -633,9 +637,17 @@ extension Manifest {
                 self.migrateExistingSubscribers = migrateExistingSubscribers
                 self.reviewScreenshot = reviewScreenshot
                 self.availableTerritories = availableTerritories
+                self.applePlanType = applePlanType
                 self.promotionalImage = promotionalImage
             }
         }
+    }
+
+    /// The two billing commitments Apple documents for subscription plan
+    /// availability. Raw values are sent unchanged to App Store Connect.
+    public enum ApplePlanType: String, Codable, Sendable, Equatable, CaseIterable {
+        case monthly = "MONTHLY"
+        case upfront = "UPFRONT"
     }
 
     /// One discount on a product or on a subscription plan.
