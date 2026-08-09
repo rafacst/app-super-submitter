@@ -89,6 +89,34 @@ private func detailsReviewSource(_ relativePath: String) throws -> String {
     #expect(!editor.contains("> 0.5"))
 }
 
+/// A store refuses a listing that is missing a field it needs, and the tab said
+/// nothing about which fields those were until the refusal arrived.
+@Test func theRequiredFieldsNameTheStoreThatWantsThem() {
+    #expect(DetailsTab.requiring(.name, newApp: true) == [.apple, .google])
+    #expect(DetailsTab.requiring(.description, newApp: true) == [.apple, .google])
+    #expect(DetailsTab.requiring(.privacyPolicyURL, newApp: true) == [.apple, .google])
+    // Play reads the subtitle as its short description, which it needs.
+    #expect(DetailsTab.requiring(.subtitle, newApp: true) == [.google])
+    #expect(DetailsTab.requiring(.googleShortDescription, newApp: true) == [.google])
+    #expect(DetailsTab.requiring(.supportURL, newApp: true) == [.apple])
+    // Apple wants release notes on an update and takes none on a first submit.
+    #expect(DetailsTab.requiring(.whatsNew, newApp: true).isEmpty)
+    #expect(DetailsTab.requiring(.whatsNew, newApp: false) == [.apple])
+    // Nothing else is refused for being empty.
+    #expect(DetailsTab.requiring(.keywords, newApp: false).isEmpty)
+    #expect(DetailsTab.requiring(.promotionalText, newApp: false).isEmpty)
+    #expect(DetailsTab.requiring(.marketingURL, newApp: false).isEmpty)
+}
+
+/// The mark names the store when only one of the two asks, and says nothing
+/// extra when both do.
+@Test func theRequiredMarkIsOnTheTab() throws {
+    let tab = try detailsReviewSource("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+
+    #expect(tab.contains("RequiredTag"))
+    #expect(tab.contains("requirement"))
+}
+
 /// The identifiers belong to the store, and a box you can type in says the
 /// opposite. The Build tab already draws them as values; so does this one.
 @Test func theIdentifiersAreNotTypedIn() throws {
