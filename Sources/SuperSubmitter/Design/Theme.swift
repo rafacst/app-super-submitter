@@ -189,7 +189,12 @@ enum Theme {
     /// next redraw rather than the instant it crosses. Move to
     /// `@Environment(\.pixelLength)` at the call sites if that ever shows.
     static var hairline: CGFloat {
-        let window = NSApp?.keyWindow ?? NSApp?.windows.first { $0.isVisible }
+        // Deterministic, and never "whichever window the array listed first".
+        // A background app has no key window and no main window, and the array
+        // carries panels and the Dock tile beside the one window that matters.
+        // `canBecomeMain` is what tells a document window from those.
+        let window = NSApp?.keyWindow ?? NSApp?.mainWindow
+            ?? NSApp?.windows.first { $0.isVisible && $0.canBecomeMain }
         return 1 / (window?.backingScaleFactor
                     ?? NSScreen.main?.backingScaleFactor ?? 2)
     }
@@ -238,6 +243,25 @@ extension Binding where Value == String {
                 guard new.count <= limit || new.count < wrappedValue.count else { return }
                 wrappedValue = new
             })
+    }
+
+    /// Cuts the text to `limit`, coming and going.
+    ///
+    /// `limited(to:)` refuses growth and keeps whatever is already there,
+    /// because shortening a description somebody wrote is destructive. A store
+    /// id is the opposite case: an issuer id is a 36 character UUID and a 37th
+    /// character is not the developer's writing, it is a paste that picked up
+    /// something else. Nothing is lost by cutting it, and the field stops
+    /// showing an id the store would refuse.
+    ///
+    /// The getter cuts too, so a value that reached the state from the
+    /// Keychain or from an import is capped on sight and not only on the next
+    /// keystroke.
+    func capped(to limit: Int?) -> Binding<String> {
+        guard let limit else { return self }
+        return Binding(
+            get: { String(wrappedValue.prefix(limit)) },
+            set: { wrappedValue = String($0.prefix(limit)) })
     }
 
     /// Takes the line breaks out of whatever arrives.

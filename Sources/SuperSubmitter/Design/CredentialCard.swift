@@ -409,7 +409,12 @@ struct EditableField: View {
             //
             // Every field this draws holds a store id. None of them has a
             // second line, so this belongs here and not at the four call sites.
-            TextField(prompt, text: $value.limited(to: limit).oneLine)
+            //
+            // `capped` and not `limited`. Refusing growth leaves a value that
+            // arrived from the Keychain or from an import over length exactly
+            // as long as it was, and an issuer id is 36 characters or it is
+            // not an issuer id. The store refuses the 37th, so the field does.
+            TextField(prompt, text: $value.capped(to: limit).oneLine)
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))
                 .padding(.horizontal, 8)
