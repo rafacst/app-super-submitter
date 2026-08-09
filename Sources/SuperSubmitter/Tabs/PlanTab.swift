@@ -74,6 +74,8 @@ struct PlanTab: View {
     @State private var confirmingApply = false
     /// Shut by default. See acknowledgedSummary.
     @State private var showingAcknowledged = false
+    /// The systems whose rows are open. Empty, so every column arrives shut.
+    @State private var openColumns: Set<PlanSystem> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -531,42 +533,72 @@ struct PlanTab: View {
         }
     }
 
+    /// One system's rows, behind a chevron.
+    ///
+    /// Shut on arrival, and every one of them. Forty writes across three
+    /// systems is four screens of scrolling between the runway and the apply
+    /// button, and the summary in the header — "17 writes · 8 uploads" — is
+    /// what a developer reads first anyway. The rows are the detail behind
+    /// that number, so they wait to be asked for.
     private func column(_ plan: PlanResult, _ system: PlanSystem) -> some View {
         let steps = plan.steps(for: system)
+        let open = openColumns.contains(system)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                mark(for: system)
-                Text(name(for: system)).font(Theme.font(size: 12.5, weight: .semibold))
-                Spacer(minLength: 8)
-                Text(summary(steps)).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(steps) { step in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(step.kind.rawValue)
-                            .font(Theme.mono(11.5, weight: .bold))
-                            .foregroundStyle(color(step.kind))
-                            .frame(width: Theme.scaled(9), alignment: .leading)
-                        Text(step.summary)
-                            .font(Theme.mono(11.5))
-                            .foregroundStyle(color(step.kind))
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 4)
+            Button {
+                if open { openColumns.remove(system) } else { openColumns.insert(system) }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(Theme.font(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.text3)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                        .frame(width: 10)
+                        .motion(.easeOut(duration: 0.15), value: open)
+                    mark(for: system)
+                    Text(name(for: system)).font(Theme.font(size: 12.5, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text(summary(steps)).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .contentShape(.rect)
             }
-            .padding(.vertical, 5)
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(open ? "Expanded" : "Collapsed")
+
+            if open {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(steps) { step in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(step.kind.rawValue)
+                                .font(Theme.mono(11.5, weight: .bold))
+                                .foregroundStyle(color(step.kind))
+                                .frame(width: Theme.scaled(9), alignment: .leading)
+                            Text(step.summary)
+                                .font(Theme.mono(11.5))
+                                .foregroundStyle(color(step.kind))
+                                .lineSpacing(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 4)
+                    }
+                }
+                .padding(.vertical, 5)
+                .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        // The clip is what makes it grow rather than blink: without it the
+        // rows arrive at full height inside a card that is still the height
+        // of a header. Same rule as the Build folds.
+        .clipped()
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .motion(.easeInOut(duration: 0.22), value: open)
     }
 
     /// The logo of the column. The provider has none, so it takes a glyph.
