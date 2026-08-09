@@ -13,9 +13,15 @@ struct MoneyTab: View {
             if let error = state.moneyError { WarningNote(error) }
             // Two short blocks that answer "what does it cost, and where",
             // so they share a row and a height the way Review info does.
-            HStack(alignment: .top, spacing: 14) {
-                priceSection
-                availabilitySection
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 14) {
+                    priceSection
+                    availabilitySection
+                }
+                VStack(alignment: .leading, spacing: 14) {
+                    priceSection
+                    availabilitySection
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             purchasesSection
@@ -406,8 +412,20 @@ struct MoneyTab: View {
     }
 
     private var providerCatalog: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Section_(state.provider == .adapty ? "Access levels" : "Entitlements", icon: "lock.open.fill", tint: Theme.pink) {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 14) {
+                providerEntitlements
+                providerOfferings
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                providerEntitlements
+                providerOfferings
+            }
+        }
+    }
+
+    private var providerEntitlements: some View {
+        Section_(state.provider == .adapty ? "Access levels" : "Entitlements", icon: "lock.open.fill", tint: Theme.pink) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array((state.manifest.entitlements ?? []).enumerated()), id: \.offset) { index, _ in
                         HStack {
@@ -418,8 +436,11 @@ struct MoneyTab: View {
                     }
                     Button("Add entitlement", action: state.addEntitlement)
                 }.storePanel()
-            }
-            Section_(state.provider == .adapty ? "Paywalls" : "Offerings", icon: "rectangle.on.rectangle", tint: Theme.yellow) {
+        }
+    }
+
+    private var providerOfferings: some View {
+        Section_(state.provider == .adapty ? "Paywalls" : "Offerings", icon: "rectangle.on.rectangle", tint: Theme.yellow) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array((state.manifest.offerings ?? []).enumerated()), id: \.offset) { index, _ in
                         VStack(alignment: .leading, spacing: 7) {
@@ -444,7 +465,6 @@ struct MoneyTab: View {
                     }
                     Button("Add offering", action: state.addOffering)
                 }.storePanel()
-            }
         }
     }
 }
