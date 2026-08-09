@@ -264,6 +264,8 @@ final class AppState {
     var accountPassword = ""
     var accountBusy = false
     var accountMessage: String?
+    @ObservationIgnored var pendingAccountSession: SupabaseSession?
+    var pendingAccountEmail: String?
 
     // Tab 1.
     var appleGuideOpen = false

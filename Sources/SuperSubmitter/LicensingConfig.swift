@@ -68,9 +68,11 @@ struct LicensingConfig {
     }
 
     private static func value(_ plistKey: String, _ variable: String) -> String? {
+#if DEBUG
         if let text = ProcessInfo.processInfo.environment[variable], !text.isEmpty {
             return text
         }
+#endif
         guard let text = Bundle.main.object(forInfoDictionaryKey: plistKey) as? String,
               !text.isEmpty, !text.hasPrefix("$(") else { return nil }
         return text

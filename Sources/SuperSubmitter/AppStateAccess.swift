@@ -157,15 +157,55 @@ extension AppState {
     /// grants nothing on its own, and `didBecomeActive` already asks the
     /// server, so this leaves it alone.
     func handle(callback url: URL) {
+        guard Self.isAccountCallback(url) else { return }
         let parts = SupabaseAuth.parameters(in: url)
-        let carriesSession = parts["refresh_token"] != nil
-            || parts["error_description"] != nil || parts["error"] != nil
-        guard carriesSession, let auth = authController else { return }
+        if let raw = parts["error_description"] ?? parts["error"] {
+            let message = SupabaseAuthError.humanize(String(raw.prefix(200)))
+            accountMessage = message
+            errorMessage = message
+            return
+        }
+        guard parts["refresh_token"] != nil, let auth = authController else { return }
         Task {
+            guard !accountBusy else { return }
             accountBusy = true
             defer { accountBusy = false }
             do {
-                accountEmail = try await auth.adopt(callback: url)
+                let session = try await auth.resolve(callback: url)
+                pendingAccountSession = session
+                pendingAccountEmail = session.email
+            } catch {
+                let message = SupabaseAuthError.humanize(
+                    String(error.localizedDescription.prefix(200)))
+                accountMessage = message
+                errorMessage = message
+            }
+        }
+    }
+
+    static func isAccountCallback(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == OAuthSession.scheme
+            && url.host?.lowercased() == OAuthSession.callback.host
+            && url.user == nil && url.password == nil && url.port == nil
+            && url.path.isEmpty
+    }
+
+    func cancelPendingAccount() {
+        pendingAccountSession = nil
+        pendingAccountEmail = nil
+    }
+
+    func confirmPendingAccount() {
+        guard let auth = authController, let session = pendingAccountSession else {
+            cancelPendingAccount()
+            return
+        }
+        cancelPendingAccount()
+        accountBusy = true
+        Task {
+            defer { accountBusy = false }
+            do {
+                accountEmail = try await auth.adopt(session: session)
                 accessController?.forgetLater()
                 entitlement = .free(at: Date())
                 await refreshEntitlement()
@@ -173,8 +213,10 @@ extension AppState {
                 showSignIn = false
                 errorMessage = "Your email address is confirmed. You are signed in as \(accountEmail ?? "")."
             } catch {
-                accountMessage = error.localizedDescription
-                errorMessage = error.localizedDescription
+                let message = SupabaseAuthError.humanize(
+                    String(error.localizedDescription.prefix(200)))
+                accountMessage = message
+                errorMessage = message
             }
         }
     }
@@ -343,6 +385,11 @@ extension AppState {
         }
     }
 
+    static func isTrustedStripeURL(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https"
+            && ["checkout.stripe.com", "billing.stripe.com"].contains(url.host?.lowercased())
+    }
+
     /// A plan change invalidates a preview. Showing a discount for the plan
     /// the user just left is the one thing this screen must not do.
     func selectPlan(_ plan: String) {
@@ -369,6 +416,11 @@ extension AppState {
                 promotionCode: trimmedPromotionCode,
                 idempotencyKey: checkoutIdempotencyKey(),
                 idToken: bearer)
+            guard Self.isTrustedStripeURL(session.url) else {
+                billingOperation = .idle
+                billingMessage = "The service returned a checkout address this build does not trust."
+                return
+            }
             PostHogSDK.shared.capture("checkout_opened", properties: ["plan": selectedPlan])
             // A browser that refuses the address is the one failure this
             // screen used to swallow: the button worked, nothing opened, and
@@ -481,7 +533,14 @@ extension AppState {
         }
         do {
             let session = try await HTTPLicensingClient(base: config.baseURL).portal(idToken: bearer)
-            NSWorkspace.shared.open(session.url)
+            guard Self.isTrustedStripeURL(session.url) else {
+                billingMessage = "The service returned a billing address this build does not trust."
+                return
+            }
+            guard NSWorkspace.shared.open(session.url) else {
+                billingMessage = "The browser did not open the billing page."
+                return
+            }
         } catch {
             billingMessage = (error as? AccessError)?.errorDescription ?? error.localizedDescription
         }

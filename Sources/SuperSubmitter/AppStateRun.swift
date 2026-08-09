@@ -145,7 +145,7 @@ extension AppState {
 
     /// Reads every store, then diffs. Spec section 7.2. This writes nothing.
     func readStores() async {
-        guard !planReading else { return }
+        guard !planReading, !showsRun || runDone else { return }
         let generation = stateGeneration
         planReading = true
         planReadFailures = []
@@ -162,11 +162,19 @@ extension AppState {
                                                 stores: stores, root: root, packages: packages))
         guard generation == stateGeneration else { return }
         // A new plan invalidates the runner that held the old one.
+        runTask?.cancel()
+        runTask = nil
+        DockTile.clear()
         runContinuation?.finish()
         runContinuation = nil
         eventTask?.cancel()
         eventTask = nil
         runner = nil
+        runIndex = -1
+        runDone = false
+        runProgress = 0
+        runDetail = ""
+        logLines = []
         // The failure belonged to the run this plan replaces. Its step index
         // points into the old step list, so the panel named no step at all and
         // Retry from the failed step would have started at whatever now sits
@@ -568,9 +576,37 @@ extension AppState {
     /// **Draft, ready to release**. No poll is needed to know that.
     func refreshDraftStatuses() {
         for store in stores where statuses[store]?.phase.isReleased != true {
-            let phase: StoreStatus.Phase = applied ? .draft : .noDraft
-            statuses[store] = StoreStatus(store: store, phase: phase,
+            statuses[store] = StoreStatus(store: store, phase: storePhase(store),
                                           detail: detail(for: store), checkedAt: Date())
+        }
+    }
+
+    /// What the store itself holds, and this run only when the store said
+    /// nothing.
+    ///
+    /// This used to be `applied ? .draft : .noDraft` and nothing else. The
+    /// card then reported the session rather than the store: a draft made on
+    /// the App Store Connect website, or by yesterday's apply, read **No draft
+    /// yet** on a version the store had been holding for a week, and the row
+    /// went back to saying it every time the app was relaunched or another app
+    /// was opened. The read that answers this already runs on every plan.
+    private func storePhase(_ store: Store) -> StoreStatus.Phase {
+        switch store {
+        case .apple:
+            guard let state = actualState.apple?.versionState else {
+                return applied ? .draft : .noDraft
+            }
+            return ReleaseStatusReader.applePhase(state)
+        case .google:
+            // Google's edits API names a track release `draft`, `inProgress`,
+            // `halted` or `completed`, which is not the vocabulary the poll
+            // reads off `/tracks/{track}/releases`. Only the draft question is
+            // asked here; `pollStatuses` owns everything after a release.
+            guard let track = actualState.google?.tracks[manifest.googlePrimaryTrack],
+                  !track.versionCodes.isEmpty else {
+                return applied ? .draft : .noDraft
+            }
+            return track.status == "draft" ? .draft : .live
         }
     }
 

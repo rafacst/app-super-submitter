@@ -69,7 +69,7 @@ public struct ReleaseStatusReader: Sendable {
                            checkedAt: Date())
     }
 
-    static func applePhase(_ state: String) -> StoreStatus.Phase {
+    public static func applePhase(_ state: String) -> StoreStatus.Phase {
         switch state {
         case "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED": .draft
         case "WAITING_FOR_REVIEW", "READY_FOR_REVIEW": .inQueue

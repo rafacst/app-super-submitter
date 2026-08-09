@@ -159,7 +159,7 @@ public struct StoreConnectionClient: Sendable {
                                identifier: $0.attributes.bundleID,
                                platforms: platforms[$0.id] ?? [])
             })
-            next = payload.links?.next.flatMap(URL.init(string:))
+            next = payload.links?.next.flatMap(Self.trustedAppleURL)
         }
         return result
     }
@@ -358,6 +358,10 @@ public struct StoreConnectionClient: Sendable {
         let (data, response) = try await session.data(for: request)
         try Self.requireSuccess(response, data: data)
         return data
+    }
+
+    static func trustedAppleURL(_ value: String) -> URL? {
+        StoreDiagnostics.appleNextPath(value).flatMap { try? appleURL($0) }
     }
 
     private static func appleURL(_ path: String) throws -> URL {
