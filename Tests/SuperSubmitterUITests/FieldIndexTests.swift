@@ -19,13 +19,23 @@ struct FieldIndexTests {
         .deletingLastPathComponent()   // the repository
 
     /// Every `.swift` file that draws a tab, joined into one string.
+    ///
+    /// `ManifestEditing.swift` joins them, because the listing labels moved
+    /// into it. The Details columns draw a field's name from that one table
+    /// rather than repeating the words per column, so the words a search has
+    /// to match live there now and a rename there still has to reach the
+    /// index.
     private static let tabSources: String = {
         let directory = root.appending(path: "Sources/SuperSubmitter/Tabs")
         let files = (try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: nil)) ?? []
-        return files
+        let labels = (try? String(
+            contentsOf: root.appending(path: "Sources/SubmitKit/Manifest/ManifestEditing.swift"),
+            encoding: .utf8)) ?? ""
+        return (files
             .filter { $0.pathExtension == "swift" }
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+            + [labels])
             .joined(separator: "\n")
     }()
 

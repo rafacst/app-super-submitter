@@ -331,6 +331,12 @@ final class AppState {
 
     // Tab 3.
     var locale = ""
+    /// Whether the listing stands in one column instead of one per store.
+    ///
+    /// Two columns are the point of the tab, and they need the width for it. A
+    /// developer working in half a window, or reading a description that wants
+    /// every point it can get, stacks them instead.
+    var detailsMerged = false
 
     // The YAML toggle that every editing tab holds. Spec 16.1.
     var showYAML = false

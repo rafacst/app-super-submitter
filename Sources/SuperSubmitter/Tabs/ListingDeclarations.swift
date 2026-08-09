@@ -165,12 +165,29 @@ extension ListingDeclarations {
 /// tab 9 also reads. A row is never done in one place and open in the other.
 /// Spec section 16.6.
 ///
-/// It is a wide list of rows, so it stays in the main column while the small
-/// fields above it moved beside the preview.
+/// It stands in the column of the store that asks for it, so a step that only
+/// the Play Console can answer sits under the Play fields it belongs to.
 struct ConsoleStepsPanel: View {
+    /// The store whose steps this panel lists, or nil for the steps that
+    /// belong to neither store. Nil is the safety net: a provider row that
+    /// reaches this tab has a panel to land in rather than falling off it.
+    var system: String?
+
     @Environment(AppState.self) private var state
 
     var body: some View { consoleSteps }
+
+    private var rows: [ConsoleRow] {
+        let listing = state.consoleRows.filter(\.onEditingTab)
+        guard let system else {
+            return listing.filter {
+                $0.system != Store.apple.storeName && $0.system != Store.google.storeName
+            }
+        }
+        return listing.filter { $0.system == system }
+    }
+
+    private var title: String { system.map { "\($0) console" } ?? "Console steps" }
 
     /// The listing half of the Release checklist, beside the listing.
     ///
@@ -182,10 +199,9 @@ struct ConsoleStepsPanel: View {
     /// an untouched copy of it two tabs later. One name, and a line that says
     /// outright this is part of the other one.
     private var consoleSteps: some View {
-        Section_("Console steps", icon: "arrow.up.forward.square.fill",
-                 tint: Theme.yellow) {
+        Section_(title, icon: "arrow.up.forward.square.fill", tint: Theme.yellow) {
             VStack(spacing: 0) {
-                let rows = state.consoleRows.filter(\.onEditingTab)
+                let rows = rows
                 if rows.isEmpty {
                     HStack {
                         Text("Read the stores on the Summary tab to fill this list.")
