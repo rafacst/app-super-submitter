@@ -134,4 +134,17 @@ struct StoreCredentialScopeTests {
         #expect(try KeychainCredentials.load(GoogleServiceAccount.self, kind: .google,
                                              account: account) != nil)
     }
+
+    @Test func theStoresScreenOffersGoogleOAuthAndJSON() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/SuperSubmitter/Tabs/StoresTab.swift"),
+            encoding: .utf8)
+
+        #expect(source.contains("Connect with Google"))
+        #expect(source.contains("Service account JSON"))
+    }
 }
