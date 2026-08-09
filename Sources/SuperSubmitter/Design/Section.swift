@@ -53,9 +53,11 @@ struct Section_<Content: View>: View {
             } else {
                 header
             }
-            if !folds || isOpen { content }
+            if !folds || isOpen { content.transition(.opacity) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .foldBox(folds)
+        .motion(.easeInOut(duration: 0.22), value: isOpen)
         .fieldAnchor(anchor)
     }
 
@@ -90,5 +92,29 @@ struct Section_<Content: View>: View {
             Spacer(minLength: 0)
         }
         .contentShape(.rect)
+    }
+}
+
+private extension View {
+    /// The box a fold draws around itself: a title-high card while it is shut
+    /// and the whole block once it is open.
+    ///
+    /// It lives here rather than at the call sites, because the two that drew
+    /// their own put it in two different places. One wrapped the content, so a
+    /// shut fold was a bare header row floating beside the cards it belongs
+    /// with and an open one dropped a second panel in under the header. The
+    /// other wrapped the whole section and was the only one that looked right.
+    /// The clip is what turns the swap into a growth. Without it the fields
+    /// arrive at full height inside a box that is still the height of a title,
+    /// and they hang out of the bottom of it for the length of the animation.
+    /// It stays inside this branch, because a section that never folds never
+    /// changes height and clipping one could only cut something it draws.
+    @ViewBuilder
+    func foldBox(_ folds: Bool) -> some View {
+        if folds {
+            clipped().storePanel(padding: 14, horizontal: 15)
+        } else {
+            self
+        }
     }
 }

@@ -319,7 +319,6 @@ struct BuildTab: View {
                 }
             }
         }
-        .storePanel(padding: 14, horizontal: 15)
     }
 
     private var sortedPackages: [AppPackage] {
