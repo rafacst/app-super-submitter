@@ -423,6 +423,51 @@ public struct StoreImportReader: Sendable {
         return matching
     }
 
+    /// Where each platform of one app id stands, from the answer the reader
+    /// already has.
+    ///
+    /// `/v1/apps/{id}/appStoreVersions` returns every platform's train mixed
+    /// together, and every other reader here narrows that to the one platform
+    /// it is planning for. This keeps the rest: an app id whose Mac version is
+    /// on sale and whose iOS version has never shipped is an ordinary state,
+    /// and the developer has to be able to see it before choosing what to
+    /// submit.
+    ///
+    /// `live` is the highest released number, by the version comparison the
+    /// validator uses and not by the order Apple returns, which is unspecified.
+    /// `pending` is the newest version that has not been released.
+    public static func applePlatformStandings(_ payload: JSON)
+        -> [ActualState.Apple.PlatformStanding] {
+        let released = Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION",
+                            "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE",
+                            "REPLACED_WITH_NEW_VERSION"])
+        func state(_ version: JSON) -> String {
+            version["attributes"]["appVersionState"].string
+                ?? version["attributes"]["appStoreState"].string ?? ""
+        }
+        func number(_ version: JSON) -> String {
+            version["attributes"]["versionString"].string ?? ""
+        }
+        var byPlatform: [String: [JSON]] = [:]
+        for version in payload["data"].array {
+            let platform = version["attributes"]["platform"].string ?? "IOS"
+            byPlatform[platform, default: []].append(version)
+        }
+        return byPlatform.keys.sorted().map { platform in
+            let versions = byPlatform[platform] ?? []
+            let live = versions
+                .filter { released.contains(state($0)) }
+                .max { Validator.isVersion(number($1), above: number($0)) }
+            let pending = versions
+                .filter { !released.contains(state($0)) }
+                .max { Validator.isVersion(number($1), above: number($0)) }
+            return ActualState.Apple.PlatformStanding(
+                platform: platform,
+                live: live.map(number), liveState: live.map(state),
+                pending: pending.map(number), pendingState: pending.map(state))
+        }
+    }
+
     /// Item id -> the bucket its set names, for a payload read with `include`.
     ///
     /// The **set** names its members. App Store Connect fills `data` on the

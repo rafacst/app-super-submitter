@@ -146,9 +146,11 @@ enum Theme {
     // touched, and a mechanical sweep of the rest would be a large diff that
     // nothing can test.
 
-    /// The name of the screen, in the header band.
-    static let screenTitle = Theme.font(size: 21, weight: .semibold)
-    /// The question under the screen title.
+    /// The question the screen answers, in the header band.
+    ///
+    /// There was a `screenTitle` tier above this, at 21 points, for the name of
+    /// the screen. The name is in the window's own title bar now, in the system
+    /// font AppKit sets, so this app no longer has a size for it.
     static let screenSubtitle = Theme.font(size: 12)
     /// The heading over a group of cards.
     static let sectionHeader = Theme.font(size: 12.5, weight: .semibold)
@@ -159,11 +161,13 @@ enum Theme {
 
     // The window itself.
     static let windowRadius: CGFloat = 11
-    /// Tall enough to carry a title at `screenTitle` with the question under
-    /// it. It was 52, which held a 14 point title: smaller than the body text
-    /// on the tab below it, so the screen named itself more quietly than it
-    /// said anything else.
-    static let headerHeight: CGFloat = 64
+    /// Tall enough for one line of `screenSubtitle` and a row of 24 point
+    /// controls.
+    ///
+    /// It was 64, which held a title at `screenTitle` with the question under
+    /// it. The title moved to the window's own title bar, beside the sidebar
+    /// toggle, and 64 points left the question floating in a band of air.
+    static let headerHeight: CGFloat = 44
     /// One device pixel, on whatever display is drawing.
     ///
     /// This was the constant 0.5, which is exactly one pixel on a Retina

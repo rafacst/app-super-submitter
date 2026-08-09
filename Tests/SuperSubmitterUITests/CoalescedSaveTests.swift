@@ -78,6 +78,45 @@ struct CoalescedSaveTests {
         #expect(state.lastSavedAt == stamp)
     }
 
+    /// The other half of the same promise, for the characters that have not
+    /// reached the manifest yet.
+    ///
+    /// `ListingEditor` keeps a draft while the developer types, so a key
+    /// redraws one field instead of the whole window. Every boundary that
+    /// writes or replaces the document has to empty that draft first, or a
+    /// pause of typing is lost — or worse, lands in the next app's file.
+    @Test func everyWriteBoundaryEmptiesAFieldStillHoldingText() throws {
+        let (state, url, folder) = try workspace()
+        let (_, other, otherFolder) = try workspace()
+        defer {
+            try? FileManager.default.removeItem(at: folder)
+            try? FileManager.default.removeItem(at: otherFolder)
+        }
+
+        func arm(_ locale: String) {
+            state.pendingListingEdit = {
+                state.manifest.addLocale(locale)
+                state.saveManifestReportingErrors()
+                state.pendingListingEdit = nil
+            }
+        }
+
+        arm("pt-BR")
+        state.flushSave()
+        #expect(try onDisk(url).contains("pt-BR"))
+
+        arm("de-DE")
+        state.saveNow()
+        #expect(try onDisk(url).contains("de-DE"))
+
+        // The one that would put an edit in the wrong file: the document is
+        // swapped while a field still holds characters.
+        arm("fr-FR")
+        try state.load(from: other)
+        #expect(try onDisk(url).contains("fr-FR"))
+        #expect(!(try onDisk(other).contains("fr-FR")))
+    }
+
     /// Command-S goes straight to the disk, and it answers the waiting write
     /// rather than leaving it to land a moment later.
     @Test func savingByHandAnswersThePendingWrite() throws {

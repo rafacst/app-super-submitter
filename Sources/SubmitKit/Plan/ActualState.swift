@@ -32,6 +32,20 @@ public struct ActualState: Sendable, Equatable {
         /// because a live version is not a version the app may write to. The
         /// validator needs it to demand a higher number in the manifest.
         public var liveVersionString: String?
+        /// Where every platform of this app id stands, and not only the one
+        /// this run is submitting.
+        ///
+        /// One app id carries a separate train per platform, and they are not
+        /// in step: a Mac app can be on sale for a year while its iOS twin has
+        /// never left the draft. Every other field here is narrowed to one
+        /// platform, which is right for planning a run and wrong for the one
+        /// question a developer asks before starting one, "which of these is
+        /// actually out?".
+        ///
+        /// It costs no extra request. `/v1/apps/{id}/appStoreVersions` answers
+        /// for every platform at once and the reader was already dropping the
+        /// rest on the floor.
+        public var platforms: [PlatformStanding] = []
         /// Every category id App Store Connect accepts, parents and children.
         /// Apple owns this list and changes it, so the app checks a manifest
         /// category against this read and never against a list of its own.
@@ -215,6 +229,41 @@ public struct ActualState: Sendable, Equatable {
             if let draft = screenshotChecksumOrder[key] { return draft }
             guard isUpdate, versionId == nil else { return nil }
             return liveScreenshotChecksumOrder[key]
+        }
+
+        /// One platform of one app id, and how far along it is.
+        ///
+        /// `live` is the number a customer can buy today and `pending` is the
+        /// number that is on its way, so an app that is on sale at 1.5 with 1.6
+        /// in review carries both. Either may be nil: a platform in draft has
+        /// no live version, and a shipped platform with nothing started has no
+        /// pending one.
+        public struct PlatformStanding: Sendable, Equatable {
+            /// `IOS`, `MAC_OS`, `TV_OS` or `VISION_OS`, as Apple spells them.
+            public var platform: String
+            /// The number a customer can buy today, and its `AppVersionState`.
+            /// Nil on a platform that has never shipped.
+            public var live: String?
+            public var liveState: String?
+            /// The number on its way, and its `AppVersionState`. Nil when
+            /// nothing has been started since the last release.
+            public var pending: String?
+            public var pendingState: String?
+
+            /// Two states and not one, because the answer depends on which
+            /// question is being asked. "Is this platform out?" is the live
+            /// one; "what is happening to it?" is the pending one. A chip that
+            /// merged them read "In review over live", which is both answers in
+            /// one breath and too long for a chip.
+            public init(platform: String,
+                        live: String? = nil, liveState: String? = nil,
+                        pending: String? = nil, pendingState: String? = nil) {
+                self.platform = platform
+                self.live = live
+                self.liveState = liveState
+                self.pending = pending
+                self.pendingState = pendingState
+            }
         }
 
         public struct InfoLocale: Sendable, Equatable {

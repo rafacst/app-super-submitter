@@ -69,18 +69,66 @@ struct DetailsTab: View {
         }
     }
 
-    @ViewBuilder
     private func editor(_ title: String, field: ListingTextField, limit: Int? = nil,
                         multiline: Bool = false, tag: String? = nil,
                         anchor: String? = nil) -> some View {
-        let value = state.manifest.listingText(locale: state.locale, field: field)
+        ListingEditor(title: title, field: field, limit: limit,
+                      multiline: multiline, tag: tag, anchor: anchor)
+    }
+}
+
+/// One field of the listing, and the characters it holds while you type.
+///
+/// **Why it holds them.** `AppState` is `@Observable` and `manifest` is one
+/// stored property, so a write to any field of the listing invalidates every
+/// view that has read any part of the manifest: the twelve editors on this tab,
+/// the inspector preview, the header, and the sidebar, whose badges count the
+/// listing's overflowing fields. Measured on the live window, one character
+/// typed into Description cost 25 ms of the main thread and one typed into Name
+/// cost 50, against 0.05 ms for a redraw with nothing to do. The model work in
+/// that is 0.17 ms. All the rest is the window drawing itself again, per key.
+///
+/// So the manifest stops hearing about every key. The field keeps a draft, the
+/// draft is what the box shows and what the counter counts, and the manifest
+/// takes it when the typing stops. A key now redraws one field.
+///
+/// **The three ways this could lose or misplace an edit, and what stops each.**
+///
+/// - The value changes from somewhere else: an undo, an import, a language
+///   switch, the "Use this" button. `settled` is the last text this field
+///   handed over or took, so a stored value that differs from it is somebody
+///   else's write, and the draft adopts it.
+/// - The window closes the tab with characters still waiting. `onDisappear`
+///   hands them over.
+/// - The developer switches app between the last key and the commit.
+///   `AppState.flushSave` drains this first, because `load(from:)` flushes
+///   before it swaps the document. The owner check is the second line: a draft
+///   belongs to the manifest it was typed into and lands in no other.
+private struct ListingEditor: View {
+    @Environment(AppState.self) private var state
+    let title: String
+    let field: ListingTextField
+    var limit: Int?
+    var multiline = false
+    var tag: String?
+    var anchor: String?
+
+    /// A reference and not a `@State String`, so the closures that commit it
+    /// read the characters as they are now and not as they were when the body
+    /// that made the closure ran.
+    @State private var draft = ListingDraft()
+
+    var body: some View {
+        @Bindable var draft = draft
+        let stored = state.manifest.listingText(locale: state.locale, field: field)
+        let value = draft.text
         let overLimit = limit.map { value.count > $0 } ?? false
         // Grey means "this is what the store already says". The developer
         // types over it and it goes black, because the text no longer matches
         // what the store holds and the run will write it.
         let live = state.storeSnapshot.text(field, locale: state.locale)
         let unchanged = !live.isEmpty && live.allSatisfy { $0.value == value }
-        VStack(alignment: .leading, spacing: 5) {
+        return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(Theme.font(size: 11.5, weight: .medium))
                 if let tag { Tag(tag) }
@@ -119,8 +167,7 @@ struct DetailsTab: View {
                 // tab. The ceiling is what the fixed height was protecting —
                 // the tab is inside a scroll view, and a description that runs
                 // to a page must not push the fields under it off the window.
-                TextField("", text: state.listingBinding(field).limited(to: limit),
-                          axis: .vertical)
+                TextField("", text: $draft.text.limited(to: limit), axis: .vertical)
                     .textFieldStyle(.plain)
                     .returnInsertsLineBreak()
                     .lineLimit(3...16)
@@ -132,7 +179,7 @@ struct DetailsTab: View {
                         .strokeBorder(overLimit ? Theme.red : Theme.sep,
                                       lineWidth: overLimit ? 1 : Theme.hairline))
             } else {
-                TextField(title, text: state.listingBinding(field).limited(to: limit))
+                TextField(title, text: $draft.text.limited(to: limit))
                     .textFieldStyle(.roundedBorder)
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
             }
@@ -143,7 +190,68 @@ struct DetailsTab: View {
             liveValues(field, live: live, current: value)
         }
         .fieldAnchor(anchor)
+        .onAppear { adopt(stored) }
+        // Somebody else wrote this field: an undo, an import, a language
+        // switch, the "Use this" button. `settled` tells that apart from the
+        // echo of this field's own commit.
+        .onChange(of: stored) { _, new in if new != draft.settled { adopt(new) } }
+        .onChange(of: draft.text) { scheduleCommit() }
+        .onDisappear { commit() }
     }
+
+    private func adopt(_ text: String) {
+        draft.pending?.cancel()
+        draft.pending = nil
+        draft.text = text
+        draft.settled = text
+        draft.owner = state.manifestURL
+        state.pendingListingEdit = nil
+    }
+
+    /// The pause that ends a burst of typing. Trailing, so a developer who
+    /// types a paragraph without stopping writes once at the end of it and not
+    /// four times a second.
+    private func scheduleCommit() {
+        guard draft.text != draft.settled else { return }
+        draft.pending?.cancel()
+        // The shell drains this before any write and before it swaps the
+        // document, so the characters below cannot be lost to a Command-S or
+        // to a click on another app in the sidebar.
+        state.pendingListingEdit = { commit() }
+        draft.pending = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            commit()
+        }
+    }
+
+    private func commit() {
+        draft.pending?.cancel()
+        draft.pending = nil
+        state.pendingListingEdit = nil
+        guard draft.text != draft.settled else { return }
+        // A draft belongs to the manifest it was typed into. Without this an
+        // app switched inside the pause would take the previous app's words.
+        guard draft.owner == state.manifestURL else { return }
+        draft.settled = draft.text
+        state.listingBinding(field, locale: state.locale).wrappedValue = draft.text
+    }
+}
+
+/// The characters of one field between two keystrokes. See `ListingEditor`.
+///
+/// A class, so the commit closures hold the field itself and not a copy of the
+/// view that made them. `@ObservationIgnored` on all but the text: the body
+/// reads the text and nothing else, and an observed `Task` would redraw the
+/// field twice per key for no picture.
+@MainActor @Observable private final class ListingDraft {
+    var text = ""
+    @ObservationIgnored var settled = ""
+    @ObservationIgnored var owner: URL?
+    @ObservationIgnored var pending: Task<Void, Never>?
+}
+
+private extension ListingEditor {
 
     /// What the stores hold for this field today, when it is not what the
     /// developer is about to send. A matching value says nothing, so it stays
@@ -207,11 +315,15 @@ struct DetailsTab: View {
         }
     }
 
+}
+
+private extension DetailsTab {
+
     @ViewBuilder
-    private func googleOverrideEditor(_ title: String, shared: ListingTextField,
-                                      google: ListingTextField,
-                                      bindingField: ListingField,
-                                      anchor: String? = nil) -> some View {
+    func googleOverrideEditor(_ title: String, shared: ListingTextField,
+                              google: ListingTextField,
+                              bindingField: ListingField,
+                              anchor: String? = nil) -> some View {
         let overrides: Set<Store> = state.manifest.hasGoogleOverride(locale: state.locale, field: google)
             ? [.google] : []
         // The anchor goes on the shared field. The Google override under it is

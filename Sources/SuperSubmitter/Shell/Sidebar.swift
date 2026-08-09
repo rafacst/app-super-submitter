@@ -113,7 +113,7 @@ struct Sidebar: View {
     /// has to move with the type. Left fixed, a larger font makes the footer
     /// taller than the room kept for it and the last row hides underneath.
     private var footerHeight: CGFloat {
-        Theme.scaled(state.showsUpgradeCard ? 176 : 44)
+        Theme.scaled(state.showsUpgradeCard ? 132 : 44)
     }
 
     /// The account, then the offer, pinned to the floor of the column.
@@ -495,13 +495,15 @@ private struct UpgradeCard: View {
     /// `AppState.upgradeCardLine`. It lives there so a test can read it.
     private var line: String { state.upgradeCardLine }
 
+    /// A sentence and a button, and nothing else.
+    ///
+    /// It carried a bolt in a tinted chip and the product name over a
+    /// two-sentence paragraph that listed the four things this app gives away.
+    /// Three rows of card to make one offer, and the loudest row was a name the
+    /// window already wears. A call to action is one line and one button: the
+    /// line says what is withheld, the button opens the plans.
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 7) {
-                IconChip(symbol: "bolt.fill", tint: Theme.accent, size: 20)
-                Text("Super Submitter Pro").font(Theme.font(size: 12.5, weight: .semibold))
-                Spacer(minLength: 0)
-            }
             Text(line)
                 .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
@@ -524,6 +526,7 @@ private struct UpgradeCard: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .accessibilityHint(line)
         }
         .padding(11)
         // The one place a tint is allowed to be decoration, because the tint is
