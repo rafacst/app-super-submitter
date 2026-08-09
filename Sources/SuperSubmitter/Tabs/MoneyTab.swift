@@ -11,16 +11,18 @@ struct MoneyTab: View {
             // Yellow, not red. Red says irreversible in this app, and a value
             // the developer can fix in the next keystroke is not that.
             if let error = state.moneyError { WarningNote(error) }
-            // Two short blocks that answer "what does it cost, and where",
-            // so they share a row and a height the way Review info does.
+            // One column per store. The same money reaches the two of them in
+            // two different shapes — Apple sells at a price point off a ladder
+            // it publishes, Play takes micros and converts per currency — and
+            // one "Base price" panel over one "Availability" panel said neither.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 14) {
                     priceSection
-                    availabilitySection
+                    if state.stores.contains(.google) { googleMoneySection }
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     priceSection
-                    availabilitySection
+                    if state.stores.contains(.google) { googleMoneySection }
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -47,10 +49,17 @@ struct MoneyTab: View {
         .task { await state.loadApplePricePoints() }
     }
 
+    /// The price, under the store whose ladder decides it.
+    ///
+    /// It carries the fields even when Apple is not selected, because the base
+    /// price is one value and something has to own it.
     private var priceSection: some View {
         @Bindable var state = state
-        return Section_("Base price", icon: "dollarsign.circle.fill", tint: Theme.green,
-                        anchor: "money.basePrice") {
+        let apple = state.stores.contains(.apple)
+        return Section_(apple ? "App Store" : "Base price",
+                        icon: apple ? nil : "dollarsign.circle.fill",
+                        tint: Theme.green, anchor: "money.basePrice",
+                        note: apple ? "A price point, not a number." : nil) {
             VStack(alignment: .leading, spacing: 9) {
                 FieldRow {
                     LabeledField("Currency", width: 120) {
@@ -71,10 +80,24 @@ struct MoneyTab: View {
                 }
                 Text("Other territories are converted by the stores.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                Toggle("Convert the base price for every Google region",
-                       isOn: state.autoConvertPricesBinding)
-                    .disabled(!state.stores.contains(.google))
+                // The Google half of this moved to the Play column, where the
+                // rest of what Play does with the price already lives.
+                if !state.stores.contains(.google) {
+                    Toggle("Convert the base price for every Google region",
+                           isOn: state.autoConvertPricesBinding)
+                        .disabled(true)
+                }
                 resolvedPoint
+                if state.stores.contains(.apple) {
+                    LabeledField("Territories", anchor: "money.appStoreTerritories") {
+                        MultiChoiceField(text: state.appTerritoriesBinding,
+                                         choices: StoreValues.appleTerritories,
+                                         emptyLabel: "Every territory Apple sells in")
+                    }
+                    Link("Edit App Store countries ↗",
+                         destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
+                        .font(Theme.font(size: 12))
+                }
                 Spacer(minLength: 0)
             }
             // The stretch happens before the panel is painted, so the two
@@ -130,26 +153,29 @@ struct MoneyTab: View {
         }
     }
 
-    private var availabilitySection: some View {
-        Section_("Availability", icon: "globe", tint: Theme.teal,
-                 anchor: "money.availability") {
+
+    /// What Play does with the same money.
+    ///
+    /// Play takes micros and converts per currency, so it holds no ladder and
+    /// no price point. What it does hold is the conversion and the countries,
+    /// and both used to sit in an "Availability" panel that named the App Store
+    /// in its only field.
+    private var googleMoneySection: some View {
+        Section_("Google Play", tint: Theme.playGreen, anchor: "money.availability",
+                 note: "Micros, per currency.") {
             VStack(alignment: .leading, spacing: 10) {
-                // The app's own territories. The identically labelled field on
-                // each purchase repeats down a list, so it carries no anchor.
-                LabeledField("App Store territories",
-                             anchor: "money.appStoreTerritories") {
-                    MultiChoiceField(text: state.appTerritoriesBinding,
-                                     choices: StoreValues.appleTerritories,
-                                     emptyLabel: "Every territory Apple sells in")
+                Text("Play takes the base price beside this and converts it into every currency it sells in. There is no price point to resolve.")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle("Convert the base price for every Google region",
+                       isOn: state.autoConvertPricesBinding)
+                LabeledField("Countries") {
+                    Text("Every country Play sells in, unless the Play Console says otherwise.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                if state.stores.contains(.apple) {
-                    Link("Edit App Store countries ↗",
-                         destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
-                }
-                if state.stores.contains(.google) {
-                    Link("Open Play Console countries ↗",
-                         destination: URL(string: "https://play.google.com/console/")!)
-                }
+                Link("Open Play Console countries ↗",
+                     destination: URL(string: "https://play.google.com/console/")!)
                 Spacer(minLength: 0)
             }
             .font(Theme.font(size: 12))
