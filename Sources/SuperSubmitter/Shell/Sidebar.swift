@@ -49,8 +49,15 @@ struct Sidebar: View {
         Binding(get: { [state] in Destination(tab: state.selectedTab, mode: state.mode) },
                 set: { [state] destination in
                     guard let destination else { return }
-                    state.mode = destination.mode
-                    state.selectedTab = destination.tab
+                    // Build and Details may present a saved inspector. Letting
+                    // the List's selection transaction animate that column
+                    // briefly widens the split view and clips the sidebar.
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        state.mode = destination.mode
+                        state.selectedTab = destination.tab
+                    }
                 })
     }
 
