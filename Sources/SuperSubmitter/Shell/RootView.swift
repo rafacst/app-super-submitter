@@ -39,7 +39,11 @@ struct RootView: View {
                 // This is a different fact. A window that edits a file names
                 // the file, which is what every document window on the Mac
                 // does, and it is what makes the line below work.
-                .navigationTitle(state.currentApp?.name ?? "Super Submitter")
+                //
+                // No app, no title. The fallback put the program name back on
+                // the one screen that has no file to name, which is the
+                // onboarding screen, and that is the objection above.
+                .navigationTitle(state.currentApp?.name ?? "")
                 // The proxy icon. `store.yaml` is a real file that the app
                 // writes on every keystroke, so this window is a document
                 // window and had none of the affordances of one.
