@@ -36,6 +36,15 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(selection.contains("disablesAnimations = true"))
 }
 
+/// A vertically growing TextField asks the entire Details scroll view to
+/// remeasure after each character. The native editor keeps a stable viewport.
+@Test func multilineListingTextUsesAStableEditor() throws {
+    let details = try responsiveFormSource("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+
+    #expect(details.contains("TextEditor(text: $draft.text.limited(to: limit))"))
+    #expect(!details.contains("axis: .vertical"))
+}
+
 /// A base amount is an App Store price point, never arbitrary text. Currency
 /// comes first because it determines which monetary values make sense.
 @Test func basePriceIsCurrencyThenPricePicker() throws {
