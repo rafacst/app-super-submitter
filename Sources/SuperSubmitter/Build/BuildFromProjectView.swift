@@ -16,17 +16,14 @@ struct BuildFromProjectView: View {
                 linkCard
             } else {
                 if flow.project != nil {
+                    projectCard
                     if !flow.containers.isEmpty, flow.state == .needsSelection {
-                        pair(projectCard, containerChooser)
-                        selectionRow
-                    } else {
-                        pair(projectCard, selectionRow)
+                        containerChooser
                     }
                 }
+                preflightCard
                 if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
-                    pair(preflightCard, liveRun)
-                } else {
-                    preflightCard
+                    liveRun
                 }
                 if let candidate = flow.candidate { artifactCard(candidate) }
                 if let failure = flow.failure { errorPanel(failure) }
@@ -43,27 +40,40 @@ struct BuildFromProjectView: View {
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
     }
 
-    /// Two cards on one row, and one under the other when the window is too
-    /// narrow to hold both.
+    /// A card's rows, in two columns when the values are short enough for two
+    /// to fit, and in one when they are not.
     ///
-    /// An app that ships on one store builds one platform, and this screen is
-    /// then a single column of full-width cards with the whole right half of
-    /// the window empty beside it. The pairs are the ones that answer one
-    /// question together: what will be built, and how the run is going.
-    private func pair(_ first: some View, _ second: some View) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 14) {
-                first.frame(minWidth: 380, maxWidth: .infinity,
-                            maxHeight: .infinity, alignment: .top)
-                second.frame(minWidth: 380, maxWidth: .infinity,
-                             maxHeight: .infinity, alignment: .top)
+    /// An app that ships on one store builds one platform, and this screen was
+    /// then a single column of cards whose contents are label and value pairs
+    /// a few words wide. Preflight is twelve of them and the artifact is nine,
+    /// so most of a 980 point card was empty and the card was twice as tall as
+    /// its contents needed.
+    ///
+    /// Splitting the rows rather than standing the cards side by side, because
+    /// a row shrinks and a card does not: the project card carries five buttons
+    /// on one line, and two of those cards on one row overflow the window
+    /// instead of folding. `ViewThatFits` measures what a column wants, so a
+    /// long path puts the rows back in one column by itself.
+    private func twoColumns<Row, Cell: View>(
+        _ rows: [Row], @ViewBuilder cell: @escaping (Row) -> Cell) -> some View {
+        let half = (rows.count + 1) / 2
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 22) {
+                column(Array(rows.prefix(half)), cell: cell)
+                column(Array(rows.dropFirst(half)), cell: cell)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 16) {
-                first
-                second
+            column(rows, cell: cell)
+        }
+    }
+
+    private func column<Row, Cell: View>(
+        _ rows: [Row], @ViewBuilder cell: @escaping (Row) -> Cell) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                cell(row)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Linking
@@ -254,7 +264,7 @@ struct BuildFromProjectView: View {
             }
             .padding(.bottom, 9)
 
-            ForEach(preflightRows(snapshot), id: \.0) { label, value, status in
+            twoColumns(preflightRows(snapshot)) { label, value, status in
                 PreflightRow(label: label, value: value, status: status)
             }
 
@@ -441,14 +451,15 @@ struct BuildFromProjectView: View {
                           background: candidate.signingSummary.verified == true
                               ? Theme.greenBg : Theme.redBg)
             }
-            ForEach(artifactRows(candidate), id: \.0) { label, value in
+            twoColumns(artifactRows(candidate)) { label, value in
                 HStack(spacing: 12) {
                     Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .frame(width: 128, alignment: .leading)
+                        .frame(width: 96, alignment: .leading)
                     Text(value).font(Theme.mono(11.5)).textSelection(.enabled)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 0)
                 }
+                .padding(.vertical, 2)
             }
             ForEach(candidate.mismatches) { mismatch in
                 HStack(alignment: .top, spacing: 9) {
