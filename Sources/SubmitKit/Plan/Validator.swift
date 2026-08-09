@@ -1111,10 +1111,10 @@ public enum Validator {
         // normal shape of a live app between releases, and the plan creates
         // the version, so it is not a block.
         if writesMetadata, let versionState = apple.versionState,
-           versionState != "PREPARE_FOR_SUBMISSION" {
+           !AppleVersionState.editable.contains(versionState) {
             result.append(Finding(
                 id: "state.appleVersion", severity: .error,
-                message: "The App Store version is \(versionState). Metadata writes need PREPARE_FOR_SUBMISSION.",
+                message: "The App Store version is \(versionState). Apple takes no write until the version is back with you: cancel the submission, or start the next version.",
                 location: "Summary · App Store", fix: .plan))
         }
         // Apple refuses a version that does not climb. Catching it here names
