@@ -262,6 +262,13 @@ public struct StateReader: Sendable {
                 result.reviewContactLastName = review["contactLastName"].string
                 result.reviewContactPhone = review["contactPhone"].string
                 result.reviewDemoAccountRequired = review["demoAccountRequired"].bool
+                // Empty is the same as absent here. Apple returns "" for a
+                // password it will not hand back, and a blank that reads as an
+                // answer would overwrite the one in the Keychain with nothing.
+                result.reviewDemoAccountName = review["demoAccountName"].string
+                    .flatMap { $0.isEmpty ? nil : $0 }
+                result.reviewDemoAccountPassword = review["demoAccountPassword"].string
+                    .flatMap { $0.isEmpty ? nil : $0 }
                 result.reviewNotes = review["notes"].string
             }
         }
@@ -276,6 +283,28 @@ public struct StateReader: Sendable {
         // the editing tabs draw. It touches no id, no plan, and no diff.
         //
         // The read is optional. A failure costs the display, never the plan.
+        // The reviewer sign-in the released version was approved with.
+        //
+        // The block above reads the review detail of the draft, and between
+        // releases there is no draft, so an update read nothing and the Review
+        // info tab opened with two empty fields on an app that has shipped with
+        // a demo account several times. Apple carries the detail into the next
+        // version, so the released one is what the next version will start
+        // with. It never overwrites the draft: this runs only when the draft
+        // did not answer.
+        if let liveID = liveVersion?["id"].string, liveID != result.versionId,
+           result.reviewDemoAccountName == nil,
+           let payload = try? await api.apple(
+            "GET", "/v1/appStoreVersions/\(liveID)/appStoreReviewDetail") {
+            let review = JSON(data: payload.data)["data"]["attributes"]
+            result.reviewDemoAccountRequired = result.reviewDemoAccountRequired
+                ?? review["demoAccountRequired"].bool
+            result.reviewDemoAccountName = review["demoAccountName"].string
+                .flatMap { $0.isEmpty ? nil : $0 }
+            result.reviewDemoAccountPassword = review["demoAccountPassword"].string
+                .flatMap { $0.isEmpty ? nil : $0 }
+        }
+
         if let liveID = liveVersion?["id"].string, liveID != result.versionId,
            let payload = try? await api.apple(
             "GET", "/v1/appStoreVersions/\(liveID)/appStoreVersionLocalizations?limit=200") {
@@ -355,14 +384,19 @@ public struct StateReader: Sendable {
         // so every line of a listing the store already carried was drawn as
         // an add, and one banner said the store could not be read. A block
         // that fails now costs its own rows, which the plan marks unverified.
-        if let basePrice {
-            let territory = basePrice.territory ?? "USA"
-            if let response = try? await api.apple(
-                "GET",
-                "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)&limit=200") {
-                let amounts = JSON(data: response.data)["data"].array
-                    .compactMap { $0["attributes"]["customerPrice"].string }
-                    .compactMap { Decimal(string: $0) }
+        // The list is read whether the manifest names a price or not. It used
+        // to be fetched only to resolve one, so an app with no price yet got no
+        // list, and the field that asks for the first price was the one field
+        // that could not offer the prices Apple sells at.
+        let territory = basePrice?.territory ?? "USA"
+        if let response = try? await api.apple(
+            "GET",
+            "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)&limit=200") {
+            let amounts = JSON(data: response.data)["data"].array
+                .compactMap { $0["attributes"]["customerPrice"].string }
+                .compactMap { Decimal(string: $0) }
+            result.pricePoints = Set(amounts).sorted()
+            if let basePrice {
                 result.priceAmount = Self.nearest(to: basePrice.amount, in: amounts)
                 result.priceCurrency = basePrice.currency
             }

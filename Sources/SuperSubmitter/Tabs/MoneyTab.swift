@@ -41,8 +41,25 @@ struct MoneyTab: View {
                         anchor: "money.basePrice") {
             VStack(alignment: .leading, spacing: 9) {
                 FieldRow {
-                    LabeledField("Amount", width: 90) {
-                        TextField("0.00", text: $state.priceAmount)
+                    // Apple's own prices when Apple has told us what they are.
+                    //
+                    // The App Store sells at a price point and at nothing else,
+                    // so the apply resolved whatever was typed to the nearest
+                    // one and the developer learned the real price on the
+                    // Summary tab, after the fact. A field that offers the
+                    // prices that exist cannot be wrong in the first place.
+                    //
+                    // It stays a text field until the store has been read. See
+                    // `applePricePoints`: a picker with no rows is a field that
+                    // cannot be filled.
+                    LabeledField("Amount", width: 120) {
+                        let points = state.applePricePoints
+                        if points.isEmpty {
+                            TextField("0.00", text: $state.priceAmount)
+                        } else {
+                            ChoiceField(value: $state.priceAmount, choices: points,
+                                        emptyLabel: "Pick a price", allowsNone: false)
+                        }
                     }
                     LabeledField("Currency") {
                         ChoiceField(value: $state.priceCurrency,

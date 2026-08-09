@@ -27,6 +27,18 @@ import SwiftUI
 struct Sidebar: View {
     @Environment(AppState.self) private var state
 
+    /// Which groups are open. Every one starts open, because a sidebar that
+    /// opens closed hides the app from a first-time developer, and the point of
+    /// listing both jobs at once was that nothing hides.
+    ///
+    /// `@AppStorage` and not `@State`: a group a developer closed is a
+    /// decision, and re-opening it on every launch would undo that decision
+    /// every morning. One key per group, because they close independently.
+    @AppStorage("sidebar.apps.open") private var appsOpen = true
+    @AppStorage("sidebar.publish.open") private var publishOpen = true
+    @AppStorage("sidebar.send.open") private var sendOpen = true
+    @AppStorage("sidebar.manage.open") private var manageOpen = true
+
     /// The selection, as the two properties that already hold it.
     ///
     /// No new state. `selectedTab` and `mode` are the app's own navigation and
@@ -42,45 +54,140 @@ struct Sidebar: View {
                 })
     }
 
+    private func isOpen(_ section: SidebarSection) -> Binding<Bool> {
+        switch section {
+        case .publish: $publishOpen
+        case .send: $sendOpen
+        case .manage: $manageOpen
+        }
+    }
+
     var body: some View {
-        // The `List` is the column, and nothing wraps it and nothing insets it.
+        // The account and the offer are pinned, and the destinations scroll.
         //
-        // Both of the obvious ways to pin a header and a footer to a sidebar
-        // break this one, and each breaks it the same way: the column draws
-        // nothing at all — not a row, not a plain `Text` put first as a probe —
-        // and the detail pane loses its header off the top of the window. A
-        // `VStack` around the list does it. A `safeAreaInset` on the list does
-        // it too, with any content and any menu style. Both were tried and
-        // photographed. `NavigationSplitView` gives its sidebar column to a
-        // list and to nothing else.
+        // `safeAreaInset` and not a row at the end of the list. As rows they
+        // scrolled away with the navigation, so the offer at the "foot of the
+        // column" was only at the foot of a short column, and the account moved
+        // whenever a group opened. As an inset they are the floor of the
+        // sidebar and the list scrolls under them.
         //
-        // So the two ends are rows. They scroll with the destinations, which
-        // is the one thing lost, and there are eleven rows at most.
+        // The offer sits below the account on purpose. The account is a control
+        // the developer uses, the offer is something the app is asking for, and
+        // the thing being asked for does not get to sit closer to the work.
         List(selection: selection) {
-            // Neither end carries a tag, so neither is selectable: the
-            // selection means "the destination you are on", and the app you
-            // are working on and the account you are signed in as are two
-            // other levels of the same hierarchy.
-            AppSwitcher()
-                .listRowSeparator(.hidden)
+            AppsSection(isOpen: $appsOpen)
 
             ForEach(SidebarSection.allCases) { section in
                 let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
                 if !rows.isEmpty {
-                    Section(section.title) {
+                    Section(section.title, isExpanded: isOpen(section)) {
                         ForEach(rows) { DestinationRow(destination: $0) }
                     }
                 }
             }
-
-            Section {
-                if state.showsUpgradeCard {
-                    UpgradeCard().listRowSeparator(.hidden)
-                }
-                AccountControl().listRowSeparator(.hidden)
-            }
         }
         .listStyle(.sidebar)
+        // The scroll ends above the floor, so the last row can be reached and
+        // nothing sits under the footer for good.
+        .contentMargins(.bottom, footerHeight, for: .scrollContent)
+        .overlay(alignment: .bottom) { footer }
+    }
+
+    /// Enough for the account row, and for the offer when it shows.
+    ///
+    /// ponytail: a measured constant, not a `GeometryReader` reading the
+    /// overlay back into the margin. The footer is two known controls; when it
+    /// grows a third, measure it again.
+    private var footerHeight: CGFloat { state.showsUpgradeCard ? 150 : 44 }
+
+    /// The account, then the offer, pinned to the floor of the column.
+    ///
+    /// An overlay and not a `VStack` or a `safeAreaInset`. Both of those wrap
+    /// the list, and `NavigationSplitView` gives its sidebar column to a list
+    /// and to nothing else: with either one the column drew nothing at all and
+    /// the detail pane lost its header off the top of the window. Tried,
+    /// photographed, and tried again after the switcher changed. An overlay
+    /// leaves the list as the column and draws on top of it.
+    ///
+    /// The offer sits below the account on purpose. The account is a control
+    /// the developer uses; the offer is something the app is asking for, and
+    /// the thing being asked for does not get to sit closer to the work.
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            AccountControl()
+                .padding(.horizontal, 10)
+            if state.showsUpgradeCard {
+                UpgradeCard()
+                    .padding(.horizontal, 10)
+            }
+        }
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // The rows scroll under this, so it cannot be transparent.
+        .background(.thickMaterial)
+    }
+}
+
+/// The apps, as a group that opens and closes like the three below it.
+///
+/// It was a pull-down button. A pull-down says "one of these" in the smallest
+/// space, which was right while the apps sat in a `safeAreaInset` that could
+/// hold one control. Now that every other group is a list that opens, an app
+/// list that hides behind a click is the odd one out, and the developer who
+/// wants to see what they have linked has to press something to find out.
+///
+/// The row is not selectable. `List` selection means "the destination you are
+/// on", and the app being worked on is another level of the same hierarchy: a
+/// tick marks the current one, the way a pull-down marked it.
+private struct AppsSection: View {
+    @Environment(AppState.self) private var state
+    @Binding var isOpen: Bool
+
+    var body: some View {
+        Section("Apps", isExpanded: $isOpen) {
+            ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
+                Button {
+                    state.selectApp(at: index)
+                } label: {
+                    HStack(spacing: 7) {
+                        AppIconBadge(icon: app.icon, initials: app.initials, size: 16)
+                        Text(app.name).lineLimit(1)
+                        Spacer(minLength: 6)
+                        if index == state.selectedAppIndex {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                // The two actions that belong to one app, on that app. They
+                // were in the pull-down, where they read as actions on
+                // "whichever app is current" and could be pressed while
+                // looking at another one.
+                .contextMenu {
+                    Button("Update from the Stores…") {
+                        state.selectApp(at: index)
+                        state.showExistingAppImport = true
+                    }
+                    Divider()
+                    Button("Remove from Super Submitter…") { state.askToRemoveApp(at: index) }
+                }
+                .accessibilityAddTraits(index == state.selectedAppIndex ? [.isSelected] : [])
+            }
+
+            // The entry screen, not a folder picker. "Add App" is the question
+            // "what do I want to do", and the entry screen is where that
+            // question is already answered three ways.
+            Button { state.showEntryScreen = true } label: {
+                Label("Add App…", systemImage: "plus")
+                    .foregroundStyle(.secondary)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 
@@ -180,10 +287,15 @@ private struct AppSwitcher: View {
             }
             .font(.system(size: 13, weight: .semibold))
         }
-        // The system's own pull-down. It was `.borderlessButton`, and a
-        // borderless menu in a safe area inset of a sidebar list took the
-        // whole column down with it: the list drew no rows and the detail pane
-        // lost its header off the top of the window.
+        // `.button`, and the default style drew the app icon at the size of
+        // the whole sidebar. A macOS `Menu` in its default style hands its
+        // label to AppKit, which sizes an image itself and ignores the frame
+        // SwiftUI put on it, so an 18 point badge came out 200 points wide,
+        // clipped at the column edge, with the app name pushed off the end.
+        // The button style keeps the label in SwiftUI, where a frame is a
+        // frame.
+        .menuStyle(.button)
+        .buttonStyle(.accessoryBar)
         .menuIndicator(.visible)
         .controlSize(.small)
         .padding(.horizontal, 8)
@@ -276,6 +388,11 @@ private struct UpgradeCard: View {
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
+                // A `List` row proposes its own width to a `Text` before it
+                // proposes the column's, and `fixedSize` then held the line at
+                // one line and truncated it. This asks for the row's width
+                // first, so the sentence wraps instead of ending in an ellipsis.
+                .frame(maxWidth: .infinity, alignment: .leading)
             // The route the gates already use. It does not introduce a second
             // purchase path.
             Button { state.openPaywall(.settings) } label: {
@@ -329,15 +446,27 @@ struct AppIconBadge: View {
     let initials: String
     var size: CGFloat
 
+    /// Sized here, on the `NSImage`, and not by `.resizable()` and a frame.
+    ///
+    /// A macOS `Menu` hands its label to AppKit, and AppKit draws an image at
+    /// the image's own size. The SwiftUI frame around it is not consulted, so
+    /// an 18 point badge came back 200 points wide, clipped at the edge of the
+    /// sidebar, with the app name pushed off the end of the row. Every screen
+    /// opened with a band of app icon where the app switcher should be.
+    ///
+    /// An `NSImage` carries its own size, every renderer reads it, and the
+    /// frame below still holds for the layout. So this is one size stated in
+    /// two places that cannot disagree, rather than one that AppKit ignores.
     private var image: NSImage? {
-        guard let icon, FileManager.default.fileExists(atPath: icon.path) else { return nil }
-        return NSImage(contentsOf: icon)
+        guard let icon, FileManager.default.fileExists(atPath: icon.path),
+              let image = NSImage(contentsOf: icon) else { return nil }
+        image.size = NSSize(width: size, height: size)
+        return image
     }
 
     var body: some View {
         if let image {
             Image(nsImage: image)
-                .resizable()
                 .interpolation(.high)
                 .frame(width: size, height: size)
                 // The stores serve a square icon and draw the corner

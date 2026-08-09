@@ -84,6 +84,20 @@ public struct ActualState: Sendable, Equatable {
         public var reviewContactLastName: String?
         public var reviewContactPhone: String?
         public var reviewDemoAccountRequired: Bool?
+        /// The reviewer sign-in App Store Connect already holds.
+        ///
+        /// An update inherits the review detail from the released version, so
+        /// a developer who sent a demo account last time has already sent this
+        /// one. The app keeps its own copy in the Keychain and never in the
+        /// manifest, and a Keychain is per machine: a new Mac, a re-install, or
+        /// a colleague meant the fields opened empty on an app that had shipped
+        /// with them three times. The store is the one place that remembers.
+        ///
+        /// Apple may answer the name and withhold the password. The two are
+        /// read apart for that reason, and the screen says which of them came
+        /// back.
+        public var reviewDemoAccountName: String?
+        public var reviewDemoAccountPassword: String?
         public var reviewNotes: String?
         public var ageRatingDeclarationId: String?
         /// Every age rating field App Store Connect holds, with its current
@@ -136,6 +150,21 @@ public struct ActualState: Sendable, Equatable {
         /// Spec 10.6. A second submission cannot open while one is open.
         public var hasOpenReviewSubmission = false
         public var priceAmount: Decimal?
+        /// Every customer price Apple sells at in the base territory, sorted.
+        ///
+        /// Apple does not sell at the number the developer typed. It sells at a
+        /// price point, and the apply already resolves the typed amount to the
+        /// nearest one, so a manifest that said 4.95 shipped as 4.99 and the
+        /// only warning was a gap of under five percent that nobody read.
+        ///
+        /// The read has always fetched this whole list and kept one value out
+        /// of it. Keeping the list lets the field offer the prices that exist
+        /// instead of accepting a number that does not.
+        ///
+        /// Empty means nobody has read the store, or the app does not go to the
+        /// App Store. The field stays a plain text field then: a developer with
+        /// no credentials still has to be able to name a price.
+        public var pricePoints: [Decimal] = []
         public var currentPriceAmount: Decimal?
         public var priceCurrency: String?
         public var territoryCount: Int?

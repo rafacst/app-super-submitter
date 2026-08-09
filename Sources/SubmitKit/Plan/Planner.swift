@@ -1683,6 +1683,15 @@ public enum Planner {
                     } == desired
                     : held == Set(desired)
                 guard !orderedMatches else { continue }
+                // Whether anybody checked. With no read there are no checksums,
+                // so the skip above cannot fire and every set looks new: an
+                // update whose credentials had lapsed read "replace with 5
+                // screenshots" in the same green as a set that really had
+                // changed. The upload is still right, because an unknown store
+                // is not a matching one, but the plan may not call it verified.
+                let read = store == .apple
+                    ? input.actual.apple != nil
+                    : input.actual.google != nil
                 let bytes = uploads.reduce(Int64(0)) { $0 + $1.bytes }
                 let label = store == .apple ? "screenshots" : "\(uploads[0].bucket)"
                 steps.append(PlanStep(
@@ -1701,7 +1710,8 @@ public enum Planner {
                                             files: uploads)
                         : .googleImages(locale: code, imageType: uploads[0].bucket,
                                         files: uploads),
-                    uploadCount: uploads.count, uploadBytes: bytes))
+                    uploadCount: uploads.count, uploadBytes: bytes,
+                    comparison: read ? .verified : .unverified))
             }
 
             // Apple takes a video file. Google takes a YouTube URL and no file.
