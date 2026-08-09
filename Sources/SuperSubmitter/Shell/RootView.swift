@@ -172,8 +172,6 @@ private struct ContentArea: View {
     /// Whether the Details inspector is showing. It outlives a relaunch, the
     /// way every inspector on the Mac does.
     @AppStorage("detailsInspector") private var detailsInspectorOpen = true
-    /// The same, for the reference boxes beside the build.
-    @AppStorage("buildInspector") private var buildInspectorOpen = true
     /// For the jump-to-field scroll, which is a command and not a state flag.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -274,33 +272,10 @@ private struct ContentArea: View {
             }
         }
         .background(Theme.content)
-        // Outside the ScrollView on purpose: an inspector inside one scrolls
-        // away with the content it is meant to sit beside.
-        // One inspector, not one per tab. Two `.inspector` modifiers on the
-        // same view give two trailing columns, and the second one wins the
-        // width while the first keeps the space.
         .inspector(isPresented: Binding(
-            get: {
-                switch state.selectedTab {
-                case .details: detailsInspectorOpen
-                case .build: buildInspectorOpen
-                default: false
-                }
-            },
-            set: { open in
-                switch state.selectedTab {
-                case .details: detailsInspectorOpen = open
-                case .build: buildInspectorOpen = open
-                default: break
-                }
-            })) {
-            Group {
-                switch state.selectedTab {
-                case .details: DetailsInspector()
-                case .build: BuildInspector()
-                default: Color.clear
-                }
-            }
+            get: { state.selectedTab == .details && detailsInspectorOpen },
+            set: { if state.selectedTab == .details { detailsInspectorOpen = $0 } })) {
+            DetailsInspector()
             .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
         }
 
@@ -529,7 +504,6 @@ private struct ContentHeader: View {
     @Environment(AppState.self) private var state
     @AppStorage("showYAMLToggle") private var yamlToggleVisible = false
     @AppStorage("detailsInspector") private var detailsInspectorOpen = true
-    @AppStorage("buildInspector") private var buildInspectorOpen = true
     /// Whether content is passing underneath. See ContentArea.
     let scrolled: Bool
     /// Whether the question that arms a store write is open.
@@ -651,24 +625,6 @@ private struct ContentHeader: View {
             }
 
             if state.manifestURL != nil { switch state.selectedTab {
-            case .build:
-                HeaderCluster(morphOn: shape) {
-                    Button { buildInspectorOpen.toggle() } label: {
-                        Image(systemName: "sidebar.trailing")
-                            .font(Theme.font(size: 13))
-                            .foregroundStyle(buildInspectorOpen ? Theme.accent : Theme.text2)
-                            // The column slides in beside the content, and the
-                            // glyph that opened it now says so rather than only
-                            // changing colour.
-                            .symbolEffect(.bounce, value: buildInspectorOpen)
-                            .frame(width: 24, height: 24)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("The stores, the workflows, and the identities")
-                    .accessibilityValue(buildInspectorOpen ? "Showing" : "Hidden")
-                    .help("Show or hide the diagnostics, Xcode Cloud, and signing")
-                }
             case .details:
                 HeaderCluster(morphOn: shape) { LocalePicker() }
                 HeaderCluster(morphOn: shape) {

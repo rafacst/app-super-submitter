@@ -5,63 +5,20 @@ import SwiftUI
 /// release/build paths and build-derived listing fields in `store.yaml`.
 struct BuildTab: View {
     @Environment(AppState.self) private var state
+    @State private var storeToolsOpen = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            versionSection
-            source
+        VStack(alignment: .leading, spacing: 14) {
+            source.frame(maxWidth: .infinity, alignment: .trailing)
+            storeIdentitySection
             if state.showBuildFromProject {
                 BuildFromProjectView()
             } else {
                 importSection
             }
-            // Who gets the build, whichever way it was made. It sits outside
-            // the two sources on purpose: a tester group belongs to the app,
-            // and it does not stop existing because you switched to the
-            // project builder.
-            if state.stores.contains(.apple) { TestFlightSection() }
+            storeTools
         }
-        .frame(maxWidth: 980, alignment: .leading)
-    }
-
-    /// The number this submission carries, and the only place that takes one.
-    ///
-    /// It used to arrive from a package or from an import and from nowhere
-    /// else. An update with no build attached kept whatever the import read,
-    /// and the Summary's "Version 1.2 is not above 1.4, which is live on the
-    /// App Store" sent the developer to this tab, which showed a version and
-    /// never took one. Its own error had no fix on the tab it named.
-    private var versionSection: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Version").font(Theme.font(size: 12.5, weight: .semibold))
-                TextField("1.0", text: state.releaseVersionBinding)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 96)
-                    .monospacedDigit()
-                if let live = state.liveAppleVersion {
-                    Text(verbatim: "\(live) is live on the App Store")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .monospacedDigit()
-                }
-                Spacer(minLength: 8)
-                // Only when it would change something. A button offering the
-                // number already in the field is a button that does nothing.
-                if let next = state.nextAppleVersion,
-                   next != state.manifest.release?.versionName {
-                    QuietButton(title: "Use \(next)") { state.useReleaseVersion(next) }
-                }
-            }
-            Text("Apple refuses a version that does not climb past the one on sale. A package you import fills this in while it is empty.")
-                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                .fixedSize(horizontal: false, vertical: true)
-            ApplePlatformStandings()
-        }
-        .padding(.horizontal, 15).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .frame(maxWidth: 1040, alignment: .leading)
     }
 
     /// Two ways to get a build: run the project, or import a package that
@@ -93,23 +50,126 @@ struct BuildTab: View {
             .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
     }
 
-    private var importSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // One row, one height. Each box stretches to the taller of the
-            // two, so the rule between them runs the whole way down.
+    private var storeIdentitySection: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("This app in the stores")
+                .font(Theme.font(size: 13.5, weight: .semibold))
+
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 14) {
-                    submitBuilds
-                    Rectangle().fill(Theme.sep2).frame(width: 1)
-                    updateExistingApp
+                    if state.stores.contains(.apple) { appleIdentity }
+                    if state.stores.contains(.google) { googleIdentity }
                 }
-                VStack(alignment: .leading, spacing: 14) {
-                    submitBuilds
-                    updateExistingApp
+                VStack(alignment: .leading, spacing: 10) {
+                    if state.stores.contains(.apple) { appleIdentity }
+                    if state.stores.contains(.google) { googleIdentity }
                 }
             }
-            .fixedSize(horizontal: false, vertical: true)
 
+            Divider().overlay(Theme.sep)
+            versionRow
+
+            HStack(alignment: .top, spacing: 10) {
+                QuietButton(
+                    title: state.listingImportStatus == .connecting
+                        ? "Fetching…" : "Fetch the current listings",
+                    action: state.importExistingListing)
+                    .disabled(state.listingImportStatus == .connecting)
+                switch state.listingImportStatus {
+                case .connected(let message):
+                    Text(message).foregroundStyle(Theme.green)
+                case .failed(let message):
+                    WarningNote(message)
+                default:
+                    Text("The store owns these identifiers; importing an existing listing fills them in.")
+                        .foregroundStyle(Theme.text3)
+                }
+            }
+            .font(Theme.font(size: 11.5))
+        }
+        .storePanel(padding: 14, horizontal: 15)
+    }
+
+    private var appleIdentity: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            StoreLabel(store: .apple, size: 11, weight: .medium, color: Theme.text2)
+            Text("Bundle id · App id")
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+            HStack(spacing: 8) {
+                if state.remoteAppleApps.isEmpty {
+                    PickerActionRow(value: state.appleBundleID.isEmpty
+                                    ? "Connect App Store first" : state.appleBundleID) {
+                        state.selectedTab = .stores
+                    }
+                } else {
+                    Menu {
+                        ForEach(state.remoteAppleApps) { app in
+                            Button("\(app.name) · \(app.identifier)") {
+                                state.chooseRemoteAppleApp(app)
+                            }
+                        }
+                    } label: {
+                        PickerLabel(value: state.appleBundleID.isEmpty
+                                    ? "Choose an app" : state.appleBundleID)
+                    }
+                    .menuStyle(.borderlessButton)
+                }
+                identityValue(state.appleAppID.isEmpty ? "App id" : state.appleAppID,
+                              width: 120)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var googleIdentity: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
+            Text("Package name")
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+            PickerActionRow(value: state.googlePackageName.isEmpty
+                            ? "Set and test a package on Stores"
+                            : state.googlePackageName) {
+                state.selectedTab = .stores
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func identityValue(_ value: String, width: CGFloat? = nil) -> some View {
+        Text(value)
+            .font(Theme.mono(11.5))
+            .foregroundStyle(value == "App id" ? Theme.text3 : Theme.text)
+            .lineLimit(1)
+            .padding(.horizontal, 9).padding(.vertical, 6)
+            .frame(width: width, alignment: .leading)
+            .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+    }
+
+    private var versionRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("Release version").font(Theme.font(size: 11.5, weight: .medium))
+            TextField("1.0", text: state.releaseVersionBinding)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 96)
+                .monospacedDigit()
+            if let live = state.liveAppleVersion {
+                Text(verbatim: "\(live) is live on the App Store")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .monospacedDigit()
+            }
+            Spacer(minLength: 8)
+            if let next = state.nextAppleVersion,
+               next != state.manifest.release?.versionName {
+                QuietButton(title: "Use \(next)") { state.useReleaseVersion(next) }
+            }
+        }
+    }
+
+    private var importSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            storeBuildColumns
             if !state.packages.isEmpty {
                 packageCards
                 filledLine
@@ -120,125 +180,132 @@ struct BuildTab: View {
                     versionWarning(mismatch)
                 }
             }
-            // Side by side. Both answer "what goes into the Google edit", and
-            // stacked they left the right half of a 980 point tab empty.
-            if state.stores.contains(.google) {
+        }
+    }
+
+    private var storeBuildColumns: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                if state.stores.contains(.apple) {
+                    appleBuildCard
+                        .frame(minWidth: 0, maxWidth: .infinity,
+                               maxHeight: .infinity, alignment: .top)
+                }
+                if state.stores.contains(.google) {
+                    googleBuildCard
+                        .frame(minWidth: 0, maxWidth: .infinity,
+                               maxHeight: .infinity, alignment: .top)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 14) {
+                if state.stores.contains(.apple) {
+                    TestFlightSection()
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .top)
+                }
+                if state.stores.contains(.google) {
+                    googleOptions
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .top)
+                }
+            }
+        }
+    }
+
+    private var appleBuildCard: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            storeBuildHeader(.apple, title: "App Store takes", detail: ".ipa or .pkg")
+            PackageDropWell(
+                title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
+                prompt: ".ipa · drop here or",
+                extensions: ["ipa"], reading: state.readingPackages.contains(.ipa),
+                error: state.packageErrors[.ipa], note: state.missingBuildNote(.ipa),
+                choose: { state.chooseBuildFiles(allowedExtensions: ["ipa"]) },
+                accept: state.importPackages)
+            PackageDropWell(
+                title: state.packages[.pkg]?.url.lastPathComponent ?? "Mac App Store package",
+                prompt: ".pkg · drop here or",
+                extensions: ["pkg"], reading: state.readingPackages.contains(.pkg),
+                error: state.packageErrors[.pkg], note: state.missingBuildNote(.pkg),
+                choose: { state.chooseBuildFiles(allowedExtensions: ["pkg"]) },
+                accept: state.importPackages)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .storePanel(padding: 14, horizontal: 15)
+    }
+
+    private var googleBuildCard: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            storeBuildHeader(.google, title: "Google Play takes", detail: ".aab or .apk")
+            PackageDropWell(
+                title: state.packages[.aab]?.url.lastPathComponent ?? "Android package",
+                prompt: ".aab · drop here or",
+                extensions: ["aab"], reading: state.readingPackages.contains(.aab),
+                error: state.packageErrors[.aab], note: state.missingBuildNote(.aab),
+                choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
+                accept: state.importPackages)
+            Text("Play has no TestFlight equivalent. Testers and rollout belong to the track below.")
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .storePanel(padding: 14, horizontal: 15)
+    }
+
+    private func storeBuildHeader(_ store: Store, title: String,
+                                  detail: String) -> some View {
+        HStack(spacing: 8) {
+            StoreMark(store: store, size: 16)
+            Text(title).font(Theme.font(size: 13, weight: .semibold))
+            Spacer(minLength: 8)
+            Text(detail).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+        }
+        .padding(.bottom, 9)
+        .overlay(alignment: .bottom) { Hairline() }
+    }
+
+    private var googleOptions: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            GoogleTracksSection()
+            AndroidArtifactsSection()
+        }
+    }
+
+    private var storeTools: some View {
+        DisclosureGroup(isExpanded: $storeToolsOpen) {
+            VStack(alignment: .leading, spacing: 14) {
+                StoreDiagnosticsPanel()
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 14) {
-                        AndroidArtifactsSection()
-                        GoogleTracksSection().frame(width: 330)
+                        if state.stores.contains(.apple) {
+                            VStack(alignment: .leading, spacing: 14) {
+                                XcodeCloudPanel()
+                                SigningIdentitiesPanel()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .top)
+                        }
+                        if state.stores.contains(.google) {
+                            InternalSharingPanel()
+                                .frame(maxWidth: .infinity, alignment: .top)
+                        }
                     }
                     VStack(alignment: .leading, spacing: 14) {
-                        AndroidArtifactsSection()
-                        GoogleTracksSection()
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var submitBuilds: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            Text("Submit a build").font(Theme.font(size: 13, weight: .semibold))
-            VStack(spacing: 9) {
-                PackageDropWell(
-                    title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
-                    prompt: ".ipa · drop here or",
-                    extensions: ["ipa"], reading: state.readingPackages.contains(.ipa),
-                    error: state.packageErrors[.ipa],
-                    note: state.missingBuildNote(.ipa),
-                    choose: { state.chooseBuildFiles(allowedExtensions: ["ipa"]) },
-                    accept: state.importPackages)
-                PackageDropWell(
-                    title: state.packages[.pkg]?.url.lastPathComponent ?? "Mac App Store package",
-                    prompt: ".pkg · drop here or",
-                    extensions: ["pkg"], reading: state.readingPackages.contains(.pkg),
-                    error: state.packageErrors[.pkg],
-                    note: state.missingBuildNote(.pkg),
-                    choose: { state.chooseBuildFiles(allowedExtensions: ["pkg"]) },
-                    accept: state.importPackages)
-                PackageDropWell(
-                    title: state.packages[.aab]?.url.lastPathComponent ?? "Android package",
-                    prompt: ".aab · drop here or",
-                    extensions: ["aab"], reading: state.readingPackages.contains(.aab),
-                    error: state.packageErrors[.aab],
-                    note: state.missingBuildNote(.aab),
-                    choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
-                    accept: state.importPackages)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 15)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-    }
-
-    private var updateExistingApp: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            Text("Update an app that exists").font(Theme.font(size: 13, weight: .semibold))
-
-            VStack(alignment: .leading, spacing: 9) {
-                VStack(alignment: .leading, spacing: 4) {
-                    StoreLabel(store: .apple, size: 11, weight: .medium, color: Theme.text2)
-                    if state.remoteAppleApps.isEmpty {
-                        PickerActionRow(value: state.appleAppID.isEmpty ? "Connect and test App Store first" : state.appleBundleID) {
-                            state.selectedTab = .stores
+                        if state.stores.contains(.apple) {
+                            XcodeCloudPanel()
+                            SigningIdentitiesPanel()
                         }
-                    } else {
-                        Menu {
-                            ForEach(state.remoteAppleApps) { app in
-                                Button("\(app.name) · \(app.identifier)") {
-                                    state.chooseRemoteAppleApp(app)
-                                }
-                            }
-                        } label: {
-                            PickerLabel(value: state.appleBundleID.isEmpty ? "Choose an app" : state.appleBundleID)
-                        }
-                        .menuStyle(.borderlessButton)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
-                    PickerActionRow(value: state.googlePackageName.isEmpty
-                                    ? "Set and test a package on Stores"
-                                    : state.googlePackageName) {
-                        state.selectedTab = .stores
+                        if state.stores.contains(.google) { InternalSharingPanel() }
                     }
                 }
             }
-
-            Text("App Store apps come from the connected account. Android Publisher cannot list apps, so Google uses the tested package name from Stores.")
-                .font(Theme.font(size: 11.5))
-                .foregroundStyle(Theme.text2)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(alignment: .top, spacing: 10) {
-                QuietButton(
-                    title: state.listingImportStatus == .connecting ? "Fetching…" : "Fetch the current listings",
-                    action: state.importExistingListing)
-                    .disabled(state.listingImportStatus == .connecting)
-                switch state.listingImportStatus {
-                case .connected(let message):
-                    Text(message).foregroundStyle(Theme.green)
-                case .failed(let message):
-                    WarningNote(message)
-                default:
-                    EmptyView()
-                }
+            .padding(.top, 12)
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Store tooling").font(Theme.font(size: 13, weight: .semibold))
+                Text("Diagnostics, Xcode Cloud, signing identities, and internal sharing")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
-            .font(Theme.font(size: 11.5))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 15)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .storePanel(padding: 14, horizontal: 15)
     }
 
     private var sortedPackages: [AppPackage] {
@@ -486,34 +553,6 @@ private struct WarningLine: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.red, lineWidth: 1))
-    }
-}
-
-/// What the build reads but does not decide: the stores' own diagnostics, the
-/// workflows on Xcode Cloud, the identities that sign, and the internal share.
-///
-/// All four sat under the build itself, in one 980 point column, so the tab
-/// ran four screens deep and the preflight ended above four boxes that answer
-/// a different question. None of them is a step of a build, and none is
-/// edited: they are reference, which is what an inspector is for.
-struct BuildInspector: View {
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                StoreDiagnosticsPanel()
-                if state.stores.contains(.apple) { XcodeCloudPanel() }
-                // A lapsed certificate reads as a failed build, so it belongs
-                // beside the build and not on a tab of its own.
-                if state.stores.contains(.apple) { SigningIdentitiesPanel() }
-                if state.stores.contains(.google) { InternalSharingPanel() }
-                Spacer(minLength: 0)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(Theme.sunken)
     }
 }
 
