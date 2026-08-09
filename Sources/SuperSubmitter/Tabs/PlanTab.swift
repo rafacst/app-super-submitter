@@ -1,6 +1,71 @@
 import SubmitKit
 import SwiftUI
 
+/// The five things a release passes through, and what each of them holds now.
+///
+/// The tab answered "what changes" in exact detail and never answered "where
+/// am I": a developer met a diff with no account of the pass around it, and
+/// "does apply send this to a customer" was answered by the small print under
+/// a button. Each caption reads real state or says plainly that it has none.
+/// None of them invents a number.
+enum RunwayStep {
+
+    /// What the listing holds, in languages rather than in fields: a field
+    /// count needs a read of both stores to mean anything, and this step has to
+    /// say something true before the first read.
+    @MainActor
+    static func describe(_ state: AppState) -> String {
+        let locales = state.locales.count
+        guard locales > 0 else { return "no language yet" }
+        return locales == 1 ? "1 language" : "\(locales) languages"
+    }
+
+    /// The artifacts the manifest names, and how many of those files are on
+    /// this Mac. An attached build is the one thing a version cannot ship
+    /// without and the one thing the manifest cannot prove by itself.
+    @MainActor
+    static func build(_ state: AppState) -> String {
+        let named = AppPackage.Kind.allCases.filter { kind in
+            let path: String? = switch kind {
+            case .ipa: state.manifest.release?.build?.ios
+            case .pkg: state.manifest.release?.build?.macos
+            case .aab: state.manifest.release?.build?.android
+            }
+            return !(path ?? "").isEmpty
+        }
+        guard !named.isEmpty else { return "no artifact named" }
+        let here = named.filter { state.missingBuildNote($0) == nil }.count
+        let word = named.count == 1 ? "artifact" : "artifacts"
+        if here == 0 { return "\(named.count) \(word) named, none found" }
+        if here == named.count { return "\(named.count) \(word) ready" }
+        return "\(named.count) \(word) named, \(here) found"
+    }
+
+    /// The two numbers the whole tab produces, or the fact that it has not
+    /// produced them yet.
+    @MainActor
+    static func plan(_ state: AppState) -> String {
+        guard let plan = state.plan else {
+            return state.planReading ? "reading the stores" : "not read yet"
+        }
+        return "\(plan.writeCount) writes · \(plan.uploadCount) uploads"
+    }
+
+    /// Where a run ends. This is the sentence the product is built around, and
+    /// a dry run ends somewhere else entirely.
+    @MainActor
+    static func apply(_ state: AppState) -> String {
+        state.dryRun ? "dry run, sends nothing" : "writes drafts only"
+    }
+
+    /// Nothing here reaches a customer. The Release tab does, and only when it
+    /// is pressed.
+    @MainActor
+    static func release(_ state: AppState) -> String {
+        state.stores.count > 1 ? "you press it, one store at a time" : "you press it"
+    }
+}
+
 /// Tab 7. Every change, before any write. This tab is the safety model of the
 /// product, and it is the one screen that can refuse to continue.
 struct PlanTab: View {
@@ -11,6 +76,17 @@ struct PlanTab: View {
     @State private var showingAcknowledged = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            // The runway stays put while the tab under it changes between the
+            // placeholders, the diff and the run. It is the one part of this
+            // screen that answers a question the diff cannot: where the release
+            // has got to, and where pressing the button ends.
+            if !state.showsRun { runway }
+            content
+        }
+    }
+
+    private var content: some View {
         Group {
             // The run replaces the diff on the same tab. Pressing Apply used
             // to move the developer to a tab of its own, which put a
@@ -52,6 +128,84 @@ struct PlanTab: View {
             else { return }
             await state.readStores()
         }
+    }
+
+    // MARK: - The runway
+
+    /// The version being shipped, and the five steps it passes through.
+    private var runway: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 8) {
+                Text(shipTitle).font(Theme.font(size: 17, weight: .semibold))
+                Spacer(minLength: 8)
+                // The failure panel below carries its own retry beside the
+                // reason it failed. Two "Read again" buttons on one screen is
+                // one button too many, and the one next to the message is the
+                // one that explains itself.
+                if state.planReadFailures.isEmpty {
+                    if state.plan?.readAt != nil {
+                        Text("Read at \(readTime)")
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                    }
+                    QuietButton(title: "Read again") { Task { await state.readStores() } }
+                }
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 0) { steps }
+                VStack(alignment: .leading, spacing: 9) { steps }
+            }
+        }
+        .padding(.horizontal, 15).padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    @ViewBuilder
+    private var steps: some View {
+        step(1, "Describe", RunwayStep.describe(state), tab: .details)
+        step(2, "Build", RunwayStep.build(state), tab: .build)
+        step(3, "Plan", RunwayStep.plan(state), tab: nil)
+        step(4, "Apply", RunwayStep.apply(state), tab: nil)
+        step(5, "Release", RunwayStep.release(state), tab: .release)
+    }
+
+    /// One step. The three that own a tab open it; Plan and Apply are this
+    /// screen, so pressing them would go nowhere.
+    @ViewBuilder
+    private func step(_ number: Int, _ title: String, _ caption: String,
+                      tab: Tab?) -> some View {
+        let here = number == 3 || number == 4
+        let body = VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Text(verbatim: "\(number)")
+                    .font(Theme.mono(10.5))
+                    .foregroundStyle(here ? Theme.accentText : Theme.text3)
+                    .frame(width: 15, height: 15)
+                    .background(here ? Theme.accent : Theme.sunken, in: Circle())
+                Text(title).font(Theme.font(size: 12.5, weight: here ? .semibold : .medium))
+                    .foregroundStyle(here ? Theme.text : Theme.text2)
+            }
+            Text(caption).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 10)
+
+        if let tab {
+            Button { state.selectedTab = tab } label: { body.contentShape(.rect) }
+                .buttonStyle(.plain)
+                .help("Open \(tab.title)")
+        } else {
+            body
+        }
+    }
+
+    /// The release this pass sends, named by the version in the manifest.
+    private var shipTitle: String {
+        let version = state.manifest.release?.versionName ?? ""
+        return version.isEmpty ? "Ship this release" : "Ship \(version)"
     }
 
     // MARK: - Before the read
