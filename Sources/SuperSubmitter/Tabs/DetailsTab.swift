@@ -2,70 +2,332 @@ import SubmitKit
 import SwiftUI
 
 /// Tab 3. All controls edit the active locale in `store.yaml` immediately.
+///
+/// **Why one column per store.** The listing is written for two stores that
+/// take different words, and a single column asked the developer to hold both
+/// in their head. Every shared field carried the smaller of the two limits with
+/// no way to see whose it was, and the Google override arrived as an indented
+/// afterthought under the Apple field it replaces. Standing the stores side by
+/// side puts each store's own limit over its own box and turns an override into
+/// what it is: this store takes different text from that one.
+///
+/// A shared field is still one value. It is drawn in both columns, because each
+/// store's limit and each store's "changed since we read it" mark belong over
+/// that store's column, and typing in either box writes the same manifest key.
 struct DetailsTab: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 16) {
-                // Publishing sends this tab through the Summary tab, which
-                // plans and then writes. Managing has none, so it writes here.
-                if state.mode == .managing { DirectApplyBar(target: .listing) }
-                editor("Name", field: .name,
-                       limit: BindingLimits.binding(for: .name, stores: state.stores),
-                       anchor: "details.name")
-                googleOverrideEditor("Subtitle", shared: .subtitle,
-                                     google: .googleShortDescription, bindingField: .subtitle,
-                                     anchor: "details.subtitle")
-                editor("Description", field: .description,
-                       limit: BindingLimits.binding(for: .description, stores: state.stores),
-                       multiline: true, anchor: "details.description")
-                googleOverrideEditor("What is new", shared: .whatsNew,
-                                     google: .googleWhatsNew, bindingField: .whatsNew,
-                                     anchor: "details.whatsNew")
+        VStack(alignment: .leading, spacing: 14) {
+            // Publishing sends this tab through the Summary tab, which
+            // plans and then writes. Managing has none, so it writes here.
+            if state.mode == .managing { DirectApplyBar(target: .listing) }
+            statusBar
+            if columns { columnHeaders }
+            listingRows
+            // The parts of the listing that no API will write, under the
+            // fields they belong to rather than at the end of a long column.
+            consoleSteps
+            // Apple's own keyword resource, beside the Keywords field it
+            // is so easily mistaken for.
+            if shows(.apple) {
+                SearchKeywordsPanel().padding(.top, 6)
+                // The other half of how the store classifies the app, and
+                // the only part of this tab that Apple writes rather than
+                // the developer.
+                AppTagsPanel().padding(.top, 6)
+            }
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-                if state.stores.contains(.apple) {
-                    editor("Keywords", field: .keywords,
-                           limit: BindingLimits.binding(for: .keywords, stores: state.stores),
-                           tag: "Apple only", anchor: "details.keywords")
-                    editor("Promotional text", field: .promotionalText,
-                           limit: BindingLimits.binding(for: .promotionalText, stores: state.stores),
-                           tag: "Apple only", anchor: "details.promotionalText")
+    // MARK: - The rows
+
+    @ViewBuilder
+    private var listingRows: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            pair(apple: { shared(.name, in: .apple, anchor: "details.name") },
+                 google: { shared(.name, in: .google) })
+            pair(apple: { shared(.subtitle, in: .apple, anchor: "details.subtitle") },
+                 google: {
+                     override(.googleShortDescription, sharing: .subtitle,
+                              limit: 80, of: "the subtitle",
+                              anchor: "details.googleShortDescription")
+                 })
+            pair(apple: { shared(.description, in: .apple, multiline: true,
+                                 anchor: "details.description") },
+                 google: { shared(.description, in: .google, multiline: true) })
+            pair(apple: { shared(.whatsNew, in: .apple, multiline: true,
+                                 anchor: "details.whatsNew") },
+                 google: {
+                     override(.googleWhatsNew, sharing: .whatsNew, limit: 500,
+                              of: "what is new", multiline: true)
+                 })
+            pair(apple: {
+                     appleOnly {
+                         editor("Keywords", field: .keywords,
+                                limit: BindingLimits.limit(for: .keywords, in: .apple),
+                                anchor: "details.keywords")
+                     }
+                 },
+                 google: {
+                     absent("Google Play has no keywords field. Play reads the description instead.")
+                 })
+            pair(apple: {
+                     appleOnly {
+                         editor("Promotional text", field: .promotionalText,
+                                limit: BindingLimits.limit(for: .promotionalText, in: .apple),
+                                anchor: "details.promotionalText")
+                     }
+                 },
+                 google: { absent("Play has no promotional text.") })
+            pair(apple: { shared(.supportURL, in: .apple, anchor: "details.supportURL") },
+                 google: { shared(.supportURL, in: .google) })
+            pair(apple: {
+                     appleOnly {
+                         editor("Marketing URL", field: .marketingURL,
+                                anchor: "details.marketingURL")
+                     }
+                 },
+                 google: { absent("Play carries no separate marketing URL.") })
+            pair(apple: { shared(.privacyPolicyURL, in: .apple,
+                                 anchor: "details.privacyPolicyURL") },
+                 google: { shared(.privacyPolicyURL, in: .google) })
+            pair(apple: {
+                     appleOnly {
+                         VStack(alignment: .leading, spacing: 15) {
+                             editor("Privacy policy text", field: .privacyPolicyText,
+                                    multiline: true, anchor: "details.privacyPolicyText")
+                             editor("Privacy choices URL", field: .privacyChoicesURL,
+                                    anchor: "details.privacyChoicesURL")
+                         }
+                     }
+                 },
+                 google: { absent("Play keeps both of these in the console.") })
+        }
+    }
+
+    /// Two cells on one row, one store each.
+    ///
+    /// They stack when the developer merges the columns, when only one store is
+    /// picked, and before any store is picked at all — the Apple cell carries
+    /// the shared value, so a tab with no store yet draws the same fields it
+    /// always drew.
+    @ViewBuilder
+    private func pair<A: View, G: View>(@ViewBuilder apple: () -> A,
+                                        @ViewBuilder google: () -> G) -> some View {
+        if columns {
+            HStack(alignment: .top, spacing: 14) {
+                apple().frame(maxWidth: .infinity, alignment: .leading)
+                google().frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 15) {
+                if shows(.apple) { apple() }
+                if shows(.google) { google() }
+            }
+        }
+    }
+
+    /// One value of the manifest, under one store's limit.
+    private func shared(_ field: ListingTextField, in store: Store,
+                        multiline: Bool = false, anchor: String? = nil) -> some View {
+        editor(field.label, field: field,
+               limit: Self.bindingField(field).flatMap {
+                   BindingLimits.limit(for: $0, in: store)
+               },
+               multiline: multiline, anchor: anchor)
+    }
+
+    /// The Google column of a field Google may take different text for.
+    ///
+    /// Off, it mirrors the shared box beside it and offers the switch. On, it
+    /// is a box of its own and offers the way back. The toggle used to sit
+    /// under the Apple field as an indented child; the column says which store
+    /// it belongs to without a word.
+    @ViewBuilder
+    private func override(_ google: ListingTextField, sharing shared: ListingTextField,
+                          limit: Int, of name: String, multiline: Bool = false,
+                          anchor: String? = nil) -> some View {
+        let binding = state.googleOverrideBinding(google)
+        VStack(alignment: .leading, spacing: 5) {
+            if binding.wrappedValue {
+                editor(google.label, field: google, limit: limit,
+                       multiline: multiline, anchor: anchor)
+                overrideNote("Play cuts at \(limit)", action: "use the shared text") {
+                    binding.wrappedValue = false
                 }
-                if state.stores.contains(.google) {
-                    editor("Short description", field: .googleShortDescription, limit: 80,
-                           tag: "Google only", anchor: "details.googleShortDescription")
-                }
-                editor("Support URL", field: .supportURL, anchor: "details.supportURL")
-                if state.stores.contains(.apple) {
-                    editor("Marketing URL", field: .marketingURL, tag: "Apple only",
-                           anchor: "details.marketingURL")
-                }
-                editor("Privacy policy URL", field: .privacyPolicyURL,
-                       anchor: "details.privacyPolicyURL")
-                if state.stores.contains(.apple) {
-                    editor("Privacy policy text", field: .privacyPolicyText,
-                           multiline: true, tag: "Apple only",
-                           anchor: "details.privacyPolicyText")
-                    editor("Privacy choices URL", field: .privacyChoicesURL,
-                           tag: "Apple only", anchor: "details.privacyChoicesURL")
-                }
-                // The parts of the listing that no API will write. It is a
-                // wide list of rows, so it stays in this column while the
-                // short fields sit beside the preview.
-                ConsoleStepsPanel().padding(.top, 6).fieldAnchor("details.console")
-                // Apple's own keyword resource, beside the Keywords field it
-                // is so easily mistaken for.
-                if state.stores.contains(.apple) {
-                    SearchKeywordsPanel().padding(.top, 6)
-                    // The other half of how the store classifies the app, and
-                    // the only part of this tab that Apple writes rather than
-                    // the developer.
-                    AppTagsPanel().padding(.top, 6)
+            } else {
+                editor(shared.label, field: shared,
+                       limit: Self.bindingField(shared).flatMap {
+                           BindingLimits.limit(for: $0, in: .google)
+                       },
+                       multiline: multiline, anchor: anchor)
+                overrideNote("Play takes \(name) as it stands",
+                             action: "use different text") {
+                    binding.wrappedValue = true
                 }
             }
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func overrideNote(_ text: String, action: String,
+                              press: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Rectangle().fill(Theme.sep2).frame(width: 12, height: Theme.hairline)
+            Text("\(text) · ").font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+            Button(action, action: press)
+                .buttonStyle(.plain)
+                .font(Theme.font(size: 11))
+                .foregroundStyle(Theme.accent)
+        }
+    }
+
+    /// A field only the App Store holds. It stays out of a Google-only app
+    /// exactly as it did before the columns, and out of a tab with no store
+    /// picked yet, where "only" has nothing to be only against.
+    @ViewBuilder
+    private func appleOnly<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if state.stores.contains(.apple) { content() }
+    }
+
+    /// A store that holds no equivalent of the field beside it. The row keeps
+    /// its shape, and the reason stands where the missing box would be.
+    ///
+    /// It says nothing without a column beside it to say it about, so a
+    /// merged or single-store layout drops it rather than listing what the
+    /// other store does not have.
+    @ViewBuilder
+    private func absent(_ reason: String) -> some View {
+        if columns {
+            HStack(alignment: .top, spacing: 7) {
+                Text(verbatim: "—").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                Text(reason).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 18)
+        }
+    }
+
+    // MARK: - The bar over the columns
+
+    /// What the tab is worth reading for before any single field is: what
+    /// blocks it, what only a console can answer, and how much of it writes.
+    private var statusBar: some View {
+        HStack(spacing: 14) {
+            if let badge = state.badge(for: .details), badge.errors > 0 {
+                Button { state.selectedTab = .plan } label: {
+                    HStack(spacing: 6) {
+                        Dot(colour: Theme.red)
+                        Text(badge.errors == 1 ? "1 blocker" : "\(badge.errors) blockers")
+                            .font(Theme.font(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.red)
+                        Image(systemName: "chevron.right")
+                            .font(Theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(Theme.red.opacity(0.6))
+                    }
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Theme.red.opacity(0.14), in: RoundedRectangle(cornerRadius: 7))
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+            let consoleHere = state.consoleRows.filter(\.onEditingTab).count
+            if consoleHere > 0 {
+                count(consoleHere == 1 ? "1 console step here"
+                      : "\(consoleHere) console steps here", colour: Theme.yellow)
+            }
+            if let plan = state.plan, plan.writeCount > 0 {
+                count(plan.writeCount == 1 ? "1 change will write"
+                      : "\(plan.writeCount) changes will write", colour: Theme.accent)
+            }
+            Spacer(minLength: 8)
+            QuietButton(title: "Read again") { Task { await state.readStores() } }
+            if state.stores.count > 1 {
+                QuietButton(title: state.detailsMerged ? "Split by store" : "Merge the columns") {
+                    state.detailsMerged.toggle()
+                }
+            }
+        }
+    }
+
+    private func count(_ text: String, colour: Color) -> some View {
+        HStack(spacing: 6) {
+            Dot(colour: colour)
+            Text(text).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
+        }
+    }
+
+    private var columnHeaders: some View {
+        HStack(alignment: .bottom, spacing: 14) {
+            storeColumnHeader(.apple)
+            storeColumnHeader(.google)
+        }
+    }
+
+    private func storeColumnHeader(_ store: Store) -> some View {
+        HStack(spacing: 8) {
+            StoreMark(store: store, size: 14)
+            Text(store.storeName).font(Theme.font(size: 13, weight: .semibold))
+            Spacer(minLength: 8)
+            Text(state.locale).font(Theme.mono(11)).foregroundStyle(Theme.text3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 7)
+        .overlay(alignment: .bottom) { Hairline() }
+    }
+
+    /// The console rows this tab owns, in the column of the store that asks
+    /// for them. Anything neither store owns keeps a row of its own, so a
+    /// provider step can never fall off the tab.
+    @ViewBuilder
+    private var consoleSteps: some View {
+        let rows = state.consoleRows.filter(\.onEditingTab)
+        let others = rows.filter {
+            $0.system != Store.apple.storeName && $0.system != Store.google.storeName
+        }
+        VStack(alignment: .leading, spacing: 14) {
+            // Nothing read yet means no rows at all, and the panel that says
+            // so has to survive the split or the tab goes silent about a list
+            // it is about to grow.
+            if rows.isEmpty {
+                ConsoleStepsPanel(system: nil)
+            } else {
+                pair(apple: { ConsoleStepsPanel(system: Store.apple.storeName) },
+                     google: { ConsoleStepsPanel(system: Store.google.storeName) })
+                if !others.isEmpty { ConsoleStepsPanel(system: nil) }
+            }
+        }
+        .padding(.top, 6)
+        .fieldAnchor("details.console")
+    }
+
+    // MARK: - Helpers
+
+    /// Two columns need two stores and the width for them.
+    private var columns: Bool { state.stores.count > 1 && !state.detailsMerged }
+
+    /// Before any store is picked the Apple column carries the shared fields,
+    /// so the tab draws what it always drew rather than nothing at all.
+    private func shows(_ store: Store) -> Bool {
+        state.stores.isEmpty ? store == .apple : state.stores.contains(store)
+    }
+
+    /// The limit table keys off its own enum, and only the fields that have a
+    /// limit appear in it. A URL has none, so it returns nil and the box shows
+    /// no counter, exactly as it did before the columns.
+    private static func bindingField(_ field: ListingTextField) -> ListingField? {
+        switch field {
+        case .name: .name
+        case .subtitle: .subtitle
+        case .description: .description
+        case .whatsNew: .whatsNew
+        case .keywords: .keywords
+        case .promotionalText: .promotionalText
+        case .googleShortDescription: .shortDescription
+        default: nil
         }
     }
 
@@ -75,6 +337,12 @@ struct DetailsTab: View {
         ListingEditor(title: title, field: field, limit: limit,
                       multiline: multiline, tag: tag, anchor: anchor)
     }
+}
+
+/// The dot that colours a count on the bar over the columns.
+private struct Dot: View {
+    let colour: Color
+    var body: some View { Circle().fill(colour).frame(width: 7, height: 7) }
 }
 
 /// One field of the listing, and the characters it holds while you type.
@@ -306,49 +574,6 @@ private extension ListingEditor {
                 .lineLimit(6)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-}
-
-private extension DetailsTab {
-
-    @ViewBuilder
-    func googleOverrideEditor(_ title: String, shared: ListingTextField,
-                              google: ListingTextField,
-                              bindingField: ListingField,
-                              anchor: String? = nil) -> some View {
-        let overrides: Set<Store> = state.manifest.hasGoogleOverride(locale: state.locale, field: google)
-            ? [.google] : []
-        // The anchor goes on the shared field. The Google override under it is
-        // the same field said twice, and a search for "subtitle" wants the box
-        // the developer types in first.
-        editor(title, field: shared,
-               limit: BindingLimits.binding(for: bindingField, stores: state.stores,
-                                             overriddenIn: overrides),
-               multiline: title == "What is new", anchor: anchor)
-        if state.stores.contains(.google) {
-            // The toggle and the field it reveals belong to the field above
-            // them, and they used to be its siblings: three top-level rows in
-            // a column of top-level rows, with only the word "Google Play" in
-            // the child's label to say which parent it belonged to. The rule
-            // and the indent say it instead, so the label no longer has to
-            // repeat the parent's name and the tag can carry the store.
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Use different text for Google Play",
-                       isOn: state.googleOverrideBinding(google))
-                    .font(Theme.font(size: 11.5))
-                if state.manifest.hasGoogleOverride(locale: state.locale, field: google) {
-                    editor(title, field: google,
-                           limit: title == "Subtitle" ? 80 : 500,
-                           multiline: title == "What is new",
-                           tag: "Google only")
-                }
-            }
-            .padding(.leading, 11)
-            .overlay(alignment: .leading) {
-                Rectangle().fill(Theme.sep).frame(width: Theme.hairline)
-            }
         }
     }
 
