@@ -14,7 +14,7 @@ struct StoresTab: View {
     @State private var removing: Store?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 14) {
             StoreSelectionGrid(selected: state.stores) { store in
                 let turningOff = state.stores.contains(store)
                 state.setStore(store, enabled: !turningOff)
@@ -22,16 +22,21 @@ struct StoresTab: View {
                 // one". The key is the other half of that, and it is the half
                 // no other control reaches, so this is where it gets offered.
                 if turningOff, state.hasCredential(for: store) { removing = store }
-            } detail: { store in
-                switch store {
-                case .apple:
-                    AppleCredentialPanel()
-                    AppleTeamPanel()
-                case .google:
-                    GoogleCredentialPanel()
-                    GoogleTeamPanel()
-                }
             }
+            HStack(alignment: .top, spacing: 16) {
+                AppleCredentialPanel()
+                    .frame(maxHeight: .infinity, alignment: .top)
+                GoogleCredentialPanel()
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 16) {
+                AppleTeamPanel()
+                    .frame(maxHeight: .infinity, alignment: .top)
+                GoogleTeamPanel()
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: 1040, alignment: .leading)
         .confirmationDialog("Remove the stored credential?", isPresented: $removing.isPresent,
