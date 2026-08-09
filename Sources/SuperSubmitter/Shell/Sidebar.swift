@@ -74,25 +74,33 @@ struct Sidebar: View {
         // The offer sits below the account on purpose. The account is a control
         // the developer uses, the offer is something the app is asking for, and
         // the thing being asked for does not get to sit closer to the work.
-        List(selection: selection) {
-            AppsSection(isOpen: $appsOpen)
+        ScrollViewReader { proxy in
+            List(selection: selection) {
+                AppsSection(isOpen: $appsOpen)
 
-            ForEach(SidebarSection.allCases) { section in
-                let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
-                if !rows.isEmpty {
-                    Section(isExpanded: isOpen(section)) {
-                        ForEach(rows) { DestinationRow(destination: $0) }
-                    } header: {
-                        GroupHeader(title: section.title, isOpen: isOpen(section))
+                ForEach(SidebarSection.allCases) { section in
+                    let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
+                    if !rows.isEmpty {
+                        Section(isExpanded: isOpen(section)) {
+                            ForEach(rows) { DestinationRow(destination: $0) }
+                        } header: {
+                            GroupHeader(title: section.title, isOpen: isOpen(section))
+                        }
                     }
                 }
             }
+            .listStyle(.sidebar)
+            // The scroll ends above the floor, so the last row can be reached
+            // and nothing sits under the footer for good.
+            .safeAreaPadding(.bottom, footerHeight)
+            .overlay(alignment: .bottom) { footer }
+            .task(id: selection.wrappedValue) {
+                guard let destination = selection.wrappedValue,
+                      destination.mode == .managing else { return }
+                await Task.yield()
+                proxy.scrollTo(destination, anchor: .center)
+            }
         }
-        .listStyle(.sidebar)
-        // The scroll ends above the floor, so the last row can be reached and
-        // nothing sits under the footer for good.
-        .contentMargins(.bottom, footerHeight, for: .scrollContent)
-        .overlay(alignment: .bottom) { footer }
     }
 
     /// Enough for the account row, and for the offer when it shows.
@@ -105,7 +113,7 @@ struct Sidebar: View {
     /// has to move with the type. Left fixed, a larger font makes the footer
     /// taller than the room kept for it and the last row hides underneath.
     private var footerHeight: CGFloat {
-        Theme.scaled(state.showsUpgradeCard ? 150 : 44)
+        Theme.scaled(state.showsUpgradeCard ? 176 : 44)
     }
 
     /// The account, then the offer, pinned to the floor of the column.
@@ -254,14 +262,19 @@ private struct DestinationRow: View {
     /// top of that is a colour fighting a fill.
     private var marksTheHazard: Bool { destination.tab == .release && !selected }
 
+    private var iconStyle: AnyShapeStyle {
+        if marksTheHazard { return AnyShapeStyle(Theme.red) }
+        if selected { return AnyShapeStyle(Theme.accentText) }
+        return AnyShapeStyle(.tint)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             Label {
                 Text(destination.title)
             } icon: {
                 Image(systemName: destination.tab.symbol)
-                    .foregroundStyle(marksTheHazard ? AnyShapeStyle(Theme.red)
-                                                    : AnyShapeStyle(.tint))
+                    .foregroundStyle(iconStyle)
             }
             Spacer(minLength: 8)
             if let badge = state.badge(for: destination.tab) {

@@ -128,18 +128,13 @@ struct ReleaseTab: View {
     /// reason over a link, so at 900 points three columns crush their text
     /// into towers before anything wraps.
     ///
-    /// An adaptive grid and not `ViewThatFits`. The cards are `maxWidth:
-    /// .infinity` so they can share a wide window equally, which makes their
-    /// ideal width unbounded, which makes `ViewThatFits` decide the row never
-    /// fits and take the fallback at every size. The grid asks the same
-    /// question — how many 300 point columns go in this width — without
-    /// needing an ideal width to compare.
-    ///
     /// `alignment: .top` on the item, or a short card floats to the middle of
-    /// the row's height and the three tops no longer line up.
+    /// the row's height and the two tops no longer line up.
     private var checklist: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14,
-                                     alignment: .top)],
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 300),
+                                                     spacing: 14,
+                                                     alignment: .top),
+                                 count: 2),
                   alignment: .leading, spacing: 14) {
             ForEach(cards, id: \.name) { card in checklistCard(card) }
         }
