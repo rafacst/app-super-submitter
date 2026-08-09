@@ -55,7 +55,6 @@ struct AndroidArtifactsSection: View {
                 .font(Theme.font(size: 12))
                 externalApk
             }
-            .storePanel()
             .onAppear { showRare = Self.rare.contains { !state.artifactBinding($0).wrappedValue.isEmpty } }
         }
     }
@@ -161,7 +160,6 @@ struct GoogleTracksSection: View {
                     .font(Theme.font(size: 12))
                 testers
             }
-            .storePanel()
         }
     }
 
