@@ -66,3 +66,34 @@ private func state() -> AppState {
     #expect(app.selectedTab == .build)
     #expect(app.paywallReason == nil)
 }
+
+/// Debug may bypass the write gate for local development, but that bypass is
+/// not a paid entitlement and must never be presented as one in Account.
+@MainActor
+@Test func theDebugGateBypassDoesNotPretendAFreeAccountIsPaid() {
+    let app = state()
+
+    #expect(app.can(.storeWrite))
+    #expect(!app.entitlement.isPaid)
+    #expect(!app.isPaid)
+    #expect(app.planLabel == "Free")
+    #expect(app.statusLabel == nil)
+}
+
+/// A failed provider read is fixed in Settings; store reads are fixed on the
+/// Stores tab. The action beside each error must take the same route its copy
+/// names.
+@MainActor
+@Test func readFailureActionsOpenTheRightSurface() {
+    let app = state()
+    app.selectedTab = .plan
+
+    app.fixReadFailure("Provider: RevenueCat refused the key.")
+    #expect(app.showSettings)
+    #expect(app.selectedTab == .plan)
+
+    app.showSettings = false
+    app.fixReadFailure("Google Play: The credentials were refused.")
+    #expect(!app.showSettings)
+    #expect(app.selectedTab == .stores)
+}

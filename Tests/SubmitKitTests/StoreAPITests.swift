@@ -170,3 +170,14 @@ private func base64URLDecoded(_ value: String) -> Data? {
     #expect(call.error?.contains(token) != true)
     #expect((call.error?.utf8.count ?? 0) <= 2_048)
 }
+
+/// A shared 401 explanation cannot name Apple's issuer id while reporting a
+/// Google service-account failure. Keep the shared copy true for both stores.
+@Test func credentialRefusalsUseStoreNeutralInstructions() {
+    let message = ConnectionError.http(401, "Unauthorized").localizedDescription
+
+    #expect(message.contains("credential file"))
+    #expect(message.contains("Stores tab"))
+    #expect(!message.localizedCaseInsensitiveContains("issuer"))
+    #expect(!message.localizedCaseInsensitiveContains("key id"))
+}
