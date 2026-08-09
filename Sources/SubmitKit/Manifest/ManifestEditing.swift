@@ -165,13 +165,99 @@ public extension Manifest {
         }
     }
 
-    func mediaPaths(locale: String, deviceClass: DeviceClass, previews: Bool = false) -> [String] {
-        let source = previews ? media?.previews : media?.screenshots
-        return source?[locale]?[deviceClass.rawValue] ?? []
+    /// The files one size holds, for one store or for both.
+    ///
+    /// `store` nil is every caller that has no store in hand and every caller
+    /// written before the two stores could differ: it reads the shared list,
+    /// which is what it always read. With a store, an override answers when the
+    /// manifest holds one for that size, and the shared list answers when it
+    /// does not.
+    ///
+    /// Previews ignore the store. They are Apple's alone; Google takes a
+    /// YouTube URL on the listing instead.
+    func mediaPaths(locale: String, deviceClass: DeviceClass, previews: Bool = false,
+                    store: Store? = nil) -> [String] {
+        if previews { return media?.previews?[locale]?[deviceClass.rawValue] ?? [] }
+        if let store,
+           let own = storeScreenshots(store)?[locale]?[deviceClass.rawValue] {
+            return own
+        }
+        return media?.screenshots?[locale]?[deviceClass.rawValue] ?? []
+    }
+
+    /// Whether this store holds pictures of its own for this size. A present
+    /// but empty list is still an answer, so this asks about the key and never
+    /// about the count.
+    func hasStoreScreenshots(locale: String, deviceClass: DeviceClass,
+                             store: Store) -> Bool {
+        storeScreenshots(store)?[locale]?[deviceClass.rawValue] != nil
+    }
+
+    private func storeScreenshots(_ store: Store) -> [String: [String: [String]]]? {
+        switch store {
+        case .apple: media?.appleScreenshots
+        case .google: media?.googleScreenshots
+        }
+    }
+
+    /// Gives each store its own copy of what both hold today.
+    ///
+    /// Copying, and not emptying: a split is the moment before the first
+    /// per-store edit, and it must not lose the pictures that were already
+    /// going out. The edit after it changes one store and never both.
+    mutating func splitMedia(locale: String, deviceClass: DeviceClass) {
+        let shared = mediaPaths(locale: locale, deviceClass: deviceClass)
+        for store in Store.allCases where !hasStoreScreenshots(
+            locale: locale, deviceClass: deviceClass, store: store) {
+            setStoreScreenshots(shared, locale: locale, deviceClass: deviceClass, store: store)
+        }
+    }
+
+    /// Puts one size back to a single list for both stores.
+    ///
+    /// Lossy, and it says which of the two survives: the App Store's list
+    /// becomes the shared one. Google's is dropped, because something has to
+    /// be and a silent merge of two lists into one would send a store pictures
+    /// nobody chose.
+    mutating func mergeMedia(locale: String, deviceClass: DeviceClass) {
+        let kept = mediaPaths(locale: locale, deviceClass: deviceClass, store: .apple)
+        var media = self.media ?? Media()
+        media.appleScreenshots?[locale]?[deviceClass.rawValue] = nil
+        media.googleScreenshots?[locale]?[deviceClass.rawValue] = nil
+        var locales = media.screenshots ?? [:]
+        var groups = locales[locale] ?? [:]
+        groups[deviceClass.rawValue] = kept
+        locales[locale] = groups
+        media.screenshots = locales
+        self.media = media
+    }
+
+    private mutating func setStoreScreenshots(_ values: [String], locale: String,
+                                              deviceClass: DeviceClass, store: Store) {
+        var media = self.media ?? Media()
+        var locales = (store == .apple ? media.appleScreenshots : media.googleScreenshots) ?? [:]
+        var groups = locales[locale] ?? [:]
+        groups[deviceClass.rawValue] = values
+        locales[locale] = groups
+        switch store {
+        case .apple: media.appleScreenshots = locales
+        case .google: media.googleScreenshots = locales
+        }
+        self.media = media
     }
 
     mutating func addMediaPaths(_ paths: [String], locale: String,
-                                deviceClass: DeviceClass, previews: Bool = false) {
+                                deviceClass: DeviceClass, previews: Bool = false,
+                                store: Store? = nil) {
+        // A store that holds its own list takes the write; everything else
+        // writes the shared list, which is what every caller did before.
+        if let store, !previews,
+           hasStoreScreenshots(locale: locale, deviceClass: deviceClass, store: store) {
+            var values = mediaPaths(locale: locale, deviceClass: deviceClass, store: store)
+            for path in paths where !values.contains(path) { values.append(path) }
+            setStoreScreenshots(values, locale: locale, deviceClass: deviceClass, store: store)
+            return
+        }
         var media = self.media ?? Media()
         if previews {
             var locales = media.previews ?? [:]
