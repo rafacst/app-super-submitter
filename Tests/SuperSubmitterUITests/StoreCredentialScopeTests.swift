@@ -1,7 +1,16 @@
 import Foundation
+import Observation
 import SubmitKit
 import Testing
 @testable import SuperSubmitter
+
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var changed = false
+
+    func set() { lock.withLock { changed = true } }
+    var value: Bool { lock.withLock { changed } }
+}
 
 /// A store credential belongs to the account, not to the app.
 ///
@@ -175,5 +184,60 @@ struct StoreCredentialScopeTests {
         state.googleCredentialChoice = .oauth
         #expect(state.credentials.google == nil)
         #expect(state.credentials.googleOAuth != nil)
+    }
+
+    @Test func importingTheAppleKeySelectsTheAppStoreCard() throws {
+        let account = "test-\(UUID().uuidString)"
+        defer { try? KeychainCredentials.delete(kind: .apple, account: account) }
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: account)
+        state.appleKeyID = "Z2YFP2FP9D"
+        state.appleIssuerID = "issuer"
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("AuthKey_Z2YFP2FP9D-\(UUID().uuidString).p8")
+        try Data("pem".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        state.importAppleCredential(from: url)
+
+        #expect(state.stores.contains(.apple))
+    }
+
+    @Test func teamControlsObserveCredentialsArriving() throws {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        let appleChanged = ObservationFlag()
+        withObservationTracking {
+            _ = state.hasCredential(for: .apple)
+        } onChange: {
+            appleChanged.set()
+        }
+        state.applePrivateKeyPEM = "pem"
+
+        let googleChanged = ObservationFlag()
+        withObservationTracking {
+            _ = state.hasCredential(for: .google)
+        } onChange: {
+            googleChanged.set()
+        }
+        let json = Data("""
+        {"private_key":"pem","client_email":"bot@example.com",
+         "token_uri":"https://oauth2.googleapis.com/token"}
+        """.utf8)
+        state.googleCredential = try GoogleServiceAccount(data: json)
+
+        #expect(appleChanged.value)
+        #expect(googleChanged.value)
+    }
+
+    @Test func missingOAuthBuildConfigurationDoesNotShakeTheCredentialCard() {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        state.googleCredentialChoice = .oauth
+
+        state.connectGoogleStore()
+
+        #expect(!state.googleConnection.isFailed)
+        #expect(state.errorMessage?.contains("OAuth desktop client ID") == true)
     }
 }
