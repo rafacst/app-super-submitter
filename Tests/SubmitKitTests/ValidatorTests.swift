@@ -308,6 +308,37 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
     #expect(finding.fix == .plan)
 }
 
+/// Cancelling a submission puts the version back in the developer's hands.
+///
+/// App Store Connect leaves it editable: the metadata takes a write, a new
+/// build attaches to the same version, and it goes back into review under the
+/// same number. The reader has always known this, and picks exactly these
+/// states as the version to write to. The validator asked for
+/// `PREPARE_FOR_SUBMISSION` alone, so it blocked the apply against the very
+/// version the reader had chosen, and a developer who withdrew a submission
+/// could not send the rebuilt binary at all.
+@Test func aWithdrawnOrRejectedVersionStillTakesWrites() {
+    let manifest = base()
+    for state in ["DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED",
+                  "INVALID_BINARY", "PREPARE_FOR_SUBMISSION"] {
+        var actual = ActualState()
+        var apple = ActualState.Apple()
+        apple.versionState = state
+        actual.apple = apple
+
+        #expect(!has(findings(manifest, actual), "state.appleVersion"),
+                "\(state) blocked the apply")
+    }
+}
+
+/// Every reader and the validator answer the same question the same way.
+@Test func oneListSaysWhichAppleVersionStatesTakeWrites() {
+    #expect(AppleVersionState.editable.contains("DEVELOPER_REJECTED"))
+    #expect(AppleVersionState.editable.contains("PREPARE_FOR_SUBMISSION"))
+    #expect(!AppleVersionState.editable.contains("IN_REVIEW"))
+    #expect(!AppleVersionState.editable.contains("READY_FOR_SALE"))
+}
+
 @Test func anOpenReviewSubmissionBlocksTheApply() {
     let manifest = base()
     var actual = ActualState()
