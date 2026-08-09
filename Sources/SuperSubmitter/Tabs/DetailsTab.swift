@@ -63,6 +63,7 @@ struct DetailsTab: View {
                      appleOnly {
                          editor("Keywords", field: .keywords,
                                 limits: limits(.keywords, in: .apple),
+                                requirement: requirement(.keywords, in: .apple),
                                 anchor: "details.keywords")
                      }
                  },
@@ -73,6 +74,7 @@ struct DetailsTab: View {
                      appleOnly {
                          editor("Promotional text", field: .promotionalText,
                                 limits: limits(.promotionalText, in: .apple),
+                                requirement: requirement(.promotionalText, in: .apple),
                                 anchor: "details.promotionalText")
                      }
                  },
@@ -81,6 +83,7 @@ struct DetailsTab: View {
             pair(apple: {
                      appleOnly {
                          editor("Marketing URL", field: .marketingURL,
+                                requirement: requirement(.marketingURL, in: .apple),
                                 anchor: "details.marketingURL")
                      }
                  },
@@ -112,14 +115,17 @@ struct DetailsTab: View {
         if columns {
             HStack(alignment: .top, spacing: 14) {
                 editor(field.label, field: field, limits: limits(field, in: .apple),
+                       requirement: requirement(field, in: .apple),
                        multiline: multiline, anchor: anchor)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 editor(field.label, field: field, limits: limits(field, in: .google),
+                       requirement: requirement(field, in: .google),
                        multiline: multiline)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
             editor(field.label, field: field, limits: limits(field),
+                   requirement: requirement(field),
                    multiline: multiline, anchor: anchor)
         }
     }
@@ -191,18 +197,22 @@ struct DetailsTab: View {
         if columns {
             HStack(alignment: .top, spacing: 14) {
                 editor(shared.label, field: shared, limits: limits(shared, in: .apple),
+                       requirement: requirement(shared, in: .apple),
                        multiline: multiline, anchor: anchor)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 5) {
                     if on {
                         editor(google.label, field: google,
                                limits: [FieldLimit(store: nil, value: limit)],
+                               requirement: requirement(google, in: .google),
                                multiline: multiline, anchor: googleAnchor)
                         overrideNote("Play cuts at \(limit)",
                                      action: "use the shared text") { binding.wrappedValue = false }
                     } else {
                         editor(shared.label, field: shared,
-                               limits: limits(shared, in: .google), multiline: multiline)
+                               limits: limits(shared, in: .google),
+                               requirement: requirement(shared, in: .google),
+                               multiline: multiline)
                         overrideNote("Play takes \(name) as it stands",
                                      action: "use different text") { binding.wrappedValue = true }
                     }
@@ -212,14 +222,17 @@ struct DetailsTab: View {
         } else {
             VStack(alignment: .leading, spacing: 5) {
                 // With the override on, Google reads its own box, so the
-                // shared one is under Apple's ceiling alone.
+                // shared one is under Apple's ceiling alone and carries only
+                // Apple's claim on it.
                 editor(shared.label, field: shared,
                        limits: limits(shared, excluding: on ? [.google] : []),
+                       requirement: requirement(shared, excluding: on ? [.google] : []),
                        multiline: multiline, anchor: anchor)
                 if shows(.google) {
                     if on {
                         editor(google.label, field: google,
                                limits: [FieldLimit(store: .google, value: limit)],
+                               requirement: requirement(google),
                                multiline: multiline, anchor: googleAnchor)
                         overrideNote("Play cuts at \(limit)",
                                      action: "use the shared text") { binding.wrappedValue = false }
@@ -375,6 +388,48 @@ struct DetailsTab: View {
         state.stores.isEmpty ? store == .apple : state.stores.contains(store)
     }
 
+    // MARK: - What a store will not publish without
+
+    /// The stores that refuse a listing with this field empty.
+    ///
+    /// Store policy, and not an API constraint: every one of these attributes
+    /// is optional to the endpoint that writes it, and both `edits.listings`
+    /// and `appStoreVersionLocalizations` take a request that omits them. The
+    /// refusal arrives at review instead, which is the worst place to learn it,
+    /// so the tab says so while the listing is being written.
+    ///
+    /// Play reads the shared subtitle as its short description unless the
+    /// override is on, so both carry Play's requirement. Apple asks for release
+    /// notes on an update and takes none on a first submission, which is why
+    /// this needs to know which of the two is being written.
+    static func requiring(_ field: ListingTextField, newApp: Bool) -> Set<Store> {
+        switch field {
+        case .name, .description, .privacyPolicyURL: [.apple, .google]
+        case .subtitle, .googleShortDescription: [.google]
+        case .supportURL: [.apple]
+        case .whatsNew: newApp ? [] : [.apple]
+        default: []
+        }
+    }
+
+    /// The words over a box that says which store is waiting for it, or nil
+    /// when no store selected here asks for this field.
+    ///
+    /// A column already names its store, so it only needs the one word. A
+    /// merged row names the store when one of the two asks and stays quiet
+    /// when both do, because "Required by the App Store and Google Play" is
+    /// the same sentence as "Required".
+    private func requirement(_ field: ListingTextField, in store: Store? = nil,
+                             excluding overridden: Set<Store> = []) -> String? {
+        let asking = Self.requiring(field, newApp: state.showsNewAppFields)
+            .subtracting(overridden)
+        if let store { return asking.contains(store) ? "Required" : nil }
+        let shown = Set(state.stores.isEmpty ? [Store.apple] : Store.allCases.filter(shows))
+        let wanted = asking.intersection(shown)
+        guard let only = wanted.first else { return nil }
+        return wanted.count == shown.count ? "Required" : "Required by \(only.storeName)"
+    }
+
     /// The limit table keys off its own enum, and only the fields that have a
     /// limit appear in it. A URL has none, so it returns nil and the box shows
     /// no counter, exactly as it did before the columns.
@@ -392,11 +447,12 @@ struct DetailsTab: View {
     }
 
     private func editor(_ title: String, field: ListingTextField,
-                        limits: [FieldLimit] = [],
+                        limits: [FieldLimit] = [], requirement: String? = nil,
                         multiline: Bool = false, tag: String? = nil,
                         anchor: String? = nil) -> some View {
         ListingEditor(title: title, field: field, limits: limits,
-                      multiline: multiline, tag: tag, anchor: anchor)
+                      requirement: requirement, multiline: multiline,
+                      tag: tag, anchor: anchor)
     }
 }
 
@@ -452,6 +508,8 @@ private struct ListingEditor: View {
     /// refuses to grow past, and each is printed so the developer can see
     /// which store the ceiling belongs to.
     var limits: [FieldLimit] = []
+    /// What a store is waiting for. See `DetailsTab.requirement`.
+    var requirement: String?
     var multiline = false
     var tag: String?
     var anchor: String?
@@ -477,6 +535,9 @@ private struct ListingEditor: View {
             HStack {
                 Text(title).font(Theme.font(size: 11.5, weight: .medium))
                 if let tag { Tag(tag) }
+                if let requirement {
+                    RequiredTag(text: requirement, unmet: value.isEmpty)
+                }
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
                 // Every budget, always, and named when more than one store
@@ -740,6 +801,28 @@ struct Tag: View {
             .padding(.horizontal, 4)
             .overlay(RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+}
+
+/// The mark on a field a store will not publish the listing without.
+///
+/// Quiet while the field holds something, because a listing full of red says
+/// nothing about which field to look at. Red once it is empty: that one is the
+/// difference between a submission and a refusal.
+struct RequiredTag: View {
+    let text: String
+    let unmet: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: unmet ? "exclamationmark.circle.fill" : "asterisk")
+                .font(Theme.font(size: 8, weight: .bold))
+            Text(text).font(Theme.font(size: 10, weight: .medium))
+        }
+        .foregroundStyle(unmet ? Theme.red : Theme.text3)
+        .padding(.horizontal, 5).padding(.vertical, 1)
+        .background(unmet ? Theme.red.opacity(0.14) : Theme.sunken, in: Capsule())
+        .accessibilityLabel(unmet ? "\(text). It is empty." : text)
     }
 }
 
