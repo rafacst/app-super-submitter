@@ -159,21 +159,15 @@ private struct ListingEditor: View {
                 }
             }
             if multiline {
-                // Grows with the text, from three lines to sixteen, and
-                // scrolls past that. A `TextEditor` cannot size to its
-                // content, so it took a floor of 90 points whatever it held:
-                // "Faster scanning and a new dark theme." is 37 characters and
-                // it was drawn in a box the height of six lines, twice on this
-                // tab. The ceiling is what the fixed height was protecting —
-                // the tab is inside a scroll view, and a description that runs
-                // to a page must not push the fields under it off the window.
-                TextField("", text: $draft.text.limited(to: limit), axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .returnInsertsLineBreak()
-                    .lineLimit(3...16)
+                // A vertically growing TextField remeasures this entire
+                // scroll view after every character. TextEditor keeps one
+                // stable viewport and scrolls long release notes internally.
+                TextEditor(text: $draft.text.limited(to: limit))
+                    .scrollContentBackground(.hidden)
                     .font(Theme.font(size: 13))
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
-                    .padding(7)
+                    .padding(3)
+                    .frame(height: Theme.scaled(90))
                     .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(overLimit ? Theme.red : Theme.sep,
