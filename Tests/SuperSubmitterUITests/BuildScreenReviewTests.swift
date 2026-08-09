@@ -45,6 +45,30 @@ private func buildReviewState() -> AppState {
     #expect(build.contains("folds: true"))
 }
 
+/// A shut fold was a bare header row beside the cards it belongs with, and an
+/// open one dropped a panel in under it. The fold owns the box either way: a
+/// title-high card shut, the whole block open, and one height between the two.
+@Test func aFoldIsOneBoxThatGrows() throws {
+    let section = try buildReviewSource("Sources/SuperSubmitter/Design/Section.swift")
+
+    #expect(section.contains("storePanel"))
+    #expect(section.contains("value: isOpen"))
+    #expect(section.contains("clipped()"))
+}
+
+/// The box moved into the fold, so no caller may draw a second one: two panels
+/// nest into a border inside a border.
+@Test func aFoldDrawsTheOnlyBoxAroundIt() throws {
+    let android = try buildReviewSource("Sources/SuperSubmitter/Tabs/AndroidArtifactsSection.swift")
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let start = try #require(build.range(of: "private var storeTools"))
+    let end = try #require(build.range(of: "private var sortedPackages"))
+    let tools = String(build[start.lowerBound..<end.lowerBound])
+
+    #expect(!android.contains(".storePanel("))
+    #expect(!tools.contains(".storePanel("))
+}
+
 // MARK: - Nothing uneditable is clickable
 
 /// The bundle id and the package name belong to the store. Drawn as a control
