@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import SubmitKit
 import Testing
 @testable import SuperSubmitter
@@ -88,4 +89,30 @@ struct CredentialFoldTests {
         state.revealCredentialDetails(forAnchor: "details.name")
         #expect(!state.credentialDetailsOpen(.google))
     }
+}
+
+/// A store id has a length, and a value over it is not the developer's writing.
+///
+/// `limited(to:)` refuses growth and keeps whatever is already there, which is
+/// right for a description and wrong for an issuer id: a value that reached the
+/// state from the Keychain or from an import stayed as long as it arrived, and
+/// the field showed an id App Store Connect would refuse. `capped(to:)` cuts
+/// both ways.
+@MainActor
+@Test func theIssuerIdFieldCannotHoldMoreThanAnIssuerId() {
+    var stored = String(repeating: "a", count: 60)
+    let binding = Binding(get: { stored }, set: { stored = $0 })
+    let capped = binding.capped(to: AppleCredential.issuerIDLength)
+
+    // Capped on sight, not only on the next keystroke.
+    #expect(capped.wrappedValue.count == AppleCredential.issuerIDLength)
+
+    capped.wrappedValue = String(repeating: "b", count: 40)
+    #expect(stored.count == AppleCredential.issuerIDLength)
+
+    // A real issuer id passes through whole.
+    let uuid = UUID().uuidString.lowercased()
+    #expect(uuid.count == AppleCredential.issuerIDLength)
+    capped.wrappedValue = uuid
+    #expect(stored == uuid)
 }

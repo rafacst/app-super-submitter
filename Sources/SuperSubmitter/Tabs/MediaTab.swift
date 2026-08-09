@@ -79,23 +79,21 @@ struct MediaTab: View {
                 .foregroundStyle(state.isUpdatingLiveApp ? Theme.text2 : Theme.yellow)
             VStack(alignment: .leading, spacing: 3) {
                 if state.isUpdatingLiveApp {
-                    Text("This app is already on the store, so its screenshots carry over on their own.")
+                    Text("Keep the current screenshots, or replace a size.")
                         .font(Theme.font(size: 11.5, weight: .semibold))
-                    Text("Leave a size empty and the run sends nothing for it: the pictures customers see today stay. Add images to a size and the run replaces that whole set, and only that one. The new pictures go live with this version, not before it.")
+                    Text("An empty size keeps what is live. Adding images replaces that size only.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     // An update that shows no live pictures is either an app
                     // with none or a read that did not reach them, and an
-                    // empty grid says neither. Silence here reads as "this
-                    // app has no screenshots", which is the one thing it
-                    // almost never means.
+                    // empty grid says neither.
                     if !state.hasLiveScreenshots {
-                        Text("None were read for \(state.locale). Run a read on the Summary tab. If the grid is still empty, the store holds none under this language for the version being read.")
+                        Text("None read for \(state.locale) yet. Run a read on the Summary tab.")
                             .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     }
                 } else {
-                    Text("Screenshots are required. \(sends) will not accept this listing without them.")
+                    Text("Screenshots are required.")
                         .font(Theme.font(size: 11.5, weight: .semibold))
-                    Text("The App Store needs at least one iPhone size, and Google Play needs at least two phone screenshots. Each size below says what pixel dimensions it takes.")
+                    Text("\(sends) will not accept this listing without them. The ⓘ beside each size lists the pixel dimensions it takes.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 }
             }
@@ -137,6 +135,15 @@ struct MediaTab: View {
                             .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                             .monospacedDigit()
                             .contentTransition(.numericText())
+                        // The store's own count, so a collapsed group still
+                        // says the App Store is showing five pictures here.
+                        // Without it a developer who changed nothing read the
+                        // same "0 of 10" as one who has no screenshots at all.
+                        if !live.isEmpty {
+                            let count = live.reduce(0) { $0 + $1.urls.count }
+                            StatePill(text: "\(count) LIVE", foreground: Theme.text2,
+                                      background: Theme.sunken)
+                        }
                     }
                     .contentShape(.rect)
                 }
