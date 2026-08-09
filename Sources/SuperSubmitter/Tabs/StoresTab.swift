@@ -32,9 +32,9 @@ struct StoresTab: View {
             .fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .top, spacing: 16) {
                 AppleTeamPanel()
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 GoogleTeamPanel()
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .fixedSize(horizontal: false, vertical: true)
         }
