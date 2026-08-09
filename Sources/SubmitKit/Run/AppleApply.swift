@@ -108,17 +108,38 @@ extension Runner {
     func appleVersionLocale(_ locale: String) async throws {
         guard let versionID = appleVersionID else { throw RunError.missingVersion }
         try await appleDropEmptyMediaSets(locale)
+
+        // What this localization already holds, and only when it exists.
+        //
+        // An update inherits the released version, so most of these fields are
+        // already on the resource before the run starts, and sending them
+        // writes the same bytes over the same bytes. The plan says so: it
+        // names the fields that differ and no others, and this sends what the
+        // plan named. The two guards below are `Planner.appendChange`, which
+        // is why they agree.
+        //
+        // The id is the whole test. A localization this run is about to create
+        // holds nothing, so nothing may be skipped against it, and Apple does
+        // not always carry one across. `appleEnsureVersion` re-reads the map
+        // from the version it just made, so by here the id is the truth about
+        // what exists rather than what the plan hoped for.
+        let existingID = appleVersionLocalizationIDs[locale]
+        let starting = existingID == nil ? nil : actual.apple?.startingVersionLocale(locale)
         var attributes: [String: Any] = [:]
-        put(&attributes, "description", manifest.listingText(locale: locale, field: .description))
-        put(&attributes, "whatsNew", manifest.listingText(locale: locale, field: .whatsNew))
-        put(&attributes, "keywords", manifest.listingText(locale: locale, field: .keywords))
-        put(&attributes, "promotionalText",
-            manifest.listingText(locale: locale, field: .promotionalText))
-        put(&attributes, "supportUrl", manifest.listingText(locale: locale, field: .supportURL))
-        put(&attributes, "marketingUrl", manifest.listingText(locale: locale, field: .marketingURL))
+        func send(_ key: String, _ field: ListingTextField, _ current: String?) {
+            let wanted = manifest.listingText(locale: locale, field: field)
+            guard !wanted.isEmpty, wanted != (current ?? "") else { return }
+            attributes[key] = wanted
+        }
+        send("description", .description, starting?.description)
+        send("whatsNew", .whatsNew, starting?.whatsNew)
+        send("keywords", .keywords, starting?.keywords)
+        send("promotionalText", .promotionalText, starting?.promotionalText)
+        send("supportUrl", .supportURL, starting?.supportUrl)
+        send("marketingUrl", .marketingURL, starting?.marketingUrl)
         guard !attributes.isEmpty else { return }
 
-        if let id = appleVersionLocalizationIDs[locale] {
+        if let id = existingID {
             try await api.apple("PATCH", "/v1/appStoreVersionLocalizations/\(id)", body: [
                 "data": ["type": "appStoreVersionLocalizations", "id": id,
                          "attributes": attributes],

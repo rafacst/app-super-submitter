@@ -121,7 +121,13 @@ public enum Planner {
                     operation: .appleInfoLocale(code)))
             }
 
-            let version = actual?.versionLocales[code]
+            // An update inherits the released version, so the comparison is
+            // against what the next version will start out holding and not
+            // against an empty draft that does not exist yet. Diffing against
+            // nothing made every field of every update look changed, and the
+            // apply then wrote the description, the keywords and the URLs back
+            // over the identical bytes Apple had already carried across.
+            let version = actual?.startingVersionLocale(code)
             var versionChanges: [String] = []
             appendChange(&versionChanges, .description,
                          managedText(manifest, code, .description), version?.description)
@@ -1666,9 +1672,15 @@ public enum Planner {
                         .imageHashes["\(code)/\(uploads[0].bucket)"] ?? []
                 }
                 let desired = uploads.map { store == .apple ? $0.md5 : $0.sha256 }
+                // The pictures the next version starts with, which for an
+                // update are the ones Apple carries over from the released
+                // version. A set that already matches uploads nothing, and
+                // that is the whole cost of an update: the text is bytes and
+                // the screenshots are megabytes.
                 let orderedMatches = store == .apple
-                    ? input.actual.apple?.screenshotChecksumOrder[
-                        "\(code)/\(uploads[0].bucket)"] == desired
+                    ? input.actual.apple.flatMap {
+                        $0.startingScreenshotOrder("\(code)/\(uploads[0].bucket)")
+                    } == desired
                     : held == Set(desired)
                 guard !orderedMatches else { continue }
                 let bytes = uploads.reduce(Int64(0)) { $0 + $1.bytes }

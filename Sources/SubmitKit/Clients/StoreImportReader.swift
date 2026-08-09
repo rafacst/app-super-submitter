@@ -488,6 +488,31 @@ public struct StoreImportReader: Sendable {
         return result
     }
 
+    /// The `sourceFileChecksum` of every screenshot in one set payload, by
+    /// display type, in the order the store shows them.
+    ///
+    /// The set's own member list drives the walk, the same as `appleAssets`,
+    /// so the order is the store's and not the order the include block
+    /// happened to arrive in. The plan compares this list to the manifest
+    /// order, and a re-ordered set is a real change.
+    static func appleChecksums(_ payload: JSON) -> [String: [String]] {
+        var rows: [String: String] = [:]
+        for item in payload["included"].array where item["type"].string == "appScreenshots" {
+            guard let id = item["id"].string,
+                  let checksum = item["attributes"]["sourceFileChecksum"].string else { continue }
+            rows[id] = checksum
+        }
+        var result: [String: [String]] = [:]
+        for set in payload["data"].array {
+            guard let kind = set["attributes"]["screenshotDisplayType"].string else { continue }
+            for member in set["relationships"]["appScreenshots"]["data"].array {
+                guard let id = member["id"].string, let checksum = rows[id] else { continue }
+                result[kind, default: []].append(checksum)
+            }
+        }
+        return result
+    }
+
     /// Apple serves an image as a template with `{w}`, `{h}`, `{f}`, and `{c}`
     /// placeholders. Every image attribute in the API uses this one shape.
     static func imageURL(_ asset: JSON, side: Int? = nil) -> URL? {

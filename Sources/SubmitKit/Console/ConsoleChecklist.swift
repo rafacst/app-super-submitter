@@ -55,6 +55,13 @@ public enum ConsoleChecklist {
     /// // deep link if two clicks per row becomes a real complaint.`
     static let playConsole = "https://play.google.com/console"
 
+    /// The one sentence for a declaration nobody read and nobody has to.
+    ///
+    /// One wording for one meaning, so a developer who meets it on the second
+    /// row knows they have already read it, and so a test can name the shape
+    /// of an assumed row without matching four separate strings.
+    static let assumed = "Assumed: the app is on the App Store, so Apple already holds this."
+
     /// The three things Apple asks of an update that the manifest alone
     /// cannot answer.
     ///
@@ -138,26 +145,61 @@ public enum ConsoleChecklist {
 
         if stores.contains(.apple) {
             let base = "https://appstoreconnect.apple.com/apps/\(appID)/distribution"
+            // An app that is on the App Store answered these once, to get
+            // there. Apple asks them per app and not per version, so a read
+            // that cannot see the answer is a gap in the API and not a gap in
+            // the app, and a row that says "needed" on that reading holds the
+            // release button over a question that was settled a year ago.
+            //
+            // So a published app assumes them and says which ones it assumed.
+            // Nothing here writes, so a wrong assumption costs no bytes: Apple
+            // refuses the submission and names the field, which is the one
+            // moment the developer can act on it. `release` says so.
+            let published = apple?.isUpdate == true
             result += [
                 ConsoleRow(
                     id: "apple.privacy", system: "App Store",
                     title: "App privacy (nutrition labels)",
-                    reason: "No API reads or writes them. Open App privacy.",
-                    link: "\(base)/privacy", state: .unknown, onEditingTab: true),
+                    reason: published
+                        ? "\(Self.assumed) Open App privacy if this version changes what the app collects."
+                        : "No API reads or writes them. Open App privacy.",
+                    link: "\(base)/privacy", state: published ? .done : .unknown,
+                    onEditingTab: true),
                 ConsoleRow(
                     id: "apple.info", system: "App Store",
                     title: "App information and categories",
                     reason: apple?.primaryCategory.map { "Confirmed: \($0)." }
-                        ?? "The API reports no primary category.",
+                        ?? (published ? Self.assumed : "The API reports no primary category."),
                     link: "\(base)/info",
-                    state: apple?.primaryCategory == nil ? .needed : .done, onEditingTab: true),
+                    state: apple?.primaryCategory == nil && !published ? .needed : .done,
+                    onEditingTab: true),
+                // The one declaration on this list that the API does answer.
+                //
+                // Apple asks the questionnaire once per app and refuses a
+                // submission without it, so it belongs here, and reading it
+                // costs nothing: `ageRating` is already on the state, filled
+                // from Apple's own answer. An empty map means the read never
+                // reached the declaration, not that the app has no rating.
+                //
+                // It never says Needed. A first publish leaves it Unknown for
+                // the developer to tick, the same as App privacy, because a
+                // read that failed must not hold the button on a guess.
+                ConsoleRow(
+                    id: "apple.ageRating", system: "App Store", title: "Age rating",
+                    reason: apple?.ageRating.isEmpty == false
+                        ? "Confirmed: App Store Connect holds the questionnaire."
+                        : (published ? Self.assumed
+                            : "No answer was read. Fill it on the Review info tab, or in App information."),
+                    link: "\(base)/info",
+                    state: apple?.ageRating.isEmpty == false || published ? .done : .unknown,
+                    onEditingTab: true),
                 ConsoleRow(
                     id: "apple.pricing", system: "App Store", title: "Pricing and availability",
                     reason: manifest.pricing.map {
                         "Confirmed: \($0.base.amount) \($0.base.currency)."
-                    } ?? "The manifest names no base price.",
+                    } ?? (published ? Self.assumed : "The manifest names no base price."),
                     link: "\(base)/pricing",
-                    state: manifest.pricing == nil ? .needed : .done),
+                    state: manifest.pricing == nil && !published ? .needed : .done),
                 // `versionString` names the version the app may write to, and
                 // a live version is not one. Reading any version here would
                 // report the released number as confirmed while the apply was
@@ -171,11 +213,17 @@ public enum ConsoleChecklist {
                         ?? "No version is prepared.",
                     link: "\(base)/ios/version/inflight",
                     state: apple?.versionString == nil ? .needed : .done),
+                // Once per account, not even once per app. A developer with an
+                // app on sale has signed the agreements and given Apple the
+                // bank details, or no version of this app would have shipped.
                 ConsoleRow(
                     id: "apple.business", system: "App Store",
                     title: "Agreements, tax, and banking",
-                    reason: "No API reads this. Open Business.",
-                    link: "https://appstoreconnect.apple.com/business", state: .unknown),
+                    reason: published
+                        ? "\(Self.assumed) No version ships without them."
+                        : "No API reads this. Open Business.",
+                    link: "https://appstoreconnect.apple.com/business",
+                    state: published ? .done : .unknown),
             ]
             // What Apple requires of an update, beyond the manifest.
             //
