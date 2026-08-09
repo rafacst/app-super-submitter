@@ -43,9 +43,19 @@ struct SuperSubmitterApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .windowResizability(.contentMinSize)
-        // The sidebar and the top bar run under the title bar, so the window
-        // shows one surface and not a bar above a bar.
-        .windowStyle(.hiddenTitleBar)
+        // The standard title bar, and it used to be hidden so that the sidebar
+        // could carry the window buttons itself.
+        //
+        // `NavigationSplitView` lays itself out against the window's title bar
+        // and cannot do without one: with `.hiddenTitleBar` it draws no sidebar
+        // column at all — a blank panel beside a detail pane whose header sits
+        // above the top of the window. Verified both ways on this machine.
+        //
+        // The split view is what gives the app a sidebar a Mac user can drag,
+        // collapse and toggle, and what draws the selection, the section
+        // headers and the vibrancy the system draws everywhere else. That is
+        // worth a title bar.
+        .windowToolbarStyle(.unified)
         .commands {
             // Where a Mac user looks for both: the app menu, About first and
             // the update check under it.
@@ -65,6 +75,12 @@ struct SuperSubmitterApp: App {
                 Divider()
                 Button("Open store.yaml…") { state.chooseExistingManifest() }
                     .keyboardShortcut("o", modifiers: .command)
+                // The sidebar used to carry "Saved to store.yaml" as a row,
+                // and clicking it showed the file. The row was a status in a
+                // navigation column and it has gone; the file it opened is
+                // reachable here, where the rest of the file commands are.
+                Button("Show store.yaml in Finder") { state.revealManifest() }
+                    .disabled(state.manifestURL == nil)
                 Divider()
                 Button("Remove App from Super Submitter…") {
                     state.askToRemoveApp(at: state.selectedAppIndex)
@@ -98,20 +114,14 @@ struct SuperSubmitterApp: App {
                     .keyboardShortcut("f", modifiers: .command)
                     .disabled(state.manifestURL == nil)
             }
-            // The app has no Settings scene. Command-comma opens the panel
-            // over the window, so the menu and the sidebar row do one thing.
-            // The mode decides which tabs exist, so it belongs in the menu as
-            // well as in the shell.
-            CommandGroup(after: .toolbar) {
-                Picker("Mode", selection: Binding(get: { state.mode },
-                                                  set: { state.mode = $0 })) {
-                    ForEach(Mode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.inline)
-                Divider()
-            }
+            // No Mode picker here any more. The mode used to be a switch above
+            // the sidebar that decided which rows existed, and this repeated
+            // it. The sidebar lists both jobs at once now, so choosing the
+            // mode *is* choosing a row: a second control for it would move the
+            // selection out from under the user to a row they did not pick.
+            //
+            // The app has no Settings scene. Command-comma opens the panel over
+            // the window, which is the one place Settings has ever opened.
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { state.showSettings = true }
                     .keyboardShortcut(",", modifiers: .command)

@@ -39,19 +39,30 @@ struct ListingDeclarations: View {
         }
     }
 
+    /// Four declarations, each on a chip of its own.
+    ///
+    /// They were four blocks in one box, separated by three `Divider`s. Evoque
+    /// gives every row of its spec table the same soft rounded fill and puts a
+    /// gap between them instead of a rule, and that is the better shape here:
+    /// these four are unrelated errands, not four lines of one list, and a
+    /// rule between them reads as continuation.
+    ///
+    /// It also adds no line at all, which the rule the `sep` comment sets asks
+    /// for — dark mode has no shadow to fall back on, and every extra hairline
+    /// spends the little contrast that boundary has.
     private var declarations: some View {
         Section_("Store declarations", icon: "checkmark.shield.fill", tint: Theme.green,
                  anchor: "details.declarations") {
-            VStack(spacing: 0) {
+            VStack(spacing: 6) {
                 ActionRow(title: "Age rating", detail: "Answer the content questionnaire") {
                     state.showAgeRating = true
                 }
-                Divider()
+                .rowChip()
                 ActionRow(title: "Google data safety",
                           detail: "Review declarations stored in the manifest") {
                     state.showDataSafety = true
                 }
-                Divider()
+                .rowChip()
                 VStack(alignment: .leading, spacing: 9) {
                     Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
                         .font(.system(size: 12))
@@ -61,7 +72,7 @@ struct ListingDeclarations: View {
                     if state.encryptionBinding.wrappedValue { exportCompliance }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 11)
-                Divider()
+                .rowChip()
                 VStack(alignment: .leading, spacing: 9) {
                     LabeledField("Kids age band", note: "Apple, optional") {
                         ChoiceField(value: state.reviewMetadataBinding("kidsAgeBand"),
@@ -72,8 +83,25 @@ struct ListingDeclarations: View {
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 11)
-            }.storePanel(padding: 0)
+                .rowChip()
+            }
+            .storePanel(padding: 6)
         }
+    }
+}
+
+private extension View {
+    /// One row of a list, as its own soft chip.
+    ///
+    /// `sunken` on `raised` is a two percent step, which is what makes it soft:
+    /// the chip separates itself without drawing anything. The hairline is
+    /// `sep2` and not `sep`, because the chip is a grouping inside a card and
+    /// not the edge of one.
+    func rowChip() -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
     }
 }
 

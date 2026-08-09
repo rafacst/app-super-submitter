@@ -124,6 +124,30 @@ public enum KeychainCredentials {
             cache = nil
         }
     }
+
+    /// Whether the vault is a dictionary in this process rather than an item
+    /// in the Keychain.
+    ///
+    /// A service of its own was not enough. macOS grants Keychain access to a
+    /// *binary*, and an unsigned build is a new binary every time it is
+    /// compiled, so the second run of a demo build reads an item the first run
+    /// wrote and raises "allow access" — on every single build, forever, and
+    /// on the main thread. Isolating the service moved the prompt off the real
+    /// credentials; it could not remove it.
+    ///
+    /// A run that must not touch the real vault has nothing worth keeping
+    /// between launches either, so it keeps its credentials in memory and the
+    /// Keychain is never opened at all. No item, no owner, no dialog.
+    nonisolated(unsafe) private static var memory: [String: Data]?
+
+    /// Puts the vault in memory for the rest of the process. Call it before
+    /// the first credential read, in place of `useIsolatedService`.
+    public static func useMemoryVault() {
+        lock.withLock {
+            memory = [:]
+            cache = nil
+        }
+    }
     /// The one item. The old per-credential items used `kind:account` as their
     /// account, and none of them can collide with this.
     private static let vaultAccount = "all-credentials"
@@ -155,6 +179,7 @@ public enum KeychainCredentials {
     /// this service and this account, and both belong to Super Submitter.
     public static func deleteEverything() throws {
         try lock.withLock {
+            if memory != nil { memory = [:]; cache = nil; return }
             let status = SecItemDelete([
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service,
@@ -180,6 +205,7 @@ public enum KeychainCredentials {
     // MARK: - The one item
 
     private static func readVault() throws -> [String: Data] {
+        if let memory { return memory }
         if let cache { return cache }
         var item: CFTypeRef?
         let status = SecItemCopyMatching([
@@ -210,6 +236,7 @@ public enum KeychainCredentials {
     }
 
     private static func writeVault(_ vault: [String: Data]) throws {
+        if memory != nil { memory = vault; return }
         let data = try JSONEncoder().encode(vault)
         cache = vault
         let match: [String: Any] = [

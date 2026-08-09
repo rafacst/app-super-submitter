@@ -218,25 +218,32 @@ struct PlanTab: View {
         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
     }
 
+    /// The two numbers the whole tab exists to produce.
+    ///
+    /// They were three counters in a row of grey, inside one card, beside two
+    /// hairline dividers. The tab computes a diff across two stores and every
+    /// figure it arrives at was set in the quietest tier the app has.
+    ///
+    /// Two cards and not three. The byte count is not an event, it is the size
+    /// of one, so it reads as the second line of the uploads card instead of
+    /// standing beside it as an equal.
     private func counters(_ plan: PlanResult) -> some View {
-        HStack(spacing: 26) {
-            Counter(value: "\(plan.writeCount)", label: "writes")
-            Rectangle().fill(Theme.sep2).frame(width: 1, height: 28)
-            Counter(value: "\(plan.uploadCount)", label: "uploads")
-            Rectangle().fill(Theme.sep2).frame(width: 1, height: 28)
-            Counter(value: plan.uploadSizeText, label: "to upload")
-            Spacer(minLength: 0)
+        HStack(spacing: 12) {
+            StatCard(symbol: "square.and.pencil",
+                     value: "\(plan.writeCount)", label: "writes",
+                     tint: Theme.accent, badge: Theme.accentFill)
+            StatCard(symbol: "arrow.up.circle.fill",
+                     value: "\(plan.uploadCount)", label: "uploads",
+                     detail: plan.uploadCount == 0 ? nil : plan.uploadSizeText,
+                     tint: Theme.teal, badge: Theme.tealFill)
             // The apply row below already says where this ends. Saying it
             // twice on one screen is what made the page long.
             Text("Ends in a draft. Nothing reaches a customer.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.text2)
+                .padding(.leading, 4)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 13)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
     private func validations(_ plan: PlanResult) -> some View {
@@ -361,11 +368,19 @@ struct PlanTab: View {
         return uploads == 0 ? "\(writes) writes" : "\(writes) writes · \(uploads) uploads"
     }
 
+    /// Three events, three colours, and none of them red.
+    ///
+    /// `.remove` was red, which broke the one rule the palette has: red says
+    /// irreversible and nothing else may use it. A cleared field in a draft is
+    /// reversible — the apply writes a draft, and only the Release tab sends
+    /// one — so red overstated it by a whole category. `ChangedTag` had already
+    /// settled the same question in the same words: orange and not red,
+    /// because an edit is not irreversible.
     private func color(_ kind: ChangeKind) -> Color {
         switch kind {
         case .add: Theme.green
         case .change: Theme.yellow
-        case .remove: Theme.red
+        case .remove: Theme.orange
         }
     }
 
@@ -474,20 +489,61 @@ struct PlanTab: View {
     }
 }
 
-private struct Counter: View {
+/// One number from the plan: the word, then a solid glyph badge beside a large
+/// figure, on a soft tint of the badge's own hue.
+///
+/// The tint carries meaning and is not decoration. A write and an upload are
+/// two different events — one changes a field, the other sends a file, and the
+/// second is the slow half of every apply — so the two take two hues and a
+/// developer can tell at a glance which kind of work an apply is mostly made
+/// of.
+///
+/// The badge is a solid fill with a white glyph, and not the `IconChip` wash
+/// used elsewhere. A wash of the same hue at 15% on a card of the same hue at
+/// 12% is two tones four percent apart, which is the amount of contrast that
+/// made the dark-mode card borders disappear. See the `sep` note.
+private struct StatCard: View {
+    let symbol: String
     let value: String
     let label: String
+    /// The size of the upload, under the count of them. Absent when there is
+    /// nothing to send, because "0 bytes" is a fact nobody asked for.
+    var detail: String?
+    /// The display hue, for the card. `badge` is the same hue taken deep
+    /// enough to sit under white.
+    let tint: Color
+    let badge: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value)
-                .font(.system(size: 17, weight: .semibold)).kerning(-0.34)
-                // The three counters sit in a row and each read moves them.
-                // Proportional digits made the labels underneath shuffle.
-                .monospacedDigit()
-                .contentTransition(.numericText())
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
+        HStack(spacing: 11) {
+            Circle()
+                .fill(badge)
+                .frame(width: 30, height: 30)
+                .overlay(Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.accentText))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value)
+                    .font(.system(size: 22, weight: .semibold))
+                    .kerning(-0.44)
+                    // Every read of the stores moves these, and proportional
+                    // digits shuffled the words underneath when they moved.
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(detail.map { "\(label) · \($0)" } ?? label)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text2)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .frame(width: 186, alignment: .leading)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(tint.opacity(0.30), lineWidth: Theme.hairline))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value) \(detail.map { "\(label), \($0)" } ?? label)")
     }
 }
 

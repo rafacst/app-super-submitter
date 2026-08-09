@@ -56,6 +56,12 @@ enum Theme {
     /// These are the same hues, deep enough to sit under white in both modes.
     static let accentFill = Color(light: 0x0A6FD8, dark: 0x2C6ECF)
     static let purpleFill = Color(light: 0x6A35C9, dark: 0x6A44C4)
+    /// The third fill, for the second number on a card of numbers.
+    ///
+    /// `teal` in dark is 0x4FCFDC, which is a display tint and about 1.9 to 1
+    /// under white. This is the same hue taken down until white clears it:
+    /// 5.35 to 1 in light and 5.56 to 1 in dark.
+    static let tealFill = Color(light: 0x0C7681, dark: 0x11737E)
 
     /// Red says irreversible, and nothing else in the app may use it.
     ///
@@ -121,7 +127,6 @@ enum Theme {
 
     // The window itself.
     static let windowRadius: CGFloat = 11
-    static let sidebarWidth: CGFloat = 240
     /// Tall enough to carry a title at `screenTitle` with the question under
     /// it. It was 52, which held a 14 point title: smaller than the body text
     /// on the tab below it, so the screen named itself more quietly than it
@@ -145,11 +150,6 @@ enum Theme {
     /// that ever shows.
     static var hairline: CGFloat { 1 / (NSScreen.main?.backingScaleFactor ?? 2) }
 
-    /// The content is the window surface, and the sidebar is a panel floating
-    /// on it. The gap is the separator, so no rule runs between the two.
-    static let panelGap: CGFloat = 8
-    static let panelRadius: CGFloat = 10
-    static let panelEdge = Color(light: .black.opacity(0.16), dark: .white.opacity(0.20))
 }
 
 // MARK: - The colour helper
@@ -263,15 +263,6 @@ extension View {
                 .strokeBorder(border, lineWidth: borderWidth))
     }
 
-    /// Turns a working area into a panel that floats on the window surface.
-    ///
-    /// Glass where the OS has it, and the flat fill this app shipped on
-    /// everywhere else: a rounded fill, a hairline edge, and a shadow that
-    /// lifts it off the back.
-    func panelSurface() -> some View {
-        modifier(PanelSurface())
-    }
-
     /// The band that floats above scrolling content.
     ///
     /// It takes its own fill below macOS 26, because the band is the page at
@@ -328,23 +319,10 @@ extension View {
 // The form cards stay opaque, because glass under dense body copy is a
 // legibility regression and this app is a form.
 
-private struct PanelSurface: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.glassEffect(.regular,
-                                in: .rect(cornerRadius: Theme.panelRadius))
-        } else {
-            content
-                .background(Theme.raised)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
-                // A full point, not a hairline. The panel sits on a surface
-                // close to its own tone, and half a point disappears into it.
-                .overlay(RoundedRectangle(cornerRadius: Theme.panelRadius)
-                    .strokeBorder(Theme.panelEdge, lineWidth: 1))
-                .shadow(color: .black.opacity(0.20), radius: 6, y: 1)
-        }
-    }
-}
+// `PanelSurface` used to live here: a rounded fill, an edge and a shadow that
+// made the sidebar float on the window. `NavigationSplitView` draws the
+// sidebar's surface itself, in the system's own material, so there is nothing
+// left to float.
 
 private struct HeaderSurface: ViewModifier {
     let scrolled: Bool
@@ -360,6 +338,11 @@ private struct HeaderSurface: ViewModifier {
                 .overlay(alignment: .bottom) {
                     Hairline().opacity(scrolled ? 1 : 0)
                 }
+                // Here, and not at the `withAnimation` that used to set
+                // `scrolled`. That one was a global transaction and swept the
+                // whole first-run layout in with it. This animates the rule and
+                // the fill, which is all the state was ever for.
+                .animation(.easeOut(duration: 0.14), value: scrolled)
         }
     }
 }
@@ -632,7 +615,12 @@ struct SmallToggle: View {
         Button {
             withAnimation(.easeOut(duration: 0.12)) { isOn.toggle() }
         } label: {
-            ZStack(alignment: isOn ? .trailing : .leading) {
+            // An offset and a centred stack. See `AppearanceSwitch`: the
+            // alignment this used to swap has nothing between its two values
+            // to interpolate, so the knob jumped the full width of the track,
+            // and it stopped hard against the end cap with its shadow outside
+            // the capsule.
+            ZStack {
                 // The off track is the state, so it has to be visible against
                 // the bar behind it. `sep` reads as nothing there.
                 Capsule().fill(isOn ? Theme.accent : Theme.controlEdge)
@@ -640,10 +628,12 @@ struct SmallToggle: View {
                     .fill(.white)
                     .frame(width: 16, height: 16)
                     .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
+                    .offset(x: isOn ? 7 : -7)
             }
             .frame(width: 34, height: 20)
             .padding(2)
             .contentShape(.rect)
+            .animation(.easeOut(duration: 0.12), value: isOn)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Dry run")

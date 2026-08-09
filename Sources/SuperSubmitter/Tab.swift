@@ -123,21 +123,28 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         allCases.filter { $0.modes.contains(mode) }
     }
 
-    /// The outline reads as "not here", the filled one as "here". Release is
-    /// the exception: the dotted path says the flight already left.
-    func symbol(selected: Bool) -> String {
+    /// One symbol, whether the row is selected or not.
+    ///
+    /// It used to be two, an outline and a fill, so that "here" and "not here"
+    /// read differently. A `List` in its sidebar style already says which row
+    /// you are standing on, in the way the whole system says it, and swapping
+    /// the glyph underneath that is a second answer to a question already
+    /// answered. No sidebar on the Mac swaps its symbols.
+    var symbol: String {
         switch self {
-        case .stores: selected ? "storefront.fill" : "storefront"
-        case .build: selected ? "shippingbox.fill" : "shippingbox"
-        case .details: selected ? "list.bullet.rectangle.fill" : "list.bullet.rectangle"
-        case .media: selected ? "photo.stack.fill" : "photo.stack"
-        case .money: selected ? "dollarsign.square.fill" : "dollarsign.square"
-        case .marketing: selected ? "megaphone.fill" : "megaphone"
-        case .reviewInfo: selected ? "checkmark.square.fill" : "checkmark.square"
-        case .plan: selected ? "text.bubble.fill" : "text.bubble"
-        case .release: selected ? "airplane.path.dotted" : "airplane"
-        case .liveApp: selected ? "waveform.path.ecg.rectangle.fill" : "waveform.path.ecg.rectangle"
-        case .account: selected ? "person.crop.circle.fill" : "person.crop.circle"
+        case .stores: "storefront"
+        case .build: "shippingbox"
+        case .details: "list.bullet.rectangle"
+        case .media: "photo.stack"
+        case .money: "dollarsign.square"
+        case .marketing: "megaphone"
+        case .reviewInfo: "checkmark.square"
+        // The tab answers "what changes, exactly?", which is a list to read
+        // before you send it and not a message. It was `text.bubble`.
+        case .plan: "checklist"
+        case .release: "airplane"
+        case .liveApp: "waveform.path.ecg.rectangle"
+        case .account: "person.crop.circle"
         }
     }
 
@@ -178,8 +185,10 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// The three zones of the app. The sidebar draws a divider between them,
-    /// because the zone tells the user what a tab can do to a live store.
+    /// The three zones of the app. The zone tells the user what a tab can do
+    /// to a live store, and it is what splits the sidebar's Publish section
+    /// from its Send one: everything that only edits the manifest, then the
+    /// two screens that talk to a store.
     ///
     /// There used to be a fourth, for the tab that wrote the drafts. Summary
     /// reads and then writes, from one screen, so the read and the write are
@@ -209,25 +218,14 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         allCases.filter { $0.zone == zone }
     }
 
-    /// A rule sits before tab 7 and before tab 9.
-    ///
-    /// The first marks where the app stops editing a file and starts reading
-    /// the stores. The second marks the only tab that can send a version to
-    /// review. Two hairlines carry the whole mental model.
-    ///
-    /// Managing has one rule, before the tabs that touch a live app.
-    ///
-    /// Stores draws no rule of its own. The sidebar pins it to the foot,
-    /// under everything, because one credential covers the whole account and
-    /// the tab is a setting rather than step one.
-    var startsZone: Bool { self == .plan || self == .release || self == .liveApp }
 
-    /// Whether the tab works with no app open.
+    /// Whether the tab works with no app open, in the sense the sidebar means.
     ///
-    /// The two footer tabs do. Account answers who you are and what you have
-    /// paid for. Stores holds one App Store Connect key for the whole team and
-    /// one Play service account for the whole developer account, so it is
-    /// answered once and covers every app, including the ones not added yet.
+    /// Two tabs do, and neither is a step of the work. Account answers who you
+    /// are and what you have paid for. Stores holds one App Store Connect key
+    /// for the whole team and one Play service account for the whole developer
+    /// account, so it is answered once and covers every app, including the ones
+    /// not added yet.
     ///
     /// Stores also has to be reachable with nothing linked, because "Forget"
     /// lives there and it is the only way to remove a store key on purpose.
@@ -236,12 +234,94 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// exactly when a developer went looking for it.
     ///
     /// Every other tab edits or reads one app, so without one there is nothing
-    /// on it.
-    var standsAlone: Bool { Tab.footer.contains(self) }
+    /// on it. Stores is the only row the sidebar keeps on an empty window,
+    /// because a key is what the rest waits on. Account is reached from the
+    /// control at the foot of the column, which is available at all times.
+    var standsAlone: Bool {
+        switch self {
+        case .stores, .account: true
+        default: false
+        }
+    }
+}
 
-    /// The two tabs the sidebar pins to its foot, in the order it draws them.
+/// A group of sidebar rows.
+///
+/// The sections replaced the Publishing and Managing segmented control. That
+/// control was a second navigation system stacked on top of the first: it
+/// decided which rows existed, so half of the app lived behind a switch that
+/// named neither half, and a developer who never pressed it never learned the
+/// other half was there. A sidebar says the same thing by showing it, which is
+/// the job a macOS sidebar has.
+///
+/// Title case, not capitals. `List` in its sidebar style already draws a
+/// section header small and subdued, and setting the word in capitals on top
+/// of that is a second emphasis for one boundary. `Section_` states the same
+/// rule for the whole app, and no Apple sidebar heads its groups in capitals.
+enum SidebarSection: Int, CaseIterable, Identifiable {
+    /// Everything that only edits `store.yaml`.
+    case publish
+    /// The two screens that talk to a store.
+    case send
+    /// The app that is already out there.
+    case manage
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .publish: "Publish"
+        case .send: "Send"
+        case .manage: "Manage"
+        }
+    }
+}
+
+/// One row of the sidebar: a tab, and the job it is opened for.
+///
+/// A `Tab` alone cannot name a row. Details and Media belong to both jobs and
+/// read differently in each: the publisher edits the version that has not
+/// shipped, the manager edits the listing the customers are reading now, and
+/// the manager's copy carries a bar that writes straight to the live store.
+/// The shell used to tell the two apart with a switch above the column; the
+/// column holds both now, so a row is the pair.
+///
+/// It holds no state. It is a projection of `AppState.selectedTab` and
+/// `AppState.mode`, and the sidebar's selection binding reads those two and
+/// writes those two.
+struct Destination: Hashable, Identifiable {
+    let tab: Tab
+    let mode: Mode
+
+    var id: Self { self }
+
+    /// "Details" under Publish, "Live listing" under Manage.
+    var title: String { tab.title(in: mode) }
+
+    /// The rows of one section, in order.
     ///
-    /// Neither is a step of the work. One says who you are, the other says
-    /// which store accounts you use, and both answer once and stay answered.
-    static let footer: [Tab] = [.account, .stores]
+    /// Stores survives an empty window and no other row does: the rest edit an
+    /// app. They used to show greyed, which reads as a place you have not
+    /// earned rather than a place that does not apply.
+    ///
+    /// The account is in no section. It is not a step of the work, and the
+    /// control at the foot of the sidebar opens it.
+    static func rows(in section: SidebarSection, hasApp: Bool) -> [Destination] {
+        let mode: Mode = section == .manage ? .managing : .publishing
+        let tabs = switch section {
+        case .publish: Tab.tabs(in: .publishing).filter { $0.zone == .edits }
+        case .send: Tab.tabs(in: .publishing).filter { $0.zone != .edits }
+        // Stores is one key for the whole account, so it is listed once,
+        // under Publish, and not a second time here.
+        case .manage: Tab.tabs(in: .managing).filter { $0 != .stores }
+        }
+        return tabs
+            .filter { $0 != .account && (hasApp || $0.standsAlone) }
+            .map { Destination(tab: $0, mode: mode) }
+    }
+
+    /// Every row the sidebar can draw, in the order it draws them.
+    static func all(hasApp: Bool) -> [Destination] {
+        SidebarSection.allCases.flatMap { rows(in: $0, hasApp: hasApp) }
+    }
 }

@@ -11,6 +11,8 @@ struct StoreSelectionGrid<Detail: View>: View {
     private let selected: Set<Store>
     private let toggle: (Store) -> Void
     private let detail: (Store) -> Detail
+    /// Whether a person has pressed a card in this grid. See `body`.
+    @State private var interacted = false
 
     init(selected: Set<Store>, toggle: @escaping (Store) -> Void,
          @ViewBuilder detail: @escaping (Store) -> Detail) {
@@ -24,6 +26,7 @@ struct StoreSelectionGrid<Detail: View>: View {
             ForEach([Store.apple, .google], id: \.self) { store in
                 VStack(alignment: .leading, spacing: 14) {
                     StoreSelectionCard(store: store, selected: selected.contains(store)) {
+                        interacted = true
                         toggle(store)
                     }
                     detail(store)
@@ -31,7 +34,20 @@ struct StoreSelectionGrid<Detail: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: selected)
+        // The spring belongs to a click, and only to a click.
+        //
+        // On a first run the app launches with nothing linked, links the app a
+        // moment later, and `selected` goes from empty to both stores without
+        // anybody pressing anything. The grid played its selection animation
+        // over the arrival of the whole tab, so the cards and their logos slid
+        // into place and the panel read as though it were assembling itself.
+        //
+        // The flag is set by the card's own action and not by `onAppear`, which
+        // would race the link: both run on the first turn of the loop and
+        // nothing orders them. A press is unambiguous, and a press is the only
+        // thing this spring was ever for.
+        .animation(interacted ? .spring(response: 0.34, dampingFraction: 0.86) : nil,
+                   value: selected)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Stores")
     }
