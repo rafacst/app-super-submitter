@@ -14,6 +14,10 @@ import Testing
         [kSecAttrAccount as String: account, kSecValueData as String: Data(value.utf8)]
     }
 
+    @Test func testRunsNeverOpenTheLoginKeychain() {
+        #expect(KeychainCredentials.isUsingMemoryVault)
+    }
+
     @Test func theTakeOverKeepsEverySeparateItem() {
         let vault = KeychainCredentials.vault(fromSeparateItems: [
             entry("apple:default", "the apple key"),

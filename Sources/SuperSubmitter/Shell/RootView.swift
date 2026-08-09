@@ -230,7 +230,7 @@ private struct ContentArea: View {
                 default: Color.clear
                 }
             }
-            .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
+            .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
         }
 
         // macOS 14 keeps the rule on at all times. There is no way to read the

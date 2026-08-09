@@ -135,13 +135,24 @@ public enum KeychainCredentials {
     /// on the main thread. Isolating the service moved the prompt off the real
     /// credentials; it could not remove it.
     ///
-    /// A run that must not touch the real vault has nothing worth keeping
-    /// between launches either, so it keeps its credentials in memory and the
-    /// Keychain is never opened at all. No item, no owner, no dialog.
-    nonisolated(unsafe) private static var memory: [String: Data]?
+    /// Tests and package builds have nothing worth keeping between launches,
+    /// so they start in memory automatically and never open the Keychain. The
+    /// signed Xcode app starts with nil and keeps using the real vault.
+    nonisolated(unsafe) private static var memory: [String: Data]? = {
+        #if SWIFT_PACKAGE
+        return [:]
+        #else
+        return ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+            ? nil : [:]
+        #endif
+    }()
 
-    /// Puts the vault in memory for the rest of the process. Call it before
-    /// the first credential read, in place of `useIsolatedService`.
+    static var isUsingMemoryVault: Bool {
+        lock.withLock { memory != nil }
+    }
+
+    /// Puts a demo or screenshot run in memory for the rest of the process.
+    /// Call it before the first credential read.
     public static func useMemoryVault() {
         lock.withLock {
             memory = [:]

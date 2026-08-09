@@ -736,8 +736,9 @@ struct PreflightRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                .frame(width: 118, alignment: .leading)
+                .frame(width: 96, alignment: .leading)
             Text(value)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .font(Theme.font(size: 11.5))
                 .foregroundStyle(status == .blocked ? Theme.red : Theme.text)
                 .textSelection(.enabled)
