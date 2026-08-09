@@ -166,6 +166,19 @@ struct StoreCredentialScopeTests {
         #expect(card.contains("maxHeight: equalizedHeight ? .infinity : nil"))
     }
 
+    @Test func theTeamPanelsShareTheAvailableWidth() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/SuperSubmitter/Tabs/StoresTab.swift"),
+            encoding: .utf8)
+
+        #expect(source.components(separatedBy:
+            ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)").count == 3)
+    }
+
     @Test func bothGoogleCredentialsRemainStoredWhileTheUserChoosesOne() throws {
         let account = "test-\(UUID().uuidString)"
         defer {
