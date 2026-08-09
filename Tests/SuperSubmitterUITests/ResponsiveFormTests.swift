@@ -13,15 +13,30 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
                encoding: .utf8)
 }
 
-/// Build keeps its inspector useful without squeezing the sidebar or the work
-/// below their minimum readable widths.
-@Test func theBuildInspectorLeavesRoomForTheBuild() throws {
+/// Build keeps the store tools reachable without giving them a permanent
+/// inspector that squeezes the two artifact columns.
+@Test func theBuildToolsStayInsideTheResponsiveBuildScreen() throws {
     let shell = try responsiveFormSource("Sources/SuperSubmitter/Shell/RootView.swift")
-    let build = try responsiveFormSource(
-        "Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
 
-    #expect(shell.contains("inspectorColumnWidth(min: 220, ideal: 260, max: 340)"))
-    #expect(build.contains("Text(value)\n                .frame(maxWidth: .infinity"))
+    #expect(build.contains("private var storeTools"))
+    #expect(build.contains("ViewThatFits(in: .horizontal)"))
+    #expect(!shell.contains("case .build: BuildInspector()"))
+}
+
+@Test func theBuildRedesignKeepsEveryExistingStoreAction() throws {
+    let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+
+    for marker in ["This app in the stores", "App Store takes", "Google Play takes",
+                   "StoreDiagnosticsPanel()", "XcodeCloudPanel()",
+                   "SigningIdentitiesPanel()", "InternalSharingPanel()"] {
+        #expect(build.contains(marker), "Build lost \(marker)")
+    }
+    #expect(build.contains("accept: state.importPackages"))
+    #expect(build.contains("BuildFromProjectView()"))
+    #expect(build.contains("TestFlightSection()"))
+    #expect(build.contains("AndroidArtifactsSection()"))
+    #expect(build.contains("GoogleTracksSection()"))
 }
 
 /// Selecting Build also presents its saved inspector. That presentation must
