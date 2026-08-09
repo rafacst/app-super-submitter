@@ -1666,25 +1666,89 @@ final class AppState {
         })
     }
 
+    /// The territory the base price is set in. Apple's own default when the
+    /// developer has not picked one, which is what the reader and the apply
+    /// both fall back to.
+    var basePriceTerritory: String {
+        priceTerritory.isEmpty ? "USA" : priceTerritory
+    }
+
+    /// Fetches the ladder for the base territory when the one in hand is for
+    /// another country, or for no country at all.
+    ///
+    /// The Monetization tab calls this when it opens and whenever the base
+    /// territory moves. Without it the prices arrived only with a whole store
+    /// read from the Summary tab, so the field that asks for the first price
+    /// was a plain box on the one screen where a developer sets a price, and
+    /// moving the territory left the old country's money on offer.
+    ///
+    /// It costs one paged GET and nothing else. A failure leaves the state
+    /// alone: the fields fall back to free text, which is where they started.
+    func loadApplePricePoints() async {
+        guard stores.contains(.apple), let appID = appleActionAppID,
+              credentials.apple != nil else { return }
+        let territory = basePriceTerritory
+        guard territory != actualState.apple?.pricePointTerritory,
+              let points = try? await ApplePricePoints.app(readOnlyAPI(), appID: appID,
+                                                           territory: territory)
+        else { return }
+        // The developer can move the territory again while Apple answers. The
+        // answer that comes back for the country they left is not their list.
+        guard territory == basePriceTerritory else { return }
+        var apple = actualState.apple ?? ActualState.Apple()
+        apple.pricePoints = Set(points.map(\.amount)).sorted()
+        apple.pricePointTerritory = territory
+        actualState.apple = apple
+    }
+
     /// The prices Apple sells at, as the picker's rows.
     ///
     /// Empty whenever the app must not constrain the field: the App Store is
-    /// not a chosen store, or nobody has read it yet. The Amount field falls
-    /// back to free text then, because a developer who has not connected a key
-    /// still has to be able to name a price, and a picker with no rows is a
-    /// field that cannot be filled at all.
+    /// not a chosen store, nobody has read it yet, or the developer moved the
+    /// base territory after the read. The Amount field falls back to free text
+    /// then, because a developer who has not connected a key still has to be
+    /// able to name a price, and a picker with no rows is a field that cannot
+    /// be filled at all.
+    ///
+    /// The territory has to match. A ladder is one country's money, so São
+    /// Paulo's prices offered against a United States base price are the wrong
+    /// numbers in the wrong currency, which is worse than a plain box.
     var applePricePoints: [StoreValues.Choice] {
-        guard stores.contains(.apple) else { return [] }
+        guard stores.contains(.apple),
+              actualState.apple?.pricePointTerritory == basePriceTerritory else { return [] }
         // Sorted here and not only in the reader. The picker's order is what a
         // person reads down, and it should not depend on which code path filled
         // the state.
         return (actualState.apple?.pricePoints ?? []).sorted().map {
-            // The stored value is the number the manifest writes, so the label
-            // and the value are the same string. Apple returns it already
-            // formatted for the territory.
-            let text = "\($0)"
-            return StoreValues.Choice(text, text)
+            // The value is the number the manifest writes. The label is the
+            // money App Store Connect shows for it, so the row reads $1.99 and
+            // not 1.99 the way the web form does.
+            StoreValues.Choice("\($0)", priceLabel($0))
         }
+    }
+
+    /// The same ladder, for a purchase or a plan.
+    ///
+    /// Apple prices an in-app purchase off the territory's price points, the
+    /// way it prices the app. It sells no product for nothing, though: the free
+    /// row belongs to the app alone, and a purchase priced at zero is a write
+    /// the App Store refuses.
+    var appleProductPricePoints: [StoreValues.Choice] {
+        applePricePoints.filter { Decimal(string: $0.value).map { $0 > 0 } ?? true }
+    }
+
+    /// One price point in the base price's currency.
+    ///
+    /// The locale is fixed, and not this Mac's. Apple states `customerPrice`
+    /// with a dot, the manifest writes it with a dot, and the row a developer
+    /// picks has to read as the value it sets: a Brazilian Mac rendered the
+    /// same price as `US$ 1,99` against a stored `1.99`. The currency code
+    /// still supplies the symbol, so USD reads $1.99 and BRL reads R$6.90, the
+    /// way App Store Connect prints them.
+    private func priceLabel(_ amount: Decimal) -> String {
+        guard !priceCurrency.isEmpty else { return "\(amount)" }
+        return amount.formatted(.currency(code: priceCurrency)
+            .locale(Locale(identifier: "en_US_POSIX")))
     }
 
     /// The reviewer sign-in App Store Connect holds that this Mac does not.

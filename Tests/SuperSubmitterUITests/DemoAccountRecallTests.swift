@@ -110,14 +110,19 @@ struct PricePointChoiceTests {
         values.compactMap { Decimal(string: $0) }
     }
 
-    private func state(stores: Set<Store>, points: [Decimal]) -> AppState {
+    private func state(stores: Set<Store>, points: [Decimal],
+                       readFor: String? = "USA", territory: String = "",
+                       currency: String = "") -> AppState {
         let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                              storeAccount: "test-\(UUID().uuidString)")
         var apple = ActualState.Apple()
         apple.pricePoints = points
+        apple.pricePointTerritory = readFor
         var actual = ActualState()
         actual.apple = apple
         state.actualState = actual
+        state.priceTerritory = territory
+        state.priceCurrency = currency
         // `stores` is derived from the apps the manifest names, so naming one
         // is how a test says which stores this app goes to.
         if stores.contains(.apple) {
@@ -146,5 +151,44 @@ struct PricePointChoiceTests {
         // The points may be in hand from an earlier App Store read. They do not
         // apply to an app that no longer goes there.
         #expect(state(stores: [.google], points: points(["0.99", "4.99"])).applePricePoints.isEmpty)
+    }
+
+    @Test func aLadderReadForOneTerritoryIsNeverOfferedInAnother() {
+        // Brazil's prices under a United States base price would be the wrong
+        // numbers in the wrong money. Free text is the honest fallback until
+        // the next read fetches the ladder this territory sells at.
+        let moved = state(stores: [.apple], points: points(["0.99", "4.99"]),
+                          readFor: "USA", territory: "BRA")
+        #expect(moved.applePricePoints.isEmpty)
+        let matched = state(stores: [.apple], points: points(["0.99"]),
+                            readFor: "BRA", territory: "BRA")
+        #expect(matched.applePricePoints.map(\.value) == ["0.99"])
+    }
+
+    @Test func theRowsReadAsMoneyTheWayAppStoreConnectShowsThem() {
+        let state = state(stores: [.apple], points: points(["1.99"]), currency: "USD")
+        // The value is what the manifest writes; the label is what a person
+        // picks. `0.99` in a menu of prices is not a price anybody recognises.
+        #expect(state.applePricePoints.map(\.value) == ["1.99"])
+        #expect(state.applePricePoints[0].label.contains("1.99"))
+        #expect(state.applePricePoints[0].label != "1.99")
+    }
+
+    @Test func theTabsOwnReadLeavesTheLadderAloneWithoutAKey() async {
+        // The Monetization tab asks for the ladder every time it opens. A
+        // project with no App Store key has nothing to ask, and the list a
+        // Summary read already put in hand has to survive that.
+        let state = state(stores: [.apple], points: points(["0.99", "4.99"]))
+        await state.loadApplePricePoints()
+        #expect(state.applePricePoints.map(\.value) == ["0.99", "4.99"])
+    }
+
+    @Test func aPurchaseIsNeverOfferedTheFreeRow() {
+        // The App Store sells the app for nothing. It sells no purchase and no
+        // subscription plan for nothing, so that row would be a write Apple
+        // refuses.
+        let state = state(stores: [.apple], points: points(["0", "0.99"]))
+        #expect(state.applePricePoints.map(\.value) == ["0", "0.99"])
+        #expect(state.appleProductPricePoints.map(\.value) == ["0.99"])
     }
 }

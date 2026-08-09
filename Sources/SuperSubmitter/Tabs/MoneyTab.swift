@@ -32,7 +32,13 @@ struct MoneyTab: View {
         .frame(maxWidth: 940, alignment: .leading)
         .onChange(of: state.priceAmount) { _, _ in state.updateBasePrice() }
         .onChange(of: state.priceCurrency) { _, _ in state.updateBasePrice() }
-        .onChange(of: state.priceTerritory) { _, _ in state.updateBasePrice() }
+        .onChange(of: state.priceTerritory) { _, _ in
+            state.updateBasePrice()
+            // The ladder is one country's money, so the territory names which
+            // prices every Amount field on this tab may offer.
+            Task { await state.loadApplePricePoints() }
+        }
+        .task { await state.loadApplePricePoints() }
     }
 
     private var priceSection: some View {
@@ -41,25 +47,10 @@ struct MoneyTab: View {
                         anchor: "money.basePrice") {
             VStack(alignment: .leading, spacing: 9) {
                 FieldRow {
-                    // Apple's own prices when Apple has told us what they are.
-                    //
-                    // The App Store sells at a price point and at nothing else,
-                    // so the apply resolved whatever was typed to the nearest
-                    // one and the developer learned the real price on the
-                    // Summary tab, after the fact. A field that offers the
-                    // prices that exist cannot be wrong in the first place.
-                    //
-                    // It stays a text field until the store has been read. See
-                    // `applePricePoints`: a picker with no rows is a field that
-                    // cannot be filled.
+                    // The app's own ladder, which carries the free row that a
+                    // purchase below must not offer. See `amountField`.
                     LabeledField("Amount", width: 120) {
-                        let points = state.applePricePoints
-                        if points.isEmpty {
-                            TextField("0.00", text: $state.priceAmount)
-                        } else {
-                            ChoiceField(value: $state.priceAmount, choices: points,
-                                        emptyLabel: "Pick a price", allowsNone: false)
-                        }
+                        amountField($state.priceAmount, points: state.applePricePoints)
                     }
                     LabeledField("Currency") {
                         ChoiceField(value: $state.priceCurrency,
@@ -84,6 +75,29 @@ struct MoneyTab: View {
             // panels on this row draw to one height instead of two.
             .frame(maxHeight: .infinity, alignment: .top)
             .storePanel()
+        }
+    }
+
+    /// A price, offered the way App Store Connect offers one.
+    ///
+    /// The web form locks this field to a menu: Apple sells at a price point
+    /// and refuses everything else, so a number typed here used to be resolved
+    /// to the nearest point behind the developer's back, and the app was the
+    /// only place where 4.95 looked like a price you could charge.
+    ///
+    /// It stays a text field only while the ladder is unknown, which now means
+    /// a project with no App Store key: the tab fetches the prices when it
+    /// opens. A picker with no rows is a field that cannot be filled, and a
+    /// developer with no key still has to be able to name a price.
+    @ViewBuilder
+    private func amountField(_ value: Binding<String>,
+                             points: [StoreValues.Choice]? = nil) -> some View {
+        let points = points ?? state.appleProductPricePoints
+        if points.isEmpty {
+            TextField("0.00", text: value)
+        } else {
+            ChoiceField(value: value, choices: points,
+                        emptyLabel: "Pick a price", allowsNone: false)
         }
     }
 
@@ -169,8 +183,8 @@ struct MoneyTab: View {
                             LabeledField("Name") {
                                 TextField("", text: state.purchaseBinding(index: index, field: .name))
                             }
-                            LabeledField("Amount", width: 90) {
-                                TextField("0.00", text: state.purchaseBinding(index: index, field: .amount))
+                            LabeledField("Amount", width: 110) {
+                                amountField(state.purchaseBinding(index: index, field: .amount))
                             }
                             LabeledField("Currency", width: 175) {
                                 ChoiceField(value: state.purchaseBinding(index: index, field: .currency),
@@ -303,8 +317,9 @@ struct MoneyTab: View {
                                     }
                                 }
                                 FieldRow {
-                                    LabeledField("Amount", width: 90) {
-                                        TextField("0.00", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .amount))
+                                    LabeledField("Amount", width: 110) {
+                                        amountField(state.planBinding(groupIndex: groupIndex,
+                                                                      planIndex: planIndex, field: .amount))
                                     }
                                     LabeledField("Currency", width: 175) {
                                         ChoiceField(value: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .currency),

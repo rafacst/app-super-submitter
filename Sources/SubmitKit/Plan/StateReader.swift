@@ -389,13 +389,14 @@ public struct StateReader: Sendable {
         // list, and the field that asks for the first price was the one field
         // that could not offer the prices Apple sells at.
         let territory = basePrice?.territory ?? "USA"
-        if let response = try? await api.apple(
-            "GET",
-            "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)&limit=200") {
-            let amounts = JSON(data: response.data)["data"].array
-                .compactMap { $0["attributes"]["customerPrice"].string }
-                .compactMap { Decimal(string: $0) }
+        if let points = try? await ApplePricePoints.app(api, appID: appID,
+                                                        territory: territory) {
+            let amounts = points.map(\.amount)
             result.pricePoints = Set(amounts).sorted()
+            // The ladder is this territory's money. The field that offers it
+            // has to know which, because Brazil's prices under a request for
+            // the United States are the wrong numbers in the wrong currency.
+            result.pricePointTerritory = territory
             if let basePrice {
                 result.priceAmount = Self.nearest(to: basePrice.amount, in: amounts)
                 result.priceCurrency = basePrice.currency
