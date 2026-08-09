@@ -68,7 +68,11 @@ enum Severity {
 /// 1 error and 5 warnings drew a red 6, and six blockers is not what that
 /// tab held. An error stops the apply and a warning asks to be acknowledged,
 /// so the two never belonged in one number.
-struct TabBadge {
+/// `Equatable` so the sidebar can animate on it. `BadgeView` watches the whole
+/// badge rather than the two counts separately: they change together, in one
+/// read of the stores, and two `animation(value:)` modifiers would put the
+/// error pill and the warning pill on two clocks.
+struct TabBadge: Equatable {
     var errors = 0
     var warnings = 0
 
@@ -2211,6 +2215,11 @@ final class AppState {
         statuses = [:]
         releaseError = nil
         appleSubmissionID = nil
+        // Switching apps clears the run, so the Dock has to stop describing
+        // the one that was open. Both signals go: a bar from an interrupted
+        // upload and a badge counting another app's console steps.
+        DockTile.clear()
+        DockTile.badge(0)
     }
 
     /// Fills the credential fields of the Stores tab from the Keychain.

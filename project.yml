@@ -151,7 +151,7 @@ targets:
         SUPABASE_PUBLISHABLE_KEY: sb_publishable_sI-T324LV-ymezJ0j9uecA_XZ2Dyep3
         PRODUCT_BUNDLE_IDENTIFIER: com.rafacst.supersubmitter
         PRODUCT_NAME: SuperSubmitter
-        MARKETING_VERSION: 1.0.2
+        MARKETING_VERSION: 1.0.3
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: 6.0
         MACOSX_DEPLOYMENT_TARGET: 14.0

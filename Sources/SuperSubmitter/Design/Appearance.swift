@@ -79,9 +79,13 @@ struct AppearanceSwitch: View {
 
     var body: some View {
         Button {
-            withAnimation(.smooth(duration: 0.22)) {
-                appearance = isDark ? .light : .dark
-            }
+            // A bare assignment, for the reason the comment on the switch
+            // below already gives: `appearance` is `@AppStorage`, so the new
+            // value arrives back through the defaults store and lands outside
+            // any transaction opened here. The `withAnimation` that used to
+            // wrap this animated nothing it meant to, and everything else
+            // SwiftUI happened to update in the same pass.
+            appearance = isDark ? .light : .dark
             appearance.apply()
         } label: {
             // The knob moves on an offset, and the stack is centred. It used to
@@ -118,7 +122,7 @@ struct AppearanceSwitch: View {
             // is `@AppStorage`, so the new value arrives back through the
             // defaults store and lands outside the transaction the action
             // opened. The button animated nothing for that reason.
-            .animation(.smooth(duration: 0.22), value: isDark)
+            .motion(.smooth(duration: 0.22), value: isDark)
         }
         .buttonStyle(.plain)
         .contextMenu {

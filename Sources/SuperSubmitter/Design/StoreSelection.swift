@@ -46,8 +46,8 @@ struct StoreSelectionGrid<Detail: View>: View {
         // would race the link: both run on the first turn of the loop and
         // nothing orders them. A press is unambiguous, and a press is the only
         // thing this spring was ever for.
-        .animation(interacted ? .spring(response: 0.34, dampingFraction: 0.86) : nil,
-                   value: selected)
+        .motion(interacted ? .spring(response: 0.34, dampingFraction: 0.86) : nil,
+                value: selected)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Stores")
     }

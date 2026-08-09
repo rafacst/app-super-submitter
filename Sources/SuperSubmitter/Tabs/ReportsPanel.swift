@@ -204,7 +204,7 @@ struct ReportsPanel: View {
                             Text(cell)
                                 .font(Theme.mono(10))
                                 .foregroundStyle(index == 0 ? Theme.text2 : Theme.text3)
-                                .frame(width: 92, alignment: .leading)
+                                .frame(width: Theme.scaled(92), alignment: .leading)
                                 .lineLimit(1)
                         }
                     }

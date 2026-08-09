@@ -183,13 +183,27 @@ private struct ChoiceList: View {
                 HStack {
                     Text("\(chosen.count) chosen")
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
                     Spacer()
                     Button("Clear", action: clear).controlSize(.small)
                 }
                 .padding(.horizontal, 9).padding(.vertical, 6)
+                .transition(.opacity)
             }
         }
         .frame(width: 290)
+        // The popover resizes rather than jumping to each new height.
+        //
+        // The territory list holds 266 rows, and typing in its search box
+        // recomputed the frame on every keystroke: "un" to "uni" to "unit"
+        // took the panel through three unrelated heights in three frames, and
+        // the whole thing read as flicker rather than as filtering. Apple asks
+        // for this directly for popovers, and it is one line.
+        //
+        // The footer counts as a size change too, so both are on one value.
+        .motion(.snappy(duration: 0.18), value: shown.count)
+        .motion(.snappy(duration: 0.18), value: chosen.count > 1)
     }
 
     private func row(label: String, ticked: Bool, quiet: Bool,

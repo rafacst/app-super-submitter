@@ -99,7 +99,8 @@ struct MarketingTab: View {
                                     Slider(value: state.experimentTrafficBinding(index: index),
                                            in: 1...100, step: 1)
                                     Text("\(Int(state.experimentTrafficBinding(index: index).wrappedValue)) %")
-                                        .font(Theme.mono(11.5)).frame(width: 40, alignment: .trailing)
+                                        .font(Theme.mono(11.5))
+                                        .frame(width: Theme.scaled(40), alignment: .trailing)
                                 }
                             }
                             LabeledField("Treatments", note: "comma-separated", width: 320) {
