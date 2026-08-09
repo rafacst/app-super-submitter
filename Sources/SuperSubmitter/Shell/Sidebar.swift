@@ -269,12 +269,20 @@ private struct DestinationRow: View {
     /// top of that is a colour fighting a fill.
     private var marksTheHazard: Bool { destination.tab == .release && !selected }
 
-    private var buildStatus: BuildSidebarStatus? {
-        destination.tab == .build ? state.buildFlow.sidebarStatus : nil
+    /// The two halves of a run, in the order they happen.
+    private var runStatuses: [(job: String, symbol: String, status: BuildSidebarStatus)] {
+        guard destination.tab == .build else { return [] }
+        let flow = state.buildFlow
+        return [("Build", "hammer.fill", flow.artifactStatus),
+                ("Upload", "arrow.up.circle.fill", flow.uploadStatus)]
+            .compactMap { job, symbol, status in
+                status.map { (job, symbol, $0) }
+            }
     }
 
     private var accessibilityValue: String {
-        [buildStatus?.spoken, state.badge(for: destination.tab)?.spoken]
+        (runStatuses.map { $0.status.spoken($0.job) }
+            + [state.badge(for: destination.tab)?.spoken])
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
@@ -289,10 +297,10 @@ private struct DestinationRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Label {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Text(destination.title)
-                    if let buildStatus {
-                        BuildSidebarStatusView(status: buildStatus)
+                    ForEach(runStatuses, id: \.job) { run in
+                        BuildSidebarStatusView(symbol: run.symbol, status: run.status)
                             .accessibilityHidden(true)
                     }
                 }
@@ -310,21 +318,28 @@ private struct DestinationRow: View {
     }
 }
 
+/// One job of a run: its own glyph, and the colour of how it went.
+///
+/// The glyph says which job, the colour says the outcome, so the two
+/// indicators stay legible beside each other. A tick for both would need the
+/// reader to remember which position meant which job.
 private struct BuildSidebarStatusView: View {
+    let symbol: String
     let status: BuildSidebarStatus
 
-    @ViewBuilder
-    var body: some View {
+    private var tint: Color {
         switch status {
-        case .building:
-            Spinner()
-        case .succeeded:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Theme.green)
-        case .failed:
-            Image(systemName: "xmark.octagon.fill")
-                .foregroundStyle(Theme.red)
+        case .running: Theme.accent
+        case .succeeded: Theme.green
+        case .failed: Theme.red
         }
+    }
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(Theme.font(size: 10.5, weight: .semibold))
+            .foregroundStyle(tint)
+            .symbolEffect(.pulse, isActive: status == .running)
     }
 }
 

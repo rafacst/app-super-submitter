@@ -240,6 +240,17 @@ extension AppState {
     /// local writes, but it is not a purchase and must not paint paid UI.
     var isPaid: Bool { entitlement.isPaid }
 
+    /// Whether a button draws a padlock.
+    ///
+    /// The entitlement, not `can(_:)`. A Debug build with no licensing service
+    /// configured authorizes every capability so that local development works,
+    /// and that bypass is not a purchase: painting the send button unlocked
+    /// because of it would tell a free account it had paid, which is the one
+    /// mistake `isPaid` already exists to prevent.
+    func showsLock(_ capability: AccessCapability) -> Bool {
+        !entitlement.grants(capability)
+    }
+
     /// The gate a button calls. It returns false and opens the pricing sheet,
     /// so the caller stops without inventing its own message.
     @discardableResult

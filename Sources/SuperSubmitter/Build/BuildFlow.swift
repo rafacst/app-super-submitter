@@ -5,14 +5,15 @@ import SubmitKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// How one half of a run stands. The half it belongs to supplies the words.
 enum BuildSidebarStatus: Equatable {
-    case building, succeeded, failed
+    case running, succeeded, failed
 
-    var spoken: String {
+    func spoken(_ job: String) -> String {
         switch self {
-        case .building: "Build in progress"
-        case .succeeded: "Build succeeded"
-        case .failed: "Build failed"
+        case .running: "\(job) in progress"
+        case .succeeded: "\(job) succeeded"
+        case .failed: "\(job) failed"
         }
     }
 }
@@ -84,20 +85,57 @@ final class BuildFlow {
     var state: UploadState { run.state }
     var isBusy: Bool { run.state.isActive }
 
-    /// The archive result shown beside Build in the sidebar. `startedAt` keeps
-    /// discovery and preflight from looking like a build the user started.
-    var sidebarStatus: BuildSidebarStatus? {
+    /// Making the artifact, shown beside Build in the sidebar. `startedAt`
+    /// keeps discovery and preflight from looking like a build the user
+    /// started.
+    var artifactStatus: BuildSidebarStatus? {
         guard startedAt != nil else { return nil }
         switch state {
         case .building, .inspectingArtifact, .cancelling:
-            return .building
+            return .running
         case .needsUploadConfirmation, .uploading, .processingOrValidating,
              .recoveryRequired, .complete:
             return .succeeded
         case .failed:
-            return .failed
+            return failedDuringUpload ? nil : .failed
         default:
             return nil
+        }
+    }
+
+    /// Sending it, which is a separate job with a separate outcome.
+    ///
+    /// One indicator reported both, so an archive that was built and never
+    /// sent drew the same green tick as one the store had accepted. That is
+    /// the app claiming a store holds something it does not, and it is the
+    /// claim a developer acts on.
+    var uploadStatus: BuildSidebarStatus? {
+        guard startedAt != nil else { return nil }
+        switch state {
+        case .uploading, .processingOrValidating:
+            return .running
+        case .recoveryRequired:
+            return .running
+        // Keeping the artifact ends the run without an upload, so the tick
+        // belongs to the build alone.
+        case .complete:
+            return artifactOnly ? nil : .succeeded
+        case .failed:
+            return failedDuringUpload ? .failed : nil
+        default:
+            return nil
+        }
+    }
+
+    /// Which half a failure belongs to. The category already says it, and it
+    /// is the only thing that does: the state is `failed` either way.
+    private var failedDuringUpload: Bool {
+        switch failure?.category {
+        case .upload, .remoteValidation, .remoteAmbiguous, .authentication,
+             .remoteConflict, .cleanup:
+            true
+        default:
+            false
         }
     }
 

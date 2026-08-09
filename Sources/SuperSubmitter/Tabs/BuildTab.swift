@@ -5,7 +5,6 @@ import SwiftUI
 /// release/build paths and build-derived listing fields in `store.yaml`.
 struct BuildTab: View {
     @Environment(AppState.self) private var state
-    @State private var storeToolsOpen = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -90,6 +89,15 @@ struct BuildTab: View {
         .storePanel(padding: 14, horizontal: 15)
     }
 
+    /// The store owns these three, and this tab shows them.
+    ///
+    /// Only one of them is ever a control here, and only sometimes: the bundle
+    /// id becomes a menu once a read has answered with the apps of the team.
+    /// Every other case is a fact, so it is drawn as one. They were buttons
+    /// that jumped to Stores, which is a field-shaped thing that cannot be
+    /// edited answering a click by leaving the screen. The way to a value that
+    /// is missing is a sentence with a button in it, under the row, where a
+    /// call to action can say what it will do.
     private var appleIdentity: some View {
         VStack(alignment: .leading, spacing: 4) {
             StoreLabel(store: .apple, size: 11, weight: .medium, color: Theme.text2)
@@ -97,10 +105,7 @@ struct BuildTab: View {
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             HStack(spacing: 8) {
                 if state.remoteAppleApps.isEmpty {
-                    PickerActionRow(value: state.appleBundleID.isEmpty
-                                    ? "Connect App Store first" : state.appleBundleID) {
-                        state.selectedTab = .stores
-                    }
+                    identityValue(state.appleBundleID, placeholder: "Bundle id")
                 } else {
                     Menu {
                         ForEach(state.remoteAppleApps) { app in
@@ -114,8 +119,10 @@ struct BuildTab: View {
                     }
                     .menuStyle(.borderlessButton)
                 }
-                identityValue(state.appleAppID.isEmpty ? "App id" : state.appleAppID,
-                              width: 120)
+                identityValue(state.appleAppID, placeholder: "App id", width: 120)
+            }
+            if state.appleBundleID.isEmpty, state.remoteAppleApps.isEmpty {
+                missingIdentityNote("Connect App Store Connect to choose the app.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,25 +133,36 @@ struct BuildTab: View {
             StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
             Text("Package name")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            PickerActionRow(value: state.googlePackageName.isEmpty
-                            ? "Set and test a package on Stores"
-                            : state.googlePackageName) {
-                state.selectedTab = .stores
+            identityValue(state.googlePackageName, placeholder: "Package name")
+            if state.googlePackageName.isEmpty {
+                missingIdentityNote("Set and test a package name on Stores.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func identityValue(_ value: String, width: CGFloat? = nil) -> some View {
-        Text(value)
+    private func identityValue(_ value: String, placeholder: String,
+                               width: CGFloat? = nil) -> some View {
+        Text(value.isEmpty ? placeholder : value)
             .font(Theme.mono(11.5))
-            .foregroundStyle(value == "App id" ? Theme.text3 : Theme.text)
+            .foregroundStyle(value.isEmpty ? Theme.text3 : Theme.text)
             .lineLimit(1)
+            .textSelection(.enabled)
             .padding(.horizontal, 9).padding(.vertical, 6)
             .frame(width: width, alignment: .leading)
-            .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+                .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    private func missingIdentityNote(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Text(text).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+            QuietButton(title: "Open Stores") { state.selectedTab = .stores }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
     }
 
     private var versionRow: some View {
@@ -271,7 +289,9 @@ struct BuildTab: View {
     }
 
     private var storeTools: some View {
-        DisclosureGroup(isExpanded: $storeToolsOpen) {
+        Section_("Store tooling", icon: "wrench.and.screwdriver.fill",
+                 tint: Theme.purple, folds: true, startsOpen: false,
+                 note: "Diagnostics, Xcode Cloud, signing identities, and internal sharing") {
             VStack(alignment: .leading, spacing: 14) {
                 StoreDiagnosticsPanel()
                 ViewThatFits(in: .horizontal) {
@@ -296,13 +316,6 @@ struct BuildTab: View {
                         if state.stores.contains(.google) { InternalSharingPanel() }
                     }
                 }
-            }
-            .padding(.top, 12)
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Store tooling").font(Theme.font(size: 13, weight: .semibold))
-                Text("Diagnostics, Xcode Cloud, signing identities, and internal sharing")
-                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
         }
         .storePanel(padding: 14, horizontal: 15)
@@ -530,15 +543,6 @@ private struct PickerLabel: View {
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6)
             .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
-    }
-}
-
-private struct PickerActionRow: View {
-    let value: String
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) { PickerLabel(value: value) }
-            .buttonStyle(.plain)
     }
 }
 

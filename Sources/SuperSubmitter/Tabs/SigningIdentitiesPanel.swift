@@ -206,12 +206,20 @@ struct SigningIdentitiesPanel: View {
 
     /// Both forms behind one fold. Neither is a thing a developer does on the
     /// way past, and open they were half the panel.
+    ///
+    /// Creating a bundle ID is the bootstrap step of an app that has never
+    /// shipped, so an update does not draw it. It is not clutter there, it is
+    /// a hazard: the app already ships under an identifier, the call reserves
+    /// a second one for the team, and Apple publishes nothing that deletes one
+    /// again.
     private var addSomething: some View {
         DisclosureGroup(isExpanded: $addOpen) {
             VStack(alignment: .leading, spacing: 14) {
                 registerDevice
-                Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
-                addBundleID
+                if state.showsNewAppFields {
+                    Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+                    addBundleID
+                }
             }
             .padding(.top, 9)
         } label: {
@@ -219,7 +227,9 @@ struct SigningIdentitiesPanel: View {
                 Image(systemName: "plus.circle")
                     .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .frame(width: 13)
-                Text("Register a device or create a bundle ID")
+                Text(state.showsNewAppFields
+                     ? "Register a device or create a bundle ID"
+                     : "Register a device")
                     .font(Theme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 0)
             }

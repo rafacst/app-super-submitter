@@ -1740,6 +1740,19 @@ final class AppState {
         actualState.apple?.isUpdate == true || !storeSnapshot.isEmpty
     }
 
+    /// Whether the tabs draw the fields that only a first submission uses.
+    ///
+    /// A first submission has to reserve a bundle ID, name the app, and supply
+    /// everything the store has never been told. An update was told all of it
+    /// on the day it shipped, so those controls are noise at best; the write
+    /// ones are worse than noise, because reserving a second bundle ID for an
+    /// app that already ships under one is a mistake the API cannot undo.
+    ///
+    /// It is the inverse of `isUpdatingLiveApp` and it has its own name so a
+    /// view says what it means: a tab hides a field because the app is new or
+    /// is not, and never because of what a store read happened to answer.
+    var showsNewAppFields: Bool { !isUpdatingLiveApp }
+
     /// True when a store holds a screenshot for the language on screen.
     ///
     /// The Media tab asks so that an empty grid on an update can say which of
