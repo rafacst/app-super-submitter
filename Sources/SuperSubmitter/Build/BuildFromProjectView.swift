@@ -45,16 +45,16 @@ struct BuildFromProjectView: View {
 
     private var linkCard: some View {
         VStack(alignment: .leading, spacing: 11) {
-            Text("Build from a project folder").font(.system(size: 13, weight: .semibold))
+            Text("Build from a project folder").font(Theme.font(size: 13, weight: .semibold))
             Text("Super Submitter runs your own Xcode or Gradle build, reads the artifact it produced, and uploads that exact file. It never edits your project, your versions, or your signing.")
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 9) {
                 Button { flow.linkFolder() } label: {
                     Text("Link Project Folder")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(Theme.font(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -65,7 +65,7 @@ struct BuildFromProjectView: View {
                 Spacer(minLength: 0)
             }
             Text("Building can execute scripts, package plug-ins, and compiler macros supplied by the project you choose.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -79,19 +79,19 @@ struct BuildFromProjectView: View {
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
                 Text(project?.platform == .android ? "Gradle" : "Xcode")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(Theme.font(size: 10.5, weight: .medium))
                     .foregroundStyle(Theme.text2)
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 5))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(project?.displayName ?? "").font(.system(size: 13, weight: .semibold))
+                    Text(project?.displayName ?? "").font(Theme.font(size: 13, weight: .semibold))
                     Text(project?.containerURL.lastPathComponent ?? "")
                         .font(Theme.mono(11)).foregroundStyle(Theme.text2)
                 }
                 Spacer(minLength: 8)
                 if let validated = project?.lastValidatedAt {
                     Text("checked \(validated.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
             }
             if let revision = flow.candidate?.sourceRevision {
@@ -109,14 +109,14 @@ struct BuildFromProjectView: View {
                 Spacer(minLength: 0)
             }
             Text("Unlink removes this link only. It never deletes the project or its build output.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
         }
         .storePanel(horizontal: 15)
     }
 
     private var containerChooser: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Choose the container").font(.system(size: 12.5, weight: .semibold))
+            Text("Choose the container").font(Theme.font(size: 12.5, weight: .semibold))
             ForEach(flow.containers) { container in
                 Button {
                     guard let root = flow.project?.rootURL
@@ -126,10 +126,10 @@ struct BuildFromProjectView: View {
                 } label: {
                     HStack(spacing: 9) {
                         Text(container.kind.rawValue)
-                            .font(.system(size: 10.5))
+                            .font(Theme.font(size: 10.5))
                             .foregroundStyle(Theme.text2)
                             .frame(width: 66, alignment: .leading)
-                        Text(container.name).font(.system(size: 12))
+                        Text(container.name).font(Theme.font(size: 12))
                         if !container.isBuildable {
                             StatePill(text: "Blocked", foreground: Theme.red,
                                       background: Theme.redBg)
@@ -144,7 +144,7 @@ struct BuildFromProjectView: View {
                 .disabled(!container.isBuildable)
                 if !container.reasons.isEmpty {
                     Text(container.reasons.joined(separator: " "))
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.yellow)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.yellow)
                 }
             }
         }
@@ -155,7 +155,7 @@ struct BuildFromProjectView: View {
         VStack(alignment: .leading, spacing: 9) {
             if flow.project?.platform != .android {
                 HStack(spacing: 9) {
-                    Text("Platform").font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    Text("Platform").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                         .frame(width: 92, alignment: .leading)
                     Picker("", selection: Binding(get: { flow.platform },
                                                   set: { flow.choosePlatform($0) })) {
@@ -191,7 +191,7 @@ struct BuildFromProjectView: View {
     private func chooser(_ label: String, options: [String], selected: String?,
                          choose: @escaping (String) -> Void) -> some View {
         HStack(spacing: 9) {
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.text2)
+            Text(label).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 .frame(width: 92, alignment: .leading)
             Menu {
                 ForEach(options, id: \.self) { option in
@@ -200,11 +200,11 @@ struct BuildFromProjectView: View {
             } label: {
                 HStack {
                     Text(selected ?? "Choose \(label.lowercased())…")
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .foregroundStyle(selected == nil ? Theme.text3 : Theme.text)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 6)
-                    Text("▾").font(.system(size: 9)).foregroundStyle(Theme.text3)
+                    Text("▾").font(Theme.font(size: 9)).foregroundStyle(Theme.text3)
                 }
                 .padding(.horizontal, 9).padding(.vertical, 5)
                 .frame(width: 340)
@@ -223,7 +223,7 @@ struct BuildFromProjectView: View {
         let snapshot = flow.snapshot
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Preflight").font(.system(size: 12.5, weight: .semibold))
+                Text("Preflight").font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 8)
                 if flow.state == .preflight { Spinner() }
             }
@@ -238,16 +238,16 @@ struct BuildFromProjectView: View {
                 Toggle(isOn: Bindable(flow).allowProvisioningUpdates) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Let Xcode update the provisioning")
-                            .font(.system(size: 12))
+                            .font(Theme.font(size: 12))
                         Text("Off by default. With it on, Xcode may contact Apple and create or change an App ID, a certificate, or a profile.")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text2)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .toggleStyle(.checkbox)
                 Toggle(isOn: Bindable(flow).alwaysReviewArtifact) {
                     Text("Always review the built artifact before upload")
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                 }
                 .toggleStyle(.checkbox)
             }
@@ -256,13 +256,13 @@ struct BuildFromProjectView: View {
                 Divider().padding(.vertical, 7)
                 HStack(alignment: .top, spacing: 9) {
                     StatePill(text: "Blocked", foreground: Theme.red, background: Theme.redBg)
-                    Text(blocking).font(.system(size: 12))
+                    Text(blocking).font(Theme.font(size: 12))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
             }
             ForEach(flow.warnings, id: \.self) { warning in
-                Text(warning).font(.system(size: 11.5)).foregroundStyle(Theme.yellow)
+                Text(warning).font(Theme.font(size: 11.5)).foregroundStyle(Theme.yellow)
             }
         }
         .storePanel(horizontal: 15)
@@ -316,14 +316,14 @@ struct BuildFromProjectView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 if flow.state.isActive { Spinner() }
-                Text(flow.state.stepTitle).font(.system(size: 12.5, weight: .semibold))
+                Text(flow.state.stepTitle).font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 8)
                 if !flow.elapsed.isEmpty {
                     Text("\(flow.elapsed) elapsed")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                 }
             }
-            Text(explanation).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            Text(explanation).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
 
             if flow.state == .uploading || flow.state == .processingOrValidating {
@@ -337,7 +337,7 @@ struct BuildFromProjectView: View {
                 .frame(height: 6)
             }
             if let processing = flow.processingLabel {
-                Text(processing).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(processing).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
 
             HStack(spacing: 7) {
@@ -386,7 +386,7 @@ struct BuildFromProjectView: View {
     private func artifactCard(_ candidate: BuildCandidate) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("The built artifact").font(.system(size: 12.5, weight: .semibold))
+                Text("The built artifact").font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 8)
                 StatePill(text: candidate.signingSummary.verified == true
                           ? "Signature verified" : "Signature not verified",
@@ -397,7 +397,7 @@ struct BuildFromProjectView: View {
             }
             ForEach(artifactRows(candidate), id: \.0) { label, value in
                 HStack(spacing: 12) {
-                    Text(label).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .frame(width: 128, alignment: .leading)
                     Text(value).font(Theme.mono(11.5)).textSelection(.enabled)
                         .lineLimit(1).truncationMode(.middle)
@@ -410,7 +410,7 @@ struct BuildFromProjectView: View {
                               foreground: mismatch.blocksUpload ? Theme.red : Theme.yellow,
                               background: mismatch.blocksUpload ? Theme.redBg : Theme.yellowBg)
                     Text("\(mismatch.field): the preflight said \(mismatch.expected) and the artifact holds \(mismatch.actual).")
-                        .font(.system(size: 11.5))
+                        .font(Theme.font(size: 11.5))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -451,7 +451,7 @@ struct BuildFromProjectView: View {
                 Button { flow.showBuildConfirmation = true } label: {
                     Text(flow.project?.platform == .android
                          ? "Build App Bundle" : "Build Archive")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.font(size: 13, weight: .semibold))
                         .foregroundStyle(flow.canBuild ? Theme.accentText : Theme.text3)
                         .padding(.horizontal, 20).padding(.vertical, 9)
                         .background(flow.canBuild ? Theme.accent : Theme.sep2,
@@ -463,7 +463,7 @@ struct BuildFromProjectView: View {
             if flow.state == .needsUploadConfirmation {
                 Button { flow.showUploadConfirmation = true } label: {
                     Text("Upload to the store")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.font(size: 13, weight: .semibold))
                         .foregroundStyle(flow.canUpload ? Theme.accentText : Theme.text3)
                         .padding(.horizontal, 20).padding(.vertical, 9)
                         .background(flow.canUpload ? Theme.accent : Theme.sep2,
@@ -480,7 +480,7 @@ struct BuildFromProjectView: View {
                 Button { flow.buildAgain() } label: {
                     Text(flow.project?.platform == .android
                          ? "Build a new App Bundle" : "Build a new archive")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.font(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 20).padding(.vertical, 9)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 8))
@@ -588,12 +588,12 @@ struct BuildFromProjectView: View {
     private var successCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(flow.artifactOnly ? "The artifact is kept." : "The build reached the store.")
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.font(size: 15, weight: .semibold))
             if let candidate = flow.candidate {
                 Text(flow.artifactOnly
                      ? "\(candidate.productIdentifier) \(candidate.marketingVersion) (\(candidate.buildVersion)) was kept locally and was not uploaded."
                      : "\(candidate.productIdentifier) \(candidate.marketingVersion) (\(candidate.buildVersion)) is in the store as a draft. Nothing was sent for review.")
-                    .font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 7) {
@@ -624,24 +624,24 @@ struct BuildFromProjectView: View {
             HStack(spacing: 9) {
                 StatePill(text: failure.category.rawValue, foreground: Theme.red,
                           background: Theme.redBg)
-                Text(failure.stage).font(.system(size: 12.5, weight: .semibold))
+                Text(failure.stage).font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 0)
             }
-            Text(failure.message).font(.system(size: 12.5))
+            Text(failure.message).font(Theme.font(size: 12.5))
                 .fixedSize(horizontal: false, vertical: true)
             if let recovery = failure.recovery {
-                Text(recovery).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(recovery).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if failure.retainedArtifact != nil || failure.retainedRemoteEdit != nil {
                 Text(retention(failure))
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 7) {
                 Button { flow.retry() } label: {
                     Text("Retry")
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(Theme.font(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 14).padding(.vertical, 5)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 7))
@@ -666,7 +666,7 @@ struct BuildFromProjectView: View {
                     }
                     .frame(height: 160)
                 }
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
             }
         }
         .storePanel(horizontal: 15, background: Theme.redBg, border: Theme.red, borderWidth: 1)
@@ -714,10 +714,10 @@ struct PreflightRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(label).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .frame(width: 118, alignment: .leading)
             Text(value)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(status == .blocked ? Theme.red : Theme.text)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -753,8 +753,8 @@ struct ConfirmationSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
-            Text(title).font(.system(size: 15, weight: .semibold))
-            Text(body_).font(.system(size: 12.5)).lineSpacing(3)
+            Text(title).font(Theme.font(size: 15, weight: .semibold))
+            Text(body_).font(Theme.font(size: 12.5)).lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: 0) {
@@ -766,7 +766,7 @@ struct ConfirmationSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .padding(.horizontal, 12).padding(.vertical, 6)
                 }
             }
@@ -775,13 +775,13 @@ struct ConfirmationSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
 
-            Text(note).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+            Text(note).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 9) {
                 Spacer()
                 Button { dismiss() } label: {
-                    Text("Cancel").font(.system(size: 13)).foregroundStyle(Theme.text)
+                    Text("Cancel").font(Theme.font(size: 13)).foregroundStyle(Theme.text)
                         .padding(.horizontal, 16).padding(.vertical, 7)
                         .background(Theme.field, in: RoundedRectangle(cornerRadius: 7))
                         .overlay(RoundedRectangle(cornerRadius: 7)
@@ -793,7 +793,7 @@ struct ConfirmationSheet: View {
                     dismiss()
                     action()
                 } label: {
-                    Text(confirm).font(.system(size: 13, weight: .semibold))
+                    Text(confirm).font(Theme.font(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16).padding(.vertical, 7)
                         .background(destructive ? Theme.redFill : Theme.accent,

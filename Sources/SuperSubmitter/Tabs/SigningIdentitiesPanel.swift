@@ -51,13 +51,13 @@ struct SigningIdentitiesPanel: View {
                 header
                 ForEach(failures, id: \.self) { failure in
                     Label(failure, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let error { ErrorLine(text: error) }
                 if loaded, items.isEmpty, failures.isEmpty {
                     Text("The account holds no signing identity yet.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 if !expiring.isEmpty { expiryNote }
 
@@ -90,14 +90,14 @@ struct SigningIdentitiesPanel: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("The certificates, profiles, devices, and identifiers of the team, with the dates they lapse. Super Submitter reads these and revokes none.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 QuietButton(title: busy ? "Fetching…" : "Fetch the identities") { load() }
                     .disabled(busy)
                 if loaded, !items.isEmpty {
                     Text("\(items.count) identities")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 Spacer(minLength: 0)
             }
@@ -130,9 +130,9 @@ struct SigningIdentitiesPanel: View {
         let lapsing = group.filter { $0.isExpired || $0.expiresSoon() }.count
         return HStack(spacing: 7) {
             Image(systemName: kind.symbol)
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .frame(width: 13)
-            Text(kind.title).font(.system(size: 12, weight: .semibold))
+            Text(kind.title).font(Theme.font(size: 12, weight: .semibold))
             Spacer(minLength: 6)
             if lapsing > 0 {
                 StatePill(text: "\(lapsing) LAPSING", foreground: Theme.orange,
@@ -171,12 +171,12 @@ struct SigningIdentitiesPanel: View {
     private func row(_ item: AppleProvisioningClient.Item) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 8) {
-                Text(item.name).font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                Text(item.name).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 6)
                 if let expiry = item.expiresAt {
                     Text(expiry.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 10.5))
+                        .font(Theme.font(size: 10.5))
                         .foregroundStyle(item.isExpired || item.expiresSoon()
                                          ? Theme.orange : Theme.text3)
                 }
@@ -190,11 +190,11 @@ struct SigningIdentitiesPanel: View {
                     }
                     Spacer(minLength: 6)
                     if let platform = item.platform {
-                        Text(platform).font(.system(size: 10))
+                        Text(platform).font(Theme.font(size: 10))
                             .foregroundStyle(Theme.text3)
                     }
                     if let state = item.state {
-                        Text(state).font(.system(size: 10)).foregroundStyle(Theme.text3)
+                        Text(state).font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
                             .lineLimit(1)
                     }
                 }
@@ -217,10 +217,10 @@ struct SigningIdentitiesPanel: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: "plus.circle")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     .frame(width: 13)
                 Text("Register a device or create a bundle ID")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 0)
             }
             .contentShape(.rect)
@@ -234,7 +234,7 @@ struct SigningIdentitiesPanel: View {
     /// edge of the inspector, where it could not be pressed at all.
     private var registerDevice: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Register a device").font(.system(size: 11.5, weight: .medium))
+            Text("Register a device").font(Theme.font(size: 11.5, weight: .medium))
             TextField("Anna's iPhone", text: $deviceName)
                 .textFieldStyle(.roundedBorder)
             TextField("Device identifier", text: $deviceUDID)
@@ -254,7 +254,7 @@ struct SigningIdentitiesPanel: View {
                                 deviceUDID.trimmingCharacters(in: .whitespaces)))
             }
             Text("Xcode shows the identifier under Window ▸ Devices and Simulators. It costs one slot of the yearly quota, so a typo is spent until the membership renews.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -264,7 +264,7 @@ struct SigningIdentitiesPanel: View {
     /// App Store Connect, and this is the step before it.
     private var addBundleID: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Create a bundle ID").font(.system(size: 11.5, weight: .medium))
+            Text("Create a bundle ID").font(Theme.font(size: 11.5, weight: .medium))
             TextField("My App", text: $bundleName)
                 .textFieldStyle(.roundedBorder)
             // No sample identifier in the box. `RuntimePlaceholderTests`
@@ -285,7 +285,7 @@ struct SigningIdentitiesPanel: View {
                         bundleIdentifier.trimmingCharacters(in: .whitespaces)))
             }
             Text("Apple publishes no call that creates the App Store record, so this reserves the identifier and you make the app once in App Store Connect. Nothing here deletes one again.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

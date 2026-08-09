@@ -18,11 +18,11 @@ struct SignInPanel: View {
         VStack(alignment: .leading, spacing: 13) {
             HStack(spacing: 8) {
                 Text(state.accountCreating ? "Create account" : "Sign in")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.font(size: 14, weight: .semibold))
                 Spacer(minLength: 0)
                 Button { state.showSignIn = false } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(Theme.font(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.text2)
                         .frame(width: 24, height: 24)
                         .contentShape(.rect)
@@ -32,7 +32,7 @@ struct SignInPanel: View {
             }
 
             Text("Use the same account on every Mac. Your purchase is attached to it.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -51,7 +51,7 @@ struct SignInPanel: View {
 
             HStack(spacing: 9) {
                 Hairline()
-                Text("or").font(.system(size: 11)).foregroundStyle(Theme.text3)
+                Text("or").font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 Hairline()
             }
 
@@ -78,7 +78,7 @@ struct SignInPanel: View {
                     state.accountMessage = nil
                 }
                 .buttonStyle(.link)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 Spacer(minLength: 0)
                 if state.accountBusy { Spinner() }
             }
@@ -102,9 +102,9 @@ struct SignInPanel: View {
                 } label: {
                     HStack(spacing: 7) {
                         Image(systemName: provider.symbol)
-                            .font(.system(size: 12))
+                            .font(Theme.font(size: 12))
                         Text("Continue with \(provider.title)")
-                            .font(.system(size: 12))
+                            .font(Theme.font(size: 12))
                     }
                     .foregroundStyle(Theme.text)
                     .frame(maxWidth: .infinity)

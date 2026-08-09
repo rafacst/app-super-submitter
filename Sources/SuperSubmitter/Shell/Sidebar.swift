@@ -80,8 +80,10 @@ struct Sidebar: View {
             ForEach(SidebarSection.allCases) { section in
                 let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
                 if !rows.isEmpty {
-                    Section(section.title, isExpanded: isOpen(section)) {
+                    Section(isExpanded: isOpen(section)) {
                         ForEach(rows) { DestinationRow(destination: $0) }
+                    } header: {
+                        GroupHeader(title: section.title, isOpen: isOpen(section))
                     }
                 }
             }
@@ -98,7 +100,13 @@ struct Sidebar: View {
     /// ponytail: a measured constant, not a `GeometryReader` reading the
     /// overlay back into the margin. The footer is two known controls; when it
     /// grows a third, measure it again.
-    private var footerHeight: CGFloat { state.showsUpgradeCard ? 150 : 44 }
+    ///
+    /// Through `Theme.scaled`, because both controls are text and the reserve
+    /// has to move with the type. Left fixed, a larger font makes the footer
+    /// taller than the room kept for it and the last row hides underneath.
+    private var footerHeight: CGFloat {
+        Theme.scaled(state.showsUpgradeCard ? 150 : 44)
+    }
 
     /// The account, then the offer, pinned to the floor of the column.
     ///
@@ -145,7 +153,7 @@ private struct AppsSection: View {
     @Binding var isOpen: Bool
 
     var body: some View {
-        Section("Apps", isExpanded: $isOpen) {
+        Section(isExpanded: $isOpen) {
             ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
                 Button {
                     state.selectApp(at: index)
@@ -156,7 +164,7 @@ private struct AppsSection: View {
                         Spacer(minLength: 6)
                         if index == state.selectedAppIndex {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(Theme.font(size: 10, weight: .semibold))
                                 .foregroundStyle(.tint)
                         }
                     }
@@ -187,7 +195,35 @@ private struct AppsSection: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
+        } header: {
+            GroupHeader(title: "Apps", isOpen: $isOpen)
         }
+    }
+}
+
+/// The heading of a sidebar group, and the whole of it opens and closes the
+/// group.
+///
+/// `Section(_:isExpanded:)` draws the title itself and hands the opening to the
+/// disclosure control alone, so the word "Publish" was inert: the obvious
+/// target did nothing and the only one that worked was a chevron that is not
+/// drawn until the pointer is over the row. A developer who clicked the name
+/// got no answer and no reason.
+private struct GroupHeader: View {
+    let title: String
+    @Binding var isOpen: Bool
+
+    var body: some View {
+        Text(title)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+            .onTapGesture { isOpen.toggle() }
+            // The strip the system draws its own disclosure control in stays
+            // clear. Covering it would let one click reach both targets and
+            // toggle the group twice, which breaks the one way in that worked.
+            .padding(.trailing, 28)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(isOpen ? "Open" : "Closed")
     }
 }
 
@@ -285,7 +321,7 @@ private struct AppSwitcher: View {
                     Text("No app").foregroundStyle(.secondary)
                 }
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(Theme.font(size: 13, weight: .semibold))
         }
         // `.button`, and the default style drew the app icon at the size of
         // the whole sidebar. A macOS `Menu` in its default style hands its
@@ -334,11 +370,11 @@ private struct AccountControl: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: "person.crop.circle")
-                    .font(.system(size: 15))
+                    .font(Theme.font(size: 15))
                     .foregroundStyle(.secondary)
                 Text(label).lineLimit(1).truncationMode(.middle)
             }
-            .font(.system(size: 12.5))
+            .font(Theme.font(size: 12.5))
         }
         .controlSize(.small)
         .accessibilityLabel("Account")
@@ -380,11 +416,11 @@ private struct UpgradeCard: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 7) {
                 IconChip(symbol: "bolt.fill", tint: Theme.accent, size: 20)
-                Text("Super Submitter Pro").font(.system(size: 12.5, weight: .semibold))
+                Text("Super Submitter Pro").font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 0)
             }
             Text(line)
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -397,7 +433,7 @@ private struct UpgradeCard: View {
             // purchase path.
             Button { state.openPaywall(.settings) } label: {
                 Text("See the plans")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.accentText)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
@@ -431,7 +467,7 @@ struct InitialsBadge: View {
             .frame(width: size, height: size)
             .overlay(
                 Text(text)
-                    .font(.system(size: size * 0.4, weight: .medium))
+                    .font(Theme.font(size: size * 0.4, weight: .medium))
                     .foregroundStyle(Theme.text2)
             )
     }
@@ -523,7 +559,7 @@ struct BadgeView: View {
         // Verbatim, so a locale that groups thousands cannot turn a count
         // into "1.242". See the Details counter for the same reason.
         Text(verbatim: "\(count)")
-            .font(.system(size: size * 0.65, weight: .semibold))
+            .font(Theme.font(size: size * 0.65, weight: .semibold))
             .foregroundStyle(severity.color)
             .padding(.horizontal, 4)
             .frame(minWidth: size, minHeight: size)

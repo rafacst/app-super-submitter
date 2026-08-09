@@ -63,7 +63,7 @@ struct ReleaseTab: View {
             }
             Spacer()
         }
-        .font(.system(size: 12))
+        .font(Theme.font(size: 12))
         .padding(12)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9)
@@ -98,11 +98,11 @@ struct ReleaseTab: View {
                 // separator, and proportional digits shuffle the words after them
                 // every time a step is ticked.
                 Text(verbatim: "\(state.consoleDone) of \(state.consoleRows.count) steps are done")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.font(size: 14, weight: .semibold))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                 Text("Every row below happens in a console. No API performs it.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
             if !state.consoleRows.isEmpty {
@@ -115,7 +115,7 @@ struct ReleaseTab: View {
     private var notReadYet: some View {
         HStack(spacing: 11) {
             Text("The checklist needs one read of the stores.")
-                .font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2)
             QuietButton(title: "Read the stores") { Task { await state.recheck() } }
             Spacer(minLength: 0)
         }
@@ -165,10 +165,10 @@ struct ReleaseTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     SystemMark(name: card.name)
-                    Text(card.name).font(.system(size: 12.5, weight: .semibold))
+                    Text(card.name).font(Theme.font(size: 12.5, weight: .semibold))
                     Spacer(minLength: 8)
                     Text(verbatim: "\(done) of \(card.rows.count)")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                         .monospacedDigit()
                         .contentTransition(.numericText())
                 }
@@ -205,10 +205,10 @@ struct ReleaseTab: View {
             StatePill(text: "Failed", foreground: Theme.red, background: Theme.redBg)
             VStack(alignment: .leading, spacing: 3) {
                 Text(message)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .fixedSize(horizontal: false, vertical: true)
                 Text("The other store is untouched. This app never chained the two.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
         }
@@ -228,9 +228,9 @@ struct ReleaseTab: View {
     private var sendToReview: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 11) {
-                Text("Send to review").font(.system(size: 14, weight: .semibold))
+                Text("Send to review").font(Theme.font(size: 14, weight: .semibold))
                 Text("One button per store. These two are the only irreversible actions in this app.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
 
@@ -403,17 +403,17 @@ private struct ChecklistRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(row.reason)
-                    .font(.system(size: 10.5))
+                    .font(Theme.font(size: 10.5))
                     .foregroundStyle(Theme.text2)
                     .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
                 if shown != .done {
                     Button { state.open(row.link) } label: {
-                        Text("Open ↗").font(.system(size: 10.5)).foregroundStyle(Theme.accent)
+                        Text("Open ↗").font(Theme.font(size: 10.5)).foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Open \(row.title)")
@@ -460,7 +460,7 @@ private struct ChecklistRow: View {
                     .overlay(RoundedRectangle(cornerRadius: 3)
                         .strokeBorder(Theme.controlEdge, lineWidth: 1))
                     .overlay(Text(marked ? "✓" : "")
-                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white))
+                        .font(Theme.font(size: 8, weight: .bold)).foregroundStyle(.white))
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -468,7 +468,7 @@ private struct ChecklistRow: View {
             .accessibilityValue(marked ? "Confirmed" : "Not confirmed")
         } else {
             Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 9))
+                .font(Theme.font(size: 9))
                 .foregroundStyle(Theme.text3)
                 .frame(width: 14, height: 14)
                 .help("The store reports this one. There is nothing to tick.")
@@ -569,12 +569,12 @@ private struct StatusCard: View {
             .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(status.storeName).font(.system(size: 12.5, weight: .medium))
-                Text(detail).font(.system(size: 11)).foregroundStyle(Theme.text2).lineLimit(1)
+                Text(status.storeName).font(Theme.font(size: 12.5, weight: .medium))
+                Text(detail).font(Theme.font(size: 11)).foregroundStyle(Theme.text2).lineLimit(1)
             }
             Spacer(minLength: 8)
             Text(status.phase.label)
-                .font(.system(size: 12, weight: .medium))
+                .font(Theme.font(size: 12, weight: .medium))
                 .foregroundStyle(ReleaseTab.phaseColour(status.phase) ?? Theme.text)
         }
         .storePanel(padding: 12, horizontal: 15,
@@ -609,14 +609,14 @@ private struct ReleaseColumn: View {
         VStack(alignment: .leading, spacing: 12) {
             StoreLabel(store: store, size: 12.5)
             Text(lines)
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button(action: action) {
                 Text(label)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(Theme.font(size: 13.5, weight: .semibold))
                     .foregroundStyle(inactive ? Theme.text3 : .white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 13)
@@ -630,7 +630,7 @@ private struct ReleaseColumn: View {
             .disabled(inactive)
 
             Text(hint)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(hintColor)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)

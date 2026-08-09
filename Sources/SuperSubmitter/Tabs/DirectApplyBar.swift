@@ -22,11 +22,11 @@ struct DirectApplyBar: View {
                 Text(changes.isEmpty
                      ? "\(destination.capitalizedFirst) already holds everything on this tab."
                      : "\(changes.count) \(changes.count == 1 ? "row" : "rows") to write")
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(Theme.font(size: 12.5, weight: .medium))
                 Text(message.isEmpty
                      ? (changes.first ?? "Nothing here reaches a customer until you publish it in the store console.")
                      : message)
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(state.directApplyFailed(target) ? Theme.red : Theme.text2)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)

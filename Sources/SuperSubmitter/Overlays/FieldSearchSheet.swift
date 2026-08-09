@@ -65,10 +65,10 @@ struct FieldSearchSheet: View {
     private var field: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 13)).foregroundStyle(Theme.text3)
             TextField("Find a field", text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15))
+                .font(Theme.font(size: 15))
                 .focused($focused)
                 .onAppear { focused = true }
                 // A new query invalidates the old row number, and a stale one
@@ -85,11 +85,11 @@ struct FieldSearchSheet: View {
             Spacer()
             Text(query.isEmpty ? "Type the name of a field."
                  : "No field matches \(query).")
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .foregroundStyle(Theme.text2)
             if query.isEmpty {
                 Text("Super Submitter opens the tab and scrolls to it.")
-                    .font(.system(size: 11.5))
+                    .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.text3)
             }
             Spacer()
@@ -102,7 +102,7 @@ struct FieldSearchSheet: View {
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Go to")
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(Theme.font(size: 10.5, weight: .semibold))
                 .foregroundStyle(Theme.text3)
                 .padding(.horizontal, 14)
                 .padding(.top, 10)
@@ -137,18 +137,18 @@ struct FieldSearchSheet: View {
         Button { open(entry) } label: {
             HStack(spacing: 9) {
                 Image(systemName: entry.tab.symbol)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(selected ? Theme.accent : Theme.text3)
                     .frame(width: 17)
 
                 Text(entry.tab.title(in: state.mode))
-                    .font(.system(size: 12.5))
+                    .font(Theme.font(size: 12.5))
                     .foregroundStyle(Theme.text2)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(Theme.font(size: 8, weight: .semibold))
                     .foregroundStyle(Theme.text3)
                 Self.highlighted(entry.label, matching: query)
-                    .font(.system(size: 12.5))
+                    .font(Theme.font(size: 12.5))
                     .foregroundStyle(Theme.text)
 
                 Spacer(minLength: 10)
@@ -156,7 +156,7 @@ struct FieldSearchSheet: View {
                 // keyboard and the pointer agree about which one that is.
                 if selected {
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(Theme.font(size: 11, weight: .medium))
                         .foregroundStyle(Theme.accent)
                 }
             }
@@ -196,7 +196,7 @@ struct FieldSearchSheet: View {
             hint(["return"], "to open")
             Spacer(minLength: 0)
             Text("\(results.count) \(results.count == 1 ? "field" : "fields")")
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text3)
                 .monospacedDigit()
         }
@@ -209,7 +209,7 @@ struct FieldSearchSheet: View {
     private func hint(_ symbols: [String], _ label: String) -> some View {
         HStack(spacing: 5) {
             ForEach(symbols, id: \.self) { KeyCap(symbol: $0) }
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text3)
+            Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
         }
     }
 
@@ -253,9 +253,9 @@ private struct KeyCap: View {
     var body: some View {
         Group {
             if let symbol {
-                Image(systemName: symbol).font(.system(size: 9, weight: .semibold))
+                Image(systemName: symbol).font(Theme.font(size: 9, weight: .semibold))
             } else {
-                Text(text ?? "").font(.system(size: 10, weight: .medium))
+                Text(text ?? "").font(Theme.font(size: 10, weight: .medium))
             }
         }
         .foregroundStyle(Theme.text3)

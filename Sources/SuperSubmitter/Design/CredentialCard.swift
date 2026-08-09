@@ -50,8 +50,8 @@ struct CredentialCard<Content: View>: View {
 
                     Button(action: toggleGuide) {
                         HStack(spacing: 6) {
-                            Text(guideOpen ? "▼" : "▶").font(.system(size: 8))
-                            Text("Where do I get this?").font(.system(size: 12))
+                            Text(guideOpen ? "▼" : "▶").font(Theme.font(size: 8))
+                            Text("Where do I get this?").font(Theme.font(size: 12))
                         }
                         .foregroundStyle(Theme.accent)
                         .contentShape(.rect)
@@ -84,12 +84,12 @@ struct CredentialCard<Content: View>: View {
         Button(action: toggle) {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(Theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(Theme.text3)
                     .rotationEffect(.degrees(open ? 90 : 0))
                 StoreMark(store: store, size: 18)
                 Text("\(store.storeName) credential")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.font(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
                 // What the fold hides. A folded card that says only
                 // "Connected" cannot answer "as which account", which is the
@@ -108,8 +108,8 @@ struct CredentialCard<Content: View>: View {
                 // like the state they had not reached.
                 if let status {
                     HStack(spacing: 5) {
-                        Image(systemName: Self.symbol(status)).font(.system(size: 11))
-                        Text(Self.word(status)).font(.system(size: 11.5)).fixedSize()
+                        Image(systemName: Self.symbol(status)).font(Theme.font(size: 11))
+                        Text(Self.word(status)).font(Theme.font(size: 11.5)).fixedSize()
                     }
                     .foregroundStyle(Self.colour(status))
                 }
@@ -153,13 +153,13 @@ struct CredentialCard<Content: View>: View {
             QuietButton(title: title, glass: true,
                         prominent: !(status?.isConnected ?? false), action: connect)
                 .disabled(status == .connecting)
-            Text(keychainNote).font(.system(size: 11.5))
+            Text(keychainNote).font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             if case .failed(let message) = status {
                 WarningNote(message)
             } else if case .connected(let message) = status {
-                Text(message).font(.system(size: 11.5))
+                Text(message).font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.green)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -244,14 +244,14 @@ struct GuideBox: View {
                     Text("\(index + 1)").foregroundStyle(Theme.text2)
                     Text(step).fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .lineSpacing(3)
             }
 
             HStack(alignment: .top, spacing: 9) {
-                Text("!").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.yellow)
+                Text("!").font(Theme.font(size: 12, weight: .bold)).foregroundStyle(Theme.yellow)
                 Text(guide.warning)
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -280,7 +280,7 @@ struct QuietButtonLabel: View {
     let title: String
     var body: some View {
         Text(title)
-            .font(.system(size: 12))
+            .font(Theme.font(size: 12))
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 11)
             .padding(.vertical, 4)
@@ -309,14 +309,14 @@ struct FileWell: View {
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
                 .frame(width: 30, height: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(name.isEmpty ? emptyName : name).font(.system(size: 12)).lineLimit(1)
+                Text(name.isEmpty ? emptyName : name).font(Theme.font(size: 12)).lineLimit(1)
                 HStack(spacing: 3) {
                     Text(prompt).foregroundStyle(Theme.text2)
                     Button("choose a file…", action: choose)
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
                 }
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
             }
             Spacer(minLength: 0)
         }
@@ -342,7 +342,7 @@ struct EditableField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text2)
+            Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             TextField(prompt, text: $value.limited(to: limit))
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))

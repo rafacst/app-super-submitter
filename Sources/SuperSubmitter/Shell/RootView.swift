@@ -27,11 +27,19 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             ContentArea()
+                // No title in the title bar. It said "Super Submitter" on every
+                // screen, over a band that already names the screen you are on,
+                // so the app spent its loudest row repeating the one fact a
+                // user never has to be told. The name is on the menu bar, in
+                // the Dock, and in About.
+                //
+                // The band below is the title now, on every tab.
+                .navigationTitle("")
         }
         .navigationSplitViewStyle(.balanced)
         .background(Theme.content)
         .foregroundStyle(Theme.text)
-        .font(.system(size: 13))
+        .font(Theme.font(size: 13))
         // Every sheet carries the message alert. See AppMessage: an alert on
         // this view alone cannot appear while a sheet covers it.
         .sheet(isPresented: $state.showSettings) { SettingsPanel().appMessage() }
@@ -205,13 +213,13 @@ private struct LiveWriteBar: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
+            Image(systemName: "exclamationmark.triangle.fill").font(Theme.font(size: 11))
             Text("The dry run is off. An apply writes to \(state.storeListText).")
-                .font(.system(size: 11.5, weight: .medium))
+                .font(Theme.font(size: 11.5, weight: .medium))
             Spacer(minLength: 8)
             Button("Turn the dry run on") { state.dryRun = true }
                 .buttonStyle(.plain)
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(Theme.font(size: 11.5, weight: .semibold))
                 .underline()
         }
         .foregroundStyle(Theme.yellow)
@@ -243,12 +251,12 @@ private struct EmptyAppView: View {
             Text(state.mode == .publishing
                  ? "Point Super Submitter at your app"
                  : "Bring in the app you want to manage")
-                .font(.system(size: 25, weight: .semibold))
+                .font(Theme.font(size: 25, weight: .semibold))
                 .kerning(-0.4)
             Text(state.mode == .publishing
                  ? "Pick the folder your app is built in. We read the build and keep one small file beside it."
                  : "Managing works on a live app. Connect your store accounts and import the one you want to look after.")
-                .font(.system(size: 15))
+                .font(Theme.font(size: 15))
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
@@ -282,12 +290,12 @@ private struct EmptyAppView: View {
             // old flow revealed that on the Release tab, at the end, once
             // every in-app step was already finished.
             HStack(alignment: .top, spacing: 7) {
-                Image(systemName: "info.circle").font(.system(size: 11))
+                Image(systemName: "info.circle").font(Theme.font(size: 11))
                 Text("Some store steps have no API. Super Submitter writes every draft it can, then lists the ones you finish in the store console yourself.")
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
             }
-            .font(.system(size: 11.5))
+            .font(Theme.font(size: 11.5))
             .foregroundStyle(Theme.text2)
             .frame(maxWidth: 560, alignment: .leading)
             .padding(.top, 26)
@@ -339,22 +347,24 @@ private struct EntryModeCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 11) {
                 IconChip(symbol: symbol, tint: tint, size: 52)
-                Text(title).font(.system(size: 18, weight: .semibold))
+                Text(title).font(Theme.font(size: 18, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 14))
+                    .font(Theme.font(size: 14))
                     .foregroundStyle(Theme.text2)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 6)
                 Label("Continue", systemImage: "arrow.right")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(Theme.font(size: 13.5, weight: .semibold))
                     .foregroundStyle(tint)
             }
             .padding(20)
             // A fixed height, so the pane cannot stretch the card and the two
-            // cards stay level whatever their text length.
-            .frame(maxWidth: .infinity, minHeight: 236, maxHeight: 236,
-                   alignment: .topLeading)
+            // cards stay level whatever their text length. It holds four lines
+            // of type, so it grows with the type: at a fixed 236 the detail
+            // sentence wrapped onto a line the card had no room for.
+            .frame(maxWidth: .infinity, minHeight: Theme.scaled(236),
+                   maxHeight: Theme.scaled(236), alignment: .topLeading)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(hovering ? tint.opacity(0.55) : Theme.sep,
@@ -412,7 +422,7 @@ private struct ContentHeader: View {
                     state.showYAML.toggle()
                 } label: {
                     Text("YAML")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(Theme.font(size: 11.5, weight: .medium))
                         .foregroundStyle(state.showYAML ? Theme.accentText : Theme.text2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -457,7 +467,7 @@ private struct ContentHeader: View {
                 HeaderCluster(morphOn: shape) {
                     Button { state.showFieldSearch = true } label: {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 13))
+                            .font(Theme.font(size: 13))
                             .foregroundStyle(Theme.text2)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
@@ -473,7 +483,7 @@ private struct ContentHeader: View {
                 HeaderCluster(morphOn: shape) {
                     Button { buildInspectorOpen.toggle() } label: {
                         Image(systemName: "sidebar.trailing")
-                            .font(.system(size: 13))
+                            .font(Theme.font(size: 13))
                             .foregroundStyle(buildInspectorOpen ? Theme.accent : Theme.text2)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
@@ -488,7 +498,7 @@ private struct ContentHeader: View {
                 HeaderCluster(morphOn: shape) {
                     Button { detailsInspectorOpen.toggle() } label: {
                         Image(systemName: "sidebar.trailing")
-                            .font(.system(size: 13))
+                            .font(Theme.font(size: 13))
                             .foregroundStyle(detailsInspectorOpen ? Theme.accent : Theme.text2)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
@@ -519,7 +529,7 @@ private struct ContentHeader: View {
                     }
                 }
                 HeaderCluster(morphOn: shape) {
-                    Text("Dry run").font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    Text("Dry run").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                     // Turning the dry run off is the moment an apply becomes a
                     // store write, so that is where the paywall belongs, and
                     // where the question belongs. Turning it back on needs no
@@ -613,7 +623,7 @@ private struct LocalePicker: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text("Language").font(.system(size: 11)).foregroundStyle(Theme.text2)
+            Text("Language").font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             HStack(spacing: 0) {
                 ForEach(state.locales, id: \.self) { code in
                     let selected = state.locale == code
@@ -644,7 +654,7 @@ private struct LocalePicker: View {
             // and a segmented control with a live segment is a lie about state.
             Button { state.showAddLocale = true } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(Theme.font(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.text2)
                     .frame(width: 24, height: 24)
                     .contentShape(.rect)
@@ -714,10 +724,10 @@ struct SavedChip: View {
             if recentlySaved {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10.5))
+                        .font(Theme.font(size: 10.5))
                         .foregroundStyle(Theme.green)
                     Text(line)
-                        .font(.system(size: 11))
+                        .font(Theme.font(size: 11))
                         .foregroundStyle(Theme.text2)
                         .lineLimit(1)
                 }

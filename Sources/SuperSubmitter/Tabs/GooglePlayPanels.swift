@@ -20,7 +20,7 @@ struct InternalSharingPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Upload the Android build and get a private install link. This writes no draft and it uses no version code.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Uploading…" : "Upload and share") { share() }
@@ -34,14 +34,14 @@ struct InternalSharingPanel: View {
                 } else {
                     Label("The manifest names no Android build yet.",
                           systemImage: "info.circle")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
 
                 if let error { ErrorLine(text: error) }
 
                 if let shared {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Install link").font(.system(size: 12, weight: .semibold))
+                        Text("Install link").font(Theme.font(size: 12, weight: .semibold))
                         HStack(spacing: 8) {
                             Text(shared.downloadUrl).font(Theme.mono(11))
                                 .textSelection(.enabled).lineLimit(1).truncationMode(.middle)
@@ -52,7 +52,7 @@ struct InternalSharingPanel: View {
                             }
                             .controlSize(.small)
                             if let url = URL(string: shared.downloadUrl) {
-                                Link("Open", destination: url).font(.system(size: 11.5))
+                                Link("Open", destination: url).font(Theme.font(size: 11.5))
                             }
                         }
                         if let sha = shared.sha256 {
@@ -99,7 +99,7 @@ struct GeneratedAPKPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Play re-signs every build it serves. These are the files that match a crash report from the store. Reading and downloading change nothing.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch the APKs") { load() }
@@ -108,20 +108,20 @@ struct GeneratedAPKPanel: View {
 
                 if state.googleLatestVersionCode == nil {
                     Text("Read the stores on the Summary tab first, so this knows which version code to ask for.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 if let error { ErrorLine(text: error) }
                 if loaded, apks.isEmpty {
                     Text("Google generated no APK for this version code.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 ForEach(apks) { apk in
                     HStack(spacing: 9) {
                         Image(systemName: "shippingbox")
-                            .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         Text(apk.kind).font(Theme.mono(11))
                         Text("version code \(apk.versionCode)")
-                            .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         Spacer(minLength: 8)
                         if let file = saved[apk.id] {
                             Button("Show") {
@@ -167,7 +167,7 @@ struct GoogleReviewsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("The reviews of the last week. A reply is public, and a second reply replaces the first.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch reviews") { load() }
@@ -177,7 +177,7 @@ struct GoogleReviewsPanel: View {
                 if let error { ErrorLine(text: error) }
                 if loaded, reviews.isEmpty {
                     Text("Google reports no review in the last week.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 ForEach(reviews) { review in
                     reviewRow(review)
@@ -201,25 +201,25 @@ struct GoogleReviewsPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(review.authorName ?? "Anonymous")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                 if let stars = review.starRating {
                     Text(String(repeating: "★", count: max(0, min(5, stars))))
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.yellow)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.yellow)
                 }
                 Spacer()
                 if let date = review.lastModified {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
             }
             if let text = review.text, !text.isEmpty {
-                Text(text).font(.system(size: 12)).foregroundStyle(Theme.text2)
+                Text(text).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let reply = review.developerReply, !reply.isEmpty {
                 Label(reply, systemImage: "arrowshape.turn.up.left")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
@@ -227,7 +227,7 @@ struct GoogleReviewsPanel: View {
                           text: draftBinding(review.id), axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .returnInsertsLineBreak()
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .lineLimit(1...3)
                 let draft = (drafts[review.id] ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -279,7 +279,7 @@ struct GoogleRecoveryPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("The remote fix for a bad release. A draft reaches nobody. A deploy reaches every targeted installation, and no call takes it back.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Working…" : "Fetch recoveries") { load() }
@@ -290,7 +290,7 @@ struct GoogleRecoveryPanel: View {
                 if loaded {
                     if actions.isEmpty {
                         Text("Google holds no recovery action for this app.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     }
                     ForEach(actions) { action in recoveryRow(action) }
                     HStack {
@@ -319,12 +319,12 @@ struct GoogleRecoveryPanel: View {
                 HStack(spacing: 8) {
                     Text(action.id).font(Theme.mono(11.5)).textSelection(.enabled)
                     Text(Self.statusLabel(action))
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(Theme.font(size: 10.5, weight: .semibold))
                         .foregroundStyle(live ? Theme.red : Theme.text3)
                 }
                 if !action.targetedVersionCodes.isEmpty {
                     Text("version codes \(action.targetedVersionCodes.map(String.init).joined(separator: ", "))")
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
             }
             Spacer()

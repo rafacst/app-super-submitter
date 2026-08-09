@@ -127,10 +127,10 @@ struct AboutPanel: View {
                         .frame(width: 108, height: 108)
                         .accessibilityLabel("The Super Submitter icon")
                     Text(Self.appName)
-                        .font(.system(size: 21, weight: .semibold))
+                        .font(Theme.font(size: 21, weight: .semibold))
                         .kerning(-0.25)
                     Text(Self.versionLine)
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .foregroundStyle(Theme.text2)
                         .textSelection(.enabled)
                 }
@@ -138,7 +138,7 @@ struct AboutPanel: View {
             }
 
             Text("Prepares an iOS, macOS, or Android app for the App Store and Google Play from one file. It shows you the exact diff, and sends nothing until you do.")
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -178,7 +178,7 @@ struct AboutPanel: View {
             Hairline()
 
             Text(Self.copyright)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text3)
         }
     }
@@ -190,9 +190,9 @@ struct AboutPanel: View {
                         action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(Theme.font(size: 13, weight: .semibold))
             Text(line)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)

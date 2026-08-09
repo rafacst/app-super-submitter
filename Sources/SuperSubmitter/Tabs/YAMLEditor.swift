@@ -15,15 +15,15 @@ struct YAMLEditor: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 9) {
                 Text("The raw `store.yaml` block behind this tab.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 Spacer(minLength: 8)
                 if state.yamlDirty {
-                    Text("Not saved").font(.system(size: 11.5)).foregroundStyle(Theme.yellow)
+                    Text("Not saved").font(Theme.font(size: 11.5)).foregroundStyle(Theme.yellow)
                     QuietButton(title: "Revert") { state.loadYAML(block) }
                 }
                 Button { state.saveYAML(block) } label: {
                     Text("Save the YAML")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(Theme.font(size: 12, weight: .medium))
                         .foregroundStyle(state.yamlDirty ? Theme.accentText : Theme.text3)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
@@ -50,7 +50,7 @@ struct YAMLEditor: View {
                 HStack(alignment: .top, spacing: 9) {
                     StatePill(text: "YAML", foreground: Theme.red, background: Theme.redBg)
                     Text(error)
-                        .font(.system(size: 12))
+                        .font(Theme.font(size: 12))
                         .foregroundStyle(Theme.red)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)

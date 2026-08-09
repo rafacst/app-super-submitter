@@ -29,7 +29,7 @@ private struct AppleReviewsPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("The newest reviews. A reply is public, and Apple keeps one reply per review, so a second one replaces the first.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
                     QuietButton(title: busy ? "Fetching…" : "Fetch reviews") { load() }
@@ -42,7 +42,7 @@ private struct AppleReviewsPanel: View {
                 ForEach(summaries) { summary in summaryBlock(summary) }
                 if loaded, reviews.isEmpty {
                     Text("Apple reports no review for this app.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 }
                 ForEach(reviews) { review in
                     reviewRow(review)
@@ -69,25 +69,25 @@ private struct AppleReviewsPanel: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Label("What the reviews say", systemImage: "sparkles")
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(Theme.font(size: 11.5, weight: .semibold))
                 if let locale = summary.locale {
                     Text(locale).font(Theme.mono(10)).foregroundStyle(Theme.text3)
                 }
                 if let platform = summary.platform {
-                    Text(AppleWords.title(platform)).font(.system(size: 10.5))
+                    Text(AppleWords.title(platform)).font(Theme.font(size: 10.5))
                         .foregroundStyle(Theme.text3)
                 }
                 Spacer(minLength: 8)
                 if let date = summary.createdDate {
                     Text(date.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
             }
-            Text(summary.text).font(.system(size: 12)).foregroundStyle(Theme.text2)
+            Text(summary.text).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Apple wrote this summary, not a person and not this app.")
-                .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
         }
         .padding(10)
         .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
@@ -97,10 +97,10 @@ private struct AppleReviewsPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(review.authorName ?? "Anonymous")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                 if let stars = review.starRating {
                     Text(String(repeating: "★", count: max(0, min(5, stars))))
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.yellow)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.yellow)
                 }
                 if let territory = review.territory {
                     Text(territory).font(Theme.mono(10)).foregroundStyle(Theme.text3)
@@ -108,21 +108,21 @@ private struct AppleReviewsPanel: View {
                 Spacer()
                 if let date = review.lastModified {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
             }
             if let title = review.title, !title.isEmpty {
-                Text(title).font(.system(size: 12, weight: .medium))
+                Text(title).font(Theme.font(size: 12, weight: .medium))
             }
             if let text = review.text, !text.isEmpty {
-                Text(text).font(.system(size: 12)).foregroundStyle(Theme.text2)
+                Text(text).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let reply = review.developerReply, !reply.isEmpty {
                 HStack(alignment: .top, spacing: 8) {
                     Label(reply, systemImage: "arrowshape.turn.up.left")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     if let responseId = review.responseId {
@@ -136,7 +136,7 @@ private struct AppleReviewsPanel: View {
                 TextField("Write a reply", text: draftBinding(review.id), axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .returnInsertsLineBreak()
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .lineLimit(1...4)
                 let draft = (drafts[review.id] ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)

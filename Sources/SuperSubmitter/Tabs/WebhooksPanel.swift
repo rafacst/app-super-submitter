@@ -36,7 +36,7 @@ struct WebhooksPanel: View {
                 if loaded {
                     if hooks.isEmpty {
                         Text("This app has no webhook. Apple pushes nothing until one exists.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     }
                     ForEach(hooks) { hook in
                         Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
@@ -66,7 +66,7 @@ struct WebhooksPanel: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("Apple pushes an event to your own server the moment it happens: a review state, a finished build, a tester's crash. This app configures the hook and reads the deliveries; the events reach the server, not this window.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.text2)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             QuietButton(title: busy ? "Fetching…" : "Fetch the webhooks") { load() }
@@ -82,7 +82,7 @@ struct WebhooksPanel: View {
             HStack(spacing: 9) {
                 Button { toggle(hook) } label: {
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(Theme.font(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.text3)
                         .frame(width: 14, height: 14)
                         .contentShape(.rect)
@@ -90,13 +90,13 @@ struct WebhooksPanel: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(expanded ? "Collapse the deliveries" : "Show the deliveries")
 
-                Text(hook.name).font(.system(size: 12, weight: .medium))
+                Text(hook.name).font(Theme.font(size: 12, weight: .medium))
                 if !hook.enabled {
                     StatePill(text: "OFF", foreground: Theme.text3, background: Theme.sunken)
                 }
                 Spacer(minLength: 8)
                 Text("\(hook.eventTypes.count) events")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 Button(hook.enabled ? "Switch off" : "Switch on") {
                     setEnabled(hook, !hook.enabled)
                 }
@@ -118,17 +118,17 @@ struct WebhooksPanel: View {
             Text(ChoiceText.summary(of: ChoiceText.text(from: hook.eventTypes),
                                     in: AppleWebhooksClient.eventTypes,
                                     empty: "No event"))
-                .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             let rows = deliveries[hook.id] ?? []
             if rows.isEmpty {
                 Text("Apple has delivered nothing yet.")
-                    .font(.system(size: 11)).foregroundStyle(Theme.text3)
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
             }
             ForEach(rows) { delivery in
                 HStack(spacing: 8) {
                     Text(delivery.state?.lowercased() ?? "unknown")
-                        .font(.system(size: 11))
+                        .font(Theme.font(size: 11))
                         .foregroundStyle(delivery.state == "SUCCEEDED" ? Theme.green
                                          : delivery.state == "PENDING" ? Theme.yellow : Theme.red)
                         .frame(width: 70, alignment: .leading)
@@ -137,13 +137,13 @@ struct WebhooksPanel: View {
                             .foregroundStyle(Theme.text3)
                     }
                     if let message = delivery.errorMessage, !message.isEmpty {
-                        Text(message).font(.system(size: 10.5))
+                        Text(message).font(Theme.font(size: 10.5))
                             .foregroundStyle(Theme.orange).lineLimit(1)
                     }
                     Spacer(minLength: 8)
                     if let date = delivery.createdDate {
                         Text(date.formatted(date: .abbreviated, time: .shortened))
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                     }
                 }
             }
@@ -155,7 +155,7 @@ struct WebhooksPanel: View {
 
     private var create: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Add a webhook").font(.system(size: 12, weight: .semibold))
+            Text("Add a webhook").font(Theme.font(size: 12, weight: .semibold))
             FieldRow {
                 LabeledField("Name", width: 180) {
                     TextField("", text: $newName)

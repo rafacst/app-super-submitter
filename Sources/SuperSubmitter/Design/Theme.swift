@@ -101,9 +101,41 @@ enum Theme {
     static let redBg = Color(light: Color(hex: 0xC42A24).opacity(0.09),
                              dark: Color(hex: 0xFF7A6E).opacity(0.14))
 
-    static let mono = Font.system(size: 11, design: .monospaced)
+    // MARK: - The type
+
+    /// Every font in the app, at one size and in one face.
+    ///
+    /// It replaced about 670 hand-written system-font calls across thirty
+    /// files. Each one stated a size in points, so the app had no scale it
+    /// could change: making the text larger meant editing every call site, and
+    /// the sizes drifted because nothing held them together.
+    ///
+    /// This is that one place. `fontScale` moves every size at once and keeps
+    /// the tiers the design set, and the face is the body of this function.
+    static func font(size: CGFloat, weight: Font.Weight = .regular,
+                     design: Font.Design = .default) -> Font {
+        .system(size: scaled(size), weight: weight, design: design)
+    }
+
+    /// How much larger than the design's own numbers the app draws.
+    ///
+    /// The design was set at 11 to 13 points, which is smaller than the macOS
+    /// system font and small enough that the long explanatory sentences on
+    /// every tab were hard work to read.
+    static let fontScale: CGFloat = 1.15
+
+    /// Rounded to a half point, and not to a whole one.
+    ///
+    /// The design has tiers half a point apart (10.5, 11, 11.5, 12, 12.5), and
+    /// whole-point rounding would collapse neighbours into each other, so a
+    /// caption and the body text beside it would come out the same size.
+    static func scaled(_ size: CGFloat) -> CGFloat {
+        (size * fontScale * 2).rounded() / 2
+    }
+
+    static let mono = font(size: 11, design: .monospaced)
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        font(size: size, weight: weight, design: .monospaced)
     }
 
     // MARK: - The type scale
@@ -115,15 +147,15 @@ enum Theme {
     // nothing can test.
 
     /// The name of the screen, in the header band.
-    static let screenTitle = Font.system(size: 21, weight: .semibold)
+    static let screenTitle = Theme.font(size: 21, weight: .semibold)
     /// The question under the screen title.
-    static let screenSubtitle = Font.system(size: 12)
+    static let screenSubtitle = Theme.font(size: 12)
     /// The heading over a group of cards.
-    static let sectionHeader = Font.system(size: 12.5, weight: .semibold)
+    static let sectionHeader = Theme.font(size: 12.5, weight: .semibold)
     /// The heading on a single card.
-    static let cardTitle = Font.system(size: 13, weight: .semibold)
-    static let body = Font.system(size: 12.5)
-    static let caption = Font.system(size: 11.5)
+    static let cardTitle = Theme.font(size: 13, weight: .semibold)
+    static let body = Theme.font(size: 12.5)
+    static let caption = Theme.font(size: 11.5)
 
     // The window itself.
     static let windowRadius: CGFloat = 11
@@ -238,7 +270,7 @@ struct ErrorLine: View {
 
     var body: some View {
         Label(text, systemImage: "exclamationmark.triangle.fill")
-            .font(.system(size: 11.5)).foregroundStyle(Theme.orange)
+            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.orange)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -433,7 +465,7 @@ struct PanelTitleBar: View {
 
     var body: some View {
         ZStack {
-            Text(title).font(.system(size: 13, weight: .semibold))
+            Text(title).font(Theme.font(size: 13, weight: .semibold))
             HStack(spacing: 8) {
                 Button(action: close) {
                     Circle().fill(Color(hex: 0xFF5F57)).frame(width: 12, height: 12)
@@ -465,7 +497,7 @@ struct StatePill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10.5, weight: .medium))
+            .font(Theme.font(size: 10.5, weight: .medium))
             .foregroundStyle(foreground)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
@@ -490,10 +522,10 @@ struct WarningNote: View {
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 10))
+                .font(Theme.font(size: 10))
                 .padding(.top, 1)
             Text(text)
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -531,7 +563,7 @@ struct QuietButton: View {
             // The style draws the capsule, so the label carries no fill and
             // no border of its own. Two chromes on one button is a double edge.
             Button(action: action) {
-                Text(title).font(.system(size: 12, weight: prominent ? .semibold : .regular))
+                Text(title).font(Theme.font(size: 12, weight: prominent ? .semibold : .regular))
             }
             .buttonStyle(prominent ? AnyButtonStyle(.glassProminent) : AnyButtonStyle(.glass))
             // Only the prominent one takes a tint. Plain glass reads the tint
@@ -546,7 +578,7 @@ struct QuietButton: View {
 
     private var flatLabel: some View {
         Text(title)
-            .font(.system(size: 12, weight: prominent ? .semibold : .regular))
+            .font(Theme.font(size: 12, weight: prominent ? .semibold : .regular))
             .foregroundStyle(prominent ? Theme.accentText : Theme.text)
             .padding(.horizontal, 11)
             .padding(.vertical, 4)
@@ -587,7 +619,7 @@ struct ProminentButton: View {
     var body: some View {
         if #available(macOS 26.0, *) {
             Button(action: action) {
-                Text(title).font(.system(size: 14, weight: .semibold))
+                Text(title).font(Theme.font(size: 14, weight: .semibold))
             }
             .buttonStyle(.glassProminent)
             .controlSize(.large)
@@ -595,7 +627,7 @@ struct ProminentButton: View {
         } else {
             Button(action: action) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.font(size: 14, weight: .semibold))
                     .foregroundStyle(enabled ? Theme.accentText : Theme.text3)
                     .padding(.horizontal, 26)
                     .padding(.vertical, 11)
