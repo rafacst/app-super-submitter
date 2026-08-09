@@ -19,17 +19,15 @@ struct AppIdentifiers: View {
         Section_("This app in the stores", icon: "number", tint: Theme.accent,
                  anchor: "build.identifiers") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("The store decides these, not you. An import fills them in. The credential that reaches them lives on the Stores tab and covers every app on the account.")
+                Text("The store decides these, not you. An import fills them in, and the list below picks between the apps a credential can see. The credential that reaches them lives on the Stores tab and covers every app on the account.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if state.stores.contains(.apple) {
-                    IdentifierField(label: "App id", value: $state.appleAppID,
-                                    prompt: "Numeric App Store ID")
-                        .onChange(of: state.appleAppID) { state.updateAppleAppFields() }
-                    IdentifierField(label: "Bundle id", value: $state.appleBundleID,
-                                    prompt: "Reverse-DNS bundle identifier")
-                        .onChange(of: state.appleBundleID) { state.updateAppleAppFields() }
+                    IdentifierValue(label: "App id", value: state.appleAppID,
+                                    placeholder: "Numeric App Store ID")
+                    IdentifierValue(label: "Bundle id", value: state.appleBundleID,
+                                    placeholder: "Reverse-DNS bundle identifier")
                     // A universal app has a version train per platform, each
                     // with its own numbers, text, and screenshots. This says
                     // which one every read here means. It shows only when there
@@ -69,30 +67,43 @@ struct AppIdentifiers: View {
                 }
 
                 if state.stores.contains(.google) {
-                    IdentifierField(label: "Package name", value: $state.googlePackageName,
-                                    prompt: "Reverse-DNS package name")
-                        .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
+                    IdentifierValue(label: "Package name", value: state.googlePackageName,
+                                    placeholder: "Reverse-DNS package name")
+                }
+                if state.appleAppID.isEmpty, state.appleBundleID.isEmpty,
+                   state.googlePackageName.isEmpty {
+                    Text("Nothing has filled these in yet. Import an existing listing on the Stores tab, or open the YAML editor above to set them by hand.")
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }.storePanel()
         }
     }
 }
 
-private struct IdentifierField: View {
+/// One identifier, as a value and not as a box you may type in.
+///
+/// It was a `TextField`, under a paragraph that says the store decides these.
+/// The two disagreed, and the box won the argument: an editable field is an
+/// invitation, and the invitation was to invent an App id. The Build tab draws
+/// the same three identifiers this way already.
+private struct IdentifierValue: View {
     let label: String
-    @Binding var value: String
-    let prompt: String
+    let value: String
+    let placeholder: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
-            TextField(prompt, text: $value)
-                .textFieldStyle(.plain)
+            Text(value.isEmpty ? placeholder : value)
                 .font(Theme.mono(12))
+                .foregroundStyle(value.isEmpty ? Theme.text3 : Theme.text)
+                .textSelection(.enabled)
+                .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
+                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
         }

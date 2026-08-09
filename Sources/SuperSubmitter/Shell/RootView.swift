@@ -18,6 +18,10 @@ struct RootView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     /// The sidebar may be hidden, and the shell remembers whether it is.
     @State private var columns = NavigationSplitViewVisibility.automatic
+    /// Whether the Details inspector is showing. The split view owns the
+    /// column, so the flag has to be readable here as well as in the header
+    /// button that toggles it.
+    @AppStorage("detailsInspector") private var detailsInspectorOpen = true
 
     var body: some View {
         @Bindable var state = state
@@ -96,6 +100,20 @@ struct RootView: View {
                 // the framework on every layout pass.
                 .documentURL(state.manifestURL)
         }
+        // On the split view, and not inside the detail column.
+        //
+        // It used to hang off the content of the detail column, which is where
+        // it reads naturally: the inspector belongs to the Details tab. But an
+        // inspector inside a column grows that column by its own width, so the
+        // split view laid three columns out wider than the window and pushed
+        // the sidebar off the left edge until the resize caught up. A third
+        // column of the split view divides the width it already has.
+        .inspector(isPresented: Binding(
+            get: { state.selectedTab == .details && detailsInspectorOpen },
+            set: { if state.selectedTab == .details { detailsInspectorOpen = $0 } })) {
+            DetailsInspector()
+                .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
+        }
         .navigationSplitViewStyle(.balanced)
         // The title bar takes its colour from the columns underneath it, and
         // not from one fill laid over all three.
@@ -169,9 +187,6 @@ private struct ContentArea: View {
     /// carried the same divider as a tab of forty fields. The rule now says
     /// what a rule is for: there is more above.
     @State private var scrolled = false
-    /// Whether the Details inspector is showing. It outlives a relaunch, the
-    /// way every inspector on the Mac does.
-    @AppStorage("detailsInspector") private var detailsInspectorOpen = true
     /// For the jump-to-field scroll, which is a command and not a state flag.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -272,12 +287,6 @@ private struct ContentArea: View {
             }
         }
         .background(Theme.content)
-        .inspector(isPresented: Binding(
-            get: { state.selectedTab == .details && detailsInspectorOpen },
-            set: { if state.selectedTab == .details { detailsInspectorOpen = $0 } })) {
-            DetailsInspector()
-            .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
-        }
 
         // macOS 14 keeps the rule on at all times. There is no way to read the
         // offset there without an NSScrollView of our own, and a permanent
