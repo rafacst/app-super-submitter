@@ -238,7 +238,7 @@ struct MediaTab: View {
                     ? Store.allCases.filter(state.stores.contains)
                     : [nil]
                 ForEach(rows, id: \.self) { store in
-                    tiles(device, tile: tile, store: store)
+                    tiles(name, device, tile: tile, store: store)
                 }
                 mergeControl(device)
                 liveScreenshots(live)
@@ -251,7 +251,7 @@ struct MediaTab: View {
     /// One store's pictures for one size, or the shared list when the size
     /// holds a single one.
     @ViewBuilder
-    private func tiles(_ device: Manifest.DeviceClass, tile: CGSize,
+    private func tiles(_ name: String, _ device: Manifest.DeviceClass, tile: CGSize,
                        store: Store?) -> some View {
         let paths = state.mediaPaths(deviceClass: device, store: store)
         VStack(alignment: .leading, spacing: 6) {
@@ -263,6 +263,10 @@ struct MediaTab: View {
                     Text(verbatim: "\(paths.count)")
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         .monospacedDigit()
+                    // The pixel sizes this store takes for this size, beside
+                    // this store's own row. The group header carries the pair;
+                    // a developer filling the Play row wants Play's numbers.
+                    SizeInfoButton(name: name, deviceClass: device, stores: [store])
                     Spacer(minLength: 0)
                 }
             }
