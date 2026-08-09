@@ -63,6 +63,25 @@ public struct GoogleServiceAccount: Codable, Sendable, Equatable {
     }
 }
 
+/// A Google user's installed-app OAuth grant.
+///
+/// The refresh token is the durable credential. The access token is kept only
+/// to avoid an unnecessary refresh immediately after consent.
+public struct GoogleOAuthCredential: Codable, Sendable, Equatable {
+    public var clientID: String
+    public var accessToken: String
+    public var refreshToken: String
+    public var expiresAt: Date
+
+    public init(clientID: String, accessToken: String, refreshToken: String,
+                expiresAt: Date) {
+        self.clientID = clientID
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+    }
+}
+
 public struct RevenueCatCredential: Codable, Sendable, Equatable {
     public var apiKey: String
 
@@ -82,6 +101,7 @@ public struct ReviewerCredential: Codable, Sendable, Equatable {
 public enum CredentialKind: String, Sendable {
     case apple
     case google
+    case googleOAuth
     case revenueCat
     case reviewAccount
     /// The Supabase access and refresh tokens for the Super Submitter account.

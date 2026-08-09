@@ -29,6 +29,21 @@ private func googleOAuthSession() -> URLSession {
     return URLSession(configuration: configuration)
 }
 
+private func requestBody(_ request: URLRequest) -> String {
+    if let body = request.httpBody { return String(decoding: body, as: UTF8.self) }
+    guard let stream = request.httpBodyStream else { return "" }
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    var buffer = [UInt8](repeating: 0, count: 1_024)
+    while stream.hasBytesAvailable {
+        let count = stream.read(&buffer, maxLength: buffer.count)
+        guard count > 0 else { break }
+        data.append(contentsOf: buffer.prefix(count))
+    }
+    return String(decoding: data, as: UTF8.self)
+}
+
 @Suite(.serialized)
 struct GoogleOAuthTests {
     @Test func authorizationRequestsOfflinePublisherAccessWithPKCE() throws {
@@ -38,7 +53,7 @@ struct GoogleOAuthTests {
             state: "csrf-state",
             verifier: String(repeating: "v", count: 64))
         let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let query = Dictionary(uniqueKeysWithValues:
+        let query: [String: String] = Dictionary(uniqueKeysWithValues:
             (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
 
         #expect(components.host == "accounts.google.com")
@@ -65,7 +80,7 @@ struct GoogleOAuthTests {
         defer { session.invalidateAndCancel() }
         GoogleOAuthProtocol.handler = { request in
             #expect(request.url?.absoluteString == "https://oauth2.googleapis.com/token")
-            let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+            let body = requestBody(request)
             #expect(body.contains("grant_type=authorization_code"))
             #expect(body.contains("code_verifier="))
             let data = Data(#"{"access_token":"access","refresh_token":"refresh","expires_in":3600}"#.utf8)
@@ -106,7 +121,7 @@ struct GoogleOAuthTests {
         defer { session.invalidateAndCancel() }
         GoogleOAuthProtocol.handler = { request in
             if request.url?.host == "oauth2.googleapis.com" {
-                let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+                let body = requestBody(request)
                 #expect(body.contains("grant_type=refresh_token"))
                 #expect(body.contains("refresh_token=refresh"))
                 let data = Data(#"{"access_token":"new-access","expires_in":3600}"#.utf8)

@@ -69,7 +69,8 @@ extension AppState {
             apple: applePrivateKeyPEM.isEmpty ? nil : AppleCredential(
                 keyID: appleKeyID, issuerID: appleIssuerID,
                 privateKeyPEM: applePrivateKeyPEM, fileName: appleCredentialFileName),
-            google: googleCredential,
+            google: googleCredentialChoice == .serviceAccount ? googleCredential : nil,
+            googleOAuth: googleCredentialChoice == .oauth ? googleOAuthCredential : nil,
             revenueCatKey: revenueCatAPIKey.isEmpty ? nil : revenueCatAPIKey,
             reviewer: reviewerUsername.isEmpty ? nil : ReviewerCredential(
                 username: reviewerUsername, password: reviewerPassword))

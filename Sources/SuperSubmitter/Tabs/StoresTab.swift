@@ -25,19 +25,15 @@ struct StoresTab: View {
             } detail: { store in
                 switch store {
                 case .apple:
-                    if state.stores.contains(.apple) { AppleCredentialPanel() }
+                    AppleCredentialPanel()
+                    AppleTeamPanel()
                 case .google:
-                    if state.stores.contains(.google) { GoogleCredentialPanel() }
+                    GoogleCredentialPanel()
+                    GoogleTeamPanel()
                 }
             }
-            // Under both columns and not inside the Google one. A colleague
-            // belongs to the developer account, the same way the service
-            // account above does, so the panel is as wide as the tab rather
-            // than half of it.
-            if state.stores.contains(.apple) { AppleTeamPanel() }
-            if state.stores.contains(.google) { GoogleTeamPanel() }
         }
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: 1040, alignment: .leading)
         .confirmationDialog("Remove the stored credential?", isPresented: $removing.isPresent,
                             presenting: removing) { store in
             Button("Remove the credential", role: .destructive) {
@@ -51,6 +47,55 @@ struct StoresTab: View {
         }
     }
 
+}
+
+/// The store-account state that stays visible while the tab scrolls.
+struct StoresStatusBar: View {
+    @Environment(AppState.self) private var state
+
+    private var disconnected: [Store] {
+        state.stores.filter { !state.connection(for: $0).isConnected }
+            .sorted { $0.rawValue < $1.rawValue }
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            if !disconnected.isEmpty {
+                HStack(spacing: 7) {
+                    Circle().fill(Theme.red).frame(width: 7, height: 7)
+                    Text("\(disconnected.count) \(disconnected.count == 1 ? "blocker" : "blockers")")
+                        .font(Theme.font(size: 12.5, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(Theme.font(size: 9, weight: .semibold))
+                }
+                .foregroundStyle(Theme.red)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(Theme.red.opacity(0.35), lineWidth: Theme.hairline))
+                .accessibilityElement(children: .combine)
+
+                HStack(spacing: 6) {
+                    Circle().fill(Theme.yellow).frame(width: 7, height: 7)
+                    Text(disconnected.map { "\($0.storeName) is not connected" }
+                        .joined(separator: " · "))
+                }
+                .font(Theme.font(size: 12.5))
+                .foregroundStyle(Theme.text2)
+                .accessibilityElement(children: .combine)
+            }
+            Spacer(minLength: 8)
+            Text("One key per account, for every app on this Mac")
+                .font(Theme.font(size: 12))
+                .foregroundStyle(Theme.text3)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised)
+        .overlay(alignment: .bottom) { Hairline() }
+    }
 }
 
 private struct AppleCredentialPanel: View {
@@ -112,34 +157,56 @@ private struct GoogleCredentialPanel: View {
     @State private var importerOpen = false
 
     var body: some View {
+        @Bindable var state = state
         CredentialCard(
             store: .google,
             status: state.googleConnection,
-            summary: state.googleAccountEmail,
+            summary: state.googleCredentialSummary,
             open: state.credentialDetailsOpen(.google),
             toggle: { state.toggleCredentialDetails(.google) },
-            guide: .google,
+            guide: state.googleCredentialChoice == .oauth ? .googleOAuth : .google,
             guideOpen: state.googleGuideOpen,
             toggleGuide: { state.googleGuideOpen.toggle() },
             connect: state.connectGoogleStore,
-            keychainNote: "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and you never enter it a second time. The original file is not copied."
+            keychainNote: state.googleCredentialChoice == .oauth
+                ? "Google's refresh token is stored in the macOS Keychain and used by every app you open here."
+                : "One service account for the whole Google Play developer account. It is stored in the macOS Keychain, every app you open here uses it, and the original file is not copied."
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                FileWell(
-                    name: state.googleCredentialFileName,
-                    emptyName: "Google service-account key",
-                    prompt: "Drop the service account JSON, or",
-                    choose: { importerOpen = true },
-                    accept: { urls in
-                        guard let url = urls.first,
-                              url.pathExtension.lowercased() == "json" else { return false }
-                        state.importGoogleCredential(from: url)
-                        return true
-                    })
-                if !state.googleAccountEmail.isEmpty {
-                    Text(state.googleAccountEmail)
-                        .font(Theme.mono(11))
+                Picker("Google credential", selection: $state.googleCredentialChoice) {
+                    Text("Connect with Google").tag(GoogleCredentialChoice.oauth)
+                    Text("Service account JSON").tag(GoogleCredentialChoice.serviceAccount)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityLabel("Google credential type")
+
+                if state.googleCredentialChoice == .oauth {
+                    Text("Sign in in your browser. Super Submitter uses the Google Play access already granted to that account.")
+                        .font(Theme.font(size: 11.5))
                         .foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if GoogleOAuthConfiguration.clientID == nil,
+                       state.googleOAuthCredential == nil {
+                        WarningNote("This build still needs its Google OAuth desktop client ID. Service-account JSON works now.")
+                    }
+                } else {
+                    FileWell(
+                        name: state.googleCredentialFileName,
+                        emptyName: "Google service-account key",
+                        prompt: "Drop the service account JSON, or",
+                        choose: { importerOpen = true },
+                        accept: { urls in
+                            guard let url = urls.first,
+                                  url.pathExtension.lowercased() == "json" else { return false }
+                            state.importGoogleCredential(from: url)
+                            return true
+                        })
+                    if !state.googleAccountEmail.isEmpty {
+                        Text(state.googleAccountEmail)
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.text2)
+                    }
                 }
             }
         }

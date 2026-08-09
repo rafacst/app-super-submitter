@@ -73,15 +73,13 @@ struct RootView: View {
                 // Nothing on the entry screen, which is not a tab and names no
                 // app. It is the same test the band makes, so the title bar and
                 // the band can never disagree about which screen this is.
-                .navigationTitle(state.showsEntryScreen
-                                 ? "" : state.selectedTab.title(in: state.mode))
+                .navigationTitle(state.showsEntryScreen ? "" : windowTitle)
                 // The app being edited, and never the name of this program.
                 // The program name is on the menu bar, in the Dock, and in
                 // About. This window edits a file, and a document window on the
                 // Mac names its file: that is what makes the proxy icon below
                 // work.
-                .navigationSubtitle(state.showsEntryScreen
-                                    ? "" : state.currentApp?.name ?? "")
+                .navigationSubtitle(state.showsEntryScreen ? "" : windowSubtitle)
                 // The proxy icon. `store.yaml` is a real file that the app
                 // writes on every keystroke, so this window is a document
                 // window and had none of the affordances of one.
@@ -148,6 +146,18 @@ struct RootView: View {
             Task { await state.refreshEntitlement() }
         }
     }
+
+    private var windowTitle: String {
+        state.selectedTab == .stores
+            ? state.currentApp?.name ?? "Super Submitter"
+            : state.selectedTab.title(in: state.mode)
+    }
+
+    private var windowSubtitle: String {
+        state.selectedTab == .stores
+            ? state.manifestURL?.lastPathComponent ?? ""
+            : state.currentApp?.name ?? ""
+    }
 }
 
 /// The content column: the header, then the tab.
@@ -174,7 +184,10 @@ private struct ContentArea: View {
             // a screen whose whole job is one centred choice — and the traffic
             // lights sit on the sidebar panel, not here, so nothing needs the
             // room.
-            if !state.showsEntryScreen { ContentHeader(scrolled: scrolled) }
+            if !state.showsEntryScreen {
+                ContentHeader(scrolled: scrolled)
+                if state.selectedTab == .stores { StoresStatusBar() }
+            }
             if state.showsLiveWriteWarning { LiveWriteBar(); Hairline() }
             // The payoff of the whole onboarding: the two doors give way to
             // the app they opened. It used to happen between one frame and the
@@ -539,16 +552,20 @@ private struct ContentHeader: View {
     var body: some View {
         @Bindable var state = state
         HStack(spacing: 10) {
-            // The question alone. The name of the screen is in the title bar,
-            // beside the sidebar toggle, and a band that repeats it says the
-            // one thing the selected sidebar row has already said.
-            //
-            // The entry screen carries its own headline, in the size a
-            // headline wants, so the band stays off it entirely.
             if !state.showsEntryScreen {
-                Text(state.selectedTab.question)
-                    .font(Theme.screenSubtitle)
-                    .foregroundStyle(Theme.text2)
+                if state.selectedTab == .stores {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(state.selectedTab.title(in: state.mode))
+                            .font(Theme.screenTitle)
+                        Text(state.selectedTab.question)
+                            .font(Theme.screenSubtitle)
+                            .foregroundStyle(Theme.text2)
+                    }
+                } else {
+                    Text(state.selectedTab.question)
+                        .font(Theme.screenSubtitle)
+                        .foregroundStyle(Theme.text2)
+                }
             }
             Spacer(minLength: 8)
 
@@ -579,7 +596,7 @@ private struct ContentHeader: View {
             // navigation column, which gave a status the weight of a
             // destination and told you at every moment about a moment that had
             // passed.
-            SavedChip()
+            if state.selectedTab != .stores { SavedChip() }
 
             let shape = HeaderShape(tab: state.selectedTab, busy: state.rechecking,
                                     readFailed: state.planError != nil,
@@ -603,11 +620,29 @@ private struct ContentHeader: View {
             if state.manifestURL != nil {
                 HeaderCluster(morphOn: shape) {
                     Button { state.showFieldSearch = true } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(Theme.font(size: 13))
+                        if state.selectedTab == .stores {
+                            HStack(spacing: 6) {
+                                Image(systemName: "magnifyingglass")
+                                Text("Search")
+                                Text("⌘F")
+                                    .font(Theme.mono(10.5, weight: .semibold))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Theme.sep2,
+                                                in: RoundedRectangle(cornerRadius: 4))
+                            }
+                            .font(Theme.font(size: 12.5))
                             .foregroundStyle(Theme.text2)
-                            .frame(width: 24, height: 24)
+                            .padding(.horizontal, 8)
+                            .frame(height: 24)
                             .contentShape(.rect)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                                .font(Theme.font(size: 13))
+                                .foregroundStyle(Theme.text2)
+                                .frame(width: 24, height: 24)
+                                .contentShape(.rect)
+                        }
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Find a field")
@@ -720,7 +755,7 @@ private struct ContentHeader: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 18)
-        .frame(height: Theme.headerHeight)
+        .frame(height: state.selectedTab == .stores ? 64 : Theme.headerHeight)
         .confirmationDialog("Turn the dry run off?", isPresented: $armingLiveWrites,
                             titleVisibility: .visible) {
             Button("Turn it off", role: .destructive) { state.dryRun = false }
