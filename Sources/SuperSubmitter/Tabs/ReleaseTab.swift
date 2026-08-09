@@ -11,6 +11,7 @@ struct ReleaseTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            blockersHead
             header
             if state.consoleRows.isEmpty {
                 notReadYet
@@ -68,6 +69,63 @@ struct ReleaseTab: View {
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+
+    // MARK: - What is stopping this
+
+    /// The rows that hold a button back, at the head of the tab.
+    ///
+    /// The page opened on fifteen console rows and a progress bar, which
+    /// answers "how much is left" and not "what is stopping me". Those are
+    /// different questions and only one of them is why a developer opened this
+    /// tab. The blocking rows are a handful — the app already knows which,
+    /// because they are the ones `releaseBlockers` hands the two buttons — so
+    /// they stand first, and the rail below keeps the whole list.
+    @ViewBuilder
+    private var blockersHead: some View {
+        let blockers = Store.allCases
+            .filter(state.stores.contains)
+            .flatMap { state.releaseBlockers(for: $0) }
+        if !blockers.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 9) {
+                    Text(blockers.count == 1
+                         ? "1 thing is stopping \(releaseVersion)"
+                         : "\(blockers.count) things are stopping \(releaseVersion)")
+                        .font(Theme.font(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.red)
+                    Spacer(minLength: 8)
+                    QuietButton(title: "Re-check") { Task { await state.recheck() } }
+                }
+                .padding(.horizontal, 15).padding(.vertical, 10)
+
+                ForEach(blockers) { row in
+                    Hairline(color: Theme.red.opacity(0.3))
+                    HStack(alignment: .top, spacing: 9) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title).font(Theme.font(size: 12.5, weight: .medium))
+                            Text(row.reason)
+                                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                        Text(row.system).font(Theme.font(size: 11))
+                            .foregroundStyle(Theme.text3)
+                    }
+                    .padding(.horizontal, 15).padding(.vertical, 9)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 9))
+        }
+    }
+
+    /// The version the two buttons send, named the way the manifest names it.
+    private var releaseVersion: String {
+        let version = state.manifest.release?.versionName ?? ""
+        return version.isEmpty ? "this release" : version
     }
 
     // MARK: - The checklist
