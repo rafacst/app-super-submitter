@@ -276,10 +276,10 @@ struct PlanTab: View {
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
-                    // The fix for every one of these is the same tab, and the
-                    // message already names it. A row that says where to go
-                    // and does not go there makes the reader do the walk.
-                    QuietButton(title: "Open Stores") { state.selectedTab = .stores }
+                    QuietButton(title: message.hasPrefix("Provider:")
+                                ? "Open Settings" : "Open Stores") {
+                        state.fixReadFailure(message)
+                    }
                 }
                 .padding(.horizontal, 15)
                 .padding(.vertical, 10)

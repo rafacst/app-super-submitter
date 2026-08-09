@@ -22,16 +22,22 @@ struct AccountTab: View {
                 if let reason = state.paywallReason { reasonCard(reason) }
                 identity
                 if !state.accountServiceReady {
-                    WarningNote(AppState.noAccountService, width: Self.column)
+                    WarningNote(AppState.noAccountService)
                 }
                 // What it costs and what it covers, on one row rather than
                 // stacked. The tab was a single 620 point column in a pane half
                 // as wide again, so it spent a third of the width on nothing
                 // and ran off the bottom of a default window. Both halves are
                 // read together anyway: the question is what the money buys.
-                HStack(alignment: .top, spacing: 12) {
-                    if !state.isPaid { plans.frame(maxWidth: .infinity) }
-                    capabilities.frame(maxWidth: .infinity)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        if !state.isPaid { plans.frame(maxWidth: .infinity) }
+                        capabilities.frame(maxWidth: .infinity)
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !state.isPaid { plans }
+                        capabilities
+                    }
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 actions
@@ -183,9 +189,8 @@ struct AccountTab: View {
                           symbol: "checkmark.seal.fill", lines: Self.free)
         let paid = column(title: "Paid access", tint: Theme.purple,
                           symbol: "sparkles", lines: Self.paid, locked: !state.isPaid)
-        if state.isPaid {
+        ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) { free; paid }
-        } else {
             VStack(alignment: .leading, spacing: 12) { free; paid }
         }
     }

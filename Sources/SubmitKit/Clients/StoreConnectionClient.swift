@@ -420,7 +420,7 @@ public enum ConnectionError: Error, LocalizedError {
         case 400:
             "The store refused this as it stands."
         case 401:
-            "The store did not accept the credentials. Check the key file, the key id, and the issuer id on the Stores tab."
+            "The store did not accept the credentials. Check the credential file and the fields beside it on the Stores tab."
         case 403:
             "This account is not allowed to do that. Check the role its key was given in the store console."
         case 404:
