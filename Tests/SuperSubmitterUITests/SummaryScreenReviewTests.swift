@@ -52,6 +52,18 @@ private func summaryReviewSource(_ relativePath: String) throws -> String {
     #expect(RunwayStep.apply(state).lowercased().contains("draft"))
 }
 
+/// Forty writes across three systems is four screens of scrolling before the
+/// apply button. Each system folds, and they open shut, so the tab opens on the
+/// shape of the release and the developer opens the column they came for.
+@Test func everyPlanColumnFoldsAndOpensShut() throws {
+    let tab = try summaryReviewSource("Sources/SuperSubmitter/Tabs/PlanTab.swift")
+
+    #expect(tab.contains("openColumns: Set<PlanSystem> = []"))
+    #expect(tab.contains("chevron.right"))
+    // The same growth the Build folds use, and for the same reason.
+    #expect(tab.contains("clipped()"))
+}
+
 /// The diff is still the reason the tab exists, and the runway may not push it
 /// under the fold or take a column off it.
 @Test func theDiffKeepsItsPlaceAndItsActions() throws {
