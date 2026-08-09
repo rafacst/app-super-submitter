@@ -19,15 +19,18 @@ public enum PlanSystem: String, Sendable, CaseIterable, Codable {
 public struct StoreCredentials: Sendable {
     public var apple: AppleCredential?
     public var google: GoogleServiceAccount?
+    public var googleOAuth: GoogleOAuthCredential?
     public var revenueCatKey: String?
     /// The demo account. It reaches Apple in the review details and it never
     /// reaches `store.yaml`. Spec section 9.5.
     public var reviewer: ReviewerCredential?
 
     public init(apple: AppleCredential? = nil, google: GoogleServiceAccount? = nil,
+                googleOAuth: GoogleOAuthCredential? = nil,
                 revenueCatKey: String? = nil, reviewer: ReviewerCredential? = nil) {
         self.apple = apple
         self.google = google
+        self.googleOAuth = googleOAuth
         self.revenueCatKey = revenueCatKey
         self.reviewer = reviewer
     }
@@ -326,6 +329,30 @@ public actor StoreAPI {
     private func googleBearer(
         scope: String = "https://www.googleapis.com/auth/androidpublisher"
     ) async throws -> String {
+        if let credential = credentials.googleOAuth {
+            if let googleToken, googleToken.expires > Date().addingTimeInterval(60) {
+                return googleToken.value
+            }
+            if credential.expiresAt > Date().addingTimeInterval(60) {
+                googleToken = (credential.accessToken, credential.expiresAt)
+                return credential.accessToken
+            }
+            var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded",
+                             forHTTPHeaderField: "Content-Type")
+            request.httpBody = FormBody.encoded([
+                ("client_id", credential.clientID),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", credential.refreshToken),
+            ])
+            let result = try await perform(request, system: .google, path: "/token",
+                                           retryOverride: true)
+            let payload = try JSONDecoder().decode(GoogleToken.self, from: result.data)
+            googleToken = (payload.accessToken,
+                           Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3_600)))
+            return payload.accessToken
+        }
         guard let credential = credentials.google else {
             throw ConnectionError.missingCredential(.google)
         }

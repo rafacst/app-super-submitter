@@ -37,6 +37,13 @@ enum ConnectionStatus: Equatable {
     }
 }
 
+enum GoogleCredentialChoice: String, CaseIterable, Identifiable {
+    case oauth
+    case serviceAccount
+
+    var id: Self { self }
+}
+
 enum PurchaseTextField { case id, name, amount, currency, entitlement }
 enum PlanTextField {
     case id, duration, basePlanID, applePlanType, amount, currency, entitlement, packageKey
@@ -103,9 +110,11 @@ final class AppState {
     @ObservationIgnored private var pendingSave = false
     @ObservationIgnored var applePrivateKeyPEM = ""
     @ObservationIgnored var googleCredential: GoogleServiceAccount?
+    @ObservationIgnored var googleOAuthCredential: GoogleOAuthCredential?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
     @ObservationIgnored private let lastOpenAppKey = "lastOpenApp.v1"
     @ObservationIgnored private let modeDefaultsKey = "mode.v1"
+    @ObservationIgnored private let googleCredentialChoiceKey = "googleCredentialChoice.v1"
 
     // The manifest and the file behind it.
     var manifest = Manifest()
@@ -283,6 +292,13 @@ final class AppState {
     var googlePackageName = ""
     var googleCredentialFileName = ""
     var googleAccountEmail = ""
+    var googleCredentialChoice: GoogleCredentialChoice = .serviceAccount {
+        didSet {
+            guard googleCredentialChoice != oldValue else { return }
+            defaults.set(googleCredentialChoice.rawValue, forKey: googleCredentialChoiceKey)
+            googleConnection = .notConnected
+        }
+    }
     var appleConnection: ConnectionStatus = .notConnected
     var googleConnection: ConnectionStatus = .notConnected
     var remoteAppleApps: [RemoteStoreApp] = []
@@ -454,6 +470,10 @@ final class AppState {
         }
         appleVendorNumber = defaults.string(forKey: "appleVendorNumber") ?? ""
         googleDeveloperId = defaults.string(forKey: "googleDeveloperId") ?? ""
+        if let value = defaults.string(forKey: googleCredentialChoiceKey),
+           let choice = GoogleCredentialChoice(rawValue: value) {
+            googleCredentialChoice = choice
+        }
         if let saved = defaults.string(forKey: modeDefaultsKey),
            let restored = Mode(rawValue: saved) {
             mode = restored
@@ -871,6 +891,7 @@ final class AppState {
             try KeychainCredentials.save(credential, kind: .google,
                                          account: storeAccount)
             googleCredential = credential
+            googleCredentialChoice = .serviceAccount
             googleCredentialFileName = url.lastPathComponent
             googleAccountEmail = credential.clientEmail
             googleConnection = .notConnected
@@ -918,12 +939,11 @@ final class AppState {
         }
     }
 
-    /// Saves the service account, then calls Google with it.
-    ///
-    /// The save was only on the import before, which was true but not obvious
-    /// from a button that now says Connect. Saving here as well costs one
-    /// Keychain write and makes the label mean exactly what it says.
     func connectGoogleStore() {
+        if googleCredentialChoice == .oauth {
+            connectGoogleOAuth()
+            return
+        }
         guard let credential = googleCredential else {
             googleConnection = .failed("Choose the service-account JSON first.")
             return
@@ -942,6 +962,31 @@ final class AppState {
         }
     }
 
+    private func connectGoogleOAuth() {
+        guard let clientID = GoogleOAuthConfiguration.clientID
+                ?? googleOAuthCredential?.clientID else {
+            googleConnection = .failed(
+                "This build needs a Google OAuth desktop client ID before it can connect.")
+            return
+        }
+        googleConnection = .connecting
+        Task {
+            do {
+                let credential = try await GoogleOAuthSession.authorize(clientID: clientID)
+                try KeychainCredentials.save(credential, kind: .googleOAuth,
+                                             account: storeAccount)
+                googleOAuthCredential = credential
+                let message = try await StoreConnectionClient().testGoogle(
+                    credential: credential, packageName: googlePackageName)
+                googleConnection = .connected(message)
+            } catch is CancellationError {
+                googleConnection = .notConnected
+            } catch {
+                googleConnection = .failed(error.localizedDescription)
+            }
+        }
+    }
+
     func chooseRemoteAppleApp(_ app: RemoteStoreApp) {
         appleAppID = app.id
         appleBundleID = app.identifier
@@ -954,7 +999,7 @@ final class AppState {
             listingImportStatus = .failed("Connect App Store and choose an app on Stores first.")
             return
         }
-        if stores.contains(.google), (googleCredential == nil || googlePackageName.isEmpty) {
+        if stores.contains(.google), (!hasCredential(for: .google) || googlePackageName.isEmpty) {
             listingImportStatus = .failed("Connect Google Play and enter its package name on Stores first.")
             return
         }
@@ -962,7 +1007,7 @@ final class AppState {
         let appleCredential = AppleCredential(
             keyID: appleKeyID, issuerID: appleIssuerID,
             privateKeyPEM: applePrivateKeyPEM, fileName: appleCredentialFileName)
-        let googleCredential = googleCredential
+        let credentials = credentials
         listingImportStatus = .connecting
         Task {
             do {
@@ -973,9 +1018,9 @@ final class AppState {
                     manifest.mergeAppleImport(imported)
                     await adopt(imported, store: .apple)
                 }
-                if stores.contains(.google), let googleCredential {
-                    let imported = try await client.importGoogle(
-                        credential: googleCredential, packageName: googlePackageName)
+                if stores.contains(.google) {
+                    let imported = try await StoreImportReader(credentials: credentials)
+                        .google(packageName: googlePackageName)
                     manifest.mergeGoogleImport(imported)
                     await adopt(imported, store: .google)
                 }
@@ -2361,7 +2406,7 @@ final class AppState {
     func loadCredentials() {
         do {
             let appleWas = [appleKeyID, appleIssuerID, applePrivateKeyPEM]
-            let googleWas = googleCredential?.clientEmail ?? ""
+            let googleWas = googleCredentialIdentity
 
             let apple = try storeCredential(AppleCredential.self, kind: .apple)
             appleKeyID = apple?.keyID ?? ""
@@ -2373,6 +2418,12 @@ final class AppState {
             googleCredential = google
             googleCredentialFileName = google?.fileName ?? ""
             googleAccountEmail = google?.clientEmail ?? ""
+            googleOAuthCredential = try storeCredential(
+                GoogleOAuthCredential.self, kind: .googleOAuth)
+            if defaults.object(forKey: googleCredentialChoiceKey) == nil,
+               google == nil, googleOAuthCredential != nil {
+                googleCredentialChoice = .oauth
+            }
 
             let revenueCat = try credentialAccount.flatMap {
                 try KeychainCredentials.load(RevenueCatCredential.self,
@@ -2391,7 +2442,7 @@ final class AppState {
                 // The visible apps came from the key that just went away.
                 remoteAppleApps = []
             }
-            if googleWas != (googleCredential?.clientEmail ?? "") {
+            if googleWas != googleCredentialIdentity {
                 googleConnection = .notConnected
             }
         } catch {
@@ -2421,10 +2472,14 @@ final class AppState {
                 remoteAppleApps = []
             case .google:
                 try KeychainCredentials.delete(kind: .google, account: storeAccount)
+                try KeychainCredentials.delete(kind: .googleOAuth, account: storeAccount)
                 if let credentialAccount {
                     try KeychainCredentials.delete(kind: .google, account: credentialAccount)
+                    try KeychainCredentials.delete(kind: .googleOAuth,
+                                                   account: credentialAccount)
                 }
                 googleCredential = nil
+                googleOAuthCredential = nil
                 googleCredentialFileName = ""
                 googleAccountEmail = ""
                 googleConnection = .notConnected
@@ -2438,7 +2493,23 @@ final class AppState {
     func hasCredential(for store: Store) -> Bool {
         switch store {
         case .apple: !applePrivateKeyPEM.isEmpty
-        case .google: googleCredential != nil
+        case .google:
+            googleCredentialChoice == .oauth
+                ? googleOAuthCredential != nil
+                : googleCredential != nil
+        }
+    }
+
+    var googleCredentialSummary: String {
+        googleCredentialChoice == .oauth
+            ? (googleOAuthCredential == nil ? "" : "Google OAuth")
+            : googleAccountEmail
+    }
+
+    private var googleCredentialIdentity: String {
+        switch googleCredentialChoice {
+        case .oauth: googleOAuthCredential?.refreshToken ?? ""
+        case .serviceAccount: googleCredential?.clientEmail ?? ""
         }
     }
 

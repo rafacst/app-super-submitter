@@ -197,7 +197,7 @@ struct CredentialCard<Content: View>: View {
             case .connected: "Reconnect"
             default: "Connect to the store"
             }
-            QuietButton(title: title,
+            QuietButton(title: title, glass: true,
                         prominent: !(status?.isConnected ?? false), action: connect)
                 .disabled(status == .connecting)
             Text(keychainNote).font(Theme.font(size: 11.5))
@@ -279,6 +279,15 @@ struct GuideContent {
             GuideLink("Open Cloud console ↗", "https://console.cloud.google.com/iam-admin/serviceaccounts"),
             GuideLink("Open Play Console ↗", "https://play.google.com/console"),
         ])
+
+    static let googleOAuth = GuideContent(
+        steps: [
+            "Choose Connect to the store. Super Submitter opens Google's authorization page in your browser.",
+            "Sign in with a Google account that has access to the Play Console developer account.",
+            "Review and approve the requested Google Play permissions.",
+        ],
+        warning: "Google controls what this account can do. Super Submitter cannot grant Play Console permissions or discover the developer id.",
+        buttons: [GuideLink("Open Play Console ↗", "https://play.google.com/console")])
 }
 
 struct GuideBox: View {

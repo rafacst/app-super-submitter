@@ -147,4 +147,33 @@ struct StoreCredentialScopeTests {
         #expect(source.contains("Connect with Google"))
         #expect(source.contains("Service account JSON"))
     }
+
+    @Test func bothGoogleCredentialsRemainStoredWhileTheUserChoosesOne() throws {
+        let account = "test-\(UUID().uuidString)"
+        defer {
+            try? KeychainCredentials.delete(kind: .google, account: account)
+            try? KeychainCredentials.delete(kind: .googleOAuth, account: account)
+        }
+        let json = Data("""
+        {"private_key":"pem","client_email":"bot@example.com",
+         "token_uri":"https://oauth2.googleapis.com/token"}
+        """.utf8)
+        try KeychainCredentials.save(
+            GoogleServiceAccount(data: json, fileName: "key.json"),
+            kind: .google, account: account)
+        try KeychainCredentials.save(
+            GoogleOAuthCredential(clientID: "client", accessToken: "access",
+                                  refreshToken: "refresh", expiresAt: .distantFuture),
+            kind: .googleOAuth, account: account)
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: account)
+
+        state.googleCredentialChoice = .serviceAccount
+        #expect(state.credentials.google != nil)
+        #expect(state.credentials.googleOAuth == nil)
+
+        state.googleCredentialChoice = .oauth
+        #expect(state.credentials.google == nil)
+        #expect(state.credentials.googleOAuth != nil)
+    }
 }

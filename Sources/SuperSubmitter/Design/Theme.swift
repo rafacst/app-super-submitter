@@ -146,11 +146,9 @@ enum Theme {
     // touched, and a mechanical sweep of the rest would be a large diff that
     // nothing can test.
 
+    /// The name of a screen whose redesign keeps it in the header band.
+    static let screenTitle = Theme.font(size: 21, weight: .semibold)
     /// The question the screen answers, in the header band.
-    ///
-    /// There was a `screenTitle` tier above this, at 21 points, for the name of
-    /// the screen. The name is in the window's own title bar now, in the system
-    /// font AppKit sets, so this app no longer has a size for it.
     static let screenSubtitle = Theme.font(size: 12)
     /// The heading over a group of cards.
     static let sectionHeader = Theme.font(size: 12.5, weight: .semibold)

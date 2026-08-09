@@ -326,6 +326,21 @@ public struct StoreConnectionClient: Sendable {
         return "Connected · \(credential.clientEmail)"
     }
 
+    public func testGoogle(credential: GoogleOAuthCredential,
+                           packageName: String) async throws -> String {
+        guard !packageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "Connected with Google. Add a package name to verify Play Console access."
+        }
+        let escaped = packageName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? packageName
+        let api = StoreAPI(credentials: StoreCredentials(googleOAuth: credential),
+                           record: { _ in }, session: session)
+        _ = try await api.google(
+            "GET", "/androidpublisher/v3/applications/\(escaped)/reviews",
+            query: [URLQueryItem(name: "maxResults", value: "1")])
+        return "Connected with Google"
+    }
+
     public func importGoogle(credential: GoogleServiceAccount,
                              packageName: String) async throws -> ImportedStoreListing {
         try await StoreImportReader(credentials: StoreCredentials(google: credential),
