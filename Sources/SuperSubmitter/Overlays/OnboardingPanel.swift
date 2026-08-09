@@ -12,6 +12,8 @@ import SwiftUI
 struct OnboardingPanel: View {
     @Environment(\.dismiss) private var dismiss
     @State private var step = 0
+    /// For `move(to:)`, which is a command and not a state flag.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let tints: [Color] = [
         Theme.accent, Theme.purple, Theme.teal, Theme.pink, Theme.green, Theme.orange,
@@ -53,7 +55,7 @@ struct OnboardingPanel: View {
                            center: .init(x: 0.02, y: 1.0),
                            startRadius: 8, endRadius: 520)
         }
-        .animation(.easeInOut(duration: 0.55), value: step)
+        .motion(.easeInOut(duration: 0.55), value: step)
     }
 
     private var header: some View {
@@ -246,7 +248,10 @@ struct OnboardingPanel: View {
     }
 
     private func move(to index: Int) {
-        withAnimation(.easeOut(duration: 0.22)) { step = index }
+        // A command and not a state flag, so it keeps `withAnimation`. Under
+        // Reduce Motion the panel cuts to the next step rather than sliding
+        // a full 1120 point scene across.
+        withMotion(reduceMotion, .easeOut(duration: 0.22)) { step = index }
     }
 }
 
@@ -261,18 +266,25 @@ private struct Beats<Content: View>: View {
     var rest: Duration = .seconds(2)
     @ViewBuilder var content: (Int) -> Content
     @State private var phase = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         content(phase).task {
+            // The loop still runs under Reduce Motion, and it has to. The
+            // phase is what each scene reads to decide what has arrived, so
+            // stopping it would leave every onboarding illustration empty.
+            // Only the motion between phases goes: the parts appear rather
+            // than rising into place.
             while !Task.isCancelled {
                 for _ in 0..<count {
                     try? await Task.sleep(for: beat)
                     if Task.isCancelled { return }
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.74)) { phase += 1 }
+                    withMotion(reduceMotion,
+                               .spring(response: 0.42, dampingFraction: 0.74)) { phase += 1 }
                 }
                 try? await Task.sleep(for: rest)
                 if Task.isCancelled { return }
-                withAnimation(.easeOut(duration: 0.3)) { phase = 0 }
+                withMotion(reduceMotion, .easeOut(duration: 0.3)) { phase = 0 }
             }
         }
     }

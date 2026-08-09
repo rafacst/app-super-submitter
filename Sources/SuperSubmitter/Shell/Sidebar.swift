@@ -123,8 +123,12 @@ struct Sidebar: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             Divider()
-            AccountControl()
-                .padding(.horizontal, 10)
+            HStack(spacing: 6) {
+                AccountControl()
+                Spacer(minLength: 0)
+                SettingsButton()
+            }
+            .padding(.horizontal, 10)
             if state.showsUpgradeCard {
                 UpgradeCard()
                     .padding(.horizontal, 10)
@@ -382,6 +386,37 @@ private struct AccountControl: View {
     }
 }
 
+/// The way into Settings that is on the screen.
+///
+/// It was in the app menu alone, at ⌘,. That is where a Mac keeps Settings and
+/// it stays there, but the app menu is not a place a developer looks while they
+/// are working, and every other panel in this app has a control that opens it.
+/// A window whose only route to its own settings is a menu bar reads as a
+/// window with no settings.
+///
+/// Beside the account and not among the navigation rows. Settings is not a
+/// destination: it opens a panel over the window, the same way About does, and
+/// a row in a `List` that opens a sheet is a row that lies about where it goes.
+/// That was the objection to the old Settings row, and it still stands.
+private struct SettingsButton: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        Button { state.showSettings = true } label: {
+            Image(systemName: "gearshape")
+                .font(Theme.font(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
+        // The shortcut sits in the tooltip, so the button teaches the faster
+        // way to what it does. See the field search glyph in the header.
+        .help("Settings  ⌘,")
+    }
+}
+
 /// The offer at the foot of the column, for a free account and for no other.
 ///
 /// Both references end their sidebar this way, and the two cards are not the
@@ -553,6 +588,12 @@ struct BadgeView: View {
             if badge.warnings > 0 { pill(badge.warnings, .warning) }
         }
         .help(badge.spoken)
+        // One read of the stores changes every badge in the column at once,
+        // and they used to appear and vanish between frames. A pill arriving
+        // beside a navigation row is the app saying "this tab now blocks your
+        // apply", which is the single most consequential thing the sidebar
+        // ever says, and it said it without a sound.
+        .motion(.snappy(duration: 0.24), value: badge)
     }
 
     private func pill(_ count: Int, _ severity: Severity) -> some View {
@@ -561,8 +602,16 @@ struct BadgeView: View {
         Text(verbatim: "\(count)")
             .font(Theme.font(size: size * 0.65, weight: .semibold))
             .foregroundStyle(severity.color)
+            // The count moves as findings are fixed one at a time, and
+            // proportional digits shifted the pill's width under the row.
+            .monospacedDigit()
+            .contentTransition(.numericText())
             .padding(.horizontal, 4)
             .frame(minWidth: size, minHeight: size)
             .background(severity.background, in: Capsule())
+            // It grows out of the row rather than being painted onto it. The
+            // scale is from the middle, so a pill that leaves collapses into
+            // the space it held instead of blinking out of it.
+            .transition(.scale(scale: 0.4).combined(with: .opacity))
     }
 }

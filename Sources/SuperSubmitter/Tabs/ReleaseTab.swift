@@ -368,7 +368,7 @@ private struct StepBar: View {
             }
         }
         .frame(height: thickness)
-        .animation(.smooth(duration: 0.3), value: done)
+        .motion(.smooth(duration: 0.3), value: done)
         .accessibilityElement()
         .accessibilityLabel("Progress")
         .accessibilityValue("\(done) of \(total) done")

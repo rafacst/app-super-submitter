@@ -169,6 +169,7 @@ extension AppState {
         storeSnapshot.merge(actual)
         storeSnapshot.save(toRoot: manifestRoot)
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actual, stores: stores)
+        refreshDockBadge()
         planReadFailures = result.readFailures
         stepStates = Array(repeating: .pending, count: result.steps.count)
         stepMeta = Array(repeating: "", count: result.steps.count)
@@ -369,12 +370,20 @@ extension AppState {
             runIndex = index
             runProgress = fraction
             runDetail = detail
+            // The one long wait in the app, said outside the window. Only for
+            // an upload: a write finishes faster than the Dock can draw, and a
+            // bar that flashed on every step would be an animation about
+            // nothing. `DockTile` drops repeats within the same whole percent.
+            if runSteps[safe: index]?.isUpload == true { DockTile.progress(fraction) }
         case .log(let line):
             logLines.append(line)
             if logLines.count > 500 { logLines.removeFirst(logLines.count - 500) }
         case .failure(let failure):
             runFailure = failure
             runIndex = failure.stepIndex
+            // A run that stopped mid-upload would otherwise leave a bar frozen
+            // at whatever fraction it reached, which reads as work still going.
+            DockTile.clear()
             PostHogSDK.shared.capture("submission_run_failed", properties: [
                 "step_index": failure.stepIndex,
                 "is_dry_run": dryRun
@@ -392,11 +401,17 @@ extension AppState {
         runProgress = 1
         applied = !dryRun
         runFailure = nil
+        // The icon goes back to being an icon. Left set, the bar would sit at
+        // 100% in the Dock until the app quit.
+        DockTile.clear()
         PostHogSDK.shared.capture("submission_run_completed", properties: [
             "step_count": runSteps.count,
             "is_dry_run": dryRun
         ])
         refreshDraftStatuses()
+        // `applied` has just become true, so the console steps are now the
+        // work that remains and the badge may show them.
+        refreshDockBadge()
         // The tab moves on by itself when the run ends. Spec 16.3.
         //
         // Only after a real apply. A dry run wrote nothing, so there is no
@@ -414,6 +429,7 @@ extension AppState {
     func cancelRun() {
         let previous = runTask
         previous?.cancel()
+        DockTile.clear()
         runDetail = "Cleaning up the interrupted run…"
         runTask = Task { [weak self, runner] in
             _ = await previous?.result
@@ -469,17 +485,37 @@ extension AppState {
         consoleRows.filter { markedState($0) == .done }.count
     }
 
+    /// The steps left that no API performs. This is what the Dock badge counts.
+    var consolePending: Int { consoleRows.count - consoleDone }
+
+    /// Puts the count of remaining console steps on the Dock icon.
+    ///
+    /// Only after a real apply. Before one, these rows describe work the
+    /// developer has not been asked for yet, and a badge on an app that was
+    /// opened a minute ago is a badge that creates worry without offering
+    /// anything to resolve. A dry run leaves `applied` false, so it never
+    /// raises one.
+    func refreshDockBadge() {
+        DockTile.badge(applied ? consolePending : 0)
+    }
+
     func toggleConsoleMark(_ id: String) {
         if consoleMarks.contains(id) { consoleMarks.remove(id) } else { consoleMarks.insert(id) }
         saveConsoleMarks()
+        refreshDockBadge()
     }
 
     func loadConsoleMarks() {
-        guard let root = manifestRoot else { consoleMarks = []; return }
+        guard let root = manifestRoot else {
+            consoleMarks = []
+            refreshDockBadge()
+            return
+        }
         consoleMarks = ConsoleStateStore(root: root).marks(
             app: currentAppKey, version: manifest.release?.versionName ?? "")
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actualState,
                                             stores: stores)
+        refreshDockBadge()
     }
 
     private func saveConsoleMarks() {

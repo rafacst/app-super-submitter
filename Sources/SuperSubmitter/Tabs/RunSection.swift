@@ -80,23 +80,44 @@ struct RunSection: View {
         return result
     }
 
+    /// The glyph a step wears, and the colour it wears it in.
+    ///
+    /// SF Symbols and not the four literal characters this drew before
+    /// ("✓ ✕ – ·"). A `Text` cannot replace itself with a symbol effect, so
+    /// every state change on the one screen this product exists for landed in
+    /// a single frame with nothing to mark it. Symbols also give the row a
+    /// consistent optical weight, which four characters from four different
+    /// parts of the font did not.
+    private static func glyph(_ step: StepState) -> (name: String, tint: Color) {
+        switch step {
+        case .done: ("checkmark.circle.fill", Theme.green)
+        case .failed: ("xmark.circle.fill", Theme.red)
+        case .skipped: ("minus.circle.fill", Theme.yellow)
+        // `.running` never reaches here. The spinner stands in its place.
+        case .pending, .running: ("circle.dotted", Theme.text3)
+        }
+    }
+
     private func row(_ index: Int) -> some View {
         let step = state.runSteps[index]
         let stepState = state.stepStates.indices.contains(index)
             ? state.stepStates[index] : .pending
+        let glyph = Self.glyph(stepState)
         return HStack(spacing: 11) {
             Group {
-                switch stepState {
-                case .done:
-                    Text("✓").font(Theme.font(size: 12)).foregroundStyle(Theme.green)
-                case .running:
+                if stepState == .running {
                     Spinner()
-                case .failed:
-                    Text("✕").font(Theme.font(size: 12)).foregroundStyle(Theme.red)
-                case .skipped:
-                    Text("–").font(Theme.font(size: 12)).foregroundStyle(Theme.yellow)
-                case .pending:
-                    Text("·").font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                } else {
+                    Image(systemName: glyph.name)
+                        .font(Theme.font(size: 12))
+                        .foregroundStyle(glyph.tint)
+                        // The dotted circle dissolves into the tick rather than
+                        // being replaced by it.
+                        .contentTransition(.symbolEffect(.replace))
+                        // One bounce, and only on the state worth marking. A
+                        // bounce on every transition would fire on `pending`
+                        // as the run resets and read as noise.
+                        .symbolEffect(.bounce, value: stepState == .done)
                 }
             }
             .frame(width: 16)
@@ -108,9 +129,17 @@ struct RunSection: View {
             Text(state.stepMeta.indices.contains(index) ? state.stepMeta[index] : "")
                 .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
+                // The meta arrives when the step ends ("3 screenshots", "2.1
+                // MB"), so it appears mid-run and shifted the row when it did.
+                .contentTransition(.opacity)
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 8)
+        // The row being worked on, marked behind the text. A list of twenty
+        // steps gave no answer to "which one is it on now" except the size of
+        // one spinner in a 16 point column.
+        .background(stepState == .running ? Theme.accent.opacity(0.07) : .clear)
+        .motion(.snappy(duration: 0.22), value: stepState)
     }
 
     /// The longest wait in the app. It needs a real bar, a clock, and a way
@@ -133,6 +162,10 @@ struct RunSection: View {
                 }
             }
             .frame(height: 6)
+            // The uploader reports in jumps, so the bar stepped rather than
+            // travelled. It is the one true progress on this screen and the
+            // developer watches it for minutes.
+            .motion(.smooth(duration: 0.25), value: state.runProgress)
             HStack {
                 Text("Apple processes the build after the upload. This is the longest wait in the app.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
@@ -289,17 +322,33 @@ struct RunSection: View {
     }
 }
 
+/// The busy mark, used everywhere the app is waiting on a store.
+///
+/// A repeating rotation is exactly what Reduce Motion is set to stop, and this
+/// one turns forever, so it takes the strongest fallback in the app: a pulsing
+/// symbol instead of a spinning ring. It still says "working", which is the
+/// whole job, and it says it without anything crossing the screen.
 struct Spinner: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var turning = false
 
     var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.75)
-            .stroke(Theme.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-            .frame(width: 12, height: 12)
-            .rotationEffect(.degrees(turning ? 360 : 0))
-            .animation(.linear(duration: 0.7).repeatForever(autoreverses: false), value: turning)
-            .onAppear { turning = true }
+        if reduceMotion {
+            Image(systemName: "circle.dotted")
+                .font(Theme.font(size: 12))
+                .foregroundStyle(Theme.accent)
+                .symbolEffect(.pulse)
+                .frame(width: 12, height: 12)
+        } else {
+            Circle()
+                .trim(from: 0, to: 0.75)
+                .stroke(Theme.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .frame(width: 12, height: 12)
+                .rotationEffect(.degrees(turning ? 360 : 0))
+                .animation(.linear(duration: 0.7).repeatForever(autoreverses: false),
+                           value: turning)
+                .onAppear { turning = true }
+        }
     }
 }
 
