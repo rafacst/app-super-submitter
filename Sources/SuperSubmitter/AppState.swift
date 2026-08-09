@@ -1666,6 +1666,35 @@ final class AppState {
         })
     }
 
+    /// True when this app already sells on a store.
+    ///
+    /// It decides what a tab may assume the developer has to supply. An update
+    /// starts from a listing that is already complete, so nothing on the Media
+    /// tab is required; a first submission starts from nothing, and both
+    /// stores refuse it without screenshots.
+    ///
+    /// Either answer counts, because they arrive at different moments: a
+    /// released App Store version from a read, or anything at all in the
+    /// snapshot, which is what an import and a Google read both leave behind.
+    ///
+    /// The safest default is false. Telling a developer with a shipped app
+    /// that screenshots are required costs them a shrug; telling a first-time
+    /// developer that they are optional costs them a rejection.
+    var isUpdatingLiveApp: Bool {
+        actualState.apple?.isUpdate == true || !storeSnapshot.isEmpty
+    }
+
+    /// True when a store holds a screenshot for the language on screen.
+    ///
+    /// The Media tab asks so that an empty grid on an update can say which of
+    /// the two empties it is: an app with no pictures, or a read that did not
+    /// reach them.
+    var hasLiveScreenshots: Bool {
+        Manifest.DeviceClass.allCases.contains {
+            !storeSnapshot.screenshots(locale: locale, deviceClass: $0).isEmpty
+        }
+    }
+
     /// The territory the base price is set in. Apple's own default when the
     /// developer has not picked one, which is what the reader and the apply
     /// both fall back to.

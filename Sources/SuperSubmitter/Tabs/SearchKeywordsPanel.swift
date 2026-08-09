@@ -35,13 +35,21 @@ struct SearchKeywordsPanel: View {
         Section_("Search keywords", icon: "magnifyingglass", tint: Theme.teal,
                  anchor: "details.searchKeywords") {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Send one search term to one custom product page. A customer who searches a linked word reaches that page instead of the default one. The words come from the Keywords field of your latest approved version, and Apple publishes no way to add one.")
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("This is not the Keywords field above. That one is your hundred characters of search terms, and the manifest owns it.")
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 12)
+                        QuietButton(title: busy ? "Fetching…" : "Fetch the keywords") { load() }
+                            .disabled(busy || state.appleActionAppID == nil)
+                    }
+                    Text("This sends one of those words to one custom product page. A customer who searches a linked word lands on that page, with the screenshots and the text written for that word, instead of on your default product page. Apple opened this to ordinary App Store search in July 2025.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 12)
-                    QuietButton(title: busy ? "Fetching…" : "Fetch the keywords") { load() }
-                        .disabled(busy || state.appleActionAppID == nil)
+                    Text("The list below is read only. Apple builds it from the Keywords field of your latest approved version and publishes no call that adds a word, so the way to get a new one here is to ship it in that field and have the version approved.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let error { ErrorLine(text: error) }

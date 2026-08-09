@@ -32,6 +32,7 @@ struct MediaTab: View {
             // plans and then writes. Managing has none, so it writes here.
             if state.mode == .managing { DirectApplyBar(target: .media) }
             if let error = state.mediaError { WarningNote(error) }
+            flowNote
             ForEach(groups, id: \.1) { name, device in
                 mediaGroup(name, device: device)
             }
@@ -58,6 +59,50 @@ struct MediaTab: View {
         let aspect = AssetInspector.aspectRatio(for: deviceClass)
         return CGSize(width: max(112, aspect >= 1 ? side : side * aspect),
                       height: aspect >= 1 ? side / aspect : side)
+    }
+
+    /// What this tab is for, which is a different sentence on an app that has
+    /// shipped and an app that has not.
+    ///
+    /// An update carries its screenshots forward by itself, so the job here is
+    /// to say that nothing is required and what changing one costs. A first
+    /// submission has the opposite problem: neither store accepts a listing
+    /// with no screenshots at all, and the tab used to say so nowhere.
+    @ViewBuilder
+    private var flowNote: some View {
+        let sends = state.stores.sorted { $0.rawValue < $1.rawValue }
+            .map(\.storeName).joined(separator: " and ")
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: state.isUpdatingLiveApp
+                  ? "arrow.triangle.2.circlepath" : "exclamationmark.circle.fill")
+                .font(Theme.font(size: 11))
+                .foregroundStyle(state.isUpdatingLiveApp ? Theme.text2 : Theme.yellow)
+            VStack(alignment: .leading, spacing: 3) {
+                if state.isUpdatingLiveApp {
+                    Text("This app is already on the store, so its screenshots carry over on their own.")
+                        .font(Theme.font(size: 11.5, weight: .semibold))
+                    Text("Leave a size empty and the run sends nothing for it: the pictures customers see today stay. Add images to a size and the run replaces that whole set, and only that one. The new pictures go live with this version, not before it.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    // An update that shows no live pictures is either an app
+                    // with none or a read that did not reach them, and an
+                    // empty grid says neither. Silence here reads as "this
+                    // app has no screenshots", which is the one thing it
+                    // almost never means.
+                    if !state.hasLiveScreenshots {
+                        Text("None were read for \(state.locale). Run a read on the Summary tab. If the grid is still empty, the store holds none under this language for the version being read.")
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                    }
+                } else {
+                    Text("Screenshots are required. \(sends) will not accept this listing without them.")
+                        .font(Theme.font(size: 11.5, weight: .semibold))
+                    Text("The App Store needs at least one iPhone size, and Google Play needs at least two phone screenshots. Each size below says what pixel dimensions it takes.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .storePanel()
     }
 
     private func mediaGroup(_ name: String, device: Manifest.DeviceClass) -> some View {
@@ -98,6 +143,8 @@ struct MediaTab: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(name), \(paths.count) of \(limit)")
                 .accessibilityHint(isOpen ? "Hide the images" : "Show the images")
+                SizeInfoButton(name: name, deviceClass: device,
+                               stores: state.stores)
                 Spacer()
                 // A closed group carries no control. Six "Choose images…"
                 // buttons down the right of a page is the noise this tab is
@@ -318,10 +365,62 @@ private struct LiveMediaWarning: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(Theme.font(size: 10.5))
                 .foregroundStyle(Theme.yellow)
-            Text("These are the current \(noun). If you upload new ones they will be replaced.")
+            Text("These are the \(noun) the store shows today. Leave this size empty to keep them. Add images and the run replaces this whole set.")
                 .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The pixel sizes one device class takes, behind the ⓘ beside its name.
+///
+/// The App Store refuses a screenshot whose dimensions are not one of these,
+/// and a developer who does not know that finds out from a rejected upload.
+/// The list is the catalog the upload itself validates against, so the popover
+/// cannot name a size the app would then turn away.
+private struct SizeInfoButton: View {
+    let name: String
+    let deviceClass: Manifest.DeviceClass
+    let stores: Set<Store>
+
+    @State private var open = false
+
+    var body: some View {
+        let sizes = AssetInspector.appleSizeLabels(for: deviceClass)
+        let googleBucket = AssetInspector.googleImageType(for: deviceClass)
+        // Nothing to say about a class neither store carries.
+        if !sizes.isEmpty || googleBucket != nil {
+            Button { open = true } label: {
+                Image(systemName: "info.circle")
+                    .font(Theme.font(size: 11))
+                    .foregroundStyle(Theme.text3)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("The sizes \(name) accepts")
+            .popover(isPresented: $open, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(name) sizes").font(Theme.font(size: 12, weight: .semibold))
+                    if stores.contains(.apple), !sizes.isEmpty {
+                        Text("App Store").font(Theme.font(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.text2)
+                        Text(sizes.joined(separator: "\n"))
+                            .font(Theme.mono(11)).foregroundStyle(Theme.text)
+                        Text("Portrait or landscape. Any other size is refused.")
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                    }
+                    if stores.contains(.google), googleBucket != nil {
+                        Text("Google Play").font(Theme.font(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.text2)
+                        Text("320 to 3840 pixels on each side, and no side more than twice the other.")
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(13)
+                .frame(maxWidth: 300, alignment: .leading)
+            }
         }
     }
 }
