@@ -758,19 +758,31 @@ struct QuietButton: View {
     }
 
     /// The title, with the symbol in front of it when there is one.
+    ///
+    /// One line, always. A button beside a paragraph competes with it for the
+    /// width, and SwiftUI settled that by breaking the shorter string: the
+    /// inspector on the Build tab read "Fetch / diagnostics", "Fetch the /
+    /// workflows" and "Upload / and share", each one a command cut in half
+    /// while the prose beside it had room to spare. `fixedSize` says the
+    /// button keeps its own width and the paragraph wraps instead, which is
+    /// the right way round: prose is written to wrap and a command is not.
     @ViewBuilder
     private var label: some View {
         let font = Theme.font(size: 12, weight: prominent ? .semibold : .regular)
-        if let symbol {
-            HStack(spacing: 5) {
-                Image(systemName: symbol)
-                    .symbolEffect(.bounce, value: tick)
+        Group {
+            if let symbol {
+                HStack(spacing: 5) {
+                    Image(systemName: symbol)
+                        .symbolEffect(.bounce, value: tick)
+                    Text(title)
+                }
+            } else {
                 Text(title)
             }
-            .font(font)
-        } else {
-            Text(title).font(font)
         }
+        .font(font)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var flatLabel: some View {

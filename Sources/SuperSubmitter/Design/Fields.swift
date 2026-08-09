@@ -236,7 +236,14 @@ private struct ChoiceList: View {
 /// `fileExists`, so it belongs where the path is entered.
 struct PathField: View {
     @Binding var path: String
-    var prompt = "Path, relative to the manifest"
+    /// Short enough for the narrowest box that draws one.
+    ///
+    /// It read "Path, relative to the manifest", which is a sentence and not
+    /// an example. In the two column layout on the Build tab the box is about
+    /// 190 points wide, so it arrived as "Path, relative to the manife" with
+    /// the rest under the Choose button. The place for the rule is the note
+    /// under the field, where there is room to state it.
+    var prompt = "Relative path"
     /// Nil while the path is good or empty. `AppState.missingFileNote`.
     let problem: String?
     let choose: () -> Void
@@ -259,6 +266,48 @@ struct PathField: View {
                     .accessibilityHidden(true)
             }
         }
+    }
+}
+
+/// A sentence and the command that acts on it, side by side while they fit.
+///
+/// Every panel wrote `HStack { Text(…); Spacer(); QuietButton(…) }`. That row
+/// is right in the content column, which is nearly a thousand points wide, and
+/// wrong in the inspector, which is about three hundred: the button holds its
+/// width, so the sentence was squeezed to five or six words a line and the
+/// panel grew twice as tall as the text it held.
+///
+/// `ViewThatFits` measures the row first and takes it when it fits. Where it
+/// does not, the command drops under the sentence and each one gets the whole
+/// column. Nothing here picks a breakpoint, so a panel that moves between the
+/// two columns needs no edit.
+struct NoteWithAction<Action: View>: View {
+    let text: String
+    @ViewBuilder let action: Action
+
+    init(_ text: String, @ViewBuilder action: () -> Action) {
+        self.text = text
+        self.action = action()
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                note
+                Spacer(minLength: 8)
+                action
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                note
+                HStack { action; Spacer(minLength: 0) }
+            }
+        }
+    }
+
+    private var note: some View {
+        Text(text)
+            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -318,12 +367,22 @@ struct LabeledField<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
+            // One line, and the row grows rather than the label breaking.
+            //
+            // Every `width:` below is a point value written against the
+            // default type scale, and `Theme.font` grows with the scale the
+            // developer picked. At a larger tier the label no longer fitted
+            // the column it was given, so "Entitlements comma-separated" and
+            // "Base plan id Google" broke across two lines and the control
+            // under them slid down out of the row it belonged to.
             HStack(spacing: 4) {
                 Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
                 if let note, !noteIsHelp {
                     Text(note).font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
                 }
             }
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             content.frame(minHeight: 22)
             if let note, noteIsHelp {
                 Text(note)
@@ -332,7 +391,11 @@ struct LabeledField<Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(width: width)
+        // `minWidth`, not `width`. The number is the column this field wants,
+        // and it was written at the default type scale; a field whose label or
+        // control needs more than that at a larger scale takes it instead of
+        // clipping. Rows still line up, because nothing asks for less.
+        .frame(minWidth: width.map(Theme.scaled))
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         .fieldAnchor(anchor)
         // The note is help for the field, so a reader meets it while it is on

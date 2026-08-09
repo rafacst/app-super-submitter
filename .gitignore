@@ -46,6 +46,8 @@ dist/
 # carry service configuration that has no business in a repository. Nested
 # Markdown stays, so the vendored skill references under .claude keep working.
 /*.md
+# The one exception: the front door of the public repository.
+!/README.md
 
 # Local helpers: one takes the website screenshots, one mints an Apple client
 # secret. Neither is part of the build.

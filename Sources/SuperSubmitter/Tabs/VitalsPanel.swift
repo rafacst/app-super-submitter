@@ -127,8 +127,10 @@ struct VitalsPanel: View {
                 .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                TextField("GPA.1234-5678-9012-34567, or a purchase token",
-                          text: $lookupQuery)
+                // The example alone. The sentence above already says an order
+                // id or a purchase token, and repeating it inside a 340 point
+                // box in mono 11 arrived as "or a purchase tok".
+                TextField("GPA.1234-5678-9012-34567", text: $lookupQuery)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.mono(11))
                     .frame(maxWidth: 340)
