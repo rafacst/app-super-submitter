@@ -128,7 +128,10 @@ public struct UploadRun: Codable, Sendable, Equatable, Identifiable {
         guard state.canMove(to: next) else { return false }
         state = next
         updatedAt = now
-        if next.isTerminal { finishedAt = now }
+        // A run that has moved on has not finished. The same `UploadRun` is
+        // reused for the next build, so a finish left over from the last one
+        // would make the second build read as over before it started.
+        finishedAt = next.isTerminal ? now : nil
         return true
     }
 

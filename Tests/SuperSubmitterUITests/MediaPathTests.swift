@@ -65,3 +65,40 @@ import Testing
     state.moveMedia("a.png", before: "a.png", deviceClass: .phone)
     #expect(state.mediaPaths(deviceClass: .phone) == ["b.png", "c.png", "a.png", "d.png"])
 }
+
+/// What the Media tab may assume the developer still has to supply.
+///
+/// The two flows want opposite sentences. An update carries its screenshots
+/// forward and needs none; a first submission is refused without them. Getting
+/// this backwards costs a first-time developer a rejection, so the default
+/// when nothing is known has to be "required".
+@MainActor
+@Test func aFirstSubmissionIsNeverToldItsScreenshotsAreOptional() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    #expect(!state.isUpdatingLiveApp)
+    #expect(!state.hasLiveScreenshots)
+
+    var apple = ActualState.Apple()
+    apple.liveVersionString = "1.2.0"
+    var actual = ActualState()
+    actual.apple = apple
+    state.actualState = actual
+    #expect(state.isUpdatingLiveApp)
+    // A released app whose pictures nobody read. The tab has to tell the two
+    // empties apart, so this stays false and the note says why the grid is
+    // bare instead of leaving it silent.
+    #expect(!state.hasLiveScreenshots)
+}
+
+/// The sizes behind the ⓘ come from the catalog the upload validates against,
+/// so the popover can never name a size the app would then refuse.
+@Test func theAcceptedSizesAreTheOnesTheUploadChecks() {
+    let phone = AssetInspector.appleSizeLabels(for: .phone)
+    #expect(phone.contains("1290 × 2796"))
+    #expect(phone.contains("1320 × 2868"))
+    #expect(AssetInspector.appleSizeLabels(for: .desktop).contains("2880 × 1800"))
+    // Google's own class. The App Store has no size for it and the popover
+    // then shows Google's rule alone.
+    #expect(AssetInspector.appleSizeLabels(for: .tablet7).isEmpty)
+}

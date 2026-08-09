@@ -156,22 +156,37 @@ public enum ConsoleChecklist {
             // refuses the submission and names the field, which is the one
             // moment the developer can act on it. `release` says so.
             let published = apple?.isUpdate == true
+            // The category is not a console step at all when the app can
+            // answer it. `appleCategories` writes both through
+            // `PATCH /v1/appInfos/{id}` and the Details tab holds the two
+            // pickers, so this is one of the few rows here the app finishes by
+            // itself. It read the store alone, so a developer who had just
+            // chosen a category on the Details tab was told that Apple reports
+            // none, and sent to the console to redo work the apply was about
+            // to do.
+            let storedCategory = apple?.primaryCategory
+            let namedCategory = manifest.review?.applePrimaryCategory
+                .flatMap { $0.isEmpty ? nil : $0 }
             result += [
                 ConsoleRow(
                     id: "apple.privacy", system: "App Store",
                     title: "App privacy (nutrition labels)",
                     reason: published
                         ? "\(Self.assumed) Open App privacy if this version changes what the app collects."
-                        : "No API reads or writes them. Open App privacy.",
+                        : "App Store Connect publishes no endpoint for the nutrition labels, so no app can read or write them. Open App privacy.",
                     link: "\(base)/privacy", state: published ? .done : .unknown,
                     onEditingTab: true),
                 ConsoleRow(
                     id: "apple.info", system: "App Store",
                     title: "App information and categories",
-                    reason: apple?.primaryCategory.map { "Confirmed: \($0)." }
-                        ?? (published ? Self.assumed : "The API reports no primary category."),
+                    reason: storedCategory.map { "Confirmed: \($0)." }
+                        ?? namedCategory.map {
+                            "The Details tab names \($0). The apply writes it, so this needs no console visit."
+                        }
+                        ?? (published ? Self.assumed : "No category is set. Pick one on the Details tab."),
                     link: "\(base)/info",
-                    state: apple?.primaryCategory == nil && !published ? .needed : .done,
+                    state: storedCategory == nil && namedCategory == nil && !published
+                        ? .needed : .done,
                     onEditingTab: true),
                 // The one declaration on this list that the API does answer.
                 //
@@ -221,7 +236,7 @@ public enum ConsoleChecklist {
                     title: "Agreements, tax, and banking",
                     reason: published
                         ? "\(Self.assumed) No version ships without them."
-                        : "No API reads this. Open Business.",
+                        : "These live on the account and not on the app, and App Store Connect publishes no endpoint for either. Open Business.",
                     link: "https://appstoreconnect.apple.com/business",
                     state: published ? .done : .unknown),
             ]
@@ -239,10 +254,17 @@ public enum ConsoleChecklist {
         if stores.contains(.google) {
             let track = manifest.googlePrimaryTrack
             let hasRelease = actual.google?.tracks[track]?.versionCodes.isEmpty == false
+            // The read already fetches this, from
+            // `GET /edits/{id}/countryAvailability/{track}`, and the row used
+            // to send the developer to the console to look at a list the app
+            // was holding. Google answers 404 for a track that sells
+            // everywhere, which is why "no answer" is not the same as "none".
+            let availability = actual.google?.tracks[track]
+            let countries = availability?.countries ?? []
             result += [
                 ConsoleRow(
                     id: "google.rating", system: "Google Play", title: "Content rating (IARC)",
-                    reason: "Console only: Policy, then App content, then Content rating.",
+                    reason: "The Android Publisher API publishes no content rating endpoint, so no app can read or set it. Console only: Policy, then App content, then Content rating.",
                     link: playConsole, state: .unknown, onEditingTab: true),
                 ConsoleRow(
                     id: "google.dataSafety", system: "Google Play", title: "Data safety",
@@ -255,8 +277,14 @@ public enum ConsoleChecklist {
                     onEditingTab: true),
                 ConsoleRow(
                     id: "google.countries", system: "Google Play", title: "Country availability",
-                    reason: "Console only: Production, then Countries and regions.",
-                    link: playConsole, state: .unknown),
+                    reason: availability?.restOfWorld == true
+                        ? "Confirmed: \(track) sells in every country Google reaches."
+                        : (countries.isEmpty
+                            ? "No country list was read for \(track). Run a read, or set it under Production, then Countries and regions."
+                            : "Confirmed: \(countries.count) countries on \(track)."),
+                    link: playConsole,
+                    state: availability?.restOfWorld == true || !countries.isEmpty
+                        ? .done : .unknown),
                 ConsoleRow(
                     id: "google.release", system: "Google Play", title: "The release in the track",
                     reason: hasRelease
@@ -265,16 +293,16 @@ public enum ConsoleChecklist {
                     link: playConsole, state: hasRelease ? .done : .needed),
                 ConsoleRow(
                     id: "google.signing", system: "Google Play", title: "App signing",
-                    reason: "Console only: Setup, then App signing.",
+                    reason: "The API uploads a bundle and never reads the signing key it is signed with. Console only: Setup, then App signing.",
                     link: playConsole, state: .unknown),
                 ConsoleRow(
                     id: "google.category", system: "Google Play", title: "App category",
-                    reason: "Console only. The Android Publisher API writes no category.",
+                    reason: "The edit details carry the contact email, the website and the phone, and no category. Console only.",
                     link: playConsole, state: .unknown, onEditingTab: true),
                 ConsoleRow(
                     id: "google.access", system: "Google Play",
                     title: "App access, the reviewer credentials",
-                    reason: "Console only: Policy, then App content, then App access.",
+                    reason: "The Android Publisher API publishes no app access endpoint. Console only: Policy, then App content, then App access.",
                     link: playConsole, state: .unknown, onEditingTab: true),
             ]
         }

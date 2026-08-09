@@ -312,16 +312,37 @@ struct BuildFromProjectView: View {
 
     // MARK: - 10.4 The live run
 
+    /// How long the run has taken, counted while it runs.
+    ///
+    /// `flow.elapsed` reads the clock, and a clock is not observable state, so
+    /// the label only ever redrew when something else on the screen changed:
+    /// opening the log moved a value SwiftUI does watch, and the minutes
+    /// jumped. `TimelineView` is the redraw, and it stops with the run rather
+    /// than ticking over a number that has stopped moving.
+    @ViewBuilder
+    private var elapsedLabel: some View {
+        if flow.state.isActive, let startedAt = flow.startedAt {
+            TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                elapsedText
+            }
+        } else if !flow.elapsed.isEmpty {
+            elapsedText
+        }
+    }
+
+    private var elapsedText: some View {
+        Text("\(flow.elapsed) elapsed")
+            .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+            .monospacedDigit()
+    }
+
     private var liveRun: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 if flow.state.isActive { Spinner() }
                 Text(flow.state.stepTitle).font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 8)
-                if !flow.elapsed.isEmpty {
-                    Text("\(flow.elapsed) elapsed")
-                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
-                }
+                elapsedLabel
             }
             Text(explanation).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)

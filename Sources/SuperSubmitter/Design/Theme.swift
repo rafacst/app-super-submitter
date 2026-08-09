@@ -176,11 +176,23 @@ enum Theme {
     /// Every border, rule and stroke in the app reads this, so the fix lands
     /// in all of them at once.
     ///
-    /// ponytail: reads the key window's screen when asked. A window dragged
-    /// from a Retina display to a 1x one corrects on the next redraw rather
-    /// than the instant it crosses. Move to @Environment(\.displayScale) if
-    /// that ever shows.
-    static var hairline: CGFloat { 1 / (NSScreen.main?.backingScaleFactor ?? 2) }
+    /// It asks the window, and not `NSScreen.main`. That property is the
+    /// screen holding the window with the keyboard focus, which stops being
+    /// this app's screen the moment somebody clicks another app. On a Mac with
+    /// a Retina display and a 1x display, this window sitting on the 1x one
+    /// read 1 point while it was focused and 0.5 the instant it was not, so
+    /// half the borders in the app thinned to nothing every time the developer
+    /// switched to Xcode. The window does not move when the focus does.
+    ///
+    /// ponytail: one window, so the frontmost visible one answers for the app.
+    /// A window dragged between displays of different scale corrects on the
+    /// next redraw rather than the instant it crosses. Move to
+    /// `@Environment(\.pixelLength)` at the call sites if that ever shows.
+    static var hairline: CGFloat {
+        let window = NSApp?.keyWindow ?? NSApp?.windows.first { $0.isVisible }
+        return 1 / (window?.backingScaleFactor
+                    ?? NSScreen.main?.backingScaleFactor ?? 2)
+    }
 
 }
 
