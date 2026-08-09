@@ -120,6 +120,7 @@ struct BuildTab: View {
                     .menuStyle(.borderlessButton)
                 }
                 identityValue(state.appleAppID, placeholder: "App id", width: 120)
+                Spacer(minLength: 0)
             }
             if state.appleBundleID.isEmpty, state.remoteAppleApps.isEmpty {
                 missingIdentityNote("Connect App Store Connect to choose the app.")
