@@ -105,7 +105,7 @@ struct GoogleTeamPanel: View {
                     .font(Theme.mono(11.5))
                     .frame(width: 220)
                 if !state.hasCredential(for: .google) {
-                    Text("Connect the service account above first.")
+                    Text("Connect Google above first.")
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 Spacer(minLength: 0)

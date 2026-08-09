@@ -261,7 +261,7 @@ struct GuideContent {
     static let apple = GuideContent(
         steps: [
             "Open App Store Connect, then Users and Access, then Integrations, then App Store Connect API.",
-            "Create a key with the App Manager role. Copy the key id and the issuer id.",
+            "Create a Team API key. Use Admin for the team controls below; App Manager covers publishing but cannot manage the team. Copy the key id and issuer id.",
             "Download the .p8 file.",
         ],
         warning: "Apple shows the .p8 file once. Save it now. A lost key cannot be downloaded again. You create a new one.",
@@ -271,8 +271,8 @@ struct GuideContent {
     static let google = GuideContent(
         steps: [
             "In the Google Cloud console, create a service account and download its JSON key.",
-            "Grant it the Android Publisher role.",
             "In the Play Console, open Users and permissions and invite the service account email.",
+            "Grant the Play permissions it needs. The team controls below require permission to manage users.",
         ],
         warning: "Step 3 is mandatory and no API performs it. A skipped invitation returns a permission error during the connection test.",
         buttons: [
@@ -283,7 +283,7 @@ struct GuideContent {
     static let googleOAuth = GuideContent(
         steps: [
             "Choose Connect to the store. Super Submitter opens Google's authorization page in your browser.",
-            "Sign in with a Google account that has access to the Play Console developer account.",
+            "Sign in with a Google account that has access to the Play Console developer account. Team controls require an account that may manage users.",
             "Review and approve the requested Google Play permissions.",
         ],
         warning: "Google controls what this account can do. Super Submitter cannot grant Play Console permissions or discover the developer id.",

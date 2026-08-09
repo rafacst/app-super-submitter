@@ -108,9 +108,9 @@ final class AppState {
     /// The coalesced write. See `scheduleSave`.
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var pendingSave = false
-    @ObservationIgnored var applePrivateKeyPEM = ""
-    @ObservationIgnored var googleCredential: GoogleServiceAccount?
-    @ObservationIgnored var googleOAuthCredential: GoogleOAuthCredential?
+    var applePrivateKeyPEM = ""
+    var googleCredential: GoogleServiceAccount?
+    var googleOAuthCredential: GoogleOAuthCredential?
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
     @ObservationIgnored private let lastOpenAppKey = "lastOpenApp.v1"
     @ObservationIgnored private let modeDefaultsKey = "mode.v1"
@@ -876,6 +876,7 @@ final class AppState {
                 appleKeyID = keyID
             }
             try persistAppleCredential()
+            if !stores.contains(.apple) { setStore(.apple, enabled: true) }
             appleConnection = .notConnected
         } catch {
             errorMessage = error.localizedDescription
@@ -892,6 +893,7 @@ final class AppState {
                                          account: storeAccount)
             googleCredential = credential
             googleCredentialChoice = .serviceAccount
+            if !stores.contains(.google) { setStore(.google, enabled: true) }
             googleCredentialFileName = url.lastPathComponent
             googleAccountEmail = credential.clientEmail
             googleConnection = .notConnected
@@ -965,8 +967,8 @@ final class AppState {
     private func connectGoogleOAuth() {
         guard let clientID = GoogleOAuthConfiguration.clientID
                 ?? googleOAuthCredential?.clientID else {
-            googleConnection = .failed(
-                "This build needs a Google OAuth desktop client ID before it can connect.")
+            googleConnection = .notConnected
+            errorMessage = "This build needs a Google OAuth desktop client ID before it can connect."
             return
         }
         googleConnection = .connecting
@@ -976,6 +978,7 @@ final class AppState {
                 try KeychainCredentials.save(credential, kind: .googleOAuth,
                                              account: storeAccount)
                 googleOAuthCredential = credential
+                if !stores.contains(.google) { setStore(.google, enabled: true) }
                 let message = try await StoreConnectionClient().testGoogle(
                     credential: credential, packageName: googlePackageName)
                 googleConnection = .connected(message)
