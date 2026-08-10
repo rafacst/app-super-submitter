@@ -610,6 +610,8 @@ private struct ListingEditor: View {
                 if let requirement, lock?.isStatic != true {
                     RequiredTag(text: requirement, unmet: value.isEmpty)
                 }
+                // The one box on a static tab that still writes.
+                if state.appleTakesLiveChange(field) { LiveEditTag() }
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
                 Spacer()
                 // Every budget, always, and named when more than one store
@@ -915,6 +917,25 @@ struct RequiredTag: View {
     }
 }
 
+/// The mark on the one field the App Store still takes while the listing is
+/// live.
+///
+/// Green, because everything around it is a locked grey block and this is the
+/// thing that works. It appears only on the Manage side: on the Publish side
+/// every field writes, and marking one of them would say the rest do not.
+struct LiveEditTag: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "pencil.line").font(Theme.font(size: 8, weight: .bold))
+            Text("Editable now").font(Theme.font(size: 10, weight: .medium))
+        }
+        .foregroundStyle(Theme.green)
+        .padding(.horizontal, 5).padding(.vertical, 1)
+        .background(Theme.green.opacity(0.14), in: Capsule())
+        .accessibilityLabel("Editable now. The App Store takes a change to this one without a new version.")
+    }
+}
+
 /// The mark on a field that still says what the store says.
 ///
 /// The grey text carries the message and this names it, because grey alone is
@@ -1024,7 +1045,7 @@ private struct LiveListingNote: View {
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("Apple's one exception is the promotional text. It takes that on a live version, so it is still a box above.")
+                Text("Apple's one exception is the promotional text. It takes that on a live version, so that box still types and wears an Editable now mark.")
                     .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Button { state.mode = .publishing; state.selectedTab = .details } label: {

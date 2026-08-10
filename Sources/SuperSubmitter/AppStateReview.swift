@@ -192,6 +192,20 @@ extension AppState {
         var line: String
     }
 
+    /// Whether the App Store takes a change to this field while the listing is
+    /// live, on a screen where the fields beside it do not.
+    ///
+    /// A tab of read-only boxes hides its one working control. The promotional
+    /// text is the whole answer to "what can I change right now?", and telling
+    /// it apart by the absence of a lock asks the developer to notice a thing
+    /// that is not there.
+    ///
+    /// Only where something else is locked. On the Publish side every field
+    /// writes, so a mark on one of them would say the others do not.
+    func appleTakesLiveChange(_ field: ListingTextField) -> Bool {
+        mode == .managing && stores.contains(.apple) && !AppleVersionState.isLocked(field)
+    }
+
     /// Whether the Manage listing has anything to explain about itself.
     ///
     /// The reason is the same for every box on the tab, so a line over each one
