@@ -521,6 +521,18 @@ struct BuildFromProjectView: View {
                 ActionButton(title: "Keep the artifact and stop", kind: .secondary) {
                     flow.keepArtifact()
                 }
+                // A disabled button with no reason is the worst of both: the
+                // archive is built and nothing on screen says why it cannot
+                // go. The artifact is still keepable, which is the whole point
+                // of saying this here rather than blocking the build.
+                if let held = flow.uploadBlockedByReview {
+                    HStack(spacing: 8) {
+                        StatePill(text: "Held", foreground: Theme.yellow,
+                                  background: Theme.yellowBg)
+                        Text(held).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             // The way back from a finished run. Without it the tab allowed one
             // build per session: the Build button asks for `readyToBuild`, and
