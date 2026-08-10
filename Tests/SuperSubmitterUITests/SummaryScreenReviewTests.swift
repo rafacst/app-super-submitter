@@ -101,6 +101,56 @@ private func summaryState(findings: [Finding]) -> AppState {
     #expect(state.badge(for: .details) == nil)
 }
 
+/// The tick that unlocks the apply has to be somewhere a developer can reach.
+///
+/// A refusal is a warning, a warning holds the apply until it is acknowledged,
+/// and the card below hides this one because the banner above already says it
+/// in more words. Hiding the row hid the only "Acknowledge" in the app that
+/// unlocks this apply: the button was off, the note under it asked for an
+/// acknowledgement, and there was nothing on the screen to acknowledge. The
+/// banner carries the tick, so the sentence is still said once.
+@MainActor
+@Test func aRefusalLeavesTheTickThatUnlocksTheApplyOnTheScreen() throws {
+    let refusal = try #require(Validator.appleVersion("METADATA_REJECTED", version: "1.5"))
+    let state = summaryState(findings: [refusal])
+    var apple = ActualState.Apple()
+    apple.versionState = "METADATA_REJECTED"
+    apple.versionString = "1.5"
+    state.actualState.apple = apple
+
+    // The banner is up, so the card drops the row. Something else has to ask.
+    #expect(state.reviewOutcome?.outcome == .refused)
+    #expect(!state.canApply)
+    let waiting = try #require(state.reviewWarningNeedingAcknowledgement)
+    #expect(waiting.id == Validator.appleVersionFindingID)
+
+    // And it is the real tick, not a second one: the same id the card would
+    // have ticked, so acknowledging it here unlocks the apply.
+    state.acknowledged.insert(waiting.id)
+    #expect(state.reviewWarningNeedingAcknowledgement == nil)
+    #expect(state.canApply)
+}
+
+/// A hold asks for no tick. Nothing the developer does closes it, so a control
+/// that implied otherwise would be a lie with a checkbox on it.
+@MainActor
+@Test func aVersionApplesStillReadingAsksForNoAcknowledgement() throws {
+    let hold = try #require(Validator.appleVersion("IN_REVIEW", version: "1.5"))
+    let state = summaryState(findings: [hold])
+    var apple = ActualState.Apple()
+    apple.versionState = "IN_REVIEW"
+    state.actualState.apple = apple
+
+    #expect(state.reviewOutcome?.outcome == .waiting)
+    #expect(state.reviewWarningNeedingAcknowledgement == nil)
+}
+
+/// The banner draws it. A property nothing reads closes no dead end.
+@Test func theBannerIsWhereTheTickIsDrawn() throws {
+    let tab = try summaryReviewSource("Sources/SuperSubmitter/Tabs/PlanTab.swift")
+    #expect(tab.contains("reviewWarningNeedingAcknowledgement"))
+}
+
 /// A refusal is the developer's turn again: one warning, one acknowledgement,
 /// and a button that lands on the first field rather than the top of a tab.
 @MainActor
