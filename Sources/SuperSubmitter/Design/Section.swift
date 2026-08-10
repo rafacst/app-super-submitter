@@ -21,13 +21,6 @@ struct Section_<Content: View>: View {
     /// The state a folding block opens in. A block whose fields are usually
     /// empty starts shut; a block the developer came for does not.
     var startsOpen = true
-    /// The inset of the box a fold draws around itself.
-    ///
-    /// A section whose content is a list already draws its own rows, its own
-    /// dividers and its own inset, and those dividers have to reach both edges
-    /// of the card. Such a section asks for none here, and the header takes the
-    /// list's inset instead so it still lines up with the rows below it.
-    var foldPadding: CGFloat = 14
     /// The one line under the title. It belongs to a fold, which has to say
     /// what is inside it while it is shut.
     var note: String?
@@ -37,25 +30,18 @@ struct Section_<Content: View>: View {
 
     init(_ title: String, icon: String? = nil, tint: Color = Theme.accent,
          anchor: String? = nil, folds: Bool = false, startsOpen: Bool = true,
-         foldPadding: CGFloat = 14, note: String? = nil,
-         @ViewBuilder content: () -> Content) {
+         note: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.tint = tint
         self.anchor = anchor
         self.folds = folds
         self.startsOpen = startsOpen
-        self.foldPadding = foldPadding
         self.note = note
         self.content = content()
     }
 
     private var isOpen: Bool { open ?? startsOpen }
-
-    /// What the header takes when the box takes nothing. The content of such a
-    /// section insets itself by 13, so the title sits over the rows and not
-    /// against the edge of the card.
-    private var headerInset: CGFloat { folds && foldPadding == 0 ? 13 : 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -64,9 +50,6 @@ struct Section_<Content: View>: View {
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
-                    .padding(.horizontal, headerInset)
-                    .padding(.top, headerInset > 0 ? 12 : 0)
-                    .padding(.bottom, headerInset > 0 && !isOpen ? 12 : 0)
             } else {
                 header
             }
@@ -78,7 +61,7 @@ struct Section_<Content: View>: View {
         // section came out 30 points wider than the column it stands in, which
         // pushed the store beside it off the right of the window.
         .frame(maxWidth: folds ? nil : .infinity, alignment: .leading)
-        .foldBox(folds, padding: foldPadding)
+        .foldBox(folds)
         .motion(.easeInOut(duration: 0.22), value: isOpen)
         .fieldAnchor(anchor)
     }
@@ -132,10 +115,9 @@ private extension View {
     /// It stays inside this branch, because a section that never folds never
     /// changes height and clipping one could only cut something it draws.
     @ViewBuilder
-    func foldBox(_ folds: Bool, padding: CGFloat) -> some View {
+    func foldBox(_ folds: Bool) -> some View {
         if folds {
-            clipped().storePanel(padding: padding,
-                                 horizontal: padding == 0 ? 0 : padding + 1)
+            clipped().storePanel(padding: 14, horizontal: 15)
         } else {
             self
         }

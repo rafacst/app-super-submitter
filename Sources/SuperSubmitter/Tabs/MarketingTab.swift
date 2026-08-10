@@ -62,8 +62,12 @@ struct MarketingTab: View {
 
     private var customProductPages: some View {
         let pages = state.marketing.customProductPages ?? []
+        // No fold of its own. Every row inside it already opens, so a fold here
+        // put an accordion inside an accordion and a field three clicks deep.
+        // The header row says "2 of 35", which is the summary a shut fold would
+        // have been standing in for.
         return Section_("Custom product pages", icon: "doc.on.doc.fill", tint: Theme.accent,
-                        anchor: "marketing.customPages", folds: true, foldPadding: 0) {
+                        anchor: "marketing.customPages") {
             VStack(spacing: 0) {
                 listHeader(count: "\(pages.count) of 35",
                            action: "Add a custom product page") {
@@ -81,6 +85,7 @@ struct MarketingTab: View {
                     .padding(.horizontal, 13).padding(.vertical, 9)
                 }
             }
+            .storePanel(padding: 0)
         }
     }
 
@@ -204,8 +209,9 @@ struct MarketingTab: View {
 
     private var experiments: some View {
         let items = state.marketing.experiments ?? []
+        // The same reason as the pages above: every experiment row opens.
         return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple,
-                        anchor: "marketing.experiments", folds: true, foldPadding: 0) {
+                        anchor: "marketing.experiments") {
             VStack(spacing: 0) {
                 listHeader(count: items.isEmpty
                                ? "" : "\(items.count) \(items.count == 1 ? "experiment" : "experiments")",
@@ -229,6 +235,7 @@ struct MarketingTab: View {
                     PromoteTreatment().padding(.horizontal, 13).padding(.vertical, 9)
                 }
             }
+            .storePanel(padding: 0)
         }
     }
 
