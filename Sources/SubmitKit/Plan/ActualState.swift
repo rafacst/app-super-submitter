@@ -22,6 +22,72 @@ public enum AppleVersionState {
         "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
         "METADATA_REJECTED", "INVALID_BINARY",
     ]
+
+    /// Apple has it and has not answered. Nothing may be written and nothing
+    /// may be sent: a second submission on top of an open one is the state
+    /// App Store Connect refuses outright.
+    public static let withApple: Set<String> = [
+        "READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
+        "WAITING_FOR_EXPORT_COMPLIANCE",
+    ]
+
+    /// What Apple said, once it has said anything.
+    ///
+    /// Three answers and not two. `waiting` is the state this app spent its
+    /// whole life refusing to write in and never named, and it is the one a
+    /// developer opens the app to ask about.
+    public enum Outcome: Sendable, Equatable {
+        case waiting
+        case approved
+        case refused
+    }
+
+    /// Apple's answer for a version state, or nil where Apple has not been
+    /// asked yet.
+    ///
+    /// `DEVELOPER_REJECTED` answers nil on purpose. The developer withdrew it,
+    /// Apple never refused it, and reporting a refusal sends somebody looking
+    /// for a reason nobody ever wrote.
+    public static func outcome(of state: String?) -> Outcome? {
+        guard let state else { return nil }
+        if withApple.contains(state) { return .waiting }
+        if ["ACCEPTED", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE",
+            "PROCESSING_FOR_DISTRIBUTION", "READY_FOR_DISTRIBUTION"].contains(state) {
+            return .approved
+        }
+        if ["REJECTED", "METADATA_REJECTED", "INVALID_BINARY"].contains(state) {
+            return .refused
+        }
+        return nil
+    }
+
+    /// What Apple refused, in the words its own state uses.
+    ///
+    /// This is as far as any endpoint goes. The App Store Connect API
+    /// publishes no Resolution Center resource: there is no `rejectionReason`,
+    /// no message, and no attachment of Apple's reply anywhere in the
+    /// reference. The kind is knowable and the sentence is not, so the app
+    /// says the kind and sends the developer to the thread for the rest.
+    public static func refusalKind(_ state: String?) -> String? {
+        switch state {
+        case "METADATA_REJECTED": "the metadata"
+        case "INVALID_BINARY": "the binary"
+        case "REJECTED": "the submission"
+        default: nil
+        }
+    }
+
+    /// Whether Apple locks this field while it holds the version.
+    ///
+    /// Store policy and not the schema. Every one of these is a plain string
+    /// on `appStoreVersionLocalizations` and the endpoint would take any of
+    /// them; App Store Connect refuses the write once the version is with
+    /// review. The promotional text is the exception Apple documents in its
+    /// own interface: it is not part of what review reads, so it can be
+    /// changed at any time, on a version already in review and on a live one.
+    public static func isLocked(_ field: ListingTextField) -> Bool {
+        field != .promotionalText
+    }
 }
 
 /// What the stores hold right now.
