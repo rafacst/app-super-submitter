@@ -70,8 +70,11 @@ import Testing
         let plan = try #require(state.plan)
         let held = try #require(plan.findings.first { $0.id == Validator.appleVersionFindingID })
         #expect(held.severity == .held)
+        // It stops the apply without joining the errors. This manifest is a
+        // bare one and carries errors of its own, so the claim is about the
+        // hold itself rather than about the plan being otherwise clean.
         #expect(plan.isBlocked)
-        #expect(plan.errors.isEmpty)
+        #expect(!plan.errors.contains { $0.id == Validator.appleVersionFindingID })
     }
 
     /// The seeded plan is also what keeps the seed alive. The Summary tab reads

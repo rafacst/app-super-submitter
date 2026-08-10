@@ -147,6 +147,16 @@ enum ScreenshotMode {
         #endif
     }
 
+    /// The `AppVersionState` the run wants App Store review to be holding, or
+    /// nil for the ordinary draft every other screen is captured in.
+    static var reviewState: String? {
+        #if DEBUG
+        return value(for: "--review")
+        #else
+        return nil
+        #endif
+    }
+
     /// Every workspace the run names, in order. A demo run links several, so
     /// the sidebar holds one app per scenario.
     static var manifestPaths: [String] {
@@ -160,6 +170,41 @@ enum ScreenshotMode {
         #endif
     }
 
+    /// Puts App Store review in charge of the open version, so the screen that
+    /// produces can be photographed.
+    ///
+    /// Every rule about a version under review hangs off
+    /// `actualState.apple.versionState`, and that only ever arrives from a live
+    /// store read. The app caches no `ActualState` to disk, so no fixture on
+    /// disk reaches the banner, the held row, the mark in the sidebar or the
+    /// locked listing. The rules were under test and the drawing of them had
+    /// never been seen.
+    ///
+    /// It seeds the read and stops there. The plan under it is `Planner`'s own
+    /// answer to that read, so what lands in the picture is the screen and not
+    /// a drawing of one. The plan is also what keeps the seed alive: the
+    /// Summary tab reads the stores when it appears unless a plan is already
+    /// there, and that read finds no credentials in an isolated run, answers an
+    /// empty state, and would wipe this a moment after it was written.
+    ///
+    /// Only the open app. `appReviewStates` means "what a read said", and
+    /// filling it for apps nobody read would put a claim about a store where
+    /// the app's own rule is to claim nothing.
+    @MainActor
+    static func seedReview(_ state: AppState, versionState: String) {
+        var apple = state.actualState.apple ?? ActualState.Apple()
+        apple.versionState = versionState
+        // The banner names the version, and a retrieval reads by id, so the
+        // button under the banner needs one to be pressable.
+        apple.versionString = state.manifest.release?.versionName ?? "3.2.0"
+        if apple.versionId == nil { apple.versionId = "screenshot-version" }
+        state.actualState.apple = apple
+        state.rememberOpenAppReviewState()
+        state.plan = Planner.plan(Planner.Input(
+            manifest: state.manifest, actual: state.actualState, stores: state.stores,
+            root: state.manifestRoot, packages: state.packages))
+    }
+
     /// Puts the app on the named screen.
     @MainActor
     static func apply(to state: AppState) {
@@ -170,6 +215,9 @@ enum ScreenshotMode {
         for path in manifestPaths {
             state.link(manifestAt: URL(fileURLWithPath: path))
         }
+        // After the linking and before the screen: the seed reads the manifest
+        // that linking loaded, and every tab below draws from what it leaves.
+        if let reviewState { seedReview(state, versionState: reviewState) }
         guard let screen else {
             // A demo run lands on the app it linked, not on the welcome card.
             state.showOnboarding = false
