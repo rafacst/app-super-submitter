@@ -502,7 +502,14 @@ public struct StateReader: Sendable {
             "GET", "/v1/appStoreVersions/\(versionID)/appStoreVersionExperimentsV2?limit=200") {
             for item in JSON(data: response.data)["data"].array {
                 guard let name = item["attributes"]["name"].string else { continue }
-                result.experimentNames[name] = item["attributes"]["state"].string ?? ""
+                // The dates and the traffic share come back in this same
+                // response. The reader kept the state alone, so the Marketing
+                // tab could say an experiment was running and never how far.
+                result.experiments[name] = ActualState.Apple.Experiment(
+                    state: item["attributes"]["state"].string ?? "",
+                    startDate: item["attributes"]["startDate"].string,
+                    endDate: item["attributes"]["endDate"].string,
+                    trafficProportion: item["attributes"]["trafficProportion"].int)
             }
         }
         if let response = try? await api.apple("GET", "/v1/apps/\(appID)/appEvents?limit=200") {

@@ -177,7 +177,28 @@ public struct ActualState: Sendable, Equatable {
         public var gracePeriodOptIn: Bool?
         /// The marketing resources, by the key that the manifest gives them.
         public var customProductPageNames: [String: String] = [:]
-        public var experimentNames: [String: String] = [:]
+        /// One product page experiment, as Apple describes it.
+        ///
+        /// This was the state string alone. The same response carries the
+        /// dates and the traffic share, and the Marketing tab needs them to say
+        /// how far into its run an experiment is, so the read stops throwing
+        /// them away. The plan only ever asks whether the key is present, so a
+        /// richer value costs it nothing.
+        public struct Experiment: Sendable, Equatable, Codable {
+            public var state: String
+            public var startDate: String?
+            public var endDate: String?
+            public var trafficProportion: Int?
+
+            public init(state: String = "", startDate: String? = nil,
+                        endDate: String? = nil, trafficProportion: Int? = nil) {
+                self.state = state
+                self.startDate = startDate
+                self.endDate = endDate
+                self.trafficProportion = trafficProportion
+            }
+        }
+        public var experiments: [String: Experiment] = [:]
         public var appEventNames: [String: String] = [:]
         public var eulaText: String?
         public var eulaTerritories: Set<String> = []

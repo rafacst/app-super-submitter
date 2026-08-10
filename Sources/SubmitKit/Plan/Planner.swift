@@ -587,7 +587,7 @@ public enum Planner {
         }
         if let experiments = marketing.experiments, !experiments.isEmpty {
             let treatments = experiments.reduce(0) { $0 + $1.treatments.count }
-            let missing = experiments.filter { actual?.experimentNames[$0.name] == nil }
+            let missing = experiments.filter { actual?.experiments[$0.name] == nil }
             // Every experiment carries treatments, and no read returns them.
             if !read || !missing.isEmpty || treatments > 0 {
                 steps.append(PlanStep(
