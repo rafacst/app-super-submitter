@@ -276,7 +276,6 @@ extension AppState {
     func openPaywall(_ trigger: PaywallTrigger) {
         billingMessage = nil
         PostHogSDK.shared.capture("paywall_shown", properties: ["trigger": trigger.rawValue])
-        showSettings = false
         selectedTab = .account
         Task { await loadBillingPlans() }
     }

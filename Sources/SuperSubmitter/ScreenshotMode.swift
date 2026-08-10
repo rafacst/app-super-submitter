@@ -265,9 +265,8 @@ enum ScreenshotMode {
         case "onboarding":
             state.showOnboarding = true
         // The sheets. Each opens over the tab the app already landed on, so
-        // none of them needs a tab of its own.
-        case "settings":
-            state.showSettings = true
+        // none of them needs a tab of its own. Settings left this list when it
+        // became a tab: the default below finds it by its own name.
         case "about":
             state.showAbout = true
         case "import":

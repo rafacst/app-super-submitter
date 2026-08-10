@@ -2,7 +2,14 @@ import AppKit
 import SubmitKit
 import SwiftUI
 
-/// Settings. A panel over the window, never a second window.
+/// Settings. A screen, and it was a sheet over the window.
+///
+/// The sheet carried a strip of four sections across the top: a second
+/// navigation system, inside a panel, over the first one. Three of the four
+/// sections were three rows each, so the strip hid two-thirds of a short screen
+/// behind a click and the panel opened at a fixed 560 points whatever the
+/// window was. The four are four blocks of one tab now, in the order a
+/// developer meets them, and the sidebar says where you are.
 ///
 /// The provider choice sits here rather than on the Monetization tab. A
 /// developer picks RevenueCat or Adapty once per machine, and then edits the
@@ -11,77 +18,79 @@ import SwiftUI
 /// Every control here is the AppKit one. A hand-drawn checkbox and a
 /// hand-drawn segmented control land on different baselines and different
 /// heights, and six of those in one column read as six different apps.
-struct SettingsPanel: View {
+struct SettingsTab: View {
     @Environment(AppState.self) private var state
-    @Environment(\.dismiss) private var dismiss
     @AppStorage(Appearance.defaultsKey) private var appearance: Appearance = .system
     @AppStorage("pollIntervalMinutes") private var pollMinutes = 5
     @AppStorage("dryRunByDefault") private var dryRun = true
     @AppStorage("showYAMLToggle") private var showYAMLToggle = false
-    @State private var section: SettingsSection = .workspace
 
     private static let intervals = [1, 5, 10, 15, 30, 60]
 
+    /// Four cards, in the order a developer meets them, and the last one is
+    /// the one that erases everything.
+    ///
+    /// A grid and not a column. Every block here is short — four rows, three,
+    /// one — and stacked they made one narrow ribbon down the left of a wide
+    /// window with the erase button below the fold. Abreast, the whole of
+    /// Settings is one screen, which is what it was as a panel and the one
+    /// thing the panel had going for it.
+    ///
+    /// Two columns, always, and each one takes half of whatever there is.
+    ///
+    /// It was `adaptive`, with a minimum of a label column plus a 300-point
+    /// control. That minimum is 479 points, so two of them need 973 and the
+    /// window has to be about 1350 wide before a second column appears. A real
+    /// window is 1200, the grid fell to one column, and Settings was the stack
+    /// of boxes it was meant to stop being. An adaptive grid whose minimum no
+    /// ordinary window can afford is a one-column grid with extra steps.
+    ///
+    /// So the count is fixed and the controls give way instead: every width
+    /// below is a maximum now, and a card narrower than 479 shortens its
+    /// pickers and wraps its notes rather than dropping its neighbour under it.
     var body: some View {
         @Bindable var state = state
-        VStack(spacing: 0) {
-            PanelTitleBar(title: "Settings") { dismiss() }
-            tabStrip
-            Hairline()
-            body(of: section)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.content)
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 14, alignment: .top),
+                                   GridItem(.flexible(), spacing: 14, alignment: .top)],
+                         spacing: 14) {
+            card("Workspace", icon: "macwindow") { workspace }
+            card("Files", icon: "folder") { files }
+            // "Monetization tracker" and not "Provider", which is the word on
+            // the row inside it. A box named after its own only control says
+            // the same word twice and names neither of them: the box is the
+            // subject, the row is the choice.
+            card("Monetization tracker", icon: "creditcard") { provider }
+            card("Nuclear", icon: "exclamationmark.octagon", tint: Theme.red) { nuclear }
         }
-        .frame(width: 560)
-        .background(Theme.bg)
-        .foregroundStyle(Theme.text)
-        .onExitCommand { dismiss() }
+        .frame(maxWidth: Self.column, alignment: .leading)
         .onChange(of: state.revenueCatAPIKey) { _, _ in state.revenueCatKeyChanged() }
         .onChange(of: state.revenueCatProjectID) { _, _ in state.updateRevenueCatProject() }
     }
 
-    /// One row of sections across the top, the way a Mac settings window
-    /// works. Each section is short enough to read without a scroll.
-    private var tabStrip: some View {
-        HStack(spacing: 2) {
-            ForEach(SettingsSection.allCases) { item in
-                let selected = section == item
-                Button { section = item } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: item.symbol)
-                            .font(Theme.font(size: 16, weight: selected ? .semibold : .regular))
-                        Text(item.title).font(Theme.font(size: 11.5,
-                                                      weight: selected ? .semibold : .regular))
-                    }
-                    .foregroundStyle(selected ? Theme.accentText : Theme.text2)
-                    .frame(width: 92)
-                    .padding(.vertical, 7)
-                    .background(selected ? Theme.accent : .clear,
-                                in: RoundedRectangle(cornerRadius: 7))
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(item.title)
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-            Spacer(minLength: 0)
+    /// One block, on the panel every card in this app sits on.
+    private func card<Content: View>(_ title: String, icon: String,
+                                     tint: Color = Theme.accent,
+                                     @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Section_(title, icon: icon, tint: tint, content: content)
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
-        .background(Theme.raised)
+        // Both boxes of a row are one box tall, and the contents sit at the top
+        // of it. Left to their own heights the two panels in a row ended at two
+        // different places, which is the one thing a grid of boxes is for.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .storePanel(padding: 14, horizontal: 15)
     }
 
-    @ViewBuilder
-    private func body(of section: SettingsSection) -> some View {
-        switch section {
-        case .workspace: workspace
-        case .files: files
-        case .provider: provider
-        case .nuclear: nuclear
-        }
-    }
+    /// The width a card is comfortable at: the label column, the gap, the
+    /// control, and the panel's own inset either side. Not a minimum any more.
+    /// The grid is two columns whatever the window is, and this is only what
+    /// they stop growing at.
+    static let card: CGFloat = labelWidth + 14 + controlWidth + 30
+
+    /// One width for the page. Two cards abreast and no more. A third column
+    /// would put a picker 1200 points from the sidebar, and no control here
+    /// gains anything from the room.
+    static let column: CGFloat = card * 2 + 14
 
     /// Start over. Everything the app holds, gone, and back to onboarding.
     ///
@@ -98,7 +107,7 @@ struct SettingsPanel: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Erase everything Super Submitter knows and return to the first-run screen.")
                         .font(Theme.font(size: 12))
-                        .frame(width: Self.controlWidth, alignment: .leading)
+                        .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Note("This forgets every linked app, every key and password you entered, your account, and the archives, logs and settings Super Submitter wrote. It deletes no store.yaml anywhere, including the one a managed app keeps here. Your projects, your developer accounts, and everything already published are untouched.")
                     Button("Erase everything") { state.nuclearFirstConfirm = true }
@@ -123,9 +132,10 @@ struct SettingsPanel: View {
         .confirmationDialog("This cannot be undone.",
                             isPresented: $state.nuclearSecondConfirm,
                             titleVisibility: .visible) {
+            // No dismissal to make. `eraseEverything` sends the window to the
+            // first-run screen, which is what closing the panel used to be for.
             Button("Erase everything and start over", role: .destructive) {
                 state.eraseEverything()
-                dismiss()
             }
             Button("Keep my data", role: .cancel) { state.nuclearSecondConfirm = false }
         } message: {
@@ -141,7 +151,7 @@ struct SettingsPanel: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: Self.controlWidth)
+                .frame(maxWidth: Self.controlWidth, alignment: .leading)
                 .onChange(of: appearance) { appearance.apply() }
             }
 
@@ -150,7 +160,7 @@ struct SettingsPanel: View {
                     ForEach(Self.intervals, id: \.self) { Text("\($0) minutes").tag($0) }
                 }
                 .labelsHidden()
-                .frame(width: Self.controlWidth)
+                .frame(maxWidth: Self.controlWidth, alignment: .leading)
                 // The poller reads the value on the next tick, so a
                 // restart makes the new interval take effect now.
                 .onChange(of: pollMinutes) { state.startPolling() }
@@ -182,7 +192,7 @@ struct SettingsPanel: View {
                         .textSelection(.enabled)
                         .lineLimit(2)
                         .truncationMode(.middle)
-                        .frame(width: Self.controlWidth, alignment: .leading)
+                        .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 7) {
                         QuietButton(title: "Show in Finder") { state.revealManifest() }
@@ -198,7 +208,7 @@ struct SettingsPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(state.buildStorageSummary)
                         .font(Theme.font(size: 12))
-                        .frame(width: Self.controlWidth, alignment: .leading)
+                        .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Note("Archives and App Bundles are kept outside your repository. Deleting run data removes the logs and the temporary files. It never deletes a retained archive or a bundle, and it never touches your project.")
                     HStack(spacing: 7) {
@@ -225,7 +235,7 @@ struct SettingsPanel: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(width: Self.controlWidth)
+                    .frame(maxWidth: Self.controlWidth, alignment: .leading)
                     Note("The provider mirrors the same purchases into one more catalog. The plan and the apply cover it beside the two stores.")
                     if state.provider == .revenuecat { revenueCat }
                     if state.provider == .adapty { adapty }
@@ -261,7 +271,7 @@ struct SettingsPanel: View {
                  destination: URL(string: "https://app.revenuecat.com/signup")!)
                 .font(Theme.font(size: 11.5))
         }
-        .frame(width: Self.controlWidth, alignment: .leading)
+        .frame(maxWidth: Self.controlWidth, alignment: .leading)
     }
 
     private var adapty: some View {
@@ -278,7 +288,7 @@ struct SettingsPanel: View {
                  destination: URL(string: "https://app.adapty.io/registration")!)
                 .font(Theme.font(size: 11.5))
         }
-        .frame(width: Self.controlWidth, alignment: .leading)
+        .frame(maxWidth: Self.controlWidth, alignment: .leading)
     }
 
     /// Connected is green, refused is yellow, and everything else stays quiet.
@@ -287,7 +297,11 @@ struct SettingsPanel: View {
     private func connectionRow(_ status: ConnectionStatus) -> some View {
         Group {
             if status.isFailed {
-                WarningNote(status.label, width: Self.controlWidth)
+                // No width of its own. It is already inside the control
+                // column, and a hard 300 in a card that came out narrower
+                // reaches past the panel it is drawn on.
+                WarningNote(status.label)
+                    .frame(maxWidth: Self.controlWidth, alignment: .leading)
             } else {
                 HStack(alignment: .top, spacing: 6) {
                     Circle().fill(status.isConnected ? Theme.green : Theme.text3)
@@ -298,46 +312,24 @@ struct SettingsPanel: View {
                 }
                 .font(Theme.font(size: 11.5))
                 .foregroundStyle(status.isConnected ? Theme.green : Theme.text2)
-                .frame(width: Self.controlWidth, alignment: .leading)
+                .frame(maxWidth: Self.controlWidth, alignment: .leading)
             }
         }
     }
 
     /// One width for every control, so the second column has one left edge and
-    /// one right edge down the whole panel.
+    /// one right edge down the whole page.
+    ///
+    /// The control width is not scaled and the label width is, and the two are
+    /// different kinds of number. This one is a wrap width: a picker sits in it
+    /// and a note wraps inside it, so a larger type sets more lines and nothing
+    /// runs out of the card.
     static let controlWidth: CGFloat = 300
-    static let labelWidth: CGFloat = 118
-}
 
-/// The sections, as the tabs across the top of the panel.
-/// Three sections, and every one of them is something you change.
-///
-/// Account and About left. Neither was a setting: one is the plan and the
-/// prices, which now has a tab of its own beside Stores, and the other is the
-/// label on the tin, which the sidebar opens at its foot. Both were buried two
-/// levels down, behind a sheet and under a tab strip.
-enum SettingsSection: String, CaseIterable, Identifiable {
-    case workspace, files, provider, nuclear
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .workspace: "Workspace"
-        case .files: "Files"
-        case .provider: "Provider"
-        case .nuclear: "Nuclear"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .workspace: "macwindow"
-        case .files: "folder"
-        case .provider: "creditcard"
-        case .nuclear: "exclamationmark.octagon"
-        }
-    }
+    /// The label column is a measure. "Manifest path" is the longest word here
+    /// and it needs 114 points of the 118 at the shipped scale, so a fixed 118
+    /// wrapped it onto two lines the moment the type grew at all.
+    static let labelWidth = Theme.scaled(118)
 }
 
 /// One setting: a glyph, a word, and the control.
@@ -379,7 +371,7 @@ private struct SettingRow<Content: View>: View {
                     .foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
-            .frame(width: SettingsPanel.labelWidth, alignment: .leading)
+            .frame(width: SettingsTab.labelWidth, alignment: .leading)
             // The label sits on the first line of a tall row, not in the
             // middle of it.
             .padding(.top, alignment == .top ? 1 : 0)
@@ -387,13 +379,27 @@ private struct SettingRow<Content: View>: View {
             // named once.
             .accessibilityElement(children: .combine)
             .accessibilityLabel(label)
-            content
-            Spacer(minLength: 0)
+            // The control takes the rest of the row, and each control caps
+            // itself at `controlWidth` inside that.
+            //
+            // It was `content` followed by a `Spacer`. Two flexible views in
+            // one `HStack` share the leftover width between them, so in a card
+            // narrower than the old fixed layout the spacer took half of what
+            // was left and the controls were squeezed to the other half. A
+            // frame here leaves nothing for a spacer to claim.
+            content.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
 /// A checkbox and the one sentence under it.
+///
+/// The sentence is part of the checkbox's own label, and it used to be a second
+/// row of a `VStack` beside it. A `VStack` aligns on its own leading edge,
+/// which is the left of the *box*, so every note started about twenty points to
+/// the left of the words it explains and no two lines in the card began at the
+/// same place. Inside the label, AppKit indents it under the title for us and
+/// the sentence is clickable, which is what a checkbox label is.
 private struct Check: View {
     let title: String
     @Binding var isOn: Bool
@@ -406,13 +412,14 @@ private struct Check: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Toggle(title, isOn: $isOn)
-                .toggleStyle(.checkbox)
-                .font(Theme.font(size: 12.5))
-            Note(note)
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(Theme.font(size: 12.5))
+                Note(note)
+            }
         }
-        .frame(width: SettingsPanel.controlWidth, alignment: .leading)
+        .toggleStyle(.checkbox)
+        .frame(maxWidth: SettingsTab.controlWidth, alignment: .leading)
     }
 }
 
@@ -426,7 +433,7 @@ private struct Note: View {
             .font(Theme.font(size: 11))
             .foregroundStyle(Theme.text2)
             .lineSpacing(3)
-            .frame(width: SettingsPanel.controlWidth, alignment: .leading)
+            .frame(maxWidth: SettingsTab.controlWidth, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

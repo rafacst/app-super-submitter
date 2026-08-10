@@ -30,15 +30,14 @@ private func state() -> AppState {
 }
 
 /// The detour Settings needed is gone: nothing waits, because nothing is
-/// modal. Settings closes and the tab is already there behind it.
+/// modal. Settings is a tab, and the gate moves the selection to another one.
 @MainActor
 @Test func aGateFromInsideSettingsNeedsNoQueue() {
     let app = state()
-    app.showSettings = true
+    app.selectedTab = .settings
 
     app.openPaywall(.settings)
 
-    #expect(app.showSettings == false)
     #expect(app.selectedTab == .account)
 }
 
@@ -71,18 +70,15 @@ private func state() -> AppState {
 
 /// A failed provider read is fixed in Settings; store reads are fixed on the
 /// Stores tab. The action beside each error must take the same route its copy
-/// names.
+/// names, and both of those are tabs now.
 @MainActor
 @Test func readFailureActionsOpenTheRightSurface() {
     let app = state()
     app.selectedTab = .plan
 
     app.fixReadFailure("Provider: RevenueCat refused the key.")
-    #expect(app.showSettings)
-    #expect(app.selectedTab == .plan)
+    #expect(app.selectedTab == .settings)
 
-    app.showSettings = false
     app.fixReadFailure("Google Play: The credentials were refused.")
-    #expect(!app.showSettings)
     #expect(app.selectedTab == .stores)
 }

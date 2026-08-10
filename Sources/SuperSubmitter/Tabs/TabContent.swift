@@ -32,6 +32,7 @@ struct TabContent: View {
         case .release: ReleaseTab()
         case .liveApp: LiveAppTab()
         case .account: AccountTab()
+        case .settings: SettingsTab()
         }
     }
 }

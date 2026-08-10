@@ -267,7 +267,7 @@ private func input(_ manifest: Manifest, stores: Set<Store> = [.apple, .google],
 /// The provider choice moved off the Monetization tab. The catalog stayed.
 @Test func theProviderChoiceLivesInSettingsAndNotOnTheMoneyTab() throws {
     let money = try source("Sources/SuperSubmitter/Tabs/MoneyTab.swift")
-    let settings = try source("Sources/SuperSubmitter/Overlays/SettingsPanel.swift")
+    let settings = try source("Sources/SuperSubmitter/Tabs/SettingsTab.swift")
 
     #expect(!money.contains("Manifest.Provider.revenuecat"))
     #expect(!money.contains("revenueCatAPIKey"))

@@ -24,7 +24,7 @@ import Testing
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
         "Stores", "Build", "Details", "Media", "Monetization",
-        "Review info", "Summary", "Release", "Account",
+        "Review info", "Summary", "Release", "Account", "Settings",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.release.zone == .releases)
@@ -35,44 +35,40 @@ import Testing
 
 /// The shape of the sidebar, which is the shape of the app.
 ///
-/// Every row is in a group, and the group says which job it belongs to. The
-/// switch above the column then shows one job's groups at a time: see
-/// `SidebarModeSwitchTests` for what that hides and what it may not.
+/// Every row is a step of one app's submission, in a group that says which job
+/// it belongs to. The switch above the column then shows one job's groups at a
+/// time: see `SidebarModeSwitchTests` for what that hides and what it may not.
 @Test func theSidebarListsEveryDestinationInItsSection() {
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
-        == ["Stores", "Build", "Details", "Media", "Monetization", "Review info"])
+        == ["Build", "Details", "Media", "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
-    // Stores heads this one too. Both jobs read the same credentials, and a
-    // manager who cannot reach them has to switch jobs to sign in.
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
-        == ["Stores", "Live listing", "Live media", "Marketing", "Live app"])
+        == ["Live listing", "Live media", "Marketing", "Live app"])
 
     // Publish and Send are the manifest against the stores: everything that
     // only edits `store.yaml`, then the two screens that talk to a store.
     #expect(Destination.rows(in: .publish, hasApp: true).allSatisfy { $0.tab.zone == .edits })
     #expect(Destination.rows(in: .send, hasApp: true).allSatisfy { $0.tab.zone != .edits })
 
-    // Nothing is lost. Account is the one tab off the list, and the control at
-    // the foot of the sidebar opens it.
+    // Nothing is lost, and the three off the list are the three about this Mac
+    // rather than about an app. The box at the foot of the sidebar holds them.
     let listed = Set(Destination.all(hasApp: true).map(\.tab))
-    #expect(Set(Tab.allCases).subtracting(listed) == [.account])
-    // Once per job and never twice in one column, which is the claim that
-    // matters and the one `SidebarModeSwitchTests` makes.
-    #expect(Destination.all(hasApp: true).filter { $0.tab == .stores }.count
-        == Mode.allCases.count)
+    #expect(Set(Tab.allCases).subtracting(listed) == [.stores, .settings, .account])
+    #expect(Set(Tab.allCases.filter(\.standsAlone)) == [.stores, .settings, .account])
+    // Stores was listed under Publish and again under Manage, which is one
+    // screen in two rows of a column that can only stand on one of them.
+    #expect(Destination.all(hasApp: true).allSatisfy { !$0.tab.standsAlone })
 }
 
 /// With no app linked there is nothing to edit, and a row that edits nothing
-/// used to show greyed. Stores survives, because it holds the keys the rest
-/// waits on and because "Forget" is the only way to remove one on purpose.
-@Test func anEmptyWindowKeepsStoresAndNothingElse() {
-    #expect(Set(Destination.all(hasApp: false).map(\.title)) == ["Stores"])
-    #expect(Destination.rows(in: .send, hasApp: false).isEmpty)
-    // Whichever job the switch is on, the empty window offers the one row that
-    // fills it.
-    #expect(Destination.rows(in: .manage, hasApp: false).map(\.title) == ["Stores"])
-    #expect(Destination.rows(in: .publish, hasApp: false).map(\.title) == ["Stores"])
+/// used to show greyed. The groups are empty instead, and the three screens
+/// that need no app are in the footer, which is on the screen at all times.
+@Test func anEmptyWindowListsNoStepOfTheWork() {
+    #expect(Destination.all(hasApp: false).isEmpty)
+    for section in SidebarSection.allCases {
+        #expect(Destination.rows(in: section, hasApp: false).isEmpty)
+    }
 }
 
 /// The sidebar's selection is `mode` and `selectedTab`, and nothing else.
@@ -107,10 +103,12 @@ import Testing
     let publishing = Set(Tab.tabs(in: .publishing))
     let managing = Set(Tab.tabs(in: .managing))
 
-    #expect(publishing.intersection(managing) == [.stores, .account, .details, .media])
+    #expect(publishing.intersection(managing)
+        == [.stores, .account, .settings, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
     #expect(Tab.tabs(in: .managing).map { $0.title(in: .managing) }
-        == ["Stores", "Live listing", "Live media", "Marketing", "Live app", "Account"])
+        == ["Stores", "Live listing", "Live media", "Marketing", "Live app",
+            "Account", "Settings"])
     // Nothing that builds, plans, writes, or releases reaches a manager.
     #expect(managing.isDisjoint(with: [.build, .money, .reviewInfo, .plan, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.
@@ -182,10 +180,10 @@ import Testing
     #expect(state.moneyError == nil)
 }
 
-/// The sidebar draws these outside the work column, at a fixed place that does
-/// not depend on the mode: Stores at the head, Account in the group about this
-/// program. One that belonged to a single mode would keep its place in the
-/// other one and open a tab that mode does not hold.
+/// The sidebar draws these in the box at the foot of the column, at a fixed
+/// place that does not depend on the mode. One that belonged to a single mode
+/// would keep its place in the other one and open a tab that mode does not
+/// hold.
 @Test func theStandAloneTabsBelongToEveryMode() {
     for tab in Tab.allCases.filter(\.standsAlone) {
         #expect(tab.modes == Set(Mode.allCases), "\(tab.title) is missing from a mode.")
@@ -209,10 +207,29 @@ import Testing
     #expect(state.showsEntryScreen, "Every other tab needs an app.")
 }
 
-/// About and Settings open panels, not tabs, so neither may take a tab's
-/// place in the enum and become a tenth step of the work.
+/// About is the label on the tin: a panel, and never a step of the work.
+///
+/// Settings was one of these until it grew four sections behind a strip of its
+/// own. A screen of that size is a screen, and it is a tab now, in the footer
+/// box with the other two that are about this Mac rather than about an app.
 @Test func theAboutRowIsNotATab() {
     #expect(!Tab.allCases.map(\.title).contains("About"))
+    #expect(Tab.settings.standsAlone)
+}
+
+/// Every screen that stands alone opens with nothing linked, or the developer
+/// meets a door that leads back to the door: no key, no account, and no way to
+/// change a setting until a folder is picked.
+@MainActor
+@Test func theMachineTabsSurviveAnEmptyWindow() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    #expect(state.manifestURL == nil)
+
+    for tab in Tab.allCases.filter(\.standsAlone) {
+        state.selectedTab = tab
+        #expect(!state.showsEntryScreen, "\(tab.title) is covered by the entry screen.")
+    }
 }
 
 /// A universal app holds a version train per platform under one app id, each

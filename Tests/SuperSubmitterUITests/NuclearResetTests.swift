@@ -120,13 +120,16 @@ import Testing
 
         state.showOnboarding = false
         state.showEntryScreen = false
-        state.showSettings = true
+        // Where the button is: the erase is ordered from the Settings tab.
+        state.selectedTab = .settings
 
         state.eraseEverything(storage: storage)
 
         #expect(state.showOnboarding)
         #expect(state.showEntryScreen)
-        #expect(!state.showSettings)
+        // And the tab behind the first-run screen is the one a fresh install
+        // opens on, not the screen the erase was ordered from.
+        #expect(state.selectedTab == .stores)
     }
 
     /// Both gates close on the way through. One left open would put the dialog

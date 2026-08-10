@@ -58,14 +58,34 @@ import Testing
             "2222": "PENDING_DEVELOPER_RELEASE",
             "3333": "REJECTED",
             "4444": "PREPARE_FOR_SUBMISSION",
+            "5555": "READY_FOR_DISTRIBUTION",
+            "6666": "DEVELOPER_REJECTED",
         ]
 
-        #expect(state.appReviewMark(appKey: "1111")?.text == "In review")
-        #expect(state.appReviewMark(appKey: "2222")?.text == "Approved")
-        #expect(state.appReviewMark(appKey: "3333")?.text == "Refused")
-        // A draft is the ordinary state and earns no mark at all: a column
-        // where every row wears a badge is a column with no signal in it.
-        #expect(state.appReviewMark(appKey: "4444") == nil)
+        #expect(state.appReviewMark(appKey: "1111")?.label == "In review")
+        // Apple said yes and nobody can buy it yet. The release is still a
+        // button somebody has to press.
+        #expect(state.appReviewMark(appKey: "2222")?.label == "Approved")
+        #expect(state.appReviewMark(appKey: "3333")?.label == "Refused")
+        // A draft is the ordinary state, and it is the answer for most of the
+        // apps in the list on most days. It said nothing at all before.
+        #expect(state.appReviewMark(appKey: "4444")?.label == "Draft")
+        // The one the column exists for: on sale, and not merely approved.
+        #expect(state.appReviewMark(appKey: "5555")?.label == "Live")
+        // The developer withdrew it. Apple never refused it, so it is a draft
+        // and not a refusal. See `AppleVersionState.outcome`.
+        #expect(state.appReviewMark(appKey: "6666")?.label == "Draft")
+    }
+
+    /// A read that never happened claims nothing. Every other row wears a word,
+    /// so this one has to stay the absence of an answer rather than becoming
+    /// the "Draft" the states below it earn.
+    @Test func anAppNobodyReadWearsNoWord() {
+        let state = state()
+        state.appReviewStates = ["1111": ""]
+
+        #expect(state.appReviewMark(appKey: "1111") == nil)
+        #expect(state.appReviewMark(appKey: "9999") == nil)
     }
 
     // MARK: - The open app agrees with the sweep
@@ -87,17 +107,36 @@ import Testing
 
     // MARK: - Where it runs and where it shows
 
-    @Test func theSweepRunsWhenTheAppListIsOpenedAndOnEveryAppChange() throws {
+    @Test func theSweepRunsAtLaunchAndOnEveryAppChange() throws {
         let review = try source("Sources/SuperSubmitter/AppStateReview.swift")
         #expect(review.contains("func refreshReviewStates"))
         // Every linked app, not the open one.
         #expect(review.contains("linkedApps"))
 
-        // Picking an app is the moment the answer is needed.
+        // Picking an app is one moment the answer is needed.
         let appState = try source("Sources/SuperSubmitter/AppState.swift")
         #expect(appState.contains("await refreshReviewStates()"))
 
+        // Opening the app is the other, and it is the one that was missing:
+        // the status column drew nothing until something had been clicked.
+        let shell = try source("Sources/SuperSubmitter/SuperSubmitterApp.swift")
+        #expect(shell.contains("await state.refreshReviewStates()"))
+
         let sidebar = try source("Sources/SuperSubmitter/Shell/Sidebar.swift")
         #expect(sidebar.contains("appReviewMark"))
+    }
+
+    /// The keys are in the Keychain at launch, so the app asks the stores about
+    /// them itself. It used to open on "not connected" beside a filled-in key
+    /// id and wait to be told what it could have found out.
+    @Test func theStoredKeysAreCheckedAtLaunch() throws {
+        let appState = try source("Sources/SuperSubmitter/AppState.swift")
+        #expect(appState.contains("func verifyStoredConnections"))
+        // Google's OAuth route opens a browser window to connect, and a window
+        // that opens itself at launch is an interruption and not a check.
+        #expect(appState.contains("googleCredentialChoice == .serviceAccount"))
+
+        let shell = try source("Sources/SuperSubmitter/SuperSubmitterApp.swift")
+        #expect(shell.contains("state.verifyStoredConnections()"))
     }
 }
