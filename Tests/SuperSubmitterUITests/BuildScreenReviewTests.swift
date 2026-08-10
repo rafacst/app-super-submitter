@@ -226,3 +226,76 @@ private func buildReviewState() -> AppState {
     #expect(sidebar.contains("hammer"))
     #expect(sidebar.contains("arrow.up"))
 }
+
+// MARK: - Apple's export compliance question
+
+/// Apple asks it once per build and refuses the submission without an answer.
+///
+/// It was a toggle on the Details inspector that read an unanswered question
+/// as a settled "no", two tabs from the build it belongs to, and nothing made
+/// the developer meet it until the store did. It is asked here now, and the
+/// archive waits for it.
+@MainActor
+@Test func anAppleBuildWaitsForTheExportComplianceAnswer() throws {
+    let state = buildReviewState()
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("build-encryption-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let url = folder.appendingPathComponent(ManifestFile.defaultName)
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1", bundleID: "com.example.app")
+    try ManifestFile.save(manifest, to: url)
+    try state.load(from: url)
+
+    let flow = BuildFlow(app: state)
+    flow.run.platform = .ios
+    #expect(flow.blockingReason != nil)
+
+    state.setEncryptionAnswer(false)
+    #expect(flow.blockingReason == nil)
+}
+
+/// Google asks no such question, so an App Bundle is never held for it.
+@MainActor
+@Test func anAndroidBuildIsNeverHeldForApplesQuestion() throws {
+    let state = buildReviewState()
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("build-encryption-android-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let url = folder.appendingPathComponent(ManifestFile.defaultName)
+    var manifest = Manifest()
+    manifest.setGoogleApp(packageName: "com.example.app")
+    try ManifestFile.save(manifest, to: url)
+    try state.load(from: url)
+
+    let flow = BuildFlow(app: state)
+    flow.run.platform = .android
+    #expect(flow.blockingReason == nil)
+}
+
+/// A flow with no app open has no manifest to answer from, and a question
+/// nobody can be asked may not hold a button.
+@MainActor
+@Test func aFlowWithNoAppOpenIsNotHeldForAnAnswer() {
+    let flow = BuildFlow(app: nil)
+    flow.run.platform = .ios
+    #expect(flow.blockingReason == nil)
+}
+
+/// One row, not a card. It is a yes or no question with two words of context,
+/// and the paperwork under it belongs to the app that answers yes.
+@Test func theQuestionIsOneRowOnTheBuildTab() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+
+    #expect(build.contains("Export compliance"))
+    #expect(build.contains("Uses no non-exempt encryption"))
+    #expect(build.contains("It does use encryption"))
+    #expect(build.contains("build.encryption"))
+    #expect(build.contains("struct ExportCompliance"))
+    // The reason a disabled button gives, in the place the tab already puts
+    // every other reason a build cannot start.
+    let project = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    #expect(project.contains("flow.blockingReason"))
+}
