@@ -547,7 +547,8 @@ extension AppState {
         }
     }
 
-    private var currentAppKey: String {
+    /// Also read by the review choice, which is remembered per app and version.
+    var currentAppKey: String {
         manifest.apps.apple?.appId
             ?? manifest.apps.google?.packageName
             ?? credentialAccount
