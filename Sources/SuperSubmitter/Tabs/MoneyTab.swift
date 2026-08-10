@@ -9,6 +9,16 @@ struct MoneyTab: View {
     /// what each store holds, and the twelve fields behind a row are for the
     /// one product being changed.
     @State private var openProducts: Set<Int> = []
+    /// The plans whose fields are open, by group and plan.
+    @State private var openPlans: Set<PlanKey> = []
+
+    /// One plan's place in the manifest. A pair, because a plan index alone
+    /// repeats across groups.
+    struct PlanKey: Hashable {
+        let group: Int
+        let plan: Int
+        init(_ group: Int, _ plan: Int) { self.group = group; self.plan = plan }
+    }
 
     var body: some View {
         @Bindable var state = state
@@ -225,14 +235,38 @@ struct MoneyTab: View {
                              actual: ActualState, territory: String) -> String? {
         switch store {
         case .apple:
-            guard let product = actual.apple?.catalog[id] else { return nil }
-            return product.prices[territory] ?? product.prices.values.first
+            guard let product = actual.apple?.catalog[id],
+                  let price = product.prices[territory] ?? product.prices.values.first
+            else { return nil }
+            // The ladder position, which is what a tier is. Apple stopped
+            // naming tiers in 2023 and this read stores amounts, so this
+            // counts the price up the ladder rather than printing a number
+            // the API never sent.
+            guard let point = ladderPoint(price, in: actual) else { return price }
+            return "\(price) · point \(point)"
         case .google:
             guard let product = actual.google?.catalog[id] else { return nil }
             let price = product.prices[territory] ?? product.prices.values.first
             guard let plan = product.basePlanId else { return price }
             return [price, "base plan \(plan)"].compactMap { $0 }.joined(separator: " · ")
         }
+    }
+
+    /// Where a price stands on the ladder Apple published for the territory
+    /// the ladder was read for. Nil when the ladder is unread or the price is
+    /// not on it, which is itself worth knowing and the validator already says.
+    static func ladderPoint(_ price: String, in actual: ActualState) -> Int? {
+        guard let apple = actual.apple, !apple.pricePoints.isEmpty else { return nil }
+        let digits = price.split(separator: " ").last.map(String.init) ?? price
+        // Compared as numbers with a half-cent tolerance, not as `Decimal`
+        // equality: a ladder built from float literals and a price parsed from
+        // a string are the same money and different bit patterns.
+        guard let amount = Decimal(string: digits) else { return nil }
+        let wanted = NSDecimalNumber(decimal: amount).doubleValue
+        guard let index = apple.pricePoints.firstIndex(where: {
+            abs(NSDecimalNumber(decimal: $0).doubleValue - wanted) < 0.005
+        }) else { return nil }
+        return index + 1
     }
 
     /// Where a product stands across the two stores.
@@ -350,6 +384,11 @@ struct MoneyTab: View {
         case .nonConsumable: "Non-consumable"
         case .nonRenewing: "Non-renewing"
         }
+    }
+
+    private func togglePlan(_ group: Int, _ plan: Int) {
+        let key = PlanKey(group, plan)
+        if openPlans.contains(key) { openPlans.remove(key) } else { openPlans.insert(key) }
     }
 
     private func toggleProduct(_ index: Int) {
@@ -494,8 +533,14 @@ struct MoneyTab: View {
                             }
                         }
                         gracePeriodRow(groupIndex: groupIndex)
+                        if state.stores.count > 1 { productTableHeader }
                         ForEach(Array(group.plans.enumerated()), id: \.offset) { planIndex, _ in
                             VStack(alignment: .leading, spacing: 7) {
+                                productRow(id: group.plans[planIndex].id, kind: "Subscription",
+                                           open: openPlans.contains(PlanKey(groupIndex, planIndex))) {
+                                    togglePlan(groupIndex, planIndex)
+                                }
+                                if openPlans.contains(PlanKey(groupIndex, planIndex)) {
                                 FieldRow {
                                     LabeledField("Plan id") {
                                         TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .id))
@@ -542,6 +587,7 @@ struct MoneyTab: View {
                                     activeLabel: "Base plan active")
                                 migrationRow(groupIndex: groupIndex, planIndex: planIndex)
                                 OfferEditor(target: .plan(group: groupIndex, plan: planIndex))
+                                }
                             }.padding(.leading, 14)
                         }
                         Button("Add plan") { state.addPlan(to: groupIndex) }.controlSize(.small)
