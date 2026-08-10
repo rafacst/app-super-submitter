@@ -5,9 +5,15 @@ import SwiftUI
 struct MoneyTab: View {
     @Environment(AppState.self) private var state
 
+    /// The products whose editor is open. Shut by default: the table answers
+    /// what each store holds, and the twelve fields behind a row are for the
+    /// one product being changed.
+    @State private var openProducts: Set<Int> = []
+
     var body: some View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 22) {
+            oneStoreOnlyNote
             // Yellow, not red. Red says irreversible in this app, and a value
             // the developer can fix in the next keystroke is not that.
             if let error = state.moneyError { WarningNote(error) }
@@ -189,8 +195,175 @@ struct MoneyTab: View {
         return Section_("In-app purchases", icon: "cart.fill", tint: Theme.accent,
                         anchor: "money.purchases") {
             VStack(alignment: .leading, spacing: 10) {
+                if state.stores.count > 1 { productTableHeader }
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
+                        productRow(id: state.purchaseBinding(index: index, field: .id).wrappedValue,
+                                   kind: Self.kindLabel(purchases[index].kind),
+                                   open: openProducts.contains(index)) {
+                            toggleProduct(index)
+                        }
+                        if openProducts.contains(index) {
+                            purchaseEditor(index: index)
+                        }
+                    }.storePanel()
+                }
+                Button("Add in-app purchase", action: state.addPurchase)
+            }
+        }
+    }
+
+
+    // MARK: - The same product, on two stores
+
+    /// What one store holds for one product id, in that store's own terms.
+    ///
+    /// Apple prices a product; Play prices a base plan inside a subscription,
+    /// so the ids differ and the money does not. Nil means the store has never
+    /// answered for this id, which is a different thing from a price of zero.
+    static func storeSummary(_ id: String, store: Store,
+                             actual: ActualState, territory: String) -> String? {
+        switch store {
+        case .apple:
+            guard let product = actual.apple?.catalog[id] else { return nil }
+            return product.prices[territory] ?? product.prices.values.first
+        case .google:
+            guard let product = actual.google?.catalog[id] else { return nil }
+            let price = product.prices[territory] ?? product.prices.values.first
+            guard let plan = product.basePlanId else { return price }
+            return [price, "base plan \(plan)"].compactMap { $0 }.joined(separator: " · ")
+        }
+    }
+
+    /// Where a product stands across the two stores.
+    ///
+    /// "Will add" is the honest answer before a read as well as after one: the
+    /// app has not been told the store holds it, so the apply will create it.
+    static func productStatus(_ id: String, stores: Set<Store>,
+                              actual: ActualState) -> (text: String, colour: Color) {
+        let holders = stores.filter { store in
+            switch store {
+            case .apple: actual.apple?.catalog[id] != nil
+            case .google: actual.google?.catalog[id] != nil
+            }
+        }
+        if holders.isEmpty { return ("Will add", Theme.accent) }
+        if holders.count == stores.count { return ("In sync", Theme.text2) }
+        let only = holders.first!
+        return ("Only on \(only.storeName)", Theme.yellow)
+    }
+
+    /// The products one store holds and the other does not.
+    private var oneStoreOnly: [String] {
+        guard state.stores.count > 1 else { return [] }
+        let ids = (state.manifest.purchases ?? []).map(\.id)
+            + (state.manifest.subscriptions ?? []).flatMap { $0.plans.map(\.id) }
+        return ids.filter {
+            Self.productStatus($0, stores: state.stores,
+                               actual: state.actualState).text.hasPrefix("Only on")
+        }
+    }
+
+    @ViewBuilder
+    private var oneStoreOnlyNote: some View {
+        let stranded = oneStoreOnly
+        if !stranded.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.yellow)
+                Text(stranded.count == 1
+                     ? "1 product exists on one store only"
+                     : "\(stranded.count) products exist on one store only")
+                    .font(Theme.font(size: 12, weight: .semibold))
+                Text(stranded.joined(separator: ", "))
+                    .font(Theme.mono(11)).foregroundStyle(Theme.text2)
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private var productTableHeader: some View {
+        HStack(spacing: 10) {
+            Text("Product id").frame(maxWidth: .infinity, alignment: .leading)
+            Text("Type").frame(width: 120, alignment: .leading)
+            ForEach(Store.allCases.filter(state.stores.contains), id: \.self) { store in
+                Text(store.storeName).frame(width: 190, alignment: .leading)
+            }
+            Text("").frame(width: 110, alignment: .leading)
+        }
+        .font(Theme.font(size: 10.5, weight: .medium))
+        .foregroundStyle(Theme.text3)
+        .padding(.horizontal, 13)
+    }
+
+    /// One row of the table: the id, the type, what each store holds, and
+    /// where the two stand. Pressing it opens the fields behind it.
+    private func productRow(id: String, kind: String, open: Bool,
+                            press: @escaping () -> Void) -> some View {
+        let status = Self.productStatus(id, stores: state.stores, actual: state.actualState)
+        let territory = state.manifest.pricing?.base.territory ?? "USA"
+        return Button(action: press) {
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(Theme.font(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.text3)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                    Text(id.isEmpty ? "No product id" : id)
+                        .font(Theme.mono(11.5))
+                        .foregroundStyle(id.isEmpty ? Theme.text3 : Theme.text)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(kind).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .frame(width: 120, alignment: .leading)
+                if state.stores.count > 1 {
+                    ForEach(Store.allCases.filter(state.stores.contains), id: \.self) { store in
+                        Text(Self.storeSummary(id, store: store, actual: state.actualState,
+                                               territory: territory)
+                             ?? "— not read yet")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text2)
+                            .lineLimit(1).truncationMode(.tail)
+                            .frame(width: 190, alignment: .leading)
+                    }
+                }
+                StatePill(text: status.text, foreground: status.colour,
+                          background: Theme.sunken)
+                    .frame(width: 110, alignment: .leading)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
+    }
+
+
+    /// The word the tab already uses for a kind, in the picker below.
+    static func kindLabel(_ kind: Manifest.Purchase.Kind) -> String {
+        switch kind {
+        case .consumable: "Consumable"
+        case .nonConsumable: "Non-consumable"
+        case .nonRenewing: "Non-renewing"
+        }
+    }
+
+    private func toggleProduct(_ index: Int) {
+        if openProducts.contains(index) { openProducts.remove(index) }
+        else { openProducts.insert(index) }
+    }
+
+    /// The twelve fields behind one row of the table.
+    ///
+    /// Its own function, because the row header, the fold and this body in
+    /// one expression is more than the type checker will infer in a ForEach.
+    @ViewBuilder
+    private func purchaseEditor(index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
                         FieldRow {
                             LabeledField("Product id", width: 380) {
                                 TextField("", text: state.purchaseBinding(index: index, field: .id))
@@ -283,13 +456,8 @@ struct MoneyTab: View {
                         }
                         .font(Theme.font(size: 11.5))
                         OfferEditor(target: .purchase(index))
-                    }.storePanel()
-                }
-                Button("Add in-app purchase", action: state.addPurchase)
-            }
         }
     }
-
     /// A path on a purchase, with the picker and the missing-file check every
     /// other path box in the app already has.
     ///
