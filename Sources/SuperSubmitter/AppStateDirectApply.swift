@@ -94,8 +94,20 @@ extension AppState {
     /// would write a listing into an edit that was never opened.
     private func rows(for target: DirectApplyTarget) -> [PlanStep] {
         let plan = directPlan()
-        let owned = plan.steps.filter { step in
+        var owned = plan.steps.filter { step in
             target.prefixes.contains { step.id.hasPrefix($0) }
+        }
+        // The App Store takes no change to a listing customers are reading, so
+        // the Manage side counts none of its rows. Offering them made a button
+        // whose only outcome was a refusal, and it counted the next version's
+        // draft as though the live listing were about to receive it.
+        //
+        // The promotional text goes with them, which is a real loss: Apple does
+        // take that one live. It cannot be sent alone, because the planner ids
+        // an Apple listing row per locale rather than per field, so one request
+        // carries the description and the keywords beside it.
+        if target == .listing, !directApplyOffersAppleListing {
+            owned.removeAll { $0.id.hasPrefix("apple.") }
         }
         guard owned.contains(where: { $0.id.hasPrefix("google.") }) else { return owned }
         let lifecycle = Set(["google.openEdit", "google.validate", "google.commit"])

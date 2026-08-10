@@ -47,7 +47,9 @@ struct DirectApplyBar: View {
         }
     }
 
-    private var destination: String { target.destination(state.stores) }
+    private var destination: String {
+        target.destination(state.directApplyStores(for: target))
+    }
 
     private var confirmationLine: String {
         let changes = state.changes(for: target)

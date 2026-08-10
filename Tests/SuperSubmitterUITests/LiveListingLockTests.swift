@@ -158,6 +158,18 @@ import Testing
 
     /// With no Google Play there is nothing on the tab a store would take, so
     /// the bar goes rather than standing there counting to zero.
+    /// The button names where it writes, and the App Store is not one of them
+    /// once its rows are dropped.
+    @Test func theButtonNamesOnlyTheStoreThatReceives() {
+        let state = liveApp()
+        #expect(state.directApplyStores(for: .listing) == [.google])
+        #expect(DirectApplyTarget.listing
+            .destination(state.directApplyStores(for: .listing)) == "Google Play")
+
+        // The media and the marketing tabs are untouched by any of this.
+        #expect(state.directApplyStores(for: .media) == state.stores)
+    }
+
     @Test func theBarStandsOnlyWhereAStoreStillTakesTheListing() throws {
         #expect(liveApp(stores: [.apple, .google]).showsLiveListingApplyBar)
         #expect(!liveApp(stores: [.apple]).showsLiveListingApplyBar)

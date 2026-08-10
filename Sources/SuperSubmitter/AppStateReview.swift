@@ -192,21 +192,48 @@ extension AppState {
         var line: String
     }
 
-    /// The one line the Manage listing puts above its rows, or nil where every
-    /// row answers for itself.
+    /// Whether the Manage listing has anything to explain about itself.
     ///
-    /// A merged box stands for both stores, so nearly every row on that screen
-    /// carries the same sentence about the App Store: six identical lines down
-    /// one column, which is the habit of saying a thing twice that the rest of
-    /// this screen spent a pass undoing. The rows that differ still speak for
-    /// themselves, which is the Apple-only fields and anything gone static.
-    /// Only the merged two-store view. A column per store lets the Apple boxes
-    /// go static and say it themselves, and a one-store app has no split
-    /// answer to give.
-    var listingLockBanner: String? {
-        guard mode == .managing, detailsMerged,
-              stores.contains(.apple), stores.contains(.google) else { return nil }
-        return "Google Play takes these now. The App Store takes them with the next version."
+    /// The reason is the same for every box on the tab, so a line over each one
+    /// was one sentence six times down a column. It is one ⓘ beside the tab's
+    /// own controls instead.
+    ///
+    /// The App Store alone raises it. Google Play takes a listing update at any
+    /// time, without a release and without a new version, so a Play-only app
+    /// has nothing here to explain.
+    var showsLiveListingNote: Bool {
+        mode == .managing && stores.contains(.apple)
+    }
+
+    /// Whether the button over the boxes has a store that would take a row.
+    ///
+    /// Google Play alone, on this side. With no Play the tab can write nothing
+    /// at all, and a bar that counts to zero is a control that says the screen
+    /// does something it does not.
+    var showsLiveListingApplyBar: Bool {
+        mode == .managing && stores.contains(.google)
+    }
+
+    /// Whether a direct apply of the listing may carry the App Store's rows.
+    ///
+    /// It may not on the Manage side. Apple takes no change to a listing
+    /// customers are reading, so offering those rows is a button built to be
+    /// refused.
+    ///
+    /// The promotional text goes with them, and that is a real loss: Apple does
+    /// take that one on a live version. It cannot be sent alone, because the
+    /// planner ids an Apple listing row per locale rather than per field, so
+    /// `apple.locale.en-US` carries the description and the keywords in the
+    /// same request. Sending the one field needs those steps split per field.
+    var directApplyOffersAppleListing: Bool { mode != .managing }
+
+    /// The stores a direct apply of this tab can really reach.
+    ///
+    /// The button names its destination, and naming a store whose rows were
+    /// just dropped is a button that promises a write it will not make.
+    func directApplyStores(for target: DirectApplyTarget) -> Set<Store> {
+        guard target == .listing, !directApplyOffersAppleListing else { return stores }
+        return stores.subtracting([.apple])
     }
 
     /// Reads the version App Store review is holding, so the developer can see

@@ -49,8 +49,10 @@ import Testing
         // different reason and the two answers belong side by side.
         let review = try source("Sources/SuperSubmitter/AppStateReview.swift")
         #expect(review.contains("App Store review is reading this"))
-        // The box says why, rather than being dead and silent.
-        #expect(details.contains("lock.line"))
+        // The box says why, rather than being dead and silent. The reason is
+        // the same for every box on the tab, so it is one ⓘ beside the tab's
+        // own controls and not a line over each of them.
+        #expect(details.contains("LiveListingNote"))
     }
 
     @Test func theMediaTabRefusesAPictureWhileAppleHoldsIt() throws {

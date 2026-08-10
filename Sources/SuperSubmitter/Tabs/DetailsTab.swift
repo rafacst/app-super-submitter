@@ -26,19 +26,10 @@ struct DetailsTab: View {
         VStack(alignment: .leading, spacing: 14) {
             // Publishing sends this tab through the Summary tab, which
             // plans and then writes. Managing has none, so it writes here.
-            if state.mode == .managing { DirectApplyBar(target: .listing) }
+            // Google Play alone takes a listing row from this side, so with no
+            // Play there is nothing here to write and the bar goes with it.
+            if state.showsLiveListingApplyBar { DirectApplyBar(target: .listing) }
             statusBar
-            if let banner = state.listingLockBanner {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle").font(Theme.font(size: 10))
-                    Text(banner).font(Theme.font(size: 11.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(Theme.text2)
-                .padding(.horizontal, 11).padding(.vertical, 7)
-                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
-            }
             if columns { columnHeaders }
             listingRows
             // The parts of the listing that no API will write, under the
@@ -387,6 +378,7 @@ struct DetailsTab: View {
                       : "\(plan.writeCount) changes will write", colour: Theme.accent)
             }
             Spacer(minLength: 8)
+            if state.showsLiveListingNote { LiveListingNote() }
             QuietButton(title: "Read again") { Task { await state.readStores() } }
             if state.stores.count > 1 {
                 QuietButton(title: state.detailsMerged ? "Split by store" : "Merge the columns") {
@@ -659,18 +651,6 @@ private struct ListingEditor: View {
             }
             // A dead box with no explanation is worse than a locked one that
             // says who has it: see AppState.listingLock.
-            // A merged box says nothing while another store still takes it: the
-            // tab says that once, above the rows. See listingLockBanner.
-            if let lock, lock.isStatic || store != nil {
-                HStack(spacing: 5) {
-                    Image(systemName: lock.isStatic ? "lock.fill" : "info.circle")
-                        .font(Theme.font(size: 8.5))
-                    Text(lock.line)
-                        .font(Theme.font(size: 10.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .foregroundStyle(Theme.text3)
-            }
             if locked {
                 // Text and not a dimmed box. A rounded field says "type here",
                 // and a disabled one says "type here later"; neither is true of
@@ -993,5 +973,68 @@ private struct StoreTextPreview: View {
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+    }
+}
+
+/// Why the App Store half of a live listing takes no characters, behind the ⓘ
+/// beside the tab's own controls.
+///
+/// One glyph and not a line over every box. The reason is the same for all of
+/// them, so as a per-row note it was one sentence six times down a column, and
+/// the boxes it explained are already visibly not boxes.
+///
+/// Store policy and not the schema: every one of these is a plain string on
+/// `appStoreVersionLocalizations` and the endpoint would take it. App Store
+/// Connect refuses the write, and the reference says only that `appInfos`
+/// carries a status that decides it.
+private struct LiveListingNote: View {
+    @Environment(AppState.self) private var state
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            Image(systemName: "info.circle")
+                .font(Theme.font(size: 12))
+                .foregroundStyle(Theme.text3)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Why the App Store fields cannot be changed here")
+        .help("Why the App Store fields cannot be changed here")
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 7) {
+                    StoreMark(store: .apple, size: 14)
+                    Text("The App Store locks these, not Super Submitter")
+                        .font(Theme.font(size: 12, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Apple ties a published listing to the version that shipped it. App Store Connect refuses a change to that listing, so this app can offer no box for one. Nothing here is a limit Super Submitter puts on you.")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Write the new words on the Publish side. They go to the App Store with the next version.")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                // The contrast is the point, so it stands whether or not this
+                // app goes to Play: a rule one store has and the other does not
+                // is a rule that belongs to the store.
+                HStack(alignment: .top, spacing: 7) {
+                    StoreMark(store: .google, size: 13)
+                    Text("Google Play works the other way. It takes a listing update at any time, with no new version, so its fields keep typing.")
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Apple's one exception is the promotional text. It takes that on a live version, so it is still a box above.")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { state.mode = .publishing; state.selectedTab = .details } label: {
+                    Text("Open the Publish side ↗")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(13)
+            .frame(maxWidth: 330, alignment: .leading)
+        }
     }
 }
