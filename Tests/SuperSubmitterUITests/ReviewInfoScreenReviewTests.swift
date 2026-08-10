@@ -147,8 +147,17 @@ import Testing
         #expect(tab.contains("Uses no non-exempt encryption"))
         #expect(tab.contains("It does use encryption"))
         #expect(tab.contains("Blocks the send"))
+        // The panel is named for what it is, because the row inside it is
+        // already called "App access, the reviewer credentials" and a title
+        // over it saying "App access" is the same words twice.
+        #expect(tab.contains("Console steps"))
+        #expect(tab.contains("review.console"))
         #expect(tab.contains("App access"))
         #expect(tab.contains("Copy the demo account"))
+        // The switch names the move, not the state it is already in. One
+        // wording for one meaning: the Details tab says the same two words.
+        #expect(tab.contains("Split by store"))
+        #expect(tab.contains("Merge the columns"))
         // The declaration paperwork came with the answer that owes it.
         #expect(tab.contains("struct ExportCompliance"))
         // Every field the tab already held is still on it.
