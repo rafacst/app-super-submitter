@@ -275,6 +275,21 @@ enum SidebarSection: Int, CaseIterable, Identifiable {
         case .manage: "Manage"
         }
     }
+
+    /// The job this group belongs to.
+    ///
+    /// The switch above the column shows one job's groups at a time. Every
+    /// group went into the column when the shell became a
+    /// `NavigationSplitView`, so that nothing hid behind a control that named
+    /// neither half, and it cost the height: twelve destinations and three
+    /// headings stand where four or eight are wanted, and the app list at the
+    /// top is what gets squeezed.
+    var mode: Mode {
+        switch self {
+        case .publish, .send: .publishing
+        case .manage: .managing
+        }
+    }
 }
 
 /// One row of the sidebar: a tab, and the job it is opened for.
@@ -311,9 +326,10 @@ struct Destination: Hashable, Identifiable {
         let tabs = switch section {
         case .publish: Tab.tabs(in: .publishing).filter { $0.zone == .edits }
         case .send: Tab.tabs(in: .publishing).filter { $0.zone != .edits }
-        // Stores is one key for the whole account, so it is listed once,
-        // under Publish, and not a second time here.
-        case .manage: Tab.tabs(in: .managing).filter { $0 != .stores }
+        // Stores stands here too. It was listed once, under Publish, which
+        // was right while every group was on screen at once; with one job
+        // showing, that same rule hid the credentials from a manager.
+        case .manage: Tab.tabs(in: .managing)
         }
         return tabs
             .filter { $0 != .account && (hasApp || $0.standsAlone) }

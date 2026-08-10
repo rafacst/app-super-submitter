@@ -85,7 +85,7 @@ struct Sidebar: View {
             List(selection: selection) {
                 AppsSection(isOpen: $appsOpen)
 
-                ForEach(SidebarSection.allCases) { section in
+                ForEach(SidebarSection.allCases.filter { $0.mode == state.mode }) { section in
                     let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
                     if !rows.isEmpty {
                         Section(isExpanded: isOpen(section)) {
@@ -100,7 +100,9 @@ struct Sidebar: View {
             // The scroll ends above the floor, so the last row can be reached
             // and nothing sits under the footer for good.
             .safeAreaPadding(.bottom, footerHeight)
+            .safeAreaPadding(.top, switchHeight)
             .overlay(alignment: .bottom) { footer }
+            .overlay(alignment: .top) { modeSwitch }
             .task(id: selection.wrappedValue) {
                 guard let destination = selection.wrappedValue,
                       destination.mode == .managing else { return }
@@ -109,6 +111,27 @@ struct Sidebar: View {
             }
         }
     }
+
+    /// The two jobs, pinned to the head of the column.
+    ///
+    /// An overlay for the same reason the footer is one: `NavigationSplitView`
+    /// gives its sidebar column to a list and to nothing else, so wrapping the
+    /// list in a `VStack` to seat a control above it draws no column at all.
+    private var modeSwitch: some View {
+        VStack(spacing: 0) {
+            ModeSwitch()
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
+            Divider()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // The rows scroll under this, so it cannot be transparent.
+        .background(.thickMaterial)
+    }
+
+    /// Enough for the switch and the rule under it. Through `Theme.scaled`,
+    /// because the switch is text.
+    private var switchHeight: CGFloat { Theme.scaled(38) }
 
     /// Enough for the account row, and for the offer when it shows.
     ///
@@ -698,5 +721,64 @@ struct BadgeView: View {
             // scale is from the middle, so a pill that leaves collapses into
             // the space it held instead of blinking out of it.
             .transition(.scale(scale: 0.4).combined(with: .opacity))
+    }
+}
+
+/// The two jobs, as one control.
+///
+/// It sits above the groups, because it decides which groups exist. A publisher
+/// sends a version; a manager runs the app that is already out there.
+///
+/// It was removed when every group went into the column at once, so that no
+/// half of the app hid behind a control that named neither. The groups name
+/// both halves now, which is what made this safe to bring back: the switch
+/// picks which of two named jobs the column shows, and the column is the four
+/// or the eight rows of that job rather than all twelve.
+struct ModeSwitch: View {
+    @Environment(AppState.self) private var state
+    /// The pill is one view that moves between the two halves, so the switch
+    /// slides instead of blinking from one fill to another.
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Mode.allCases) { mode in
+                let selected = state.mode == mode
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        state.mode = mode
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: mode.symbol)
+                            .font(.system(size: 10.5))
+                        Text(mode.title)
+                            .font(.system(size: 12,
+                                          weight: selected ? .semibold : .regular))
+                    }
+                    .foregroundStyle(selected ? Theme.accentText : Theme.text2)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity)
+                    .background {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(mode.tint)
+                                .matchedGeometryEffect(id: "modePill", in: pill)
+                                .shadow(color: mode.tint.opacity(0.45), radius: 3, y: 1)
+                        }
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(mode.title)
+                .accessibilityHint(mode.line)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
     }
 }

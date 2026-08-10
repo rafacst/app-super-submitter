@@ -35,38 +35,44 @@ import Testing
 
 /// The shape of the sidebar, which is the shape of the app.
 ///
-/// The rows used to be split across a Publishing and Managing switch that sat
-/// above the column: half the destinations existed at a time, and the control
-/// that hid the other half named neither. Every row is in the list now, in a
-/// section that says which job it belongs to.
+/// Every row is in a group, and the group says which job it belongs to. The
+/// switch above the column then shows one job's groups at a time: see
+/// `SidebarModeSwitchTests` for what that hides and what it may not.
 @Test func theSidebarListsEveryDestinationInItsSection() {
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
         == ["Stores", "Build", "Details", "Media", "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
+    // Stores heads this one too. Both jobs read the same credentials, and a
+    // manager who cannot reach them has to switch jobs to sign in.
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
-        == ["Live listing", "Live media", "Marketing", "Live app"])
+        == ["Stores", "Live listing", "Live media", "Marketing", "Live app"])
 
     // Publish and Send are the manifest against the stores: everything that
     // only edits `store.yaml`, then the two screens that talk to a store.
     #expect(Destination.rows(in: .publish, hasApp: true).allSatisfy { $0.tab.zone == .edits })
     #expect(Destination.rows(in: .send, hasApp: true).allSatisfy { $0.tab.zone != .edits })
 
-    // Nothing was lost with the switch. Account is the one tab off the list,
-    // and the control at the foot of the sidebar opens it.
+    // Nothing is lost. Account is the one tab off the list, and the control at
+    // the foot of the sidebar opens it.
     let listed = Set(Destination.all(hasApp: true).map(\.tab))
     #expect(Set(Tab.allCases).subtracting(listed) == [.account])
-    // One key for the whole account, so Stores is listed once.
-    #expect(Destination.all(hasApp: true).filter { $0.tab == .stores }.count == 1)
+    // Once per job and never twice in one column, which is the claim that
+    // matters and the one `SidebarModeSwitchTests` makes.
+    #expect(Destination.all(hasApp: true).filter { $0.tab == .stores }.count
+        == Mode.allCases.count)
 }
 
 /// With no app linked there is nothing to edit, and a row that edits nothing
 /// used to show greyed. Stores survives, because it holds the keys the rest
 /// waits on and because "Forget" is the only way to remove one on purpose.
 @Test func anEmptyWindowKeepsStoresAndNothingElse() {
-    #expect(Destination.all(hasApp: false).map(\.title) == ["Stores"])
+    #expect(Set(Destination.all(hasApp: false).map(\.title)) == ["Stores"])
     #expect(Destination.rows(in: .send, hasApp: false).isEmpty)
-    #expect(Destination.rows(in: .manage, hasApp: false).isEmpty)
+    // Whichever job the switch is on, the empty window offers the one row that
+    // fills it.
+    #expect(Destination.rows(in: .manage, hasApp: false).map(\.title) == ["Stores"])
+    #expect(Destination.rows(in: .publish, hasApp: false).map(\.title) == ["Stores"])
 }
 
 /// The sidebar's selection is `mode` and `selectedTab`, and nothing else.
