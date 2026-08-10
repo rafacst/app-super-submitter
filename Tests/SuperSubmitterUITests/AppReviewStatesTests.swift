@@ -88,12 +88,16 @@ import Testing
     // MARK: - Where it runs and where it shows
 
     @Test func theSweepRunsWhenTheAppListIsOpenedAndOnEveryAppChange() throws {
-        let source = try source("Sources/SuperSubmitter/AppStateReview.swift")
-        #expect(source.contains("func refreshReviewStates"))
+        let review = try source("Sources/SuperSubmitter/AppStateReview.swift")
+        #expect(review.contains("func refreshReviewStates"))
         // Every linked app, not the open one.
-        #expect(source.contains("linkedApps"))
+        #expect(review.contains("linkedApps"))
 
-        let shell = try source("Sources/SuperSubmitter/Shell/Sidebar.swift")
-        #expect(shell.contains("appReviewMark"))
+        // Picking an app is the moment the answer is needed.
+        let appState = try source("Sources/SuperSubmitter/AppState.swift")
+        #expect(appState.contains("await refreshReviewStates()"))
+
+        let sidebar = try source("Sources/SuperSubmitter/Shell/Sidebar.swift")
+        #expect(sidebar.contains("appReviewMark"))
     }
 }

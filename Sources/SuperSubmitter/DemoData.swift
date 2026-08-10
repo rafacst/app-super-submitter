@@ -101,6 +101,9 @@ struct AppSummary: Identifiable {
     /// goes to one store now wears one logo.
     let apple: StoreHealth?
     let google: StoreHealth?
+    /// The App Store app id, which is the key the review-state sweep answers
+    /// under. Nil for an app that goes to Google alone.
+    var appleAppID: String?
 
     /// The row read aloud. A store the app does not go to is not named at
     /// all, the same as on the screen.

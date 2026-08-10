@@ -35,6 +35,66 @@ extension AppState {
         return AppleVersionState.withApple.contains(state)
     }
 
+    // MARK: - Every linked app, not only the open one
+
+    /// Whether App Store review is holding this app's version.
+    ///
+    /// Nil means nobody has asked, and an app nobody has asked is not an app
+    /// that is free. It locks nothing and claims nothing, which is the same
+    /// rule every other read in this app follows.
+    func isAppLocked(appKey: String) -> Bool {
+        guard let state = appReviewStates[appKey] else { return false }
+        return AppleVersionState.withApple.contains(state)
+    }
+
+    /// The mark the sidebar puts beside one row.
+    ///
+    /// A draft earns none. It is the ordinary state, and a column where every
+    /// row wears a badge is a column with no signal left in it.
+    func appReviewMark(appKey: String) -> (text: String, colour: Color)? {
+        switch AppleVersionState.outcome(of: appReviewStates[appKey]) {
+        case .waiting: ("In review", Theme.yellow)
+        case .approved: ("Approved", Theme.green)
+        case .refused: ("Refused", Theme.red)
+        case nil: nil
+        }
+    }
+
+    /// The open app is read twice, by the plan read and by the sweep below,
+    /// and the two may never disagree about it. The plan read is the better
+    /// answer because it is the fuller one, so it wins.
+    func rememberOpenAppReviewState() {
+        guard let state = actualState.apple?.versionState else { return }
+        appReviewStates[currentAppKey] = state
+    }
+
+    /// Reads the version state of every linked app.
+    ///
+    /// The rules about a version under review all read `actualState`, and
+    /// `actualState` only ever describes the app that happens to be open. A
+    /// developer with six linked apps had to open each one to learn which were
+    /// frozen, and the list that shows all six said nothing.
+    ///
+    /// One small read per app: the versions of that app and nothing else. The
+    /// full plan read is far heavier and answers a question this does not ask.
+    /// An app that cannot be read keeps whatever it had, because a failed read
+    /// is not news about the store.
+    func refreshReviewStates() async {
+        guard !applePrivateKeyPEM.isEmpty else { return }
+        rememberOpenAppReviewState()
+        let reader = StoreImportReader(credentials: credentials)
+        for record in linkedApps {
+            let url = URL(fileURLWithPath: record.manifestPath)
+            guard let loaded = try? ManifestFile.load(from: url),
+                  let appID = loaded.apps.apple?.appId, !appID.isEmpty,
+                  appID != currentAppKey || actualState.apple?.versionState == nil
+            else { continue }
+            if let state = await reader.appleVersionState(appID: appID) {
+                appReviewStates[appID] = state
+            }
+        }
+    }
+
     /// The key the choice is remembered under.
     ///
     /// The version string and not the app alone. "I looked at 3.2.0" says

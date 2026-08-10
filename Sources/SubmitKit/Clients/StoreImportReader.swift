@@ -359,6 +359,35 @@ public struct StoreImportReader: Sendable {
         }
     }
 
+    /// Where one app's newest unreleased version stands, and nothing else.
+    ///
+    /// One request. The full state read answers a question this does not ask,
+    /// and the caller runs this once per linked app: six apps through the plan
+    /// read would be sixty requests to learn six words.
+    ///
+    /// Nil when the read fails or the app has no version Apple could be
+    /// holding. A failed read is not news about the store, so the caller keeps
+    /// whatever it already had.
+    public func appleVersionState(appID: String) async -> String? {
+        guard let response = try? await api.apple(
+            "GET", "/v1/apps/\(appID)/appStoreVersions",
+            query: [URLQueryItem(name: "limit", value: "200")]) else { return nil }
+        let versions = JSON(data: response.data)["data"].array
+        func state(_ version: JSON) -> String {
+            version["attributes"]["appVersionState"].string
+                ?? version["attributes"]["appStoreState"].string ?? ""
+        }
+        // The one Apple could be holding wins over the one on sale, because
+        // this exists to answer "is this app frozen?".
+        if let held = versions.first(where: { AppleVersionState.withApple.contains(state($0)) }) {
+            return state(held)
+        }
+        return versions
+            .max { Validator.isVersion($1["attributes"]["versionString"].string ?? "",
+                                        above: $0["attributes"]["versionString"].string ?? "") }
+            .map(state)
+    }
+
     /// One named version, exactly as Apple holds it.
     ///
     /// `apple(appID:)` picks the version the developer may write to, which is

@@ -181,6 +181,18 @@ private struct AppsSection: View {
                         AppIconBadge(icon: app.icon, initials: app.initials, size: 16)
                         Text(app.name).lineLimit(1)
                         Spacer(minLength: 6)
+                        // Where App Store review has this app, before it is
+                        // opened. Every rule about a review used to read the
+                        // open app alone, so a developer with six linked apps
+                        // opened each one to find out which were frozen.
+                        if let mark = state.appReviewMark(appKey: app.appleAppID ?? "") {
+                            Text(mark.text)
+                                .font(Theme.font(size: 9.5, weight: .medium))
+                                .foregroundStyle(mark.colour)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(mark.colour.opacity(0.14), in: Capsule())
+                                .accessibilityLabel("App Store: \(mark.text)")
+                        }
                         if index == state.selectedAppIndex {
                             Image(systemName: "checkmark")
                                 .font(Theme.font(size: 10, weight: .semibold))

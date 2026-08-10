@@ -407,6 +407,9 @@ final class AppState {
     /// The read of the version App Store review is holding. See AppStateReview.
     var reviewRetrieving = false
     var reviewRetrievalError: String?
+    /// App id -> the version state Apple last reported, for every linked app
+    /// and not only the open one. See `refreshReviewStates`.
+    var appReviewStates: [String: String] = [:]
     var consoleRows: [ConsoleRow] = []
     var consoleMarks: Set<String> = []
     var statuses: [Store: StoreStatus] = [:]
@@ -526,7 +529,8 @@ final class AppState {
                 },
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
                 apple: health(.apple, manifest: loaded, selected: selected),
-                google: health(.google, manifest: loaded, selected: selected))
+                google: health(.google, manifest: loaded, selected: selected),
+                appleAppID: loaded?.apps.apple?.appId)
         }
     }
 
@@ -681,6 +685,11 @@ final class AppState {
         selectedAppIndex = index
         guard !linkedApps.isEmpty else { return }
         activateLinkedApp(at: index)
+        // Where App Store review has each of them. Picking an app is the
+        // moment a developer needs to know whether this one is frozen, and
+        // whether the others are, so the sweep runs on every change and not
+        // once per launch.
+        Task { await refreshReviewStates() }
     }
 
     /// The name in the removal question, so the user reads which app leaves.
