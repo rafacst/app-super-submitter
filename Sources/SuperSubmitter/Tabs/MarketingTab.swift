@@ -552,21 +552,17 @@ extension MarketingTab {
 
     /// Whether the App Store holds this custom product page.
     ///
-    /// It answers to either spelling, and that is not tidiness. The apply
-    /// creates a page named after the manifest **key** and then renames it to
-    /// the **name**, so a page that exists can be sitting under either word
-    /// depending on how many applies have run. The planner asks by name and the
-    /// apply asks by key, which is the same disagreement seen from the other
-    /// side. Checking one of the two called a live page missing.
+    /// `StoreIdentity` is the one rule, and the apply and the planner read it
+    /// too. A store that has been through the older build can be holding the
+    /// page under either spelling, so checking one of the two called a live
+    /// page missing.
     ///
     /// Nothing read means nothing to compare against, and "Will add" would be a
     /// claim about a store nobody has asked.
     static func pageStatus(key: String, name: String, actual: ActualState) -> Standing {
         guard let apple = actual.apple, !apple.customProductPageNames.isEmpty
         else { return notRead }
-        let held = apple.customProductPageNames[key] != nil
-            || apple.customProductPageNames[name] != nil
-        return held
+        return StoreIdentity.holds(key: key, name: name, in: apple.customProductPageNames)
             ? Standing(text: "Live", colour: Theme.green, background: Theme.greenBg)
             : Standing(text: "Will add", colour: Theme.orange,
                        background: Theme.orange.opacity(0.13))
@@ -576,7 +572,8 @@ extension MarketingTab {
     /// reworded. `AppleWords` holds the one table the whole app reads.
     static func experimentStatus(key: String, name: String, actual: ActualState) -> Standing {
         guard let apple = actual.apple, !apple.experiments.isEmpty else { return notRead }
-        guard let found = apple.experiments[key] ?? apple.experiments[name] else {
+        guard let found = StoreIdentity.value(key: key, name: name, in: apple.experiments)
+        else {
             return Standing(text: "Will add", colour: Theme.orange,
                             background: Theme.orange.opacity(0.13))
         }
@@ -590,7 +587,7 @@ extension MarketingTab {
     /// The experiment Apple holds for this row, under either spelling.
     static func experiment(key: String, name: String,
                            actual: ActualState) -> ActualState.Apple.Experiment? {
-        actual.apple?.experiments[key] ?? actual.apple?.experiments[name]
+        StoreIdentity.value(key: key, name: name, in: actual.apple?.experiments ?? [:])
     }
 
     /// How far into its run an experiment is.

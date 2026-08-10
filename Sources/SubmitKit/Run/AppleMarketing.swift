@@ -25,11 +25,16 @@ extension Runner {
         for page in pages {
             try Task.checkCancellation()
             let pageID: String
-            if let id = byName[page.key] {
+            // Either spelling, and created under the one it will keep. See
+            // `StoreIdentity`: this asked for the key alone and created under
+            // the key, then renamed the page to its name, so the apply after
+            // that found nothing and made a second page.
+            let wanted = StoreIdentity.displayName(key: page.key, name: page.name)
+            if let id = StoreIdentity.value(key: page.key, name: page.name, in: byName) {
                 pageID = id
                 try await api.apple("PATCH", "/v1/appCustomProductPages/\(id)", body: [
                     "data": ["type": "appCustomProductPages", "id": id,
-                             "attributes": ["name": page.name,
+                             "attributes": ["name": wanted,
                                             "visible": page.visible ?? true]],
                 ])
             } else {
@@ -37,7 +42,7 @@ extension Runner {
                     "POST", "/v1/appCustomProductPages", body: [
                         "data": [
                             "type": "appCustomProductPages",
-                            "attributes": ["name": page.key, "visible": page.visible ?? true],
+                            "attributes": ["name": wanted, "visible": page.visible ?? true],
                             "relationships": ["app": [
                                 "data": ["type": "apps", "id": appleAppID]]],
                         ],
@@ -136,12 +141,16 @@ extension Runner {
         for experiment in experiments {
             try Task.checkCancellation()
             let experimentID: String
-            if let id = byName[experiment.key] {
+            // The same rule as the pages above, and it was the same bug. See
+            // `StoreIdentity`.
+            let wanted = StoreIdentity.displayName(key: experiment.key, name: experiment.name)
+            if let id = StoreIdentity.value(key: experiment.key, name: experiment.name,
+                                            in: byName) {
                 experimentID = id
                 try await api.apple("PATCH", "/v2/appStoreVersionExperiments/\(id)", body: [
                     "data": ["type": "appStoreVersionExperiments", "id": id,
                              "attributes": [
-                                 "name": experiment.name,
+                                 "name": wanted,
                                  "trafficProportion": experiment.trafficProportion ?? 50,
                              ]],
                 ])
@@ -151,7 +160,7 @@ extension Runner {
                         "data": [
                             "type": "appStoreVersionExperiments",
                             "attributes": [
-                                "name": experiment.key,
+                                "name": wanted,
                                 "trafficProportion": experiment.trafficProportion ?? 50,
                                 "platform": experiment.platform?.rawValue ?? applePlatform,
                             ],
