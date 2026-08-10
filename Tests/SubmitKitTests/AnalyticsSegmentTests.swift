@@ -134,6 +134,23 @@ struct AnalyticsSegmentTests {
             ["Date", "Product Page ID", "Impressions"]).isEmpty)
     }
 
+    /// A report holds a daily, a weekly and a monthly instance at once, and an
+    /// experiment that has run nine days is a daily question. Picking the
+    /// newest of all three answered it with last month's figures.
+    @Test func theNewestInstanceIsPickedWithinOneGranularity() {
+        let all = [
+            AppleReportsClient.Instance(id: "d1", granularity: "DAILY",
+                                        processingDate: "2026-08-08"),
+            AppleReportsClient.Instance(id: "d2", granularity: "DAILY",
+                                        processingDate: "2026-08-09"),
+            AppleReportsClient.Instance(id: "m1", granularity: "MONTHLY",
+                                        processingDate: "2026-08-31"),
+        ]
+        #expect(AppleReportsClient.newest(all, granularity: "DAILY")?.id == "d2")
+        #expect(AppleReportsClient.newest(all, granularity: "WEEKLY") == nil)
+        #expect(AppleReportsClient.newest([], granularity: "DAILY") == nil)
+    }
+
     /// The report the engagement numbers would come from, picked by category
     /// rather than by a name this app invented.
     @Test func theEngagementReportsArePickedByCategory() {

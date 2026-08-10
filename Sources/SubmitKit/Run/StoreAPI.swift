@@ -176,6 +176,24 @@ public actor StoreAPI {
         return request
     }
 
+    /// A file from a URL a store handed back, and never from a path this app
+    /// built.
+    ///
+    /// **No Authorization header, on purpose.** An analytics segment lives on a
+    /// signed storage URL and not on `api.appstoreconnect.apple.com`, and a
+    /// bearer token sent to a host outside the API is a token handed to that
+    /// host. The signature in the URL is the whole of the authorisation, which
+    /// is why the URL has one.
+    ///
+    /// It still goes through `perform`, so the retry budget, the rate limit
+    /// bucket and the call log are the same ones every other request uses.
+    public func download(_ urlString: String, system: PlanSystem = .apple,
+                         path: String = "download") async throws -> Data {
+        var request = URLRequest(url: try Self.url(urlString))
+        request.httpMethod = "GET"
+        return try await perform(request, system: system, path: path).data
+    }
+
     /// The dry run never reaches this type, but it still has to appear in the
     /// log. Spec section 7.2: a dry run builds every request and sends none.
     public func recordDryRun(system: PlanSystem, method: String, path: String) async {

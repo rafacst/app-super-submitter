@@ -50,6 +50,28 @@ extension AppState {
         try await appleReports().stopAnalytics(feedID: feedID)
     }
 
+    /// One report, fetched, so the app can say what it carries.
+    ///
+    /// The App Store Connect API reference documents the transport of an
+    /// analytics report and never its contents: it names five categories and
+    /// no report name, no column, and no dimension. So nothing here assumes a
+    /// column. It fetches the newest daily instance and reports the header row
+    /// that came back.
+    ///
+    /// Nil when Apple has produced no daily instance yet, which is the normal
+    /// state for a day or two after a feed starts.
+    func appleAnalyticsSample(reportID: String)
+        async throws -> (date: String, columns: [String], rows: [[String]])? {
+        let client = appleReports()
+        let instances = try await client.instances(reportID: reportID)
+        guard let newest = AppleReportsClient.newest(instances, granularity: "DAILY")
+        else { return nil }
+        let text = try await client.instanceText(instanceID: newest.id)
+        return (newest.processingDate ?? "",
+                AppleReportsClient.columns(text),
+                AppleReportsClient.preview(text))
+    }
+
     // MARK: - The search keywords
 
     /// The `searchKeywords` of a custom product page, which is **not** the
