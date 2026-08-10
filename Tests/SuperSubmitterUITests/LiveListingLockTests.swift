@@ -117,4 +117,52 @@ import Testing
         // meet: the submission it belonged to has already happened.
         #expect(tab.contains("if let requirement, lock?.isStatic != true"))
     }
+
+    /// One glyph, not a line over every box.
+    ///
+    /// The reason is the same for all of them, so it was the same sentence six
+    /// times down one column. It is a ⓘ beside the tab's own controls now, and
+    /// only the App Store raises it: Google Play takes a listing update at any
+    /// time and has nothing to explain.
+    @Test func theReasonIsOneIconAndNotALineOverEveryBox() throws {
+        let tab = try source("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+
+        #expect(tab.contains("LiveListingNote"))
+        // The per-box sentence is gone from the row.
+        #expect(!tab.contains("lock.line"))
+    }
+
+    @Test func onlyTheAppStoreRaisesTheNote() {
+        let apple = liveApp(stores: [.apple])
+        let play = liveApp(stores: [.google])
+
+        #expect(apple.showsLiveListingNote)
+        #expect(!play.showsLiveListingNote)
+        // The publish side writes the next version, so it explains nothing.
+        apple.mode = .publishing
+        #expect(!apple.showsLiveListingNote)
+    }
+
+    // MARK: - The button over the boxes
+
+    /// The App Store takes no listing row from this tab, so the Manage side
+    /// never offers one. A bar that counts rows the store will refuse is a
+    /// button that fails on purpose.
+    @Test func theManageSideOffersNoAppleListingRow() {
+        let state = liveApp()
+        #expect(!state.directApplyOffersAppleListing)
+
+        state.mode = .publishing
+        #expect(state.directApplyOffersAppleListing)
+    }
+
+    /// With no Google Play there is nothing on the tab a store would take, so
+    /// the bar goes rather than standing there counting to zero.
+    @Test func theBarStandsOnlyWhereAStoreStillTakesTheListing() throws {
+        #expect(liveApp(stores: [.apple, .google]).showsLiveListingApplyBar)
+        #expect(!liveApp(stores: [.apple]).showsLiveListingApplyBar)
+
+        let tab = try source("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+        #expect(tab.contains("showsLiveListingApplyBar"))
+    }
 }
