@@ -66,21 +66,14 @@ struct StoresStatusBar: View {
     var body: some View {
         HStack(spacing: 14) {
             if !disconnected.isEmpty {
-                HStack(spacing: 7) {
-                    Circle().fill(Theme.red).frame(width: 7, height: 7)
-                    Text("\(disconnected.count) \(disconnected.count == 1 ? "blocker" : "blockers")")
-                        .font(Theme.font(size: 12.5, weight: .semibold))
-                    Image(systemName: "chevron.right")
-                        .font(Theme.font(size: 9, weight: .semibold))
-                }
-                .foregroundStyle(Theme.red)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7)
-                    .strokeBorder(Theme.red.opacity(0.35), lineWidth: Theme.hairline))
-                .accessibilityElement(children: .combine)
-
+                // A red "N blockers ›" pill stood here and counted the stores
+                // with no key. Two things were wrong with it. It wore a chevron
+                // and opened nothing, and the header band above it now carries
+                // that word for the release: one screen said "2 blockers" and
+                // "4 blockers" at once, about two different things.
+                //
+                // The sentence beside it already names each store and what is
+                // missing, which is the whole of what the pill counted.
                 HStack(spacing: 6) {
                     Circle().fill(Theme.yellow).frame(width: 7, height: 7)
                     Text(disconnected.map { "\($0.storeName) is not connected" }

@@ -122,6 +122,8 @@ struct RootView: View {
         // Every sheet carries the message alert. See AppMessage: an alert on
         // this view alone cannot appear while a sheet covers it.
         .sheet(isPresented: $state.showSettings) { SettingsPanel().appMessage() }
+        .sheet(isPresented: $state.showSignIn) { SignInPanel().appMessage() }
+        .sheet(isPresented: $state.showBlockers) { BlockersPanel().appMessage() }
         .sheet(isPresented: $state.showAbout) { AboutPanel().appMessage() }
         .sheet(isPresented: $state.showOnboarding, onDismiss: { hasSeenOnboarding = true }) {
             OnboardingPanel().appMessage()
@@ -623,6 +625,13 @@ private struct ContentHeader: View {
             // linked or not, so the control that decides how a screen reads
             // cannot depend on one.
             HeaderCluster(morphOn: shape) { AppearanceSwitch() }
+
+            // What is stopping the release, from whichever screen the question
+            // occurred to you. It draws nothing while nothing is stopping it,
+            // so the band stays quiet on the weeks it has no news.
+            if state.manifestURL != nil {
+                HeaderCluster(morphOn: shape) { BlockersButton() }
+            }
 
             // The palette, with a way in that is not the menu bar.
             //

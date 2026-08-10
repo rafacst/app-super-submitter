@@ -47,10 +47,14 @@ enum ScreenshotMode {
 
     /// What the ⌘F palette opens with, so the screenshot shows a result list
     /// and not an empty box. Empty in every real launch.
+    ///
+    /// "privacy" and not "url", because the palette answers in two kinds now
+    /// and this is the word that reaches both: the fields on the listing, and
+    /// the App Store step that no field of this app can satisfy.
     @MainActor
     static var fieldSearchQuery: String {
         #if DEBUG
-        return screen == "field-search" ? "url" : ""
+        return screen == "field-search" ? "privacy" : ""
         #else
         return ""
         #endif
@@ -268,9 +272,15 @@ enum ScreenshotMode {
             state.showAbout = true
         case "import":
             state.showExistingAppImport = true
-        case "paywall":
-            state.paywallReason = .settings
+        // The offer, which is a tab and no longer a sheet, and the one panel
+        // it still opens.
+        case "account":
             state.selectedTab = .account
+        case "sign-in":
+            state.selectedTab = .account
+            state.showSignIn = true
+        case "blockers":
+            state.showBlockers = true
         case "field-search":
             state.showFieldSearch = true
         // Proves the other half of ⌘F: that an anchor is on a real view and

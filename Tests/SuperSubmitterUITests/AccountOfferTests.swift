@@ -124,7 +124,7 @@ import Testing
                      "Drafts first", "Nothing goes live without you.",
                      "Developer-first", "Built for real shipping workflows.",
                      "Sign in to sync your plan across Macs and unlock applies, uploads, and releases.",
-                     "Keys stay in Keychain", "Drafts never go live on their own",
+                     "Keys stay in Keychain",
                      "Indie developer?", "Ask for a code.",
                      "Discount code", "Enter code", "Apply",
                      "Continue to secure checkout",
@@ -156,6 +156,16 @@ import Testing
             "Priority support",
             // The gate's sentence, above a screen that answers it in full.
             "PaywallTrigger",
+            // The account card said this over the trust bar that says it in
+            // full. Asserted as absent and not merely dropped from the list
+            // above, because the words survived in a comment for one commit
+            // and the copy test went on passing on a comment.
+            "Drafts never go live on their own",
+            // The sign-in form is a panel over the window now, the way
+            // Settings is, so the tab names it and never draws it.
+            "SignInPanel",
+            // The free card gave away the write the card beside it sells.
+            "Applies & uploads",
         ] {
             #expect(!source.contains(gone), "the tab still carries: \(gone)")
         }
