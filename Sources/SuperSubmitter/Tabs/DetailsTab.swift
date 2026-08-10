@@ -28,6 +28,17 @@ struct DetailsTab: View {
             // plans and then writes. Managing has none, so it writes here.
             if state.mode == .managing { DirectApplyBar(target: .listing) }
             statusBar
+            if let banner = state.listingLockBanner {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle").font(Theme.font(size: 10))
+                    Text(banner).font(Theme.font(size: 11.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Theme.text2)
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+            }
             if columns { columnHeaders }
             listingRows
             // The parts of the listing that no API will write, under the
@@ -174,11 +185,11 @@ struct DetailsTab: View {
             HStack(alignment: .top, spacing: 14) {
                 editor(field.label, field: field, limits: limits(field, in: .apple),
                        requirement: requirement(field, in: .apple),
-                       multiline: multiline, anchor: anchor)
+                       multiline: multiline, anchor: anchor, store: .apple)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 editor(field.label, field: field, limits: limits(field, in: .google),
                        requirement: requirement(field, in: .google),
-                       multiline: multiline)
+                       multiline: multiline, store: .google)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
@@ -256,21 +267,22 @@ struct DetailsTab: View {
             HStack(alignment: .top, spacing: 14) {
                 editor(shared.label, field: shared, limits: limits(shared, in: .apple),
                        requirement: requirement(shared, in: .apple),
-                       multiline: multiline, anchor: anchor)
+                       multiline: multiline, anchor: anchor, store: .apple)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 5) {
                     if on {
                         editor(google.label, field: google,
                                limits: [FieldLimit(store: nil, value: limit)],
                                requirement: requirement(google, in: .google),
-                               multiline: multiline, anchor: googleAnchor)
+                               multiline: multiline, anchor: googleAnchor,
+                               store: .google)
                         overrideNote("Play cuts at \(limit)",
                                      action: "use the shared text") { binding.wrappedValue = false }
                     } else {
                         editor(shared.label, field: shared,
                                limits: limits(shared, in: .google),
                                requirement: requirement(shared, in: .google),
-                               multiline: multiline)
+                               multiline: multiline, store: .google)
                         overrideNote("Play takes \(name) as it stands",
                                      action: "use different text") { binding.wrappedValue = true }
                     }
@@ -507,10 +519,10 @@ struct DetailsTab: View {
     private func editor(_ title: String, field: ListingTextField,
                         limits: [FieldLimit] = [], requirement: String? = nil,
                         multiline: Bool = false, tag: String? = nil,
-                        anchor: String? = nil) -> some View {
+                        anchor: String? = nil, store: Store? = nil) -> some View {
         ListingEditor(title: title, field: field, limits: limits,
                       requirement: requirement, multiline: multiline,
-                      tag: tag, anchor: anchor)
+                      tag: tag, anchor: anchor, store: store)
     }
 }
 
@@ -571,6 +583,10 @@ private struct ListingEditor: View {
     var multiline = false
     var tag: String?
     var anchor: String?
+    /// The column this box stands in, or nil for the merged box that stands for
+    /// every selected store at once. It decides who is allowed to refuse the
+    /// characters: see `AppState.listingLock`.
+    var store: Store?
 
     private var limit: Int? { limits.map(\.value).min() }
 
@@ -589,13 +605,17 @@ private struct ListingEditor: View {
         // what the store holds and the run will write it.
         let live = state.storeSnapshot.text(field, locale: state.locale)
         let unchanged = !live.isEmpty && live.allSatisfy { $0.value == value }
-        // Apple is reading this version, so the box takes no characters.
-        let locked = state.isListingLocked(field)
+        // Whether anything would take the characters, and who will not.
+        let lock = state.listingLock(field, store: store)
+        let locked = lock?.isStatic == true
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(Theme.font(size: 11.5, weight: .medium))
                 if let tag { Tag(tag) }
-                if let requirement {
+                // "Required" over a box nothing will take is a demand nobody
+                // can meet. The submission it belongs to has already happened,
+                // and the next one edits the next version.
+                if let requirement, lock?.isStatic != true {
                     RequiredTag(text: requirement, unmet: value.isEmpty)
                 }
                 if unchanged { KeptTag() } else if !live.isEmpty { ChangedTag() }
@@ -638,16 +658,34 @@ private struct ListingEditor: View {
                 }
             }
             // A dead box with no explanation is worse than a locked one that
-            // says who has it: see AppState.isListingLocked.
-            if locked {
+            // says who has it: see AppState.listingLock.
+            // A merged box says nothing while another store still takes it: the
+            // tab says that once, above the rows. See listingLockBanner.
+            if let lock, lock.isStatic || store != nil {
                 HStack(spacing: 5) {
-                    Image(systemName: "lock.fill").font(Theme.font(size: 8.5))
-                    Text("App Store review is reading this")
+                    Image(systemName: lock.isStatic ? "lock.fill" : "info.circle")
+                        .font(Theme.font(size: 8.5))
+                    Text(lock.line)
                         .font(Theme.font(size: 10.5))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(Theme.text3)
             }
-            if multiline {
+            if locked {
+                // Text and not a dimmed box. A rounded field says "type here",
+                // and a disabled one says "type here later"; neither is true of
+                // a listing this app cannot write at all. The characters stay
+                // selectable, because reading what the store holds is the whole
+                // reason the row is still on screen.
+                Text(value.isEmpty ? "Empty" : value)
+                    .font(Theme.font(size: 13))
+                    .foregroundStyle(value.isEmpty ? Theme.text3 : Theme.text2)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 7).padding(.vertical, 6)
+                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
+            } else if multiline {
                 // A vertically growing TextField remeasures this entire
                 // scroll view after every character. TextEditor keeps one
                 // stable viewport and scrolls long release notes internally.
