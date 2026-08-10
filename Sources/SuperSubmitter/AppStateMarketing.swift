@@ -55,15 +55,81 @@ extension AppState {
             self.marketing.customProductPages?[safe: index]?
                 .locales?[locale]?.promotionalText ?? ""
         }, set: { text in
-            var value = self.marketing
-            guard value.customProductPages?.indices.contains(index) == true else { return }
-            var locales = value.customProductPages?[index].locales ?? [:]
+            // The text, and only the text.
+            //
+            // This rebuilt the whole locale from the text alone, so one
+            // keystroke here dropped every screenshot the page carried, and
+            // emptying the box removed the locale outright. A locale holds two
+            // things and this control owns one of them.
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { locales.removeValue(forKey: locale) }
-            else { locales[locale] = .init(promotionalText: text) }
-            value.customProductPages?[index].locales = locales.isEmpty ? nil : locales
-            self.setMarketing(value)
+            self.editPageLocale(index: index, locale: locale) { block in
+                block.promotionalText = trimmed.isEmpty ? nil : text
+            }
         })
+    }
+
+    // MARK: - The pictures a custom product page carries
+
+    /// One page's screenshots for one locale, by device class.
+    ///
+    /// Apple's `appCustomProductPageLocalizations` carries an
+    /// `appScreenshotSets` relationship and the apply has always uploaded to
+    /// it. Nothing empty is the page **inheriting the default product page**,
+    /// which is what an empty map has always meant to the apply: it uploads
+    /// nothing and Apple keeps what the page already shows.
+    func customProductPageScreenshots(index: Int, locale: String) -> [String: [String]] {
+        marketing.customProductPages?[safe: index]?.locales?[locale]?.screenshots ?? [:]
+    }
+
+    /// Takes the App Store's own screenshots for this locale into the page.
+    ///
+    /// The Media tab already holds them, per locale and per device class, and
+    /// a custom product page starts from the default page rather than from an
+    /// empty box. `mediaPaths(store:)` is the same rule the Media tab reads by,
+    /// so an Apple override wins over the shared list exactly as it does there.
+    func takeMediaScreenshots(intoPage index: Int, locale: String) {
+        var taken: [String: [String]] = [:]
+        for device in Manifest.DeviceClass.allCases {
+            let paths = manifest.mediaPaths(locale: locale, deviceClass: device, store: .apple)
+            if !paths.isEmpty { taken[device.rawValue] = paths }
+        }
+        guard !taken.isEmpty else { return }
+        editPageLocale(index: index, locale: locale) { $0.screenshots = taken }
+    }
+
+    /// Clears them, so the page inherits the default product page again.
+    func clearPageScreenshots(index: Int, locale: String) {
+        editPageLocale(index: index, locale: locale) { $0.screenshots = nil }
+    }
+
+    /// One device class of one page. An emptied size is removed and never
+    /// written as an empty list: the two mean different things in this manifest.
+    func setPageScreenshots(index: Int, locale: String, device: String, paths: [String]) {
+        editPageLocale(index: index, locale: locale) { block in
+            var sizes = block.screenshots ?? [:]
+            if paths.isEmpty { sizes.removeValue(forKey: device) } else { sizes[device] = paths }
+            block.screenshots = sizes.isEmpty ? nil : sizes
+        }
+    }
+
+    /// One writer for a page's locale, so no control can drop what another one
+    /// owns. A locale that ends up holding neither the text nor a picture is
+    /// removed, because that is a locale the page does not have.
+    private func editPageLocale(index: Int, locale: String,
+                                _ edit: (inout Manifest.Marketing.CustomProductPage.PageLocale)
+                                    -> Void) {
+        var value = marketing
+        guard value.customProductPages?.indices.contains(index) == true else { return }
+        var locales = value.customProductPages?[index].locales ?? [:]
+        var block = locales[locale] ?? .init()
+        edit(&block)
+        if block.promotionalText == nil, block.screenshots?.isEmpty != false {
+            locales.removeValue(forKey: locale)
+        } else {
+            locales[locale] = block
+        }
+        value.customProductPages?[index].locales = locales.isEmpty ? nil : locales
+        setMarketing(value)
     }
 
     // MARK: - The experiments

@@ -478,6 +478,21 @@ extension Manifest {
     /// Spec 6.3. The pixel dimensions pick the bucket, never the folder name.
     public enum DeviceClass: String, Codable, Sendable, CaseIterable {
         case phone, tablet7, tablet10, desktop, watch, tv, vision
+
+        /// One name for one size. The Media tab held this table privately, and
+        /// the moment a second screen listed the same sizes there were two
+        /// tables to keep in step.
+        public var label: String {
+            switch self {
+            case .phone: "Phone"
+            case .tablet7: "Small tablet"
+            case .tablet10: "Large tablet"
+            case .desktop: "Desktop"
+            case .watch: "Watch"
+            case .tv: "TV"
+            case .vision: "Vision"
+            }
+        }
     }
 }
 
