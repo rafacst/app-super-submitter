@@ -22,6 +22,11 @@ struct LiveAppTab: View {
                 ManagingEmptyState(
                     line: "Turn a store on in Stores. The reviews, the numbers, and the remedies all come from a store, so this tab has nothing to read until one is on.")
             } else {
+                // The answer first, then the panels that produced it. The tab
+                // asks what the customers are seeing, and that is a number per
+                // store, not four paragraphs behind four Fetch buttons.
+                LiveAppHead()
+                Hairline().padding(.vertical, 2)
                 // No group headings of our own. Every panel below already
                 // carries its own, and wrapping them produced "How the
                 // shipped app is doing" twice, one line under the other.

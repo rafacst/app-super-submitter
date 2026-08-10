@@ -60,6 +60,95 @@ public struct StoreVitalsClient: Sendable {
         return result
     }
 
+    /// One version's rate, for the comparison a single number cannot make.
+    public struct VersionRate: Sendable, Equatable, Identifiable {
+        public var version: String
+        public var rate: Double
+
+        public var id: String { version }
+
+        public init(version: String, rate: Double) {
+            self.version = version
+            self.rate = rate
+        }
+    }
+
+    /// What the strip above the cards says, or nil when there is nothing worth
+    /// saying.
+    public struct RateChange: Sendable, Equatable {
+        public var isWorse: Bool
+        public var line: String
+    }
+
+    /// The user-perceived crash rate per app version, newest version first.
+    ///
+    /// The same metric set as `googleVitals`, split by the dimension that says
+    /// which build a day belongs to. A crash rate on its own is a number nobody
+    /// can act on: 1.2% is bad after 0.8% and good after 2%.
+    ///
+    /// ponytail: never run against a real account. The Play Developer Reporting
+    /// API is not among the references in `docs/`, so the dimension name and
+    /// the row shape come from the API's own documentation online rather than
+    /// from a file on disk. Everything below the request is a pure function, so
+    /// a wrong shape is one fix in one place. A failed or unrecognised answer
+    /// returns nothing, and the strip then says nothing rather than a number it
+    /// cannot stand behind.
+    public func googleCrashRateByVersion(packageName: String) async throws -> [VersionRate] {
+        guard let response = try? await api.googleReporting(
+            "POST", "/v1beta1/apps/\(StateReader.escape(packageName))/crashRateMetricSet:query",
+            body: [
+                "metrics": ["userPerceivedCrashRate"],
+                "dimensions": ["versionCode"],
+                "pageSize": 1000,
+            ]) else { return [] }
+        return Self.versionRates(JSON(data: response.data)["rows"].array,
+                                 metric: "userPerceivedCrashRate")
+    }
+
+    /// One rate per version, newest first.
+    ///
+    /// Google answers a row per day per version, so a version's rate is the
+    /// mean of its days. A row that names no version belongs to no version and
+    /// is dropped rather than folded into whichever one sorts first.
+    static func versionRates(_ rows: [JSON], metric: String) -> [VersionRate] {
+        var byVersion: [String: [Double]] = [:]
+        for row in rows {
+            guard let version = row["dimensions"].array
+                .first(where: { $0["dimension"].string == "versionCode" })
+                .flatMap({ $0["stringValue"].string ?? $0["int64Value"].string
+                    ?? $0["int64Value"].int.map(String.init) }),
+                !version.isEmpty,
+                let value = row["metrics"].array
+                    .first(where: { $0["metric"].string == metric })
+                    .flatMap({ $0["decimalValue"]["value"].string.flatMap(Double.init)
+                        ?? $0["decimalValue"]["value"].double })
+            else { continue }
+            byVersion[version, default: []].append(value)
+        }
+        return byVersion
+            .map { VersionRate(version: $0.key,
+                               rate: $0.value.reduce(0, +) / Double($0.value.count)) }
+            // Newest first. A version code is a number, so it compares as one:
+            // "9" sorts above "10" as text and below it as a build.
+            .sorted { (Int($0.version) ?? 0, $0.version) > (Int($1.version) ?? 0, $1.version) }
+    }
+
+    /// Whether the newest version moved the crash rate, in the words the strip
+    /// uses.
+    ///
+    /// A first release compares to nothing, so it says nothing. A change under
+    /// a tenth of a point is noise, and the strip exists for the one fact worth
+    /// reading before the cards.
+    public static func crashRateChange(_ rates: [VersionRate]) -> RateChange? {
+        guard rates.count > 1 else { return nil }
+        let points = (rates[0].rate - rates[1].rate) * 100
+        guard abs(points) >= 0.1 else { return nil }
+        let size = String(format: "%.1f", abs(points))
+        return RateChange(
+            isWorse: points > 0,
+            line: "Play's crash rate is \(points > 0 ? "up" : "down") \(size) points since \(rates[1].version)")
+    }
+
     /// The mean of one metric across the returned rows.
     static func average(_ rows: [JSON], metric: String) -> Double? {
         let values = rows.compactMap { row -> Double? in
