@@ -55,6 +55,12 @@ extension AppState {
         defaults.set(path.rawValue, forKey: reviewChoiceKey)
     }
 
+    /// Puts the question back. A developer who looked at what was sent and now
+    /// wants to write the next version has to be able to say so.
+    func clearReviewPath() {
+        defaults.removeObject(forKey: reviewChoiceKey)
+    }
+
     /// Whether a listing field refuses characters right now.
     ///
     /// Only while Apple holds the version **and** the developer chose to look
@@ -65,6 +71,35 @@ extension AppState {
     func isListingLocked(_ field: ListingTextField) -> Bool {
         guard appleHoldsAVersion, reviewPath == .inspect else { return false }
         return AppleVersionState.isLocked(field)
+    }
+
+    /// Reads the version App Store review is holding, so the developer can see
+    /// what was actually sent.
+    ///
+    /// It lands in `storeSnapshot`, which every editing tab already draws under
+    /// the field it belongs to, and never in the manifest. The manifest is the
+    /// next version being written; overwriting it with the one under review
+    /// would throw away the work the wait exists for.
+    ///
+    /// The text and the screenshots. No artifact: a binary is not something
+    /// anybody checks by eye.
+    func retrieveVersionInReview() async {
+        guard let versionID = actualState.apple?.versionId else { return }
+        reviewRetrieving = true
+        reviewRetrievalError = nil
+        defer { reviewRetrieving = false }
+        let listing = await StoreImportReader(credentials: credentials)
+            .appleVersion(versionID: versionID)
+        guard listing.failures.isEmpty || !listing.locales.isEmpty else {
+            reviewRetrievalError = listing.failures.first
+                ?? "App Store Connect returned nothing for this version."
+            return
+        }
+        var snapshot = storeSnapshot
+        snapshot.merge(listing, store: .apple)
+        storeSnapshot = snapshot
+        if let root = manifestRoot { snapshot.save(toRoot: root) }
+        if !listing.failures.isEmpty { reviewRetrievalError = listing.failures.first }
     }
 
     /// What Apple said, for the banner that says it.

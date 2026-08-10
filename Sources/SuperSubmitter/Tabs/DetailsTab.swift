@@ -531,6 +531,8 @@ private struct ListingEditor: View {
         // what the store holds and the run will write it.
         let live = state.storeSnapshot.text(field, locale: state.locale)
         let unchanged = !live.isEmpty && live.allSatisfy { $0.value == value }
+        // Apple is reading this version, so the box takes no characters.
+        let locked = state.isListingLocked(field)
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(Theme.font(size: 11.5, weight: .medium))
@@ -577,6 +579,16 @@ private struct ListingEditor: View {
                     } ?? "\(value.count) of \(limit.value) characters")
                 }
             }
+            // A dead box with no explanation is worse than a locked one that
+            // says who has it: see AppState.isListingLocked.
+            if locked {
+                HStack(spacing: 5) {
+                    Image(systemName: "lock.fill").font(Theme.font(size: 8.5))
+                    Text("App Store review is reading this")
+                        .font(Theme.font(size: 10.5))
+                }
+                .foregroundStyle(Theme.text3)
+            }
             if multiline {
                 // A vertically growing TextField remeasures this entire
                 // scroll view after every character. TextEditor keeps one
@@ -602,6 +614,7 @@ private struct ListingEditor: View {
             }
             liveValues(field, live: live, current: value)
         }
+        .disabled(locked)
         .fieldAnchor(anchor)
         .onAppear { adopt(stored) }
         // Somebody else wrote this field: an undo, an import, a language

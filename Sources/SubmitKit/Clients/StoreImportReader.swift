@@ -359,6 +359,26 @@ public struct StoreImportReader: Sendable {
         }
     }
 
+    /// One named version, exactly as Apple holds it.
+    ///
+    /// `apple(appID:)` picks the version the developer may write to, which is
+    /// the right choice for an import and the wrong one here: the version this
+    /// answers for is the one App Store review is reading, and that version is
+    /// by definition not editable.
+    ///
+    /// The text and the screenshots, and no artifact. A binary is not
+    /// something anybody checks by eye, and downloading one to look at a
+    /// listing would spend a hundred megabytes to answer nothing.
+    public func appleVersion(versionID: String) async -> ImportedStoreListing {
+        var failures: [String] = []
+        let content = await versionContent(versionID: versionID, failures: &failures)
+        var result = ImportedStoreListing()
+        result.locales = content.locales
+        result.assets = content.assets
+        result.failures = failures
+        return result
+    }
+
     private func versionContent(versionID: String,
                                 failures: inout [String]) async -> VersionContent {
         var content = VersionContent()

@@ -404,6 +404,9 @@ final class AppState {
     /// What the stores hold right now. The import fills it, and so does every
     /// read, and the editing tabs show it beside the value being written.
     var storeSnapshot = StoreSnapshot()
+    /// The read of the version App Store review is holding. See AppStateReview.
+    var reviewRetrieving = false
+    var reviewRetrievalError: String?
     var consoleRows: [ConsoleRow] = []
     var consoleMarks: Set<String> = []
     var statuses: [Store: StoreStatus] = [:]

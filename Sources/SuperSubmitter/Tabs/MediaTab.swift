@@ -16,6 +16,15 @@ struct MediaTab: View {
     /// would leave a stale line behind in the group the pointer left.
     @State private var dropTarget: String?
 
+    /// Whether Apple is holding the version these pictures belong to.
+    ///
+    /// The screenshots go up with the version, so the same rule that locks the
+    /// listing text locks these. It follows the developer's own choice: looking
+    /// at what was sent locks them, writing the next version does not.
+    private var mediaLockedByReview: Bool {
+        state.appleHoldsAVersion && state.reviewPath == .inspect
+    }
+
     /// The sizes this app's stores take, in the order the tab draws them. The
     /// words come from `DeviceClass.label`, so the Marketing tab's page rows
     /// call a size what this tab calls it.
@@ -64,6 +73,22 @@ struct MediaTab: View {
             band(only(.google), title: "Google Play only", store: .google)
             videoSection
             if state.stores.contains(.google) { googleGraphics }
+        }
+        // Apple is reading these screenshots, so none of them may be swapped.
+        // The whole tab, and not the Apple half: a picture is one file on disk
+        // and the two stores' lists point at the same files.
+        .disabled(mediaLockedByReview)
+        .overlay(alignment: .top) {
+            if mediaLockedByReview {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill").font(Theme.font(size: 9))
+                    Text("App Store review is reading these screenshots. Nothing here changes until Apple answers.")
+                        .font(Theme.font(size: 11))
+                }
+                .foregroundStyle(Theme.text2)
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .background(Theme.yellowBg, in: Capsule())
+            }
         }
         // The one tab that never capped itself. Without this the group header
         // stretches to the window, which put "Choose images…" about 1400

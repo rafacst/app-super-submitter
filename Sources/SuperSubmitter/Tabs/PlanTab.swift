@@ -84,7 +84,98 @@ struct PlanTab: View {
             // screen that answers a question the diff cannot: where the release
             // has got to, and where pressing the button ends.
             if !state.showsRun { runway }
+            // What Apple said, and the two ways forward while it has not said
+            // anything yet. Above the diff, because a diff nobody may send is
+            // not the first thing this screen has to answer.
+            if !state.showsRun { reviewBanner }
             content
+        }
+    }
+
+    // MARK: - The version App Store review is holding
+
+    /// One panel, three states: Apple is still reading it, Apple approved it,
+    /// or Apple refused it.
+    @ViewBuilder
+    private var reviewBanner: some View {
+        if let answer = state.reviewOutcome {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 9) {
+                    Circle().fill(Self.outcomeColour(answer.outcome))
+                        .frame(width: 8, height: 8)
+                    Text(answer.line)
+                        .font(Theme.font(size: 12.5, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    // The reason lives in the Resolution Center and in no
+                    // endpoint, so a refusal offers the one place that has it.
+                    if answer.outcome == .refused {
+                        QuietButton(title: "Open App Store Connect") {
+                            state.open("https://appstoreconnect.apple.com/apps/\(state.manifest.apps.apple?.appId ?? "")/distribution")
+                        }
+                    }
+                }
+                if state.reviewNeedsAChoice { reviewChoice }
+                if let path = state.reviewPath, state.appleHoldsAVersion {
+                    reviewChosen(path)
+                }
+                if let error = state.reviewRetrievalError { ErrorLine(text: error) }
+            }
+            .storePanel(background: Self.outcomeColour(answer.outcome).opacity(0.08),
+                        border: Self.outcomeColour(answer.outcome).opacity(0.3))
+        }
+    }
+
+    private static func outcomeColour(_ outcome: AppleVersionState.Outcome) -> Color {
+        switch outcome {
+        case .waiting: Theme.yellow
+        case .approved: Theme.green
+        case .refused: Theme.red
+        }
+    }
+
+    /// The question, asked once per version.
+    ///
+    /// Two real answers and no default. Looking at what was sent and starting
+    /// the version after it are different jobs, and the app cannot know which
+    /// one the developer opened it for.
+    private var reviewChoice: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Nothing can be sent until Apple answers. Two things can be done now.")
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+            HStack(spacing: 9) {
+                Button("See what was sent") {
+                    state.chooseReviewPath(.inspect)
+                    Task { await state.retrieveVersionInReview() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                Button("Write the next version") { state.chooseReviewPath(.next) }
+                Spacer(minLength: 0)
+            }
+            Text("Seeing what was sent reads the text and the screenshots of the version Apple is reading, and locks the listing while you look. Writing the next version leaves everything open, and the drafts wait here until Apple answers.")
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// What the developer picked, and the way back out of it.
+    private func reviewChosen(_ path: AppState.ReviewPath) -> some View {
+        HStack(spacing: 9) {
+            if state.reviewRetrieving { Spinner() }
+            Text(path == .inspect
+                 ? "Showing what was sent. The listing is read-only while Apple has it."
+                 : "Writing the next version. Everything is editable and nothing is sent yet.")
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if path == .inspect {
+                QuietButton(title: "Read it again") {
+                    Task { await state.retrieveVersionInReview() }
+                }
+                .disabled(state.reviewRetrieving)
+            }
+            QuietButton(title: "Change") { state.clearReviewPath() }
         }
     }
 
