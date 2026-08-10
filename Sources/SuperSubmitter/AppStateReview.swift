@@ -162,6 +162,29 @@ extension AppState {
         if !listing.failures.isEmpty { reviewRetrievalError = listing.failures.first }
     }
 
+    /// The refusal the banner has to carry a tick for, or nil when nothing is
+    /// waiting on one.
+    ///
+    /// A refusal is a warning, a warning holds the apply until it is
+    /// acknowledged, and the Summary card drops this one row because the banner
+    /// above already says it in more words. That is right, and it took the only
+    /// "Acknowledge" in the app that unlocks this apply with it: the button was
+    /// off, the note under it asked for an acknowledgement, and the screen
+    /// carried nothing to acknowledge.
+    ///
+    /// So the banner grows the tick rather than the card growing the row back.
+    /// The sentence is still said once, and the control sits under the sentence
+    /// it belongs to.
+    ///
+    /// A hold gets none. Nothing the developer does closes a hold, and a
+    /// checkbox beside it would promise otherwise.
+    var reviewWarningNeedingAcknowledgement: Finding? {
+        guard reviewOutcome?.outcome == .refused else { return nil }
+        return plan?.warnings.first {
+            $0.id == Validator.appleVersionFindingID && !acknowledged.contains($0.id)
+        }
+    }
+
     /// What Apple said, for the banner that says it.
     struct ReviewAnswer: Equatable {
         var outcome: AppleVersionState.Outcome

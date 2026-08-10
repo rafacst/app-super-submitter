@@ -115,6 +115,17 @@ struct PlanTab: View {
                         }
                     }
                 }
+                // The card below drops this finding's row, because the banner
+                // is already saying it in more words. The row carried the only
+                // tick that unlocks this apply, so the tick lands here.
+                if let waiting = state.reviewWarningNeedingAcknowledgement {
+                    HStack(spacing: 9) {
+                        AcknowledgeToggle(id: waiting.id)
+                        Text("The apply stays shut until you have read this.")
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                        Spacer(minLength: 0)
+                    }
+                }
                 if state.reviewNeedsAChoice { reviewChoice }
                 if let path = state.reviewPath, state.appleHoldsAVersion {
                     reviewChosen(path)
@@ -970,6 +981,42 @@ private struct StatCard: View {
     }
 }
 
+/// The tick that dismisses one warning.
+///
+/// Two places draw it: the validation row, and the review banner for the one
+/// warning that row does not draw. One control, so the two can never disagree
+/// about what a tick looks like or what it does.
+private struct AcknowledgeToggle: View {
+    @Environment(AppState.self) private var state
+    let id: String
+
+    var body: some View {
+        let acked = state.acknowledged.contains(id)
+        Button {
+            if acked { state.acknowledged.remove(id) }
+            else { state.acknowledged.insert(id) }
+        } label: {
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(acked ? Theme.accent : .clear)
+                    .frame(width: 14, height: 14)
+                    .overlay(RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Theme.sep, lineWidth: 1))
+                    .overlay(Text(acked ? "✓" : "")
+                        .font(Theme.font(size: 8, weight: .bold)).foregroundStyle(.white))
+                // "Acknowledge", not "I accept this". The first person and the
+                // word "accept" read as a consent form, and this dismisses a
+                // warning. It is also the word the state already uses:
+                // `acknowledged`.
+                Text("Acknowledge").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(acked ? "Acknowledged" : "Not acknowledged")
+    }
+}
+
 /// One step of the runway across the top of the tab.
 private struct RunwayEntry: Identifiable {
     let number: Int
@@ -1034,31 +1081,7 @@ private struct ValidationRow: View {
                 Text(finding.location).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
-            if isWarning {
-                let acked = state.acknowledged.contains(finding.id)
-                Button {
-                    if acked { state.acknowledged.remove(finding.id) }
-                    else { state.acknowledged.insert(finding.id) }
-                } label: {
-                    HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(acked ? Theme.accent : .clear)
-                            .frame(width: 14, height: 14)
-                            .overlay(RoundedRectangle(cornerRadius: 3)
-                                .strokeBorder(Theme.sep, lineWidth: 1))
-                            .overlay(Text(acked ? "✓" : "")
-                                .font(Theme.font(size: 8, weight: .bold)).foregroundStyle(.white))
-                        // "Acknowledge", not "I accept this". The first person
-                        // and the word "accept" read as a consent form, and
-                        // this dismisses a warning. It is also the word the
-                        // state already uses: `acknowledged`.
-                        Text("Acknowledge").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityValue(acked ? "Acknowledged" : "Not acknowledged")
-            }
+            if isWarning { AcknowledgeToggle(id: finding.id) }
             if let destination {
                 // "Fix" only where there is something to fix. A hold is
                 // somebody else's turn, so its button offers the place the
