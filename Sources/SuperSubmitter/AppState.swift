@@ -339,6 +339,15 @@ final class AppState {
     /// asks.
     var detailsMerged = true
 
+    /// The same switch on Review info, and it opens the other way.
+    ///
+    /// Details merges because both columns hold the same words and two boxes
+    /// of one sentence compare nothing. The two stores here hold different
+    /// things: Apple takes a contact, a sign-in and notes, and Play takes none
+    /// of them and asks for a console visit instead. Standing them side by side
+    /// is the whole point of the screen, and the tab is short enough to fit.
+    var reviewMerged = false
+
     // The YAML toggle that every editing tab holds. Spec 16.1.
     var showYAML = false
     var yamlText = ""
@@ -1927,6 +1936,25 @@ final class AppState {
         reviewerCredentialsChanged()
     }
 
+    /// The reviewer sign-in as text, for the one console field no API reaches.
+    ///
+    /// Play Console asks for both halves under App access and the Android
+    /// Publisher API publishes no endpoint for either, so the only way the
+    /// account gets there is a paste. Apple withholds the password on most
+    /// accounts, so half a sign-in is still worth copying; nothing at all is
+    /// not, and nil keeps the button from clearing the pasteboard over it.
+    var demoAccountClipboard: String? {
+        let user = reviewerUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !user.isEmpty || !reviewerPassword.isEmpty else { return nil }
+        guard !reviewerPassword.isEmpty else { return user }
+        return "\(user)\n\(reviewerPassword)"
+    }
+
+    func copyDemoAccount() {
+        guard let text = demoAccountClipboard else { return }
+        copyToPasteboard(text)
+    }
+
     func reviewerCredentialsChanged() {
         do {
             try KeychainCredentials.save(
@@ -2020,13 +2048,20 @@ final class AppState {
         saveManifestReportingErrors()
     }
 
-    var encryptionBinding: Binding<Bool> {
-        Binding(get: { self.manifest.review?.usesNonExemptEncryption ?? false }, set: { value in
-            var review = self.manifest.review ?? Manifest.Review()
-            review.usesNonExemptEncryption = value
-            self.manifest.review = review
-            self.saveManifestReportingErrors()
-        })
+    /// Apple's yes or no question, and the third state a Bool cannot hold.
+    ///
+    /// The key is optional in the manifest and every reader tests it for
+    /// presence: Apple asks the question once per build and refuses the
+    /// submission until the build carries an answer, so an absent key is a
+    /// question still open. This was a `Binding<Bool>` that read an absent key
+    /// as `false`, which drew a settled "no" over every app nobody had asked.
+    var encryptionAnswer: Bool? { manifest.review?.usesNonExemptEncryption }
+
+    func setEncryptionAnswer(_ value: Bool?) {
+        var review = manifest.review ?? Manifest.Review()
+        review.usesNonExemptEncryption = value
+        manifest.review = review
+        saveManifestReportingErrors()
     }
 
     // MARK: - The export compliance declaration

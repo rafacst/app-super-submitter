@@ -39,17 +39,21 @@ struct ListingDeclarations: View {
         }
     }
 
-    /// Four declarations, each on a chip of its own.
+    /// Three declarations, each on a chip of its own.
     ///
-    /// They were four blocks in one box, separated by three `Divider`s. Evoque
-    /// gives every row of its spec table the same soft rounded fill and puts a
-    /// gap between them instead of a rule, and that is the better shape here:
-    /// these four are unrelated errands, not four lines of one list, and a
-    /// rule between them reads as continuation.
+    /// They were blocks in one box, separated by `Divider`s. Evoque gives every
+    /// row of its spec table the same soft rounded fill and puts a gap between
+    /// them instead of a rule, and that is the better shape here: these are
+    /// unrelated errands, not lines of one list, and a rule between them reads
+    /// as continuation.
     ///
     /// It also adds no line at all, which the rule the `sep` comment sets asks
     /// for — dark mode has no shadow to fall back on, and every extra hairline
     /// spends the little contrast that boundary has.
+    ///
+    /// Export compliance was a fourth chip here and is on Review info now. It
+    /// is what a reviewer needs and not what the listing declares, and the
+    /// console row for it has always said to answer it there.
     private var declarations: some View {
         Section_("Store declarations", icon: "checkmark.shield.fill", tint: Theme.green,
                  anchor: "details.declarations") {
@@ -62,16 +66,6 @@ struct ListingDeclarations: View {
                           detail: "Review declarations stored in the manifest") {
                     state.showDataSafety = true
                 }
-                .rowChip()
-                VStack(alignment: .leading, spacing: 9) {
-                    Toggle("The app uses non-exempt encryption", isOn: state.encryptionBinding)
-                        .font(Theme.font(size: 12))
-                    // The toggle above is what creates the need for this, so
-                    // the paperwork appears with the answer that owes it and
-                    // stays out of the way of every app that does not.
-                    if state.encryptionBinding.wrappedValue { exportCompliance }
-                }
-                .padding(.horizontal, 14).padding(.vertical, 11)
                 .rowChip()
                 VStack(alignment: .leading, spacing: 9) {
                     LabeledField("Kids age band", note: "Apple, optional") {
@@ -103,62 +97,6 @@ private extension View {
             .overlay(RoundedRectangle(cornerRadius: 7)
                 .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
     }
-}
-
-/// The export compliance declaration, beside the toggle that asks for it.
-///
-/// Apple attaches it to the build that ships, and it goes to the regulator's
-/// review, so the app writes what the developer answers and invents nothing.
-private struct ExportCompliance: View {
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if state.hasEncryptionDeclaration {
-                HStack {
-                    Text("Export compliance").font(Theme.font(size: 11.5, weight: .semibold))
-                    Spacer(minLength: 8)
-                    Button(role: .destructive) { state.removeEncryptionDeclaration() } label: {
-                        Image(systemName: "trash")
-                    }
-                    .controlSize(.small)
-                }
-                ForEach(AppState.EncryptionFlag.allCases, id: \.self) { flag in
-                    Toggle(flag.label, isOn: state.encryptionFlagBinding(flag))
-                        .font(Theme.font(size: 11.5))
-                }
-                LabeledField("Regulator code", note: "when Apple has issued one") {
-                    TextField("", text: state.encryptionTextBinding(.codeValue))
-                }
-                LabeledField("CCATS or ERN document") {
-                    PathField(path: state.encryptionTextBinding(.documentPath),
-                              problem: state.missingFileNote(
-                                for: state.encryptionTextBinding(.documentPath).wrappedValue)) {
-                        guard let url = state.chooseOneFile(
-                            allowedExtensions: ["pdf", "doc", "docx", "txt"]) else { return }
-                        state.encryptionTextBinding(.documentPath).wrappedValue =
-                            state.relativePath(for: url)
-                    }
-                }
-                Text("The run creates the declaration in the review state and uploads the document with it.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("An app that uses non-exempt encryption and claims no exemption also owes Apple this declaration.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Add the export declaration") { state.addEncryptionDeclaration() }
-                    .controlSize(.small)
-            }
-        }
-        .padding(9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
-    }
-}
-
-extension ListingDeclarations {
-    var exportCompliance: some View { ExportCompliance() }
 }
 
 /// The Console-only rows that the Details tab owns, from the **one** list that
@@ -229,7 +167,11 @@ struct ConsoleStepsPanel: View {
 }
 
 /// The same row shape as tab 9: one title, one reason, one state, one link.
-private struct ConsoleChecklistRow: View {
+///
+/// Review info draws two of these as well. The row and not the panel is what
+/// the two tabs share: a tick is one shared mark, so a step ticked here is
+/// ticked there, while the words around the list belong to the tab saying them.
+struct ConsoleChecklistRow: View {
     @Environment(AppState.self) private var state
     let row: ConsoleRow
 
