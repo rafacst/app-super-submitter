@@ -143,6 +143,43 @@ import Testing
         #expect(!apple.showsLiveListingNote)
     }
 
+    // MARK: - The one field that still writes
+
+    /// A screen of read-only boxes hides its one working control.
+    ///
+    /// The App Store takes the promotional text on a live version and nothing
+    /// else, so on a tab where everything is static that one field is the whole
+    /// answer to "what can I change right now?". It carries a mark of its own,
+    /// rather than being told apart by the absence of a lock.
+    @Test func theOneFieldTheAppStoreStillTakesIsMarked() {
+        let state = liveApp(stores: [.apple])
+
+        #expect(state.appleTakesLiveChange(.promotionalText))
+        for field in ListingTextField.allCases where field != .promotionalText {
+            #expect(!state.appleTakesLiveChange(field), "\(field) claimed a live write")
+        }
+    }
+
+    /// Nothing to tell apart on the Publish side: every field writes there, so
+    /// a mark on one of them would say the others do not.
+    @Test func thePublishSideMarksNothing() {
+        let state = liveApp(stores: [.apple])
+        state.mode = .publishing
+        #expect(!state.appleTakesLiveChange(.promotionalText))
+    }
+
+    /// A Play-only app never sees the App Store's exception, because it never
+    /// sees the App Store's rule.
+    @Test func aPlayOnlyAppMarksNothing() {
+        #expect(!liveApp(stores: [.google]).appleTakesLiveChange(.promotionalText))
+    }
+
+    @Test func theMarkIsDrawnOnTheField() throws {
+        let tab = try source("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
+        #expect(tab.contains("appleTakesLiveChange"))
+        #expect(tab.contains("LiveEditTag"))
+    }
+
     // MARK: - The button over the boxes
 
     /// The App Store takes no listing row from this tab, so the Manage side
