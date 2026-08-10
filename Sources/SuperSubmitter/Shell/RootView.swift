@@ -194,27 +194,12 @@ private struct ContentArea: View {
     /// A column of this view's own takes its width from the page beside it and
     /// from nothing else. The window never moves.
     var body: some View {
-        HStack(spacing: 0) {
-            page
-            if showsInspector {
-                HStack { Divider() }.ignoresSafeArea()
-                DetailsInspector()
-                    .frame(width: 260)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-        }
-        .motion(.easeInOut(duration: 0.22), value: showsInspector)
-        .clipped()
-    }
-
-    /// Whether the reference column is showing. Details only: it describes
-    /// that tab and nothing else.
-    private var showsInspector: Bool {
-        state.selectedTab == .details && detailsInspectorOpen
-    }
-
-    private var page: some View {
         VStack(spacing: 0) {
+            // The band spans the whole area, above the column and the page
+            // both. Inside the page it narrowed with it, and the control at
+            // its trailing edge — the one that opens this very column — ended
+            // up jammed against the column's own edge.
+            //
             // No band on the entry screen. It carries no title, no question
             // and no controls there, so it drew 64 points of empty glass over
             // a screen whose whole job is one centred choice — and the traffic
@@ -225,6 +210,28 @@ private struct ContentArea: View {
                 if state.selectedTab == .stores { StoresStatusBar() }
             }
             if state.showsLiveWriteWarning { LiveWriteBar(); Hairline() }
+            HStack(spacing: 0) {
+                page
+                if showsInspector {
+                    HStack { Divider() }
+                    DetailsInspector()
+                        .frame(width: 260)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .motion(.easeInOut(duration: 0.22), value: showsInspector)
+            .clipped()
+        }
+    }
+
+    /// Whether the reference column is showing. Details only: it describes
+    /// that tab and nothing else.
+    private var showsInspector: Bool {
+        state.selectedTab == .details && detailsInspectorOpen
+    }
+
+    private var page: some View {
+        VStack(spacing: 0) {
             // The payoff of the whole onboarding: the two doors give way to
             // the app they opened. It used to happen between one frame and the
             // next, so the moment a developer's first app arrived looked
