@@ -493,8 +493,17 @@ final class BuildFlow {
         restartPreflight()
     }
 
+    /// The link carries the answer too, not only the run.
+    ///
+    /// `loadSavedProject` restores `run.platform` from the saved project, so a
+    /// choice that stopped at the run came back as iOS at the next launch and
+    /// the developer had to make it again. Every switch on this value reads
+    /// `.ios` and `.macos` the same way; only Android parts anywhere.
+    /// `refreshPreflight` writes the link at the end, so this needs no save of
+    /// its own.
     func choosePlatform(_ platform: BuildPlatform) {
         run.platform = platform
+        project?.platform = platform
         restartPreflight()
     }
 

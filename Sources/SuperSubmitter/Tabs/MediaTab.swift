@@ -681,6 +681,23 @@ private struct MediaTile: View {
     /// cursor in `hover(_:)`.
     @State private var hovering = false
 
+    /// Whether the pointer is on the button row itself.
+    ///
+    /// The row answers for itself because the tile could not answer for it. A
+    /// stack takes its hover region from the shapes of its children, and a row
+    /// drawn at `opacity(0)` is not one of them, so the tile's region ended at
+    /// the store marks and the buttons stood outside it. Reaching for the trash
+    /// left the tile, `hovering` went false, and the three controls faded out
+    /// from under the pointer that was arriving at them.
+    ///
+    /// Two answers, not one moved answer: whichever of the two the pointer is
+    /// on, the row is lit, and crossing the seam between them lights neither
+    /// off. `contentShape` below closes the same gap from the tile's side, and
+    /// this holds whether or not something else ever takes the hover away.
+    @State private var hoveringControls = false
+
+    private var showsControls: Bool { hovering || hoveringControls }
+
     /// The pointer says the picture opens, and puts itself back afterwards.
     ///
     /// `NSCursor` is a stack, so every push owes a pop. A bare push and pop in
@@ -767,15 +784,19 @@ private struct MediaTile: View {
                 TileButton(symbol: "trash", label: "Remove", enabled: true,
                            tint: Theme.red, action: remove)
             }
-            .opacity(hovering ? 1 : 0)
+            .opacity(showsControls ? 1 : 0)
+            .onHover { hoveringControls = $0 }
         }
         .frame(width: size.width, alignment: .leading)
+        // The whole rectangle, and not the union of the parts drawn in it. See
+        // `hoveringControls`.
+        .contentShape(.rect)
         .onHover(perform: hover)
         .onDisappear {
             // The tile can be removed while the pointer is on it. See `hover`.
             if hovering { NSCursor.pop(); hovering = false }
         }
-        .motion(.easeOut(duration: 0.12), value: hovering)
+        .motion(.easeOut(duration: 0.12), value: showsControls)
         // Quick Look, the way Finder does it. The tab holds real image files
         // and a developer checking one used to open Finder to find it.
         .onTapGesture(count: 2) { QuickLook.show(url) }

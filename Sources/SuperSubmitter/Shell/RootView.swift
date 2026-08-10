@@ -567,15 +567,16 @@ private struct ContentHeader: View {
     var body: some View {
         @Bindable var state = state
         HStack(spacing: 10) {
-            // The question, and no name. The title bar carries the name of
-            // every screen now, so a 21-point "Stores" here would be the same
-            // word twice on one screen — which is the reason the other eleven
-            // tabs stopped drawing one. Stores kept it only because the title
-            // bar was showing the app and the file up there instead.
+            // What the tab is for, and no name. The title bar carries the name
+            // of every screen now, so a 21-point "Stores" here would be the
+            // same word twice on one screen — which is the reason the other
+            // eleven tabs stopped drawing one. Stores kept it only because the
+            // title bar was showing the app and the file up there instead.
             if !state.showsEntryScreen {
-                Text(state.selectedTab.question)
+                Text(state.selectedTab.summary)
                     .font(Theme.screenSubtitle)
                     .foregroundStyle(Theme.text2)
+                    .lineLimit(1)
             }
             Spacer(minLength: 8)
 

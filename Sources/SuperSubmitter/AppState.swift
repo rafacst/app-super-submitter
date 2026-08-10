@@ -357,6 +357,9 @@ final class AppState {
     var priceCurrency = ""
     var priceTerritory = ""
     var moneyError: String?
+    /// The app and territory pairs whose store money has been read this
+    /// launch. See `loadStoreMonetization`.
+    private var moneyReadApps: Set<String> = []
     private var purchasePriceInputs: [Int: CatalogPriceInput] = [:]
     private var planPriceInputs: [String: CatalogPriceInput] = [:]
     var offerPriceInputs: [String: CatalogPriceInput] = [:]
@@ -1902,6 +1905,47 @@ final class AppState {
         apple.pricePoints = Set(points.map(\.amount)).sorted()
         apple.pricePointTerritory = territory
         actualState.apple = apple
+    }
+
+    /// What the App Store already charges for this app and sells inside it,
+    /// into the blanks on this tab.
+    ///
+    /// An app that is on sale opened Monetization on an empty price and an
+    /// empty product list. Everything needed to fill them was already in the
+    /// app: the catalogue rides along with a listing import, and the price is
+    /// two requests that the plan makes on every read. Neither reached this
+    /// screen, so the developer of a shipping app was asked to type the price
+    /// their customers are already paying.
+    ///
+    /// It writes into blanks only. See `Manifest.mergeAppleMoney`: a value the
+    /// file already holds is the developer's answer, and a screen they walked
+    /// past may not overwrite it.
+    ///
+    /// Once per app and territory. The tab body reruns its task whenever
+    /// SwiftUI rebuilds it, and four requests per redraw is a store read nobody
+    /// asked for. The territory is part of the key because it is what the price
+    /// is read in: moving the base country asks a different question.
+    ///
+    /// A read that failed is not a read. The mark comes off, so the next visit
+    /// tries again rather than holding the tab empty until the app restarts.
+    func loadStoreMonetization() async {
+        guard stores.contains(.apple), let appID = appleActionAppID,
+              credentials.apple != nil else { return }
+        let territory = basePriceTerritory
+        let key = "\(appID)|\(territory)"
+        guard !moneyReadApps.contains(key) else { return }
+        moneyReadApps.insert(key)
+        let money = try? await StoreImportReader(credentials: credentials)
+            .appleMoney(appID: appID, territory: territory)
+        guard let money else { moneyReadApps.remove(key); return }
+        guard !money.isEmpty else { return }
+        // The developer can move to another app while Apple answers. What came
+        // back is that app's money, not this one's.
+        guard appID == appleActionAppID else { return }
+        guard manifest.mergeAppleMoney(money) else { return }
+        registerManifestUndo()
+        syncEditingStateFromManifest()
+        saveManifestReportingErrors()
     }
 
     /// The prices Apple sells at, as the picker's rows.

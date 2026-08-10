@@ -64,3 +64,23 @@ private func mediaReviewSource(_ relativePath: String) throws -> String {
     #expect(tab.contains("DirectApplyBar(target: .media)"))
     #expect(tab.contains("liveScreenshots"))
 }
+
+// MARK: - The controls stay under the pointer that is arriving at them
+
+/// A stack takes its hover region from the shapes of its children, and the
+/// button row is drawn at `opacity(0)` until the tile is hovered. The region
+/// therefore ended above the row: moving down to the trash left the tile, the
+/// flag went false, and the three buttons faded out from under the pointer.
+@Test func theTileControlsSurviveThePointerReachingThem() throws {
+    let tab = try mediaReviewSource("Sources/SuperSubmitter/Tabs/MediaTab.swift")
+
+    // The row answers for itself, whatever the tile's region turns out to be.
+    #expect(tab.contains("@State private var hoveringControls"))
+    #expect(tab.contains("var showsControls: Bool { hovering || hoveringControls }"))
+    #expect(tab.contains(".opacity(showsControls ? 1 : 0)"))
+    #expect(tab.contains(".onHover { hoveringControls = $0 }"))
+    // And the tile takes the whole rectangle rather than the union of its parts.
+    #expect(tab.contains(".contentShape(.rect)\n        .onHover(perform: hover)"))
+    // The fade has to follow what is shown, or the row jumps rather than fades.
+    #expect(tab.contains("value: showsControls"))
+}

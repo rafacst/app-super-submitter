@@ -441,6 +441,71 @@ public struct StoreImportReader: Sendable {
         return content
     }
 
+    // MARK: - The money, on its own
+
+    /// What the App Store charges for this app today, and what it sells inside
+    /// it.
+    ///
+    /// The catalogue rides along with a whole listing import, and the price
+    /// never did: `ImportedStoreListing` carries no price at all, because the
+    /// plan reads that separately to compare against. An app that was already
+    /// on sale therefore opened Monetization on an empty price and an empty
+    /// product list, and the only route to either was a full listing import
+    /// from another tab.
+    ///
+    /// Four requests, and the tab can afford them on open. The whole import is
+    /// fifteen or more, walks every locale, and downloads the screenshots.
+    ///
+    /// The territory decides the money. A price is a number and a currency,
+    /// and both belong to the country the app prices in, so the currency comes
+    /// from Apple's own answer for that territory rather than from a guess
+    /// about which money a country uses.
+    public func appleMoney(appID: String, territory: String) async throws -> AppleMoney {
+        var result = AppleMoney()
+        var failures: [String] = []
+
+        if let purchases = await attempt("App Store in-app purchases", &failures, {
+            JSON(data: try await api.apple(
+                "GET", "/v1/apps/\(appID)/inAppPurchasesV2?limit=200").data)
+        }) {
+            result.purchases = purchases["data"].array.compactMap(Self.applePurchase)
+        }
+
+        if let groups = await attempt("App Store subscriptions", &failures, {
+            JSON(data: try await api.apple(
+                "GET",
+                "/v1/apps/\(appID)/subscriptionGroups?include=subscriptions&limit=200").data)
+        }) {
+            result.subscriptions = Self.appleSubscriptionGroups(groups)
+        }
+
+        // The schedule holds one row per territory and keeps the rows that have
+        // ended, so the filter and `StateReader.currentPrice` between them pick
+        // the one row that is on sale in the one country asked about.
+        if let schedule = await attempt("App Store price", &failures, {
+            JSON(data: try await api.apple("GET", "/v1/apps/\(appID)/appPriceSchedule").data)
+        }), let scheduleID = schedule["data"]["id"].string,
+           let prices = await attempt("App Store price", &failures, {
+            JSON(data: try await api.apple(
+                "GET", "/v1/appPriceSchedules/\(StateReader.escape(scheduleID))/manualPrices?limit=200&include=appPricePoint,territory&fields%5BappPricePoints%5D=customerPrice&fields%5Bterritories%5D=currency&filter%5Bterritory%5D=\(StateReader.escape(territory))").data)
+        }), let amount = StateReader.currentPrice(prices) {
+            result.price = Price(
+                amount: amount,
+                currency: Self.currency(prices, territory: territory) ?? "USD",
+                territory: territory)
+        }
+
+        result.failures = failures
+        return result
+    }
+
+    /// The money one territory charges in, out of the included territories.
+    static func currency(_ payload: JSON, territory: String) -> String? {
+        payload["included"].array.first {
+            $0["type"].string == "territories" && $0["id"].string == territory
+        }?["attributes"]["currency"].string
+    }
+
     // MARK: - The optional reads
 
     /// Runs one read that the import can live without. A failure costs that one
