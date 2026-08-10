@@ -287,7 +287,7 @@ struct BuildFromProjectView: View {
                 .toggleStyle(.checkbox)
             }
 
-            if let blocking = flow.blocking {
+            if let blocking = flow.blockingReason {
                 Divider().padding(.vertical, 7)
                 HStack(alignment: .top, spacing: 9) {
                     StatePill(text: "Blocked", foreground: Theme.red, background: Theme.redBg)

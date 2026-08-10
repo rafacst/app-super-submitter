@@ -339,14 +339,9 @@ final class AppState {
     /// asks.
     var detailsMerged = true
 
-    /// The same switch on Review info, and it opens the other way.
-    ///
-    /// Details merges because both columns hold the same words and two boxes
-    /// of one sentence compare nothing. The two stores here hold different
-    /// things: Apple takes a contact, a sign-in and notes, and Play takes none
-    /// of them and asks for a console visit instead. Standing them side by side
-    /// is the whole point of the screen, and the tab is short enough to fit.
-    var reviewMerged = false
+    // Review info has no such switch. Merging there only stacked two columns
+    // that hold different things, so both spellings drew the same boxes and
+    // the control answered nothing. See ReviewInfoTab.
 
     // The YAML toggle that every editing tab holds. Spec 16.1.
     var showYAML = false

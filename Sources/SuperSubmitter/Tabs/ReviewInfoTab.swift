@@ -12,10 +12,11 @@ import SwiftUI
 /// store's own answer under its own name, and Play's column says outright that
 /// its half is a paste into a console.
 ///
-/// Export compliance opens the tab because it is the one question here that
-/// stops a submission. It sat on the Details inspector under a Bool toggle
-/// while the console row for it said "answer it on the Review info tab", so the
-/// instruction pointed at a screen that did not hold the control.
+/// There is no switch between merged and side by side. The Details switch earns
+/// its place: merged, a field both stores read is one box instead of the same
+/// sentence twice. Here the two columns hold different things, so merging only
+/// stacked them, and a control that offers two spellings of one screen answers
+/// nothing.
 struct ReviewInfoTab: View {
     @Environment(AppState.self) private var state
 
@@ -23,7 +24,6 @@ struct ReviewInfoTab: View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 16) {
             statusBar
-            exportComplianceCard
             if columns {
                 HStack(alignment: .top, spacing: 16) {
                     appleColumn.frame(maxWidth: .infinity, alignment: .leading)
@@ -47,8 +47,7 @@ struct ReviewInfoTab: View {
     /// stops the send, and what this version inherits from the last one.
     private var statusBar: some View {
         HStack(spacing: 14) {
-            let blockers = (state.badge(for: .reviewInfo)?.errors ?? 0)
-                + (blocksTheSend ? 1 : 0)
+            let blockers = state.badge(for: .reviewInfo)?.errors ?? 0
             if blockers > 0 {
                 Button { state.selectedTab = .plan } label: {
                     HStack(spacing: 6) {
@@ -70,64 +69,6 @@ struct ReviewInfoTab: View {
             if let note = Self.carriedOverNote(state.actualState) {
                 Text(note).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
             }
-            if state.stores.count > 1 {
-                QuietButton(title: state.reviewMerged ? "Split by store" : "Merge the columns") {
-                    state.reviewMerged.toggle()
-                }
-            }
-        }
-    }
-
-    // MARK: - The one question that stops a submission
-
-    /// Apple asks the export compliance question once per build and refuses the
-    /// submission until the build carries an answer. The card is the answer,
-    /// here, rather than a console visit.
-    private var exportComplianceCard: some View {
-        Section_("Export compliance", icon: "lock.shield.fill",
-                 tint: blocksTheSend ? Theme.red : Theme.green,
-                 anchor: "review.encryption") {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 9) {
-                    StoreMark(store: .apple, size: 12)
-                    Text("Apple asks this once per build")
-                        .font(Theme.font(size: 12.5, weight: .medium))
-                    if blocksTheSend {
-                        Text("Blocks the send")
-                            .font(Theme.font(size: 11, weight: .medium))
-                            .foregroundStyle(Theme.red)
-                            .padding(.horizontal, 7).padding(.vertical, 1.5)
-                            .background(Theme.red.opacity(0.14),
-                                        in: RoundedRectangle(cornerRadius: 5))
-                    }
-                    Spacer(minLength: 0)
-                }
-                Text(blocksTheSend
-                     ? "Apple refuses the submission without it. Answer it here, no console visit needed."
-                     : "Answered. Change it here if this build changed what the app encrypts.")
-                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
-                    .fixedSize(horizontal: false, vertical: true)
-                // Two answers and no third, so a question nobody has answered
-                // selects neither. A Bool could not say that, and the toggle
-                // this replaces drew an unasked question as a settled "no".
-                Picker("Export compliance", selection: Binding(
-                    get: { state.encryptionAnswer },
-                    set: { state.setEncryptionAnswer($0) })) {
-                    Text("Uses no non-exempt encryption").tag(Bool?.some(false))
-                    Text("It does use encryption").tag(Bool?.some(true))
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 420)
-                // The answer above is what creates the need for this, so the
-                // paperwork appears with the answer that owes it and stays out
-                // of the way of every app that does not.
-                if state.encryptionAnswer == true { ExportCompliance() }
-            }
-            // The card carries the colour of the answer, so an open question
-            // reads as an open question from across the screen.
-            .storePanel(background: blocksTheSend ? Theme.red.opacity(0.09) : Theme.raised,
-                        border: blocksTheSend ? Theme.red.opacity(0.32) : Theme.sep)
         }
     }
 
@@ -307,8 +248,8 @@ struct ReviewInfoTab: View {
         .overlay(alignment: .bottom) { Hairline() }
     }
 
-    /// Two columns need two stores and the width for them.
-    private var columns: Bool { state.stores.count > 1 && !state.reviewMerged }
+    /// Two columns need two stores. One store still stands alone.
+    private var columns: Bool { state.stores.count > 1 }
 
     /// Before any store is picked the Apple column carries the fields, so the
     /// tab draws what it always drew rather than nothing at all.
@@ -316,27 +257,7 @@ struct ReviewInfoTab: View {
         state.stores.isEmpty ? store == .apple : state.stores.contains(store)
     }
 
-    private var blocksTheSend: Bool {
-        Self.blocksTheSend(manifest: state.manifest, actual: state.actualState,
-                           stores: state.stores)
-    }
-
     // MARK: - What the screen has to judge
-
-    /// Whether Apple is still waiting for the export compliance answer.
-    ///
-    /// Store policy and not an API constraint: no endpoint refuses a request
-    /// for the missing flag, and `appStoreVersions` takes a submission that
-    /// omits it. Apple refuses at review instead, which is the worst place to
-    /// learn it. The same two sources `ConsoleChecklist` reads, in the same
-    /// order: the manifest answers it, and so does a build that shipped with
-    /// `ITSAppUsesNonExemptEncryption` set.
-    static func blocksTheSend(manifest: Manifest, actual: ActualState,
-                              stores: Set<Store>) -> Bool {
-        guard stores.contains(.apple) else { return false }
-        return manifest.review?.usesNonExemptEncryption == nil
-            && actual.apple?.buildUsesNonExemptEncryption == nil
-    }
 
     /// What the next version inherits from the released one.
     ///
@@ -358,57 +279,5 @@ struct ReviewInfoTab: View {
         ["google.access", "google.dataSafety"].compactMap { id in
             rows.first { $0.id == id }
         }
-    }
-}
-
-/// The export compliance declaration, beside the answer that asks for it.
-///
-/// Apple attaches it to the build that ships, and it goes to the regulator's
-/// review, so the app writes what the developer answers and invents nothing.
-private struct ExportCompliance: View {
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if state.hasEncryptionDeclaration {
-                HStack {
-                    Text("The declaration").font(Theme.font(size: 11.5, weight: .semibold))
-                    Spacer(minLength: 8)
-                    Button(role: .destructive) { state.removeEncryptionDeclaration() } label: {
-                        Image(systemName: "trash")
-                    }
-                    .controlSize(.small)
-                }
-                ForEach(AppState.EncryptionFlag.allCases, id: \.self) { flag in
-                    Toggle(flag.label, isOn: state.encryptionFlagBinding(flag))
-                        .font(Theme.font(size: 11.5))
-                }
-                LabeledField("Regulator code", note: "when Apple has issued one") {
-                    TextField("", text: state.encryptionTextBinding(.codeValue))
-                }
-                LabeledField("CCATS or ERN document") {
-                    PathField(path: state.encryptionTextBinding(.documentPath),
-                              problem: state.missingFileNote(
-                                for: state.encryptionTextBinding(.documentPath).wrappedValue)) {
-                        guard let url = state.chooseOneFile(
-                            allowedExtensions: ["pdf", "doc", "docx", "txt"]) else { return }
-                        state.encryptionTextBinding(.documentPath).wrappedValue =
-                            state.relativePath(for: url)
-                    }
-                }
-                Text("The run creates the declaration in the review state and uploads the document with it.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("An app that uses non-exempt encryption and claims no exemption also owes Apple this declaration.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Add the export declaration") { state.addEncryptionDeclaration() }
-                    .controlSize(.small)
-            }
-        }
-        .padding(9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
     }
 }
