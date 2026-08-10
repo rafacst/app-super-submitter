@@ -47,20 +47,59 @@ struct UpgradeCardTests {
         }
     }
 
-    /// With no plan read, the line states what is free. It has to agree with
-    /// `entitlementLabel`, which makes the same promise on the Account tab, or
-    /// the app contradicts itself one click apart.
-    @Test func theLineNeverContradictsTheFreeTierPromise() {
+    /// The offer never contradicts the free tier.
+    ///
+    /// It has to agree with `entitlementLabel`, which makes the same promise on
+    /// the Account tab, or the app sells one story in the sidebar and another
+    /// one click away. The headline leads with the work and the note carries
+    /// the promise, so the promise is on the card every time it asks for money.
+    @Test func theOfferNeverContradictsTheFreeTierPromise() {
         let state = state()
         state.entitlement = .free(at: now)
 
         #expect(state.plan == nil)
-        let line = state.upgradeCardLine
-        #expect(line.contains("free"))
-        // The offer names the one thing that is actually withheld, and nothing
-        // else. A card that implies builds or plans are paid would be selling
-        // something this app gives away.
-        #expect(line.lowercased().contains("sending"))
-        #expect(!line.contains("writes are ready"))
+        // The one thing that is actually withheld, and nothing else. A card
+        // that implied builds or plans were paid would be selling something
+        // this app gives away.
+        #expect(state.upgradeCardNote.lowercased().contains("sending"))
+        #expect(state.upgradeCardNote.lowercased().contains("free"))
+    }
+
+    /// The headline leads with the developer's own work.
+    ///
+    /// "Sending to a store needs Pro" is true and it is a sentence about what
+    /// the app withholds. A developer with writes waiting reads a count and
+    /// knows both what they have and what it is for.
+    @Test func theHeadlineNamesTheWorkWaitingAndNotTheWall() {
+        let state = state()
+        state.entitlement = .free(at: now)
+
+        #expect(!state.upgradeCardLine.lowercased().contains("needs pro"))
+        #expect(!state.upgradeCardLine.contains("writes"))
+
+        var plan = PlanResult()
+        plan.steps = (1...39).map {
+            PlanStep(id: "apple.\($0)", system: .apple, kind: .change,
+                     summary: "row", title: "Row", requests: [],
+                     operation: .appleVersionLocale("en-US"))
+        }
+        state.plan = plan
+
+        #expect(state.upgradeCardLine.contains("39"))
+        #expect(state.upgradeCardLine.lowercased().contains("ready to send"))
+    }
+
+    /// The button is a verb. "See the plans" invites browsing; a developer who
+    /// pressed it wants the one thing the card just named.
+    @Test func theButtonSaysWhatPressingItDoes() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let sidebar = try String(
+            contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/Sidebar.swift"),
+            encoding: .utf8)
+
+        #expect(sidebar.contains("Unlock sending"))
+        #expect(sidebar.contains("upgradeCardNote"))
+        #expect(!sidebar.contains("See the plans"))
     }
 }
