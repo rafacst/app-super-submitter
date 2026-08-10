@@ -3,11 +3,13 @@ import SwiftUI
 
 /// Tab 7. The App Store resources that shape how the store sells the app.
 ///
-/// **Why one column per store, on a tab only one store answers.** Google Play
-/// has no equivalent for anything here, and the tab said so in a grey line at
-/// the top that read as a footnote. Play is half of where this app goes, and
-/// "Play has none of this" is a real answer to "how does the store sell it?",
-/// so it stands in a column of its own beside the one that does answer.
+/// **One store answers, so one store gets the width.** Google Play has no
+/// equivalent for anything here. That was a grey footnote, then a column of its
+/// own, and the column was 300 points of a 1040 point tab spent saying that
+/// there is nothing in it: the App Store half was squeezed into what was left
+/// and its own columns ran off the side of the window. The answer is still a
+/// real one and it is one sentence long, so it is the ⓘ beside the store that
+/// does answer. See `PlayHasNoneOfThis`.
 ///
 /// The pages and the experiments are rows now and not open editors. Every one
 /// of them drew all of its fields at once, so a tab with four pages was four
@@ -23,19 +25,13 @@ struct MarketingTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             DirectApplyBar(target: .marketing)
-            HStack(alignment: .top, spacing: 16) {
-                appStoreColumn.frame(maxWidth: .infinity, alignment: .leading)
-                if state.stores.contains(.google) {
-                    playColumn.frame(width: Theme.scaled(300), alignment: .leading)
-                }
-            }
-            licenceAgreement
+            appStoreColumn
             smallResources
         }
         .frame(maxWidth: 1040, alignment: .leading)
     }
 
-    // MARK: - The column that answers
+    // MARK: - The one store that answers
 
     private var appStoreColumn: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -47,43 +43,11 @@ struct MarketingTab: View {
         }
     }
 
-    /// The column that does not.
-    ///
-    /// Play has all three of these products and publishes none of them: custom
-    /// store listings, store listing experiments and LiveOps events live in the
-    /// Play Console, and the Android Publisher API exposes no endpoint for any
-    /// of them. That is a fact about the API and not about this app, so the
-    /// column says which console page holds them.
-    private var playColumn: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            columnHeader(.google, note: nil)
-            VStack(alignment: .leading, spacing: 9) {
-                Text("Play has none of this")
-                    .font(Theme.font(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text2)
-                Text("Custom store listings, store listing experiments and LiveOps events all exist in the Play Console, and the Android Publisher API exposes none of them.")
-                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    state.open("https://play.google.com/console")
-                } label: {
-                    Text("Open Play Console ↗")
-                        .font(Theme.font(size: 12)).foregroundStyle(Theme.accent)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                .foregroundStyle(Theme.sep))
-        }
-    }
-
     private func columnHeader(_ store: Store, note: String?) -> some View {
         HStack(spacing: 8) {
             StoreMark(store: store, size: 14)
             Text(store.storeName).font(Theme.font(size: 13, weight: .semibold))
+            if state.stores.contains(.google) { PlayHasNoneOfThis() }
             Spacer(minLength: 8)
             if let note {
                 Text(note).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
@@ -99,7 +63,7 @@ struct MarketingTab: View {
     private var customProductPages: some View {
         let pages = state.marketing.customProductPages ?? []
         return Section_("Custom product pages", icon: "doc.on.doc.fill", tint: Theme.accent,
-                        anchor: "marketing.customPages") {
+                        anchor: "marketing.customPages", folds: true, foldPadding: 0) {
             VStack(spacing: 0) {
                 listHeader(count: "\(pages.count) of 35",
                            action: "Add a custom product page") {
@@ -117,7 +81,6 @@ struct MarketingTab: View {
                     .padding(.horizontal, 13).padding(.vertical, 9)
                 }
             }
-            .storePanel(padding: 0)
         }
     }
 
@@ -242,7 +205,7 @@ struct MarketingTab: View {
     private var experiments: some View {
         let items = state.marketing.experiments ?? []
         return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple,
-                        anchor: "marketing.experiments") {
+                        anchor: "marketing.experiments", folds: true, foldPadding: 0) {
             VStack(spacing: 0) {
                 listHeader(count: items.isEmpty
                                ? "" : "\(items.count) \(items.count == 1 ? "experiment" : "experiments")",
@@ -266,7 +229,6 @@ struct MarketingTab: View {
                     PromoteTreatment().padding(.horizontal, 13).padding(.vertical, 9)
                 }
             }
-            .storePanel(padding: 0)
         }
     }
 
@@ -423,7 +385,7 @@ struct MarketingTab: View {
     private var events: some View {
         let items = state.marketing.events ?? []
         return Section_("In-app events", icon: "calendar", tint: Theme.pink,
-                        anchor: "marketing.events") {
+                        anchor: "marketing.events", folds: true) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
@@ -467,40 +429,15 @@ struct MarketingTab: View {
         }
     }
 
-    // MARK: - The licence agreement
-
-    private var licenceAgreement: some View {
-        Section_("Licence agreement", icon: "doc.text.fill", tint: Theme.teal,
-                 anchor: "marketing.eula") {
-            VStack(alignment: .leading, spacing: 7) {
-                TextEditor(text: state.eulaTextBinding)
-                    .font(Theme.font(size: 12))
-                    .frame(height: 110)
-                    .scrollContentBackground(.hidden)
-                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
-                FieldRow {
-                    LabeledField("Territories") {
-                        MultiChoiceField(text: state.eulaTerritoriesBinding,
-                                         choices: StoreValues.appleTerritories,
-                                         emptyLabel: "Every territory")
-                            .disabled(state.eulaTextBinding.wrappedValue.isEmpty)
-                    }
-                    LabeledField("Length", width: 90) {
-                        Text("\(state.eulaTextBinding.wrappedValue.count) / 10000")
-                            .font(Theme.mono(11))
-                            .foregroundStyle(state.eulaTextBinding.wrappedValue.count > 10_000
-                                             ? Theme.red : Theme.text3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                Text("An empty agreement leaves the Apple standard licence in place.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            }.storePanel()
-        }
-    }
-
     // MARK: - The small resources
 
+    /// The three App Store resources that are not the listing and not a page.
+    ///
+    /// The licence agreement and the accessibility declaration used to stand
+    /// here. Neither one sells the app: one is the contract the customer
+    /// accepts and the other is what the app can do for a customer who cannot
+    /// see it. Both describe the app, so both moved to Details with the rest of
+    /// the description.
     private var smallResources: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 18) {
@@ -508,7 +445,6 @@ struct MarketingTab: View {
                 nomination
             }
             VStack(alignment: .leading, spacing: 18) {
-                accessibility
                 appClip
             }
         }
@@ -516,25 +452,23 @@ struct MarketingTab: View {
 
     private var routingCoverage: some View {
         Section_("Routing app coverage", icon: "map.fill", tint: Theme.green,
-                 anchor: "marketing.routing") {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    TextField("assets/coverage.geojson", text: state.routingCoverageBinding)
-                    Button("Choose…") {
-                        guard let url = state.chooseOneFile(allowedExtensions: ["geojson", "json"])
-                        else { return }
-                        state.routingCoverageBinding.wrappedValue = state.relativePath(for: url)
-                    }.controlSize(.small)
-                }
-                Text("A GeoJSON file. Only a routing app needs one.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            }.storePanel()
+                 anchor: "marketing.routing", folds: true, startsOpen: false,
+                 note: "A GeoJSON file. Only a routing app needs one.") {
+            HStack {
+                TextField("assets/coverage.geojson", text: state.routingCoverageBinding)
+                Button("Choose…") {
+                    guard let url = state.chooseOneFile(allowedExtensions: ["geojson", "json"])
+                    else { return }
+                    state.routingCoverageBinding.wrappedValue = state.relativePath(for: url)
+                }.controlSize(.small)
+            }
         }
     }
 
     private var nomination: some View {
         Section_("Featuring nomination", icon: "star.fill", tint: Theme.yellow,
-                 anchor: "marketing.nomination") {
+                 anchor: "marketing.nomination", folds: true, startsOpen: false,
+                 note: "The app creates a draft and never submits it.") {
             VStack(alignment: .leading, spacing: 7) {
                 TextField("Name", text: state.nominationBinding(.name))
                 Picker("Type", selection: state.nominationBinding(.type)) {
@@ -544,9 +478,7 @@ struct MarketingTab: View {
                           axis: .vertical)
                     .returnInsertsLineBreak()
                     .lineLimit(2...4)
-                Text("The app creates a draft and never submits it.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            }.storePanel()
+            }
         }
     }
 
@@ -562,23 +494,10 @@ struct MarketingTab: View {
         }
     }
 
-    private var accessibility: some View {
-        Section_("Accessibility declaration", icon: "figure.wave", tint: Theme.orange,
-                 anchor: "marketing.accessibility") {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(StoreValues.accessibilityFeatures) { feature in
-                    Toggle(feature.label, isOn: state.accessibilityBinding(feature.value))
-                        .font(Theme.font(size: 11.5))
-                }
-                Text("The declaration is written as a draft.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            }.storePanel()
-        }
-    }
-
     private var appClip: some View {
         Section_("App Clip default experience", icon: "bolt.fill", tint: Theme.accent,
-                 anchor: "marketing.appClip") {
+                 anchor: "marketing.appClip", folds: true, startsOpen: false,
+                 note: "Xcode creates the clip. This writes what the store shows.") {
             VStack(alignment: .leading, spacing: 7) {
                 Picker("Action", selection: state.appClipActionBinding) {
                     Text("None").tag("")
@@ -591,9 +510,7 @@ struct MarketingTab: View {
                 LabeledField("Header image, \(state.locale)") {
                     headerImageField
                 }
-                Text("Xcode creates the clip. This writes what the store shows.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            }.storePanel()
+            }
         }
     }
 }
@@ -768,6 +685,56 @@ private struct PromoteTreatment: View {
         guard let chosen else { return }
         track($busy, $error) {
             try await state.promoteAppleTreatment(chosen.id)
+        }
+    }
+}
+
+/// What Google Play does with everything on this tab, behind the ⓘ beside the
+/// store that does answer.
+///
+/// Play has all three of these products and publishes none of them: custom
+/// store listings, store listing experiments and LiveOps events live in the
+/// Play Console, and the Android Publisher API exposes no endpoint for any of
+/// them. That is a fact about the API and not about this app.
+///
+/// It was a column, 300 points of a 1040 point tab, and every one of those
+/// points said the same sentence: there is nothing here. A tab that gives a
+/// third of itself to an absence is a tab whose one working store is squeezed,
+/// so the absence is one glyph and the sentence is a click away.
+private struct PlayHasNoneOfThis: View {
+    @Environment(AppState.self) private var state
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            Image(systemName: "info.circle")
+                .font(Theme.font(size: 11))
+                .foregroundStyle(Theme.text3)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("What Google Play does with these")
+        .help("Play has none of this")
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 7) {
+                    StoreMark(store: .google, size: 14)
+                    Text("Play has none of this")
+                        .font(Theme.font(size: 12, weight: .semibold))
+                }
+                Text("Custom store listings, store listing experiments and LiveOps events all exist in the Play Console, and the Android Publisher API exposes none of them.")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    state.open("https://play.google.com/console")
+                } label: {
+                    Text("Open Play Console ↗")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(13)
+            .frame(maxWidth: 320, alignment: .leading)
         }
     }
 }

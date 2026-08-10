@@ -116,16 +116,20 @@ import Testing
         #expect(tab.contains("private func pageRow"))
         #expect(tab.contains("private func experimentRow"))
         #expect(tab.contains("of 35"))
-        // Every block that was on the tab is still on it. A rearrangement is
-        // never a subtraction, and the design's card draws only four of these.
+        // Every block that answers "how does the store sell it?" is still on
+        // the tab. A rearrangement is never a subtraction, and the design's
+        // card draws only four of these.
         #expect(tab.contains("marketing.customPages"))
         #expect(tab.contains("marketing.experiments"))
         #expect(tab.contains("marketing.events"))
-        #expect(tab.contains("marketing.eula"))
         #expect(tab.contains("marketing.routing"))
         #expect(tab.contains("marketing.nomination"))
-        #expect(tab.contains("marketing.accessibility"))
         #expect(tab.contains("marketing.appClip"))
+        // The licence agreement and the accessibility declaration left for
+        // Details. Neither one sells the app: both describe it. See
+        // `ListingResourcesMoveTests`.
+        #expect(!tab.contains("marketing.eula"))
+        #expect(!tab.contains("marketing.accessibility"))
         // The editors survive the rows: a row opens onto them.
         #expect(tab.contains("Add a custom product page"))
         #expect(tab.contains("Add an experiment"))

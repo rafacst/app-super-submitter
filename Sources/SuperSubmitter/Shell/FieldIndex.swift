@@ -90,6 +90,13 @@ enum FieldIndex {
               keywords: ["age band", "kids", "content rating", "data safety"]),
         .init(id: "details.searchKeywords", label: "Search keywords", tab: .details,
               keywords: ["aso", "custom product page", "apple"]),
+        // Both stood under Marketing, which answers how the store sells the
+        // app. Neither one sells it: they describe it, so they are searched
+        // for beside the rest of the description.
+        .init(id: "details.eula", label: "Licence agreement", tab: .details,
+              keywords: ["eula", "terms", "legal", "licence", "license"]),
+        .init(id: "details.accessibility", label: "Accessibility declaration",
+              tab: .details, keywords: ["a11y", "voiceover", "apple"]),
         .init(id: "details.console", label: "Finish in the console", tab: .details,
               keywords: ["checklist", "manual", "no api", "age rating",
                          "data safety"]),
@@ -123,14 +130,10 @@ enum FieldIndex {
               tab: .marketing, keywords: ["a/b test", "treatment", "traffic"]),
         .init(id: "marketing.events", label: "In-app events", tab: .marketing,
               keywords: ["live event", "badge", "apple"]),
-        .init(id: "marketing.eula", label: "Licence agreement", tab: .marketing,
-              keywords: ["eula", "terms", "legal", "licence", "license"]),
         .init(id: "marketing.routing", label: "Routing app coverage",
               tab: .marketing, keywords: ["maps", "geojson", "apple"]),
         .init(id: "marketing.nomination", label: "Featuring nomination",
               tab: .marketing, keywords: ["featured", "editorial", "apple"]),
-        .init(id: "marketing.accessibility", label: "Accessibility declaration",
-              tab: .marketing, keywords: ["a11y", "voiceover", "apple"]),
         .init(id: "marketing.appClip", label: "App Clip default experience",
               tab: .marketing, keywords: ["clip", "apple"]),
 

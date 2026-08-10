@@ -94,17 +94,30 @@ import Testing
         }
     }
 
-    /// A folding `Section_` draws its own box. A call site that adds one too
-    /// puts a panel inside a panel, which is the one mistake this component
-    /// documents.
-    @Test func aFoldingSectionIsNotWrappedInASecondBox() throws {
-        let marketing = try marketing()
+    /// A folding `Section_` draws its own box. A call site that wraps its whole
+    /// content in a second one puts a panel inside a panel, which is the one
+    /// mistake this component documents.
+    ///
+    /// The two lists are the ones that carried their own. A card per row inside
+    /// a folding section is a different thing and stays: the events list draws
+    /// one per event, and those are rows and not the section.
+    @Test func aFoldingSectionDoesNotWrapItsContentInASecondBox() throws {
+        #expect(!(try marketing()).contains(".storePanel(padding: 0)"))
+        // The two blocks that moved carry none either.
         let details = try details()
-
-        for source in [marketing, details] {
-            #expect(!source.contains("}.storePanel()"),
-                    "a folding section still carries its own panel")
+        for anchor in ["details.eula", "details.accessibility"] {
+            let call = try #require(sectionCall(for: anchor, in: details))
+            #expect(call.contains("folds: true"))
         }
+    }
+
+    /// A list runs its rows to the edge of its card, so the box it folds into
+    /// adds no inset of its own and the header takes the rows' instead.
+    @Test func aListSectionFoldsWithoutInsettingItsRows() throws {
+        let section = try source("Sources/SuperSubmitter/Design/Section.swift")
+        #expect(section.contains("foldPadding"))
+        #expect(section.contains("headerInset"))
+        #expect((try marketing()).contains("foldPadding: 0"))
     }
 
     /// The text of one `Section_(...)` call, from its name to the brace that
