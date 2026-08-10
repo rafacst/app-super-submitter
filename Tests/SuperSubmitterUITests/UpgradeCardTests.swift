@@ -98,7 +98,7 @@ struct UpgradeCardTests {
             contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/Sidebar.swift"),
             encoding: .utf8)
 
-        #expect(sidebar.contains("Text(\"Send with Pro\")"))
+        #expect(sidebar.contains("Text(\"Get Pro\")"))
         #expect(sidebar.contains("upgradeCardNote"))
         // The label, not the word. The comment above the button still names
         // the copy it replaced, which is the point of the comment.
