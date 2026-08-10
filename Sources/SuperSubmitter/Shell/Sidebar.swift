@@ -88,10 +88,19 @@ struct Sidebar: View {
                 ForEach(SidebarSection.allCases.filter { $0.mode == state.mode }) { section in
                     let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
                     if !rows.isEmpty {
-                        Section(isExpanded: isOpen(section)) {
-                            ForEach(rows) { DestinationRow(destination: $0) }
-                        } header: {
-                            GroupHeader(title: section.title, isOpen: isOpen(section))
+                        if section.showsHeader(in: state.mode) {
+                            Section(isExpanded: isOpen(section)) {
+                                ForEach(rows) { DestinationRow(destination: $0) }
+                            } header: {
+                                GroupHeader(title: section.title, isOpen: isOpen(section))
+                            }
+                        } else {
+                            // No heading, so nothing to press to collapse it,
+                            // and nothing to collapse it away from: it is the
+                            // only group the job has.
+                            Section {
+                                ForEach(rows) { DestinationRow(destination: $0) }
+                            }
                         }
                     }
                 }
