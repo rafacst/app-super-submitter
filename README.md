@@ -117,7 +117,7 @@ service, so store writes still need a plan on your account.
 | --- | --- |
 | `Sources/SubmitKit` | No UI. Every rule in the spec, and each one has a test. Store clients, the planner, the manifest, the runner. |
 | `Sources/SuperSubmitter` | Views only. No logic. |
-| `Tests/` | The suite the release workflow runs before it signs anything. |
+| `Tests/` | The suite. The release workflow runs it beside the release, not in front of it. |
 | `project.yml` | The Xcode project, written by XcodeGen. |
 | `.github/workflows/release.yml` | Test, build, sign, notarize, sign the appcast, publish. |
 
