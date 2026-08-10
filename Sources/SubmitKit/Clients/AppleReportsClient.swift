@@ -137,6 +137,92 @@ public struct AppleReportsClient: Sendable {
         return payload["data"].array.compactMap(Self.parseSegment)
     }
 
+    // MARK: - The bytes
+
+    /// One segment, unpacked to text.
+    ///
+    /// The last call of the feed, and the one it used to stop short of: the
+    /// four reads above could name a segment and nothing ever fetched one, so a
+    /// feed that Apple had filled produced no number in this app.
+    ///
+    /// The URL is Apple's own and signed, so `StoreAPI.download` sends no
+    /// bearer token with it. See the comment there.
+    public func segmentText(_ segment: Segment) async throws -> String {
+        guard let url = segment.url, !url.isEmpty else {
+            throw ConnectionError.invalidResponse
+        }
+        let data = try await api.download(url, path: "analyticsReportSegment")
+        // Apple gzips a segment. A reader that throws on a plain file shows
+        // nothing for a file it could have read.
+        return (try? Gzip.unpackText(data)) ?? String(decoding: data, as: UTF8.self)
+    }
+
+    /// The whole of one instance, in the order Apple splits it.
+    ///
+    /// Every segment after the first repeats the header row, so only the first
+    /// one keeps it. A reader that concatenated them counted the header as a
+    /// row of data once per segment.
+    public func instanceText(instanceID: String) async throws -> String {
+        let parts = try await segments(instanceID: instanceID)
+        var out: [String] = []
+        for (index, segment) in parts.enumerated() {
+            let text = try await segmentText(segment)
+            out.append(index == 0 ? text : Self.dropHeader(text))
+        }
+        return out.joined()
+    }
+
+    // MARK: - What the account actually returns
+
+    /// The columns of a report, read from the file rather than assumed.
+    ///
+    /// The App Store Connect API reference documents the transport of these
+    /// reports and never their contents: it names five categories and no report
+    /// name, no column, and no dimension. So the app reads the header row and
+    /// reports what it found, and it names no column it has not seen.
+    public static func columns(_ text: String) -> [String] {
+        guard let header = text.split(separator: "\n", maxSplits: 1,
+                                      omittingEmptySubsequences: true).first else { return [] }
+        let separator: Character = header.contains("\t") ? "\t" : ","
+        return header.split(separator: separator, omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    /// The columns that could identify one product page experiment treatment.
+    ///
+    /// Nothing in the API reference names such a dimension in any analytics
+    /// report, and `AppStoreVersionExperimentTreatment` carries no id that
+    /// appears in one. So this looks for a column instead of assuming one, and
+    /// an empty answer is the honest report that the account returned none.
+    public static func treatmentColumns(_ columns: [String]) -> [String] {
+        columns.filter {
+            let lowered = $0.lowercased()
+            return lowered.contains("treatment") || lowered.contains("experiment")
+        }
+    }
+
+    /// The reports whose numbers describe the store page, picked by Apple's own
+    /// category rather than by a report name this app invented.
+    public static func engagement(_ reports: [Report]) -> [Report] {
+        reports.filter { $0.category == "APP_STORE_ENGAGEMENT" }
+    }
+
+    /// The newest instance of one granularity.
+    ///
+    /// A report carries a daily, a weekly and a monthly instance at once, and
+    /// the monthly one always has the latest `processingDate`. Picking the
+    /// newest of all three answered a nine-day question with last month.
+    public static func newest(_ instances: [Instance], granularity: String) -> Instance? {
+        instances
+            .filter { $0.granularity == granularity }
+            .max { ($0.processingDate ?? "") < ($1.processingDate ?? "") }
+    }
+
+    private static func dropHeader(_ text: String) -> String {
+        guard let newline = text.firstIndex(of: "\n") else { return "" }
+        return String(text[text.index(after: newline)...])
+    }
+
     // MARK: - The sales and the finance reports
 
     /// One sales report, unpacked to text.

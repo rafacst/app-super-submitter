@@ -19,6 +19,14 @@ struct ReportsPanel: View {
     @State private var reports: [String: [AppleReportsClient.Report]] = [:]
     @State private var confirmingRequest = false
     @State private var stopping: AppleReportsClient.Feed?
+    /// What one report turned out to hold, keyed by its id. See `reportRow`.
+    @State private var samples: [String: ReportSample] = [:]
+
+    struct ReportSample {
+        var note: String
+        var columns: [String] = []
+        var rows: [[String]] = []
+    }
 
     @State private var frequency = "DAILY"
     @State private var salesRows: [[String]] = []
@@ -103,17 +111,45 @@ struct ReportsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(reports[feed.id] ?? []) { report in
-                HStack(spacing: 8) {
-                    Text(report.name).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
-                    Spacer(minLength: 8)
-                    if let category = report.category {
-                        Text(AppleWords.title(category))
-                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                    }
-                }
+                reportRow(report)
             }
         }
         .padding(.vertical, 5)
+    }
+
+    /// One report, and what it actually carries.
+    ///
+    /// The API reference names five categories and no column, so the report
+    /// name alone says nothing about what is in the file. The button fetches
+    /// the newest daily instance and prints the header row that came back.
+    private func reportRow(_ report: AppleReportsClient.Report) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(report.name).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                Spacer(minLength: 8)
+                if let category = report.category {
+                    Text(AppleWords.title(category))
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                }
+                QuietButton(title: "Columns") { loadColumns(report) }
+                    .disabled(busy)
+            }
+            if let sample = samples[report.id] {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(sample.note)
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !sample.columns.isEmpty {
+                        Text(sample.columns.joined(separator: " · "))
+                            .font(Theme.mono(10)).foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                    if !sample.rows.isEmpty { table(sample.rows) }
+                }
+                .padding(.leading, 10)
+            }
+        }
     }
 
     // MARK: - The sales report
@@ -224,6 +260,40 @@ struct ReportsPanel: View {
                 reports[feed.id] = try? await state.appleReports().reports(feedID: feed.id)
             }
             loaded = true
+        }
+    }
+
+    /// Fetches one report and says what came back.
+    ///
+    /// It names no column it has not seen. If a column identifies a product
+    /// page experiment treatment, the line says which one; if none does, it
+    /// says that, because the reference documents no such dimension and the
+    /// only honest answer is the one the account gave.
+    private func loadColumns(_ report: AppleReportsClient.Report) {
+        busy = true
+        samples[report.id] = ReportSample(note: "Fetching…")
+        Task {
+            do {
+                guard let sample = try await state.appleAnalyticsSample(reportID: report.id) else {
+                    samples[report.id] = ReportSample(
+                        note: "Apple has produced no daily instance of this report yet. The first one appears a day or two after the feed starts.")
+                    busy = false
+                    return
+                }
+                let treatment = AppleReportsClient.treatmentColumns(sample.columns)
+                let verdict = treatment.isEmpty
+                    ? "No column here identifies a product page experiment treatment."
+                    : "Treatment column: \(treatment.joined(separator: ", "))."
+                samples[report.id] = ReportSample(
+                    note: "\(sample.columns.count) columns, processed \(sample.date). \(verdict)",
+                    columns: sample.columns, rows: sample.rows)
+            } catch ConnectionError.http(404, _) {
+                samples[report.id] = ReportSample(
+                    note: "Apple holds no instance of this report yet.")
+            } catch {
+                samples[report.id] = ReportSample(note: error.localizedDescription)
+            }
+            busy = false
         }
     }
 
