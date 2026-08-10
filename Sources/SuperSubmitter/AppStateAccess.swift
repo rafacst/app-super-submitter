@@ -632,10 +632,10 @@ extension AppState {
     /// what they are holding and what the button is for.
     var upgradeCardLine: String {
         guard let plan, plan.writeCount > 0 else {
-            return "Ship to both stores from here"
+            return "One pass to both stores"
         }
         let count = plan.writeCount
-        return "\(count) \(count == 1 ? "write" : "writes") ready to send"
+        return "\(count) \(count == 1 ? "write" : "writes"), one pass"
     }
 
     /// The promise under the headline.
@@ -645,7 +645,35 @@ extension AppState {
     /// that only mentions the free half when it is convenient is an offer that
     /// reads as a trial about to end.
     var upgradeCardNote: String {
-        "Sending needs Pro. Everything else stays free."
+        "Everything up to the send is free. Pro is the send."
+    }
+
+    /// The cheapest plan on offer, in words, or nil before the price list has
+    /// arrived.
+    ///
+    /// A price is the one fact that turns an offer into a decision, so the card
+    /// carries it the moment the server answers and says nothing at all before
+    /// then. No monthly equivalent of a yearly plan: the amount shown is the
+    /// amount charged.
+    var upgradePriceLine: String? {
+        guard let plans = billingPlans,
+              let cheapest = plans.plans.filter(\.available).min(by: { $0.amount < $1.amount })
+        else { return nil }
+        let money = Self.money(cheapest.amount, plans.currency)
+        switch cheapest.interval {
+        case "month": return "From \(money) a month."
+        case "year": return "From \(money) a year."
+        default: return "\(money), once."
+        }
+    }
+
+    /// Stripe's smallest currency unit, as a person reads it.
+    static func money(_ minor: Int, _ currency: String) -> String {
+        let value = Decimal(minor) / 100
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        return formatter.string(from: value as NSDecimalNumber) ?? "\(value) \(currency)"
     }
 
     var entitlementLabel: String {
