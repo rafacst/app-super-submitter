@@ -22,6 +22,28 @@ import Testing
         try String(contentsOf: Self.root.appending(path: path), encoding: .utf8)
     }
 
+    /// The switch uses the sidebar's own two words.
+    ///
+    /// "Publishing" and "Managing" named the same two jobs in a longer voice
+    /// than every other label in the column, and the groups under the switch
+    /// say "Publish", "Send" and "Manage". One word per job, and the switch
+    /// takes the one the group already uses.
+    @Test func theSwitchIsNamedTheWayTheGroupsAre() {
+        #expect(Mode.publishing.title == "Publish")
+        #expect(Mode.managing.title == "Manage")
+    }
+
+    /// A job with one group needs no heading over it.
+    ///
+    /// The switch names the job two rows above, so a lone "Manage" heading
+    /// under a "Manage" button is the same word twice with nothing between
+    /// them. Publishing has two steps and they still have to be told apart.
+    @Test func aLoneGroupDoesNotRepeatTheSwitch() {
+        #expect(!SidebarSection.manage.showsHeader(in: .managing))
+        #expect(SidebarSection.publish.showsHeader(in: .publishing))
+        #expect(SidebarSection.send.showsHeader(in: .publishing))
+    }
+
     @Test func everyGroupBelongsToOneJob() {
         #expect(SidebarSection.publish.mode == .publishing)
         #expect(SidebarSection.send.mode == .publishing)
