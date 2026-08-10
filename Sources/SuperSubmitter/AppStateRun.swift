@@ -632,9 +632,29 @@ extension AppState {
         return consoleRows.filter { $0.system == system && markedState($0) == .needed }
     }
 
+    /// Why a store may take nothing right now, because Apple is holding the
+    /// version it would go to.
+    ///
+    /// `PENDING_DEVELOPER_RELEASE` is the one state that looks like a wait and
+    /// is not one. Apple has approved the version and is waiting for the
+    /// developer to press go, so holding it back would strand an approved
+    /// version behind a rule written for an unanswered one. `withApple` is the
+    /// unanswered set and does not contain it.
+    func sendBlockedByReview(_ store: Store) -> String? {
+        guard store == .apple, let state = actualState.apple?.versionState,
+              AppleVersionState.withApple.contains(state) else { return nil }
+        return "\(actualState.apple?.versionString ?? "This version") is already with App Store review. A second submission on top of an open one is refused."
+    }
+
     /// One store, one button, one failure. Spec 7.9 and 11.3.
     func release(_ store: Store) async {
         guard releasing == nil else { return }
+        // The gate, and not only the button that draws it. A release reachable
+        // from a keyboard shortcut or a jump has to meet the same rule.
+        if let blocked = sendBlockedByReview(store) {
+            releaseError = blocked
+            return
+        }
         guard requirePaid(.storeRelease, .release) else { return }
         releasing = store
         releaseError = nil
