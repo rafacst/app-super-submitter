@@ -67,6 +67,23 @@ extension AppState {
         return (apple, google, failures)
     }
 
+    /// Whether the newest release moved Play's crash rate, and by how much.
+    ///
+    /// The same metric set the vitals read, split by version code. A rate on
+    /// its own is a number nobody can act on, and this is the sentence that
+    /// makes it one.
+    ///
+    /// ponytail: never run against a real account. See
+    /// `StoreVitalsClient.googleCrashRateByVersion` for what that costs and why
+    /// a wrong answer here shows nothing rather than a wrong number.
+    func googleCrashRateChange() async -> StoreVitalsClient.RateChange? {
+        guard stores.contains(.google), let packageName = googleActionPackage else { return nil }
+        let client = StoreVitalsClient(api: readOnlyAPI())
+        guard let rates = try? await client.googleCrashRateByVersion(packageName: packageName)
+        else { return nil }
+        return StoreVitalsClient.crashRateChange(rates)
+    }
+
     // MARK: - Xcode Cloud
 
     /// The Xcode Cloud workflows that build this app.
