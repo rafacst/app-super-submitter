@@ -167,12 +167,73 @@ struct MarketingTab: View {
                     index: index, locale: state.locale)
                     .limited(to: MarketingLimits.customProductPagePromotionalText))
             }
-            // The pictures the row counts. The manifest holds them per locale
-            // and per device class and the apply uploads them, and no control
-            // here ever drew one, so the raw YAML editor was the only way in.
-            Text("The screenshots of this page live under its locale in store.yaml, one list per device class. The apply uploads them.")
-                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                .fixedSize(horizontal: false, vertical: true)
+            pageScreenshots(index: index)
+        }
+    }
+
+    /// The pictures a page shows, and the way to the tab that holds them.
+    ///
+    /// Apple's `appCustomProductPageLocalizations` carries an
+    /// `appScreenshotSets` relationship and the apply has always uploaded to
+    /// it. The manifest has always held the paths. No control ever drew one, so
+    /// the only way to give a page its own screenshots was the raw YAML editor.
+    ///
+    /// Nothing here is the page inheriting the default product page. That is
+    /// what an empty list has always meant to the apply, which uploads nothing
+    /// and leaves Apple showing what the page already shows.
+    private func pageScreenshots(index: Int) -> some View {
+        let held = state.customProductPageScreenshots(index: index, locale: state.locale)
+        let sizes = held.keys.sorted()
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Text("Screenshots, \(state.locale)")
+                    .font(Theme.font(size: 11.5, weight: .medium))
+                Spacer(minLength: 8)
+                if held.isEmpty {
+                    QuietButton(title: "Take the App Store screenshots") {
+                        state.takeMediaScreenshots(intoPage: index, locale: state.locale)
+                    }
+                } else {
+                    QuietButton(title: "Take them again") {
+                        state.takeMediaScreenshots(intoPage: index, locale: state.locale)
+                    }
+                    QuietButton(title: "Clear") {
+                        state.clearPageScreenshots(index: index, locale: state.locale)
+                    }
+                }
+                QuietButton(title: "Open Media") { state.selectedTab = .media }
+            }
+            if held.isEmpty {
+                Text("This page inherits the default product page. Take the App Store screenshots to start from them, then swap the ones this page should show.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(sizes, id: \.self) { size in
+                    pageScreenshotRow(index: index, size: size, paths: held[size] ?? [])
+                }
+            }
+        }
+    }
+
+    /// One device class of one page: what it shows, and the way to change it.
+    private func pageScreenshotRow(index: Int, size: String, paths: [String]) -> some View {
+        HStack(spacing: 8) {
+            Text(Manifest.DeviceClass(rawValue: size)?.label ?? size)
+                .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                .frame(width: Theme.scaled(110), alignment: .leading)
+            ForEach(paths.prefix(6), id: \.self) { path in
+                thumbnail(path)
+            }
+            if paths.count > 6 {
+                Text(verbatim: "+\(paths.count - 6)")
+                    .font(Theme.mono(10)).foregroundStyle(Theme.text3)
+            }
+            Spacer(minLength: 8)
+            Button(role: .destructive) {
+                state.setPageScreenshots(index: index, locale: state.locale,
+                                         device: size, paths: [])
+            } label: { Image(systemName: "trash") }
+            .controlSize(.small)
         }
     }
 

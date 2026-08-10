@@ -16,14 +16,17 @@ struct MediaTab: View {
     /// would leave a stale line behind in the group the pointer left.
     @State private var dropTarget: String?
 
+    /// The sizes this app's stores take, in the order the tab draws them. The
+    /// words come from `DeviceClass.label`, so the Marketing tab's page rows
+    /// call a size what this tab calls it.
     private var groups: [(String, Manifest.DeviceClass)] {
-        var values: [(String, Manifest.DeviceClass)] = [("Phone", .phone)]
-        if state.stores.contains(.google) { values.append(("Small tablet", .tablet7)) }
-        values.append(("Large tablet", .tablet10))
-        if state.stores.contains(.apple) { values.append(("Desktop", .desktop)) }
-        values.append(contentsOf: [("Watch", .watch), ("TV", .tv)])
-        if state.stores.contains(.apple) { values.append(("Vision", .vision)) }
-        return values
+        var values: [Manifest.DeviceClass] = [.phone]
+        if state.stores.contains(.google) { values.append(.tablet7) }
+        values.append(.tablet10)
+        if state.stores.contains(.apple) { values.append(.desktop) }
+        values.append(contentsOf: [.watch, .tv])
+        if state.stores.contains(.apple) { values.append(.vision) }
+        return values.map { ($0.label, $0) }
     }
 
     /// The stores that take a device class.
