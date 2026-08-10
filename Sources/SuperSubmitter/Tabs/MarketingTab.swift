@@ -183,7 +183,8 @@ struct MarketingTab: View {
         return Section_("Product page experiments", icon: "flask.fill", tint: Theme.purple,
                         anchor: "marketing.experiments") {
             VStack(spacing: 0) {
-                listHeader(count: items.isEmpty ? "" : "\(items.count)",
+                listHeader(count: items.isEmpty
+                               ? "" : "\(items.count) \(items.count == 1 ? "experiment" : "experiments")",
                            action: "Add an experiment") { state.addExperiment() }
                 if items.isEmpty {
                     emptyLine("No experiment yet. An experiment shows a treatment to a share of the people who reach your page.")
@@ -250,22 +251,26 @@ struct MarketingTab: View {
     /// has not been given. The Account tab fetches a report and prints the
     /// columns the account really returned.
     private func experimentResult(_ experiment: Manifest.Marketing.Experiment) -> some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            ForEach(["Control"] + experiment.treatments.map(\.name), id: \.self) { name in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(name.isEmpty ? "Treatment" : name)
-                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
-                        .lineLimit(1)
-                    Capsule().fill(Theme.sep2).frame(height: 5)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .bottom, spacing: 10) {
+                ForEach(["Control"] + experiment.treatments.map(\.name), id: \.self) { name in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(name.isEmpty ? "Treatment" : name)
+                            .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                            .lineLimit(1)
+                        Capsule().fill(Theme.sep2).frame(height: 5)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        .overlay(alignment: .trailing) {
-            Text("App Store Connect holds the result")
-                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                .padding(.leading, 8)
-                .background(Theme.raised)
+            // Its own line. As a trailing overlay it was drawn on top of the
+            // last treatment's name, which is the one thing on the row that
+            // cannot be guessed from the rest of it.
+            HStack(spacing: 6) {
+                Text("Apple publishes no per-treatment numbers. App Store Connect holds the result.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                Spacer(minLength: 0)
+            }
         }
     }
 
