@@ -54,33 +54,6 @@ import Testing
         #expect(state.manifest.review?.usesNonExemptEncryption == nil)
     }
 
-    @Test func theQuestionBlocksTheSendUntilItIsAnswered() {
-        var manifest = Manifest()
-        #expect(ReviewInfoTab.blocksTheSend(manifest: manifest, actual: ActualState(),
-                                            stores: [.apple, .google]))
-
-        manifest.review = Manifest.Review(usesNonExemptEncryption: false)
-        #expect(!ReviewInfoTab.blocksTheSend(manifest: manifest, actual: ActualState(),
-                                             stores: [.apple, .google]))
-    }
-
-    /// `ITSAppUsesNonExemptEncryption` in the build answers it too, and the
-    /// read reports what the build carried. The card must not ask again.
-    @Test func aBuildThatCarriesTheFlagAnswersItForTheManifest() {
-        var actual = ActualState()
-        var apple = ActualState.Apple()
-        apple.buildUsesNonExemptEncryption = false
-        actual.apple = apple
-
-        #expect(!ReviewInfoTab.blocksTheSend(manifest: Manifest(), actual: actual,
-                                             stores: [.apple]))
-    }
-
-    @Test func aGoogleOnlyAppIsNeverBlockedByApplesQuestion() {
-        #expect(!ReviewInfoTab.blocksTheSend(manifest: Manifest(), actual: ActualState(),
-                                             stores: [.google]))
-    }
-
     // MARK: - What the next version inherits
 
     /// Store policy, not an endpoint: Apple carries the review detail into the
@@ -140,13 +113,9 @@ import Testing
 
     // MARK: - Where the controls ended up
 
-    @Test func theCardAndTheTwoColumnsAreOnTheTab() throws {
+    @Test func theTwoColumnsAreOnTheTab() throws {
         let tab = try source("Sources/SuperSubmitter/Tabs/ReviewInfoTab.swift")
 
-        #expect(tab.contains("Export compliance"))
-        #expect(tab.contains("Uses no non-exempt encryption"))
-        #expect(tab.contains("It does use encryption"))
-        #expect(tab.contains("Blocks the send"))
         // The panel is named for what it is, because the row inside it is
         // already called "App access, the reviewer credentials" and a title
         // over it saying "App access" is the same words twice.
@@ -154,16 +123,37 @@ import Testing
         #expect(tab.contains("review.console"))
         #expect(tab.contains("App access"))
         #expect(tab.contains("Copy the demo account"))
-        // The switch names the move, not the state it is already in. One
-        // wording for one meaning: the Details tab says the same two words.
-        #expect(tab.contains("Split by store"))
-        #expect(tab.contains("Merge the columns"))
-        // The declaration paperwork came with the answer that owes it.
-        #expect(tab.contains("struct ExportCompliance"))
         // Every field the tab already held is still on it.
         #expect(tab.contains("review.contact"))
         #expect(tab.contains("review.demoAccount"))
         #expect(tab.contains("review.notes"))
+    }
+
+    /// Merged and side by side drew the same boxes in a different order.
+    ///
+    /// The Details switch earns its place: merged, a shared field is one box
+    /// instead of the same sentence twice. Here the two columns hold different
+    /// things, so merging only stacked them, and a switch between two spellings
+    /// of one screen is a control that answers nothing.
+    @Test func thereIsNoSwitchBetweenTwoSpellingsOfOneScreen() throws {
+        let tab = try source("Sources/SuperSubmitter/Tabs/ReviewInfoTab.swift")
+        let state = try source("Sources/SuperSubmitter/AppState.swift")
+
+        #expect(!tab.contains("reviewMerged"))
+        #expect(!state.contains("reviewMerged"))
+        #expect(!tab.contains("Merge the columns"))
+        // Two stores still stand side by side, and one store still stands alone.
+        #expect(tab.contains("state.stores.count > 1"))
+    }
+
+    /// Apple asks the export compliance question once per build, so it belongs
+    /// on the tab that makes the build and not on the one that describes it.
+    @Test func theEncryptionQuestionIsAskedOnTheBuildTab() throws {
+        let tab = try source("Sources/SuperSubmitter/Tabs/ReviewInfoTab.swift")
+
+        #expect(!tab.contains("Export compliance"))
+        #expect(!tab.contains("struct ExportCompliance"))
+        #expect(!tab.contains("blocksTheSend"))
     }
 
     /// The console row has always said "answer it on the Review info tab". The
