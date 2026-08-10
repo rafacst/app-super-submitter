@@ -101,19 +101,6 @@ struct RootView: View {
                 .documentURL(state.manifestURL)
         }
         // On the split view, and not inside the detail column.
-        //
-        // It used to hang off the content of the detail column, which is where
-        // it reads naturally: the inspector belongs to the Details tab. But an
-        // inspector inside a column grows that column by its own width, so the
-        // split view laid three columns out wider than the window and pushed
-        // the sidebar off the left edge until the resize caught up. A third
-        // column of the split view divides the width it already has.
-        .inspector(isPresented: Binding(
-            get: { state.selectedTab == .details && detailsInspectorOpen },
-            set: { if state.selectedTab == .details { detailsInspectorOpen = $0 } })) {
-            DetailsInspector()
-                .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
-        }
         .navigationSplitViewStyle(.balanced)
         // The title bar takes its colour from the columns underneath it, and
         // not from one fill laid over all three.
@@ -187,10 +174,46 @@ private struct ContentArea: View {
     /// carried the same divider as a tab of forty fields. The rule now says
     /// what a rule is for: there is more above.
     @State private var scrolled = false
+    /// Whether the reference column is showing. It outlives a relaunch, the
+    /// way every inspector on the Mac does.
+    @AppStorage("detailsInspector") private var detailsInspectorOpen = true
     /// For the jump-to-field scroll, which is a command and not a state flag.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The page, and the reference column beside it.
+    ///
+    /// Drawn by hand rather than with `.inspector`, because both places the
+    /// system one can hang move something the developer did not ask to move.
+    /// Inside the detail column it grew that column by its own width, so the
+    /// split view laid all three out wider than the window and the sidebar
+    /// slid off the left edge. On the split view it stopped doing that and
+    /// started doing the other thing AppKit does for an inspector: it widened
+    /// the *window* to make room and narrowed it again on the way out, so
+    /// showing reference material resized the window.
+    ///
+    /// A column of this view's own takes its width from the page beside it and
+    /// from nothing else. The window never moves.
     var body: some View {
+        HStack(spacing: 0) {
+            page
+            if showsInspector {
+                HStack { Divider() }.ignoresSafeArea()
+                DetailsInspector()
+                    .frame(width: 260)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .motion(.easeInOut(duration: 0.22), value: showsInspector)
+        .clipped()
+    }
+
+    /// Whether the reference column is showing. Details only: it describes
+    /// that tab and nothing else.
+    private var showsInspector: Bool {
+        state.selectedTab == .details && detailsInspectorOpen
+    }
+
+    private var page: some View {
         VStack(spacing: 0) {
             // No band on the entry screen. It carries no title, no question
             // and no controls there, so it drew 64 points of empty glass over
@@ -228,6 +251,7 @@ private struct ContentArea: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
         .background(Theme.content)
         .motion(.smooth(duration: 0.28), value: state.showsEntryScreen)
         // A new tab starts at the top, so the rule starts off.

@@ -126,16 +126,18 @@ private func detailsReviewSource(_ relativePath: String) throws -> String {
     #expect(panel.contains("Choose visible app"))
 }
 
-/// The inspector is a column of the window, not a column inside the tab.
+/// The reference column moves nothing but itself.
 ///
-/// Opening it from inside the detail column grew that column by the width of
-/// the inspector, so the split view laid all three out wider than the window
-/// and the sidebar slid off the left edge until the animation settled.
-@Test func theInspectorIsAColumnOfTheWindow() throws {
+/// `.inspector` resizes something the developer did not ask to resize wherever
+/// it hangs: inside the detail column it pushed the sidebar off the left edge,
+/// and on the split view it widened the window itself. The column is drawn by
+/// hand instead, so showing it takes width from the page and leaves the window
+/// where it is.
+@Test func theReferenceColumnNeverResizesTheWindow() throws {
     let root = try detailsReviewSource("Sources/SuperSubmitter/Shell/RootView.swift")
-    let start = try #require(root.range(of: "private struct ContentArea"))
-    let contentArea = String(root[start.lowerBound...])
 
-    #expect(!contentArea.contains(".inspector(isPresented:"))
-    #expect(root.contains(".inspector(isPresented:"))
+    #expect(!root.contains(".inspector(isPresented:"))
+    #expect(!root.contains("inspectorColumnWidth"))
+    #expect(root.contains("private var showsInspector"))
+    #expect(root.contains("DetailsInspector()"))
 }
