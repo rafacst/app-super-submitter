@@ -71,7 +71,7 @@ struct ReviewInfoTab: View {
                 Text(note).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
             }
             if state.stores.count > 1 {
-                QuietButton(title: state.reviewMerged ? "Side by side" : "Merged") {
+                QuietButton(title: state.reviewMerged ? "Split by store" : "Merge the columns") {
                     state.reviewMerged.toggle()
                 }
             }
@@ -250,8 +250,11 @@ struct ReviewInfoTab: View {
     private var googleColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             columnHeader(.google)
-            Section_("App access", icon: "arrow.up.forward.square.fill", tint: Theme.yellow,
-                     anchor: "review.appAccess") {
+            // Named for what it is, and not for the first row in it. The row
+            // is already called "App access, the reviewer credentials", and a
+            // title over it saying "App access" is the same words twice.
+            Section_("Console steps", icon: "arrow.up.forward.square.fill", tint: Theme.yellow,
+                     anchor: "review.console") {
                 VStack(spacing: 0) {
                     let rows = Self.consoleSteps(in: state.consoleRows)
                     if rows.isEmpty {
