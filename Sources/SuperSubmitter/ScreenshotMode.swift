@@ -170,6 +170,37 @@ enum ScreenshotMode {
         #endif
     }
 
+    /// Whether the run wants a made-up price list.
+    static var showsMockPlans: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("--mock-plans")
+        #else
+        return false
+        #endif
+    }
+
+    /// A price list, so the offer can be looked at before a licensing service
+    /// exists to answer for one.
+    ///
+    /// `loadBillingPlans` asks a real server. A build with no `SUPABASE_URL`
+    /// has none, so the Account tab draws "The plans could not be loaded"
+    /// forever and the one screen whose job is to sell the app is the one
+    /// screen that cannot be reviewed.
+    ///
+    /// ponytail: the amounts are invented and this comment is the only place
+    /// that says so. Nothing reads them but the screen: no checkout opens, and
+    /// `loadBillingPlans` returns early in an unconfigured build, so the seed
+    /// survives the tab's own `.task`.
+    @MainActor
+    static func seedPlans(_ state: AppState) {
+        state.billingPlans = BillingPlans(currency: "USD", plans: [
+            BillingPlan(id: "monthly", amount: 900, interval: "month", available: true),
+            BillingPlan(id: "annual", amount: 7900, interval: "year", available: true),
+            BillingPlan(id: "lifetime", amount: 19900, interval: nil, available: true),
+        ])
+        state.selectedPlan = "annual"
+    }
+
     /// Puts App Store review in charge of the open version, so the screen that
     /// produces can be photographed.
     ///
@@ -218,6 +249,7 @@ enum ScreenshotMode {
         // After the linking and before the screen: the seed reads the manifest
         // that linking loaded, and every tab below draws from what it leaves.
         if let reviewState { seedReview(state, versionState: reviewState) }
+        if showsMockPlans { seedPlans(state) }
         guard let screen else {
             // A demo run lands on the app it linked, not on the welcome card.
             state.showOnboarding = false

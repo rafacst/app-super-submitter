@@ -84,9 +84,16 @@ struct AccountTab: View {
                 Text(state.upgradeCardLine)
                     .font(Theme.font(size: 17, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(state.upgradeCardNote)
-                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 7) {
+                    Text(state.upgradeCardNote)
+                        .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let price = state.upgradePriceLine {
+                        Text(price)
+                            .font(Theme.font(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                    }
+                }
             }
             Spacer(minLength: 12)
             // The same route the gates and the sidebar use, so there is one
@@ -95,7 +102,7 @@ struct AccountTab: View {
                 HStack(spacing: 5) {
                     Image(systemName: "paperplane.fill")
                         .font(Theme.font(size: 11, weight: .semibold))
-                    Text("Unlock sending")
+                    Text("Send with Pro")
                         .font(Theme.font(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(Theme.accentText)

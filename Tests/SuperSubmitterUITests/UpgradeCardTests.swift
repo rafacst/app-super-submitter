@@ -61,7 +61,7 @@ struct UpgradeCardTests {
         // The one thing that is actually withheld, and nothing else. A card
         // that implied builds or plans were paid would be selling something
         // this app gives away.
-        #expect(state.upgradeCardNote.lowercased().contains("sending"))
+        #expect(state.upgradeCardNote.lowercased().contains("send"))
         #expect(state.upgradeCardNote.lowercased().contains("free"))
     }
 
@@ -86,7 +86,7 @@ struct UpgradeCardTests {
         state.plan = plan
 
         #expect(state.upgradeCardLine.contains("39"))
-        #expect(state.upgradeCardLine.lowercased().contains("ready to send"))
+        #expect(state.upgradeCardLine.lowercased().contains("one pass"))
     }
 
     /// The button is a verb. "See the plans" invites browsing; a developer who
@@ -98,7 +98,7 @@ struct UpgradeCardTests {
             contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/Sidebar.swift"),
             encoding: .utf8)
 
-        #expect(sidebar.contains("Text(\"Unlock sending\")"))
+        #expect(sidebar.contains("Text(\"Send with Pro\")"))
         #expect(sidebar.contains("upgradeCardNote"))
         // The label, not the word. The comment above the button still names
         // the copy it replaced, which is the point of the comment.

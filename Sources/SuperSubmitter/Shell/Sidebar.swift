@@ -588,6 +588,16 @@ private struct UpgradeCard: View {
                 // one line and truncated it. This asks for the row's width
                 // first, so the sentence wraps instead of ending in an ellipsis.
                 .frame(maxWidth: .infinity, alignment: .leading)
+            // The price, the moment the server has answered for one. It is the
+            // fact that turns an offer into a decision, and a card that asks
+            // for money without naming an amount asks the reader to go and
+            // find out.
+            if let price = state.upgradePriceLine {
+                Text(price)
+                    .font(Theme.font(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.text2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             // The route the gates already use. It does not introduce a second
             // purchase path.
             // A verb, and the verb the headline just named. "See the plans"
@@ -597,7 +607,7 @@ private struct UpgradeCard: View {
                 HStack(spacing: 5) {
                     Image(systemName: "paperplane.fill")
                         .font(Theme.font(size: 10, weight: .semibold))
-                    Text("Unlock sending")
+                    Text("Send with Pro")
                         .font(Theme.font(size: 12, weight: .semibold))
                 }
                 .foregroundStyle(Theme.accentText)
