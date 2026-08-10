@@ -243,9 +243,27 @@ struct PlanTab: View {
                     QuietButton(title: "Read again") { Task { await state.readStores() } }
                 }
             }
+            // The rule under the title, and one between every pair of steps.
+            // Five captions of five different lengths ran edge to edge with
+            // nothing between them, so "3 artifacts named, none found" and the
+            // number of the step after it read as one sentence, and the eye had
+            // to find the column boundaries from the numbers alone.
+            Hairline()
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 0) { steps }
-                VStack(alignment: .leading, spacing: 9) { steps }
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(stepList) { entry in
+                        // `Divider` in an `HStack` is the vertical rule, sized
+                        // to the tallest column by AppKit rather than by a
+                        // guess at how many lines a caption takes.
+                        if entry.number > 1 {
+                            Divider().overlay(Theme.sep).padding(.horizontal, 10)
+                        }
+                        step(entry)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 11) {
+                    ForEach(stepList) { entry in step(entry) }
+                }
             }
         }
         .padding(.horizontal, 15).padding(.vertical, 13)
@@ -255,38 +273,49 @@ struct PlanTab: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
     }
 
-    @ViewBuilder
-    private var steps: some View {
-        step(1, "Describe", RunwayStep.describe(state), tab: .details)
-        step(2, "Build", RunwayStep.build(state), tab: .build)
-        step(3, "Plan", RunwayStep.plan(state), tab: nil)
-        step(4, "Apply", RunwayStep.apply(state), tab: nil)
-        step(5, "Release", RunwayStep.release(state), tab: .release)
+    /// The five steps, as data.
+    ///
+    /// It was a `@ViewBuilder`, which hands back one opaque value: nothing can
+    /// count it, and nothing can put a rule between its parts. Two layouts draw
+    /// this list and both want separators, so the list is data and the drawing
+    /// is the loop.
+    private var stepList: [RunwayEntry] {
+        [RunwayEntry(number: 1, title: "Describe",
+                     caption: RunwayStep.describe(state), tab: .details),
+         RunwayEntry(number: 2, title: "Build",
+                     caption: RunwayStep.build(state), tab: .build),
+         RunwayEntry(number: 3, title: "Plan",
+                     caption: RunwayStep.plan(state), tab: nil),
+         RunwayEntry(number: 4, title: "Apply",
+                     caption: RunwayStep.apply(state), tab: nil),
+         RunwayEntry(number: 5, title: "Release",
+                     caption: RunwayStep.release(state), tab: .release)]
     }
 
     /// One step. The three that own a tab open it; Plan and Apply are this
     /// screen, so pressing them would go nowhere.
     @ViewBuilder
-    private func step(_ number: Int, _ title: String, _ caption: String,
-                      tab: Tab?) -> some View {
-        let here = number == 3 || number == 4
-        let body = VStack(alignment: .leading, spacing: 2) {
+    private func step(_ entry: RunwayEntry) -> some View {
+        let here = entry.number == 3 || entry.number == 4
+        let body = VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
-                Text(verbatim: "\(number)")
+                Text(verbatim: "\(entry.number)")
                     .font(Theme.mono(10.5))
                     .foregroundStyle(here ? Theme.accentText : Theme.text3)
                     .frame(width: 15, height: 15)
                     .background(here ? Theme.accent : Theme.sunken, in: Circle())
-                Text(title).font(Theme.font(size: 12.5, weight: here ? .semibold : .medium))
+                Text(entry.title)
+                    .font(Theme.font(size: 12.5, weight: here ? .semibold : .medium))
                     .foregroundStyle(here ? Theme.text : Theme.text2)
             }
-            Text(caption).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+            Text(entry.caption).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, 10)
+        // The whole column, so the rules beside it run the full height and the
+        // one caption that takes two lines does not shorten its own divider.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-        if let tab {
+        if let tab = entry.tab {
             Button { state.selectedTab = tab } label: { body.contentShape(.rect) }
                 .buttonStyle(.plain)
                 .help("Open \(tab.title)")
@@ -939,6 +968,16 @@ private struct StatCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(value) \(detail.map { "\(label), \($0)" } ?? label)")
     }
+}
+
+/// One step of the runway across the top of the tab.
+private struct RunwayEntry: Identifiable {
+    let number: Int
+    let title: String
+    let caption: String
+    let tab: Tab?
+
+    var id: Int { number }
 }
 
 private struct ValidationRow: View {
