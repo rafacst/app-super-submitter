@@ -631,11 +631,15 @@ extension AppState {
     /// developer with thirty-nine writes waiting reads the count and knows both
     /// what they are holding and what the button is for.
     var upgradeCardLine: String {
-        guard let plan, plan.writeCount > 0 else {
-            return "One pass to both stores"
-        }
-        let count = plan.writeCount
-        return "\(count) \(count == 1 ? "write" : "writes"), one pass"
+        let count = plan?.writeCount ?? 0
+        let lead = count > 0
+            ? "\(count) \(count == 1 ? "write" : "writes"), one pass"
+            : "Both stores, one pass"
+        // The price belongs in the headline, not under it. A buyer comparing
+        // tools asks the cost first, and a card that makes them press a button
+        // to find out has already lost the comparison.
+        guard let price = upgradePriceLine else { return lead }
+        return "\(lead), \(price)"
     }
 
     /// The promise under the headline.
@@ -645,7 +649,7 @@ extension AppState {
     /// that only mentions the free half when it is convenient is an offer that
     /// reads as a trial about to end.
     var upgradeCardNote: String {
-        "Everything up to the send is free. Pro is the send."
+        "Everything except the send is free, forever."
     }
 
     /// The cheapest plan on offer, in words, or nil before the price list has
@@ -661,9 +665,9 @@ extension AppState {
         else { return nil }
         let money = Self.money(cheapest.amount, plans.currency)
         switch cheapest.interval {
-        case "month": return "From \(money) a month."
-        case "year": return "From \(money) a year."
-        default: return "\(money), once."
+        case "month": return "from \(money) a month"
+        case "year": return "from \(money) a year"
+        default: return "\(money) once"
         }
     }
 
