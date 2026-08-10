@@ -569,11 +569,19 @@ private struct UpgradeCard: View {
     /// window already wears. A call to action is one line and one button: the
     /// line says what is withheld, the button opens the plans.
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
+            // The headline carries the developer's own work, so it is the
+            // loudest thing on the card. The promise under it is quiet and
+            // never absent: see `AppState.upgradeCardNote`.
             Text(line)
-                .font(Theme.font(size: 11))
-                .foregroundStyle(Theme.text2)
-                .lineSpacing(2)
+                .font(Theme.font(size: 12.5, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(state.upgradeCardNote)
+                .font(Theme.font(size: 10.5))
+                .foregroundStyle(Theme.text3)
+                .lineSpacing(1)
                 .fixedSize(horizontal: false, vertical: true)
                 // A `List` row proposes its own width to a `Text` before it
                 // proposes the column's, and `fixedSize` then held the line at
@@ -582,17 +590,24 @@ private struct UpgradeCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             // The route the gates already use. It does not introduce a second
             // purchase path.
+            // A verb, and the verb the headline just named. "See the plans"
+            // invites browsing, and a developer holding a release does not want
+            // a price list, they want the send.
             Button { state.openPaywall(.settings) } label: {
-                Text("See the plans")
-                    .font(Theme.font(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.accentText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .background(Theme.accentFill, in: RoundedRectangle(cornerRadius: 7))
-                    .contentShape(.rect)
+                HStack(spacing: 5) {
+                    Image(systemName: "paperplane.fill")
+                        .font(Theme.font(size: 10, weight: .semibold))
+                    Text("Unlock sending")
+                        .font(Theme.font(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(Theme.accentText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(Theme.accentFill, in: RoundedRectangle(cornerRadius: 7))
+                .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(line)
+            .accessibilityHint(state.upgradeCardNote)
         }
         .padding(11)
         // The one place a tint is allowed to be decoration, because the tint is

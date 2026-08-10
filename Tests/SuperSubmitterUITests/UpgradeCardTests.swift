@@ -98,8 +98,10 @@ struct UpgradeCardTests {
             contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/Sidebar.swift"),
             encoding: .utf8)
 
-        #expect(sidebar.contains("Unlock sending"))
+        #expect(sidebar.contains("Text(\"Unlock sending\")"))
         #expect(sidebar.contains("upgradeCardNote"))
-        #expect(!sidebar.contains("See the plans"))
+        // The label, not the word. The comment above the button still names
+        // the copy it replaced, which is the point of the comment.
+        #expect(!sidebar.contains("Text(\"See the plans\")"))
     }
 }

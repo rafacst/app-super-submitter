@@ -20,6 +20,14 @@ struct AccountTab: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 if let reason = state.paywallReason { reasonCard(reason) }
+                // The offer first, while there is one to make.
+                //
+                // The tab opened with an account row, then a build warning,
+                // then a loader that had failed, and the answer to the one
+                // question a developer opens this tab with was the fourth thing
+                // on it. Who I am signed in as is the mechanism; what the money
+                // buys is the reason.
+                if !state.isPaid { offer }
                 identity
                 if !state.accountServiceReady {
                     WarningNote(AppState.noAccountService)
@@ -63,6 +71,47 @@ struct AccountTab: View {
     static let column: CGFloat = 820
 
     private var signedIn: Bool { state.accountEmail != nil }
+
+    /// The one sentence this tab exists to say, over the button that acts on it.
+    ///
+    /// It is the sidebar card's promise at full size, and it says the free half
+    /// out loud: an offer that only mentions the free tier when convenient
+    /// reads as a trial about to end. The count is the developer's own work, so
+    /// a release waiting to go out says so here rather than in the abstract.
+    private var offer: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(state.upgradeCardLine)
+                    .font(Theme.font(size: 17, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(state.upgradeCardNote)
+                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            // The same route the gates and the sidebar use, so there is one
+            // purchase path in the app and not three.
+            Button { state.openPaywall(.settings) } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "paperplane.fill")
+                        .font(Theme.font(size: 11, weight: .semibold))
+                    Text("Unlock sending")
+                        .font(Theme.font(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(Theme.accentText)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Theme.accentFill, in: RoundedRectangle(cornerRadius: 8))
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(state.upgradeCardNote)
+        }
+        .padding(.horizontal, 15).padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 11))
+        .overlay(RoundedRectangle(cornerRadius: 11)
+            .strokeBorder(Theme.accent.opacity(0.30), lineWidth: Theme.hairline))
+    }
 
     // MARK: - Why you are here
 
@@ -187,8 +236,11 @@ struct AccountTab: View {
     private var capabilities: some View {
         let free = column(title: "Free, always", tint: Theme.green,
                           symbol: "checkmark.seal.fill", lines: Self.free)
-        let paid = column(title: "Paid access", tint: Theme.purple,
-                          symbol: "sparkles", lines: Self.paid, locked: !state.isPaid)
+        // "Paid access" named the transaction. This names the three things the
+        // developer gets, which is what the column actually lists.
+        let paid = column(title: "What Pro adds", tint: Theme.purple,
+                          symbol: "paperplane.fill", lines: Self.paid,
+                          locked: !state.isPaid)
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) { free; paid }
             VStack(alignment: .leading, spacing: 12) { free; paid }

@@ -623,11 +623,29 @@ extension AppState {
     /// four free things by name, which is the Account tab's job and reads as a
     /// defence rather than an offer. What the developer has to know here is the
     /// one thing that is withheld.
+    /// The headline of the sidebar offer.
+    ///
+    /// It leads with the work and not with the wall. "Sending to a store needs
+    /// Pro" is true, and it is a sentence about what the app withholds: it
+    /// opens with a refusal and names the developer's own release nowhere. A
+    /// developer with thirty-nine writes waiting reads the count and knows both
+    /// what they are holding and what the button is for.
     var upgradeCardLine: String {
         guard let plan, plan.writeCount > 0 else {
-            return "Sending to a store needs Pro. Everything else is free."
+            return "Ship to both stores from here"
         }
-        return "\(plan.writeCount) writes are ready. Sending them needs Pro."
+        let count = plan.writeCount
+        return "\(count) \(count == 1 ? "write" : "writes") ready to send"
+    }
+
+    /// The promise under the headline.
+    ///
+    /// It says the same thing as `entitlementLabel` on the Account tab, and it
+    /// stands on the card every single time the card asks for money. An offer
+    /// that only mentions the free half when it is convenient is an offer that
+    /// reads as a trial about to end.
+    var upgradeCardNote: String {
+        "Sending needs Pro. Everything else stays free."
     }
 
     var entitlementLabel: String {
