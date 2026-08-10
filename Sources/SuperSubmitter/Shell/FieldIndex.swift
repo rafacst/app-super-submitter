@@ -84,7 +84,7 @@ enum FieldIndex {
         .init(id: "details.categories", label: "Categories", tab: .details,
               keywords: ["primary", "secondary", "genre"]),
         .init(id: "details.declarations", label: "Store declarations", tab: .details,
-              keywords: ["encryption", "age band", "kids", "content rating"]),
+              keywords: ["age band", "kids", "content rating", "data safety"]),
         .init(id: "details.searchKeywords", label: "Search keywords", tab: .details,
               keywords: ["aso", "custom product page", "apple"]),
         .init(id: "details.console", label: "Finish in the console", tab: .details,
@@ -132,12 +132,18 @@ enum FieldIndex {
               tab: .marketing, keywords: ["clip", "apple"]),
 
         // MARK: Review info
+        .init(id: "review.encryption", label: "Export compliance", tab: .reviewInfo,
+              keywords: ["encryption", "non-exempt", "ccats", "ern", "regulator",
+                         "itsappusesnonexemptencryption", "apple"]),
         .init(id: "review.contact", label: "Review contact", tab: .reviewInfo,
               keywords: ["first name", "last name", "email", "phone", "reviewer"]),
         .init(id: "review.demoAccount", label: "Demo account", tab: .reviewInfo,
               keywords: ["sign in", "username", "password", "login", "reviewer"]),
         .init(id: "review.notes", label: "Notes for the reviewer", tab: .reviewInfo,
               keywords: ["notes", "instructions", "reviewer"]),
+        .init(id: "review.appAccess", label: "App access", tab: .reviewInfo,
+              keywords: ["google", "play", "console", "reviewer credentials",
+                         "data safety", "policy"]),
     ]
 
     /// Prefix hits first, then contains. Case and diacritic insensitive.
