@@ -41,10 +41,68 @@ struct DetailsTab: View {
                 // the only part of this tab that Apple writes rather than
                 // the developer.
                 AppTagsPanel().padding(.top, 6)
+                // The two blocks that describe the app without being the
+                // listing text. They stood on Marketing, which answers "how
+                // does the store sell it?", and neither one sells anything.
+                licenceAgreement
+                accessibility
             }
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - The two blocks that are not the listing text
+
+    /// The contract the customer accepts before the download.
+    ///
+    /// It folds, and it starts shut. Most apps ship the Apple standard licence
+    /// and never touch this, so an editor 110 points tall stood open under
+    /// every listing for the few that do.
+    private var licenceAgreement: some View {
+        Section_("Licence agreement", icon: "doc.text.fill", tint: Theme.teal,
+                 anchor: "details.eula", folds: true, startsOpen: false,
+                 note: "An empty agreement leaves the Apple standard licence in place.") {
+            VStack(alignment: .leading, spacing: 7) {
+                TextEditor(text: state.eulaTextBinding)
+                    .font(Theme.font(size: 12))
+                    .frame(height: 110)
+                    .scrollContentBackground(.hidden)
+                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+                FieldRow {
+                    LabeledField("Territories") {
+                        MultiChoiceField(text: state.eulaTerritoriesBinding,
+                                         choices: StoreValues.appleTerritories,
+                                         emptyLabel: "Every territory")
+                            .disabled(state.eulaTextBinding.wrappedValue.isEmpty)
+                    }
+                    LabeledField("Length", width: 90) {
+                        Text("\(state.eulaTextBinding.wrappedValue.count) / 10000")
+                            .font(Theme.mono(11))
+                            .foregroundStyle(state.eulaTextBinding.wrappedValue.count > 10_000
+                                             ? Theme.red : Theme.text3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    /// What the app does for a customer who cannot see it, hear it, or hold it
+    /// steady. Apple publishes the list; the app declares against it.
+    private var accessibility: some View {
+        Section_("Accessibility declaration", icon: "figure.wave", tint: Theme.orange,
+                 anchor: "details.accessibility", folds: true, startsOpen: false,
+                 note: "The declaration is written as a draft.") {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(StoreValues.accessibilityFeatures) { feature in
+                    Toggle(feature.label, isOn: state.accessibilityBinding(feature.value))
+                        .font(Theme.font(size: 11.5))
+                }
+            }
+        }
+        .padding(.top, 6)
     }
 
     // MARK: - The rows

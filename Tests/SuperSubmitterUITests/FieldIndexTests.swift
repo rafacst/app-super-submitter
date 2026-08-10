@@ -99,6 +99,6 @@ struct FieldIndexTests {
 
     @Test func theMatchIgnoresCaseAndAccents() {
         #expect(FieldIndex.matches("KEYWORDS").contains { $0.id == "details.keywords" })
-        #expect(FieldIndex.matches("licence").contains { $0.id == "marketing.eula" })
+        #expect(FieldIndex.matches("licence").contains { $0.id == "details.eula" })
     }
 }
