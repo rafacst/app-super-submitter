@@ -12,10 +12,15 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// One word per job, and the one the sidebar group already uses.
+    ///
+    /// "Publishing" and "Managing" named the same two jobs in a longer voice
+    /// than every other label in the column, and the switch stands directly
+    /// above groups that say "Publish", "Send" and "Manage".
     var title: String {
         switch self {
-        case .publishing: "Publishing"
-        case .managing: "Managing"
+        case .publishing: "Publish"
+        case .managing: "Manage"
         }
     }
 
@@ -289,6 +294,16 @@ enum SidebarSection: Int, CaseIterable, Identifiable {
         case .publish, .send: .publishing
         case .manage: .managing
         }
+    }
+
+    /// Whether the group needs a heading over it.
+    ///
+    /// Only where the job has more than one. The switch above the column names
+    /// the job already, so a lone "Manage" heading under a "Manage" button is
+    /// the same word twice with two rows between them. Publishing has two
+    /// steps and they still have to be told apart.
+    func showsHeader(in mode: Mode) -> Bool {
+        SidebarSection.allCases.filter { $0.mode == mode }.count > 1
     }
 }
 
