@@ -346,6 +346,23 @@ extension BuildFlow {
     var canUpload: Bool {
         guard run.state == .needsUploadConfirmation, let candidate else { return false }
         return candidate.blockingMismatches.isEmpty && blocking == nil
+            && uploadBlockedByReview == nil
+    }
+
+    /// Why a binary may not go up, when Apple is holding the version.
+    ///
+    /// The apply already refused this state and was the only door that did, so
+    /// a build could still be pushed into an app whose version App Store
+    /// Connect had locked. Google runs its own queue and Apple's review says
+    /// nothing about it, so an App Bundle is never held here.
+    ///
+    /// Building stays open. What the wait blocks is the send, and an archive
+    /// on this machine has been sent nowhere.
+    var uploadBlockedByReview: String? {
+        guard run.platform != .android,
+              let state = app?.actualState.apple?.versionState,
+              AppleVersionState.withApple.contains(state) else { return nil }
+        return "\(app?.actualState.apple?.versionString ?? "This version") is with App Store review. Apple takes no new build until it answers."
     }
 
     var uploadConfirmationText: String {
