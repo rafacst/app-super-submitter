@@ -55,6 +55,9 @@ enum FieldIndex {
               keywords: ["beta notes", "testflight", "release notes", "apple"]),
         .init(id: "build.testFlightPage", label: "TestFlight page", tab: .build,
               keywords: ["feedback email", "beta", "apple"]),
+        .init(id: "build.encryption", label: "Export compliance", tab: .build,
+              keywords: ["encryption", "non-exempt", "ccats", "ern", "regulator",
+                         "itsappusesnonexemptencryption", "apple"]),
 
         // MARK: Details
         .init(id: "details.name", label: "Name", tab: .details,
@@ -132,9 +135,6 @@ enum FieldIndex {
               tab: .marketing, keywords: ["clip", "apple"]),
 
         // MARK: Review info
-        .init(id: "review.encryption", label: "Export compliance", tab: .reviewInfo,
-              keywords: ["encryption", "non-exempt", "ccats", "ern", "regulator",
-                         "itsappusesnonexemptencryption", "apple"]),
         .init(id: "review.contact", label: "Review contact", tab: .reviewInfo,
               keywords: ["first name", "last name", "email", "phone", "reviewer"]),
         .init(id: "review.demoAccount", label: "Demo account", tab: .reviewInfo,

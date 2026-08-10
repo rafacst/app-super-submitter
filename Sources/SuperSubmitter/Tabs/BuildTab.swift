@@ -10,6 +10,7 @@ struct BuildTab: View {
         VStack(alignment: .leading, spacing: 14) {
             source.frame(maxWidth: .infinity, alignment: .trailing)
             storeIdentitySection
+            exportCompliance
             if state.showBuildFromProject {
                 BuildFromProjectView()
             } else {
@@ -47,6 +48,56 @@ struct BuildTab: View {
         .clipShape(RoundedRectangle(cornerRadius: 7))
         .overlay(RoundedRectangle(cornerRadius: 7)
             .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+    }
+
+    /// Apple's export compliance answer, on the tab that makes the build that
+    /// owes it.
+    ///
+    /// One row. It is a yes or no question, and it was a card two tabs away on
+    /// the Details inspector, under a toggle that read an absent answer as a
+    /// settled "no". Apple asks it once per build and refuses the submission
+    /// without one, so the Build button waits for it: see
+    /// `BuildFlow.blockingReason`, which tests exactly what this row shows.
+    @ViewBuilder
+    private var exportCompliance: some View {
+        if state.stores.contains(.apple) {
+            let unanswered = state.encryptionAnswer == nil
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 9) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(Theme.font(size: 11.5))
+                        .foregroundStyle(unanswered ? Theme.red : Theme.green)
+                    Text("Export compliance").font(Theme.font(size: 12.5, weight: .medium))
+                    Text("Apple asks this once per build")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    if unanswered {
+                        StatePill(text: "Needed", foreground: Theme.red,
+                                  background: Theme.redBg)
+                    }
+                    Spacer(minLength: 10)
+                    // Two answers and no third, so a question nobody has
+                    // answered selects neither segment. A Bool could not say
+                    // that, which is how an unasked question came to draw a
+                    // settled "no" over every app that had never been asked.
+                    Picker("Export compliance", selection: Binding(
+                        get: { state.encryptionAnswer },
+                        set: { state.setEncryptionAnswer($0) })) {
+                        Text("Uses no non-exempt encryption").tag(Bool?.some(false))
+                        Text("It does use encryption").tag(Bool?.some(true))
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                // The answer above is what creates the need for this, so the
+                // paperwork appears with the answer that owes it and stays out
+                // of the way of every app that does not.
+                if state.encryptionAnswer == true { ExportCompliance() }
+            }
+            .storePanel(padding: 10, horizontal: 13,
+                        border: unanswered ? Theme.red.opacity(0.3) : Theme.sep)
+            .fieldAnchor("build.encryption")
+        }
     }
 
     private var storeIdentitySection: some View {
@@ -680,5 +731,57 @@ struct AppleStanding {
         }
         if parts.isEmpty { return "\(platform.shortName): \(label)." }
         return "\(platform.shortName). " + parts.joined(separator: ", ") + "."
+    }
+}
+
+/// The export compliance declaration, beside the answer that asks for it.
+///
+/// Apple attaches it to the build that ships, and it goes to the regulator's
+/// review, so the app writes what the developer answers and invents nothing.
+private struct ExportCompliance: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if state.hasEncryptionDeclaration {
+                HStack {
+                    Text("The declaration").font(Theme.font(size: 11.5, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Button(role: .destructive) { state.removeEncryptionDeclaration() } label: {
+                        Image(systemName: "trash")
+                    }
+                    .controlSize(.small)
+                }
+                ForEach(AppState.EncryptionFlag.allCases, id: \.self) { flag in
+                    Toggle(flag.label, isOn: state.encryptionFlagBinding(flag))
+                        .font(Theme.font(size: 11.5))
+                }
+                LabeledField("Regulator code", note: "when Apple has issued one") {
+                    TextField("", text: state.encryptionTextBinding(.codeValue))
+                }
+                LabeledField("CCATS or ERN document") {
+                    PathField(path: state.encryptionTextBinding(.documentPath),
+                              problem: state.missingFileNote(
+                                for: state.encryptionTextBinding(.documentPath).wrappedValue)) {
+                        guard let url = state.chooseOneFile(
+                            allowedExtensions: ["pdf", "doc", "docx", "txt"]) else { return }
+                        state.encryptionTextBinding(.documentPath).wrappedValue =
+                            state.relativePath(for: url)
+                    }
+                }
+                Text("The run creates the declaration in the review state and uploads the document with it.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("An app that uses non-exempt encryption and claims no exemption also owes Apple this declaration.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Add the export declaration") { state.addEncryptionDeclaration() }
+                    .controlSize(.small)
+            }
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
     }
 }

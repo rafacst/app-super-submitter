@@ -13,7 +13,31 @@ extension BuildFlow {
     // MARK: - The build
 
     var canBuild: Bool {
-        run.state == .readyToBuild && blocking == nil && project?.selection.isComplete == true
+        run.state == .readyToBuild && blockingReason == nil
+            && project?.selection.isComplete == true
+    }
+
+    /// What stops the build, whether preflight found it or the manifest did.
+    ///
+    /// `blocking` is what preflight read from the project and from the store.
+    /// This adds the one thing neither of them reads. Apple asks the export
+    /// compliance question once per build and refuses the submission until the
+    /// build carries an answer, so the answer is owed before the archive exists
+    /// rather than after it has been uploaded and rejected.
+    ///
+    /// Store policy and not an API constraint: no endpoint refuses a request
+    /// for the missing flag, and the refusal arrives at review. Google asks
+    /// nothing of the kind, so an App Bundle is never held for it, and a flow
+    /// with no app open has no manifest to answer from.
+    ///
+    /// The two conditions are the same two the row on the Build tab draws
+    /// itself under, on purpose: an answer the tab does not ask for may never
+    /// hold the button, or the build stops with nowhere to unstop it.
+    var blockingReason: String? {
+        if let blocking { return blocking }
+        guard let app, run.platform != .android, app.stores.contains(.apple),
+              app.encryptionAnswer == nil else { return nil }
+        return "Answer the export compliance question above. Apple asks it once per build and refuses the submission without it."
     }
 
     /// The exact language of upload-spec 10.5. No "Are you sure?".
