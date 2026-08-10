@@ -43,9 +43,14 @@ import Testing
     @Test func theListingEditorRefusesCharactersWhileAppleHoldsIt() throws {
         let details = try source("Sources/SuperSubmitter/Tabs/DetailsTab.swift")
 
-        #expect(details.contains("isListingLocked"))
+        #expect(details.contains("listingLock"))
+        // The sentence moved to the state with the rest of the review
+        // vocabulary, because a live listing refuses the same boxes for a
+        // different reason and the two answers belong side by side.
+        let review = try source("Sources/SuperSubmitter/AppStateReview.swift")
+        #expect(review.contains("App Store review is reading this"))
         // The box says why, rather than being dead and silent.
-        #expect(details.contains("App Store review is reading this"))
+        #expect(details.contains("lock.line"))
     }
 
     @Test func theMediaTabRefusesAPictureWhileAppleHoldsIt() throws {

@@ -253,8 +253,17 @@ enum ScreenshotMode {
             state.showOnboarding = false
             // The script names a tab by a slug, and a title holds spaces:
             // "review-info" is "Review info". Letters alone match both.
+            //
+            // Both jobs, because a tab can be named twice: Details is "Live
+            // listing" on the Manage side and the two screens are not the same
+            // picture. Publishing is tried first, so a name both jobs share
+            // lands where it always did.
             let wanted = letters(screen)
-            guard let tab = Tab.allCases.first(where: { letters($0.title) == wanted }) else {
+            let found = Mode.allCases.lazy.compactMap { mode in
+                Tab.allCases.first { letters($0.title(in: mode)) == wanted }
+                    .map { (tab: $0, mode: mode) }
+            }.first
+            guard let found else {
                 // A name that matches nothing used to leave the app on the
                 // tab it opened with. The script then wrote that picture
                 // under the name of the screen it asked for, and nothing
@@ -262,7 +271,11 @@ enum ScreenshotMode {
                 print("UNKNOWN_SCREEN \(screen)")
                 exit(1)
             }
-            state.selectedTab = tab
+            // The job first. `selectedTab` moves itself into a job that holds
+            // it, and a tab both jobs hold would otherwise keep whichever job
+            // the last run left behind in the throwaway defaults.
+            state.mode = found.mode
+            state.selectedTab = found.tab
         }
         #endif
     }

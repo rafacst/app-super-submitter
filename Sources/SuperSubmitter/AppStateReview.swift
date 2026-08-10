@@ -121,16 +121,92 @@ extension AppState {
         defaults.removeObject(forKey: reviewChoiceKey)
     }
 
+    /// Whether the App Store refuses a write to this listing field right now.
+    ///
+    /// Two states refuse it, and neither one is a fault:
+    ///
+    /// - Apple is holding the version and the developer chose to look at what
+    ///   was sent. Choosing to write the next version instead unlocks
+    ///   everything, because those writes are for a version this one is not.
+    /// - The listing on screen is the one customers are reading, which is every
+    ///   field on the Manage side. App Store Connect takes no change to a
+    ///   published listing: the change belongs to the next version, and the
+    ///   next version is the Publish side of this app.
+    ///
+    /// Which fields is store policy and not the schema. Every one of them is a
+    /// plain string on `appStoreVersionLocalizations` and the endpoint would
+    /// take any of them, so nothing in the API reference says this. See
+    /// `AppleVersionState.isLocked` for the one exception Apple documents.
+    func appleRefusesListing(_ field: ListingTextField) -> Bool {
+        guard AppleVersionState.isLocked(field) else { return false }
+        if appleHoldsAVersion, reviewPath == .inspect { return true }
+        return mode == .managing
+    }
+
     /// Whether a listing field refuses characters right now.
     ///
-    /// Only while Apple holds the version **and** the developer chose to look
-    /// at it. Choosing to write the next version unlocks everything, because
-    /// those writes are for a version this one is not.
-    ///
-    /// Which fields is store policy: see `AppleVersionState.isLocked`.
+    /// Kept for the review lock's own call sites and for the tests that name
+    /// it. `listingLock(_:store:)` is what a box asks, because a box stands in
+    /// a column and the two stores answer differently.
     func isListingLocked(_ field: ListingTextField) -> Bool {
         guard appleHoldsAVersion, reviewPath == .inspect else { return false }
         return AppleVersionState.isLocked(field)
+    }
+
+    /// What one listing box says about itself, or nil while every store it
+    /// stands for takes the characters.
+    ///
+    /// `store` is the column the box is in. Nil is the merged box, which stands
+    /// for every selected store at once and goes static only when nothing at
+    /// all would take the typing: while Google Play still takes it, the
+    /// characters are still worth something and the box names the store that
+    /// will not read them.
+    ///
+    /// Google Play never appears here. Play takes a listing update whenever it
+    /// is sent, without a release and without a new version, which is the whole
+    /// reason this answer is per store rather than per field.
+    func listingLock(_ field: ListingTextField, store: Store?) -> ListingLock? {
+        guard appleRefusesListing(field) else { return nil }
+        let shown = store.map { [$0] }
+            ?? (stores.isEmpty ? [.apple] : Store.allCases.filter(stores.contains))
+        guard shown.contains(.apple) else { return nil }
+
+        guard !shown.contains(.google) else {
+            return ListingLock(
+                isStatic: false,
+                line: "Google Play takes this now. The App Store takes it with the next version.")
+        }
+        if appleHoldsAVersion, reviewPath == .inspect {
+            return ListingLock(isStatic: true, line: "App Store review is reading this")
+        }
+        return ListingLock(
+            isStatic: true,
+            line: "Customers are reading this. The App Store takes a change with the next version.")
+    }
+
+    /// Why a listing box is not taking characters, and whether it is a box at
+    /// all.
+    struct ListingLock: Equatable {
+        /// The box is text. Nothing shown would take the typing.
+        var isStatic: Bool
+        var line: String
+    }
+
+    /// The one line the Manage listing puts above its rows, or nil where every
+    /// row answers for itself.
+    ///
+    /// A merged box stands for both stores, so nearly every row on that screen
+    /// carries the same sentence about the App Store: six identical lines down
+    /// one column, which is the habit of saying a thing twice that the rest of
+    /// this screen spent a pass undoing. The rows that differ still speak for
+    /// themselves, which is the Apple-only fields and anything gone static.
+    /// Only the merged two-store view. A column per store lets the Apple boxes
+    /// go static and say it themselves, and a one-store app has no split
+    /// answer to give.
+    var listingLockBanner: String? {
+        guard mode == .managing, detailsMerged,
+              stores.contains(.apple), stores.contains(.google) else { return nil }
+        return "Google Play takes these now. The App Store takes them with the next version."
     }
 
     /// Reads the version App Store review is holding, so the developer can see
