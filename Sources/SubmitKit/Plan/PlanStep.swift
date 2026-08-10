@@ -183,12 +183,34 @@ public struct PlanStep: Sendable, Equatable, Identifiable {
 /// Where a validation error is fixed. SubmitKit names the tab; the app maps it
 /// to its own `Tab`, so the kit never imports SwiftUI.
 public enum FixTarget: String, Sendable, Equatable {
-    case stores, build, details, media, money, marketing, reviewInfo, plan
+    case stores, build, details, media, money, marketing, reviewInfo, plan, release
 }
 
 public struct Finding: Sendable, Equatable, Identifiable {
     public enum Severity: String, Sendable, Equatable {
-        case error, warning
+        /// The developer has to change something. It blocks the apply.
+        case error
+        /// Worth reading once. One acknowledgement and the apply runs.
+        case warning
+        /// Nothing is wrong. A store is holding the version and takes no write
+        /// until it answers, so the apply waits instead of failing.
+        ///
+        /// It blocks the apply exactly like an error and reads nothing like
+        /// one. A version in review is the ordinary result of shipping, and
+        /// reporting it as a fault sent developers looking for the mistake
+        /// they had made, which was none.
+        case held
+
+        /// Errors first, then warnings, then the holds. Three cases need a
+        /// rank: a two-way `lhs.severity == .error` comparator is not a strict
+        /// ordering once a third case exists, and `sort` may then trap.
+        var rank: Int {
+            switch self {
+            case .error: 0
+            case .warning: 1
+            case .held: 2
+            }
+        }
     }
 
     public var id: String
@@ -196,14 +218,19 @@ public struct Finding: Sendable, Equatable, Identifiable {
     public var message: String
     public var location: String
     public var fix: FixTarget
+    /// The `FieldAnchor` the fix button scrolls to, where one field starts the
+    /// work. Nil sends the developer to the top of the tab, which is the right
+    /// answer when the fix is a whole panel and a lie when it is one box.
+    public var fixAnchor: String?
 
     public init(id: String, severity: Severity, message: String, location: String,
-                fix: FixTarget) {
+                fix: FixTarget, fixAnchor: String? = nil) {
         self.id = id
         self.severity = severity
         self.message = message
         self.location = location
         self.fix = fix
+        self.fixAnchor = fixAnchor
     }
 }
 
@@ -217,9 +244,14 @@ public struct PlanResult: Sendable, Equatable {
 
     public var errors: [Finding] { findings.filter { $0.severity == .error } }
     public var warnings: [Finding] { findings.filter { $0.severity == .warning } }
+    /// What a store is holding. Not the developer's to fix, and it still stops
+    /// the apply: the write would be refused.
+    public var held: [Finding] { findings.filter { $0.severity == .held } }
 
-    /// An error blocks the apply. A warning needs one acknowledgement.
-    public var isBlocked: Bool { !errors.isEmpty }
+    /// An error blocks the apply. A warning needs one acknowledgement. A hold
+    /// blocks it too, and says so in the store's name rather than in the
+    /// developer's.
+    public var isBlocked: Bool { !errors.isEmpty || !held.isEmpty }
 
     public var writeCount: Int { steps.filter { !$0.isUpload }.count }
     public var uploadCount: Int { steps.reduce(0) { $0 + $1.uploadCount } }

@@ -126,8 +126,15 @@ struct CredentialCard<Content: View>: View {
                     .font(Theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(Theme.text3)
                     .rotationEffect(.degrees(open ? 90 : 0))
-                StoreMark(store: store, size: 18)
-                Text("\(store.storeName) credential")
+                // A lanyard, not the store logo. The card sits in the column
+                // under its own store card, which already says which store it
+                // belongs to, and the key is the developer's account rather
+                // than the store's.
+                Image(systemName: "lanyardcard")
+                    .font(Theme.font(size: 15))
+                    .foregroundStyle(Theme.text2)
+                    .frame(width: 18, height: 18)
+                Text("Developer credentials")
                     .font(Theme.font(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
                 // What the fold hides. A folded card that says only
@@ -169,7 +176,9 @@ struct CredentialCard<Content: View>: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(store.storeName) credential")
+        // The two cards show the same words side by side, so the label keeps
+        // the store. Visible text first, because Voice Control speaks it.
+        .accessibilityLabel("Developer credentials, \(store.storeName)")
         .accessibilityValue(accessibilityState)
         .accessibilityHint(open ? "Hide the credential" : "Show the credential")
     }

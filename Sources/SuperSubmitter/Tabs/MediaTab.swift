@@ -56,6 +56,44 @@ struct MediaTab: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // In the column and not over it. As an overlay this capsule was
+            // laid on top of the first card, centred, covering the sentence
+            // that says what the tab is for: two messages in one place and
+            // neither one readable. It also sat outside `.disabled`, which is
+            // where it belongs, because it is the reason everything below it
+            // is dim and it has to stay legible to say so.
+            if mediaLockedByReview { lockNote }
+            content
+                // Apple is reading these screenshots, so none of them may be
+                // swapped. The whole tab, and not the Apple half: a picture is
+                // one file on disk and the two stores' lists point at the same
+                // files.
+                .disabled(mediaLockedByReview)
+        }
+        // The one tab that never capped itself. Without this the group header
+        // stretches to the window, which put "Choose images…" about 1400
+        // points from the name of the group it belongs to.
+        .frame(maxWidth: 980, alignment: .leading)
+        // A column per store means a list per store, so the sizes that hold
+        // pictures get one on arrival and on every change of language. Only
+        // the sizes that hold something: see `splitMediaForThisLocale`.
+        .task(id: state.locale) { state.splitMediaForThisLocale() }
+    }
+
+    private var lockNote: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "lock.fill").font(Theme.font(size: 9))
+            Text("App Store review is reading these screenshots. Nothing here changes until Apple answers.")
+                .font(Theme.font(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Theme.text2)
+        .padding(.horizontal, 11).padding(.vertical, 7)
+        .background(Theme.yellowBg, in: Capsule())
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 22) {
             // Publishing sends this tab through the Summary tab, which
             // plans and then writes. Managing has none, so it writes here.
@@ -74,30 +112,6 @@ struct MediaTab: View {
             videoSection
             if state.stores.contains(.google) { googleGraphics }
         }
-        // Apple is reading these screenshots, so none of them may be swapped.
-        // The whole tab, and not the Apple half: a picture is one file on disk
-        // and the two stores' lists point at the same files.
-        .disabled(mediaLockedByReview)
-        .overlay(alignment: .top) {
-            if mediaLockedByReview {
-                HStack(spacing: 6) {
-                    Image(systemName: "lock.fill").font(Theme.font(size: 9))
-                    Text("App Store review is reading these screenshots. Nothing here changes until Apple answers.")
-                        .font(Theme.font(size: 11))
-                }
-                .foregroundStyle(Theme.text2)
-                .padding(.horizontal, 11).padding(.vertical, 7)
-                .background(Theme.yellowBg, in: Capsule())
-            }
-        }
-        // The one tab that never capped itself. Without this the group header
-        // stretches to the window, which put "Choose images…" about 1400
-        // points from the name of the group it belongs to.
-        .frame(maxWidth: 980, alignment: .leading)
-        // A column per store means a list per store, so the sizes that hold
-        // pictures get one on arrival and on every change of language. Only
-        // the sizes that hold something: see `splitMediaForThisLocale`.
-        .task(id: state.locale) { state.splitMediaForThisLocale() }
     }
 
     /// The sizes both selected stores read.

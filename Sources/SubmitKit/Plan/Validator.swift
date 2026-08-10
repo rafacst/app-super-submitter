@@ -2,9 +2,12 @@ import Foundation
 
 /// Every rule from spec section 10, in the order that the section states them.
 ///
-/// A rule has a severity of error or warning. An error blocks the apply. A
-/// warning needs one acknowledgement. Nothing here writes, and nothing here
-/// shortens a value: an over-limit field is an error the developer fixes.
+/// A rule has a severity of error, warning or held. An error blocks the apply
+/// and is the developer's to fix. A warning needs one acknowledgement. A hold
+/// blocks the apply too and belongs to a store: a version in review is the
+/// ordinary result of shipping, and it took the word "Error" for far too long.
+/// Nothing here writes, and nothing here shortens a value: an over-limit field
+/// is an error the developer fixes.
 public enum Validator {
 
     public static func findings(_ input: Planner.Input) -> [Finding] {
@@ -21,7 +24,9 @@ public enum Validator {
         result += update(input)
         // The errors first: tab 7 shows them at the top.
         return result.sorted { lhs, rhs in
-            lhs.severity == rhs.severity ? lhs.id < rhs.id : lhs.severity == .error
+            lhs.severity == rhs.severity
+                ? lhs.id < rhs.id
+                : lhs.severity.rank < rhs.severity.rank
         }
     }
 
@@ -1121,13 +1126,11 @@ public enum Validator {
         // A nil state means the app found no version to write to. That is the
         // normal shape of a live app between releases, and the plan creates
         // the version, so it is not a block.
-        if writesMetadata, let versionState = apple.versionState,
-           !AppleVersionState.editable.contains(versionState) {
-            result.append(Finding(
-                id: "state.appleVersion", severity: .error,
-                message: "The App Store version is \(versionState). Apple takes no write until the version is back with you: cancel the submission, or start the next version.",
-                location: "Summary · App Store", fix: .plan))
-        }
+        let standing = writesMetadata
+            ? appleVersion(apple.versionState,
+                           version: apple.versionString ?? "this version")
+            : nil
+        if let standing { result.append(standing) }
         // Apple refuses a version that does not climb. Catching it here names
         // the live number and the fix; Apple's own error names neither.
         let wanted = input.manifest.release?.versionName ?? ""
@@ -1138,10 +1141,13 @@ public enum Validator {
                 message: "Version \(wanted) is not above \(live), which is live on the App Store.",
                 location: "Build · Version", fix: .build))
         }
-        if apple.hasOpenReviewSubmission {
+        // Only when the version above has not already said it. A version in
+        // review and an open submission are one event, and the screen printed
+        // both, so the ordinary act of shipping produced two red rows.
+        if apple.hasOpenReviewSubmission, standing?.severity != .held {
             result.append(Finding(
-                id: "state.openSubmission", severity: .error,
-                message: "An App Store review submission is already open. Cancel it before you apply.",
+                id: "state.openSubmission", severity: .held,
+                message: "A review submission for this app is already open. The App Store takes one at a time, so this one finishes or is cancelled before another can be sent.",
                 location: "Summary · App Store", fix: .plan))
         }
 
@@ -1157,6 +1163,101 @@ public enum Validator {
                 location: "Summary · Google Play", fix: .plan))
         }
         return result
+    }
+
+    /// The id of the row below. The Summary tab hides it while the review
+    /// banner is saying the same thing in more words.
+    public static let appleVersionFindingID = "state.appleVersion"
+
+    /// What the App Store is doing with the version the manifest names, said
+    /// the way a developer would say it.
+    ///
+    /// One switch over `AppVersionState`, plus the deprecated `AppStoreState`
+    /// values the reader still falls back to. Three things come out of it: how
+    /// loud the row is, what it says, and where the work is.
+    ///
+    /// - A version that review is holding is **held**. It is the ordinary
+    ///   result of sending one, the developer did nothing wrong, and the apply
+    ///   waits rather than fails. This screen used to print `WAITING_FOR_REVIEW`
+    ///   in red under the word "Error", which reads as a fault and names none.
+    /// - A refusal is a **warning**, and it names where the change starts.
+    ///   Review answered, the version is the developer's again, and the next
+    ///   send is an edit away. Apple publishes no endpoint for the reason, so
+    ///   the row says which half was refused and points at the first field of
+    ///   that half.
+    /// - A binary the store would not take is an **error**. Nothing was
+    ///   accepted, and no edit on any tab clears it: only another build does.
+    ///
+    /// An unknown value is held rather than ignored. Apple adds states to this
+    /// list, and letting an unrecognised one through would aim writes at a
+    /// version that may refuse them. It never prints the value: a developer
+    /// reading `NOT_APPLICABLE` learns nothing the sentence cannot say.
+    static func appleVersion(_ state: String?, version: String) -> Finding? {
+        func finding(_ severity: Finding.Severity, _ message: String,
+                     fix: FixTarget = .plan, anchor: String? = nil) -> Finding {
+            Finding(id: appleVersionFindingID, severity: severity, message: message,
+                    location: "Summary · App Store", fix: fix, fixAnchor: anchor)
+        }
+        switch state {
+        // The version is the developer's and takes every write. This is the
+        // state the whole tab is designed around, so it says nothing.
+        case nil, "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED":
+            return nil
+
+        // MARK: Apple has it
+
+        case "READY_FOR_REVIEW", "WAITING_FOR_REVIEW":
+            return finding(.held, "\(version) is in the App Store review queue. It takes no changes until Apple answers.")
+        case "IN_REVIEW":
+            return finding(.held, "App Store review is reading \(version) now. It takes no changes until Apple answers.")
+        // Apple holds it, and the thing it waits for is the developer's, so
+        // this hold names the field that lifts it.
+        case "WAITING_FOR_EXPORT_COMPLIANCE":
+            return finding(.held, "\(version) is waiting on the export compliance answer before it reaches review.",
+                           fix: .build, anchor: "build.encryption")
+
+        // MARK: Apple answered yes
+
+        case "ACCEPTED":
+            return finding(.held, "App Store review approved \(version). An approved version takes no changes, so the next edit belongs to the version after it.")
+        case "PENDING_DEVELOPER_RELEASE":
+            return finding(.held, "App Store review approved \(version) and it goes on sale when you release it. It takes no changes.",
+                           fix: .release)
+        case "PENDING_APPLE_RELEASE":
+            return finding(.held, "App Store review approved \(version). Apple puts it on sale on the date you set, and it takes no changes.")
+        case "PROCESSING_FOR_DISTRIBUTION", "PROCESSING_FOR_APP_STORE":
+            return finding(.held, "\(version) is going out to the App Store now. It takes no changes.")
+        case "READY_FOR_DISTRIBUTION", "READY_FOR_SALE", "PREORDER_READY_FOR_SALE":
+            return finding(.held, "\(version) is on the App Store. Customers are reading it, so it takes no changes and the next edit belongs to the version after it.")
+        case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
+            return finding(.held, "\(version) is off sale on the App Store. It takes no changes.")
+        case "REPLACED_WITH_NEW_VERSION":
+            return finding(.held, "A newer version replaced \(version) on the App Store. Read the stores again, or name the newer number.",
+                           fix: .build)
+
+        // MARK: Apple answered no
+
+        // The listing is the developer's again, so this is an edit and not a
+        // fault. Apple names the offending part in App Store Connect and in no
+        // endpoint, so the row sends them to the top of the listing.
+        case "METADATA_REJECTED":
+            return finding(.warning, "App Store review refused the listing of \(version). Apple writes which part in App Store Connect. Change it here, then send it again.",
+                           fix: .details, anchor: "details.name")
+        case "REJECTED":
+            return finding(.warning, "App Store review refused \(version). Apple writes the reason in App Store Connect. Change what it asks for, then send it again.",
+                           fix: .reviewInfo, anchor: "review.notes")
+
+        // MARK: The store refused what was sent
+
+        case "INVALID_BINARY":
+            return finding(.error, "The App Store refused the build attached to \(version). Nothing was accepted. Attach a new build and send it again.",
+                           fix: .build)
+        case "PENDING_CONTRACT":
+            return finding(.error, "The App Store cannot take \(version) until the account agreements are signed. They are signed in App Store Connect, and no endpoint signs them.")
+
+        default:
+            return finding(.held, "The App Store is not taking changes to \(version) right now. Read the stores again, or open the version in App Store Connect.")
+        }
     }
 
     // MARK: - The update

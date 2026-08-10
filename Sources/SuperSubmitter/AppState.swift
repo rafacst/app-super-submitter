@@ -537,10 +537,12 @@ final class AppState {
     private func summary(for loaded: Manifest?, selected: Bool) -> String {
         if selected, let plan {
             let count = plan.steps.count
-            if plan.isBlocked {
-                let errors = plan.errors.count
+            let errors = plan.errors.count
+            if errors > 0 {
                 return "\(errors) \(errors == 1 ? "error blocks" : "errors block") the plan"
             }
+            // A hold is not a fault, so it does not borrow the word "error".
+            if !plan.held.isEmpty { return "waiting on the store" }
             return count == 0 ? "both stores match" : "\(count) changes wait"
         }
         let storeCount = [loaded?.apps.apple != nil, loaded?.apps.google != nil]
@@ -557,8 +559,10 @@ final class AppState {
         let configured = store == .apple ? loaded?.apps.apple != nil : loaded?.apps.google != nil
         guard configured else { return nil }
         guard selected, let plan else { return .changed }
-        // An error blocks the whole apply, so it marks every store.
-        guard !plan.isBlocked else { return .blocked }
+        // An error blocks the whole apply, so it marks every store. A hold
+        // blocks it too and marks nothing: the dot says "something is wrong
+        // here", and a version in review is the store working normally.
+        guard plan.errors.isEmpty else { return .blocked }
         let system: PlanSystem = store == .apple ? .apple : .google
         return plan.steps(for: system).isEmpty ? .matched : .changed
     }
@@ -1354,8 +1358,10 @@ final class AppState {
     func addMediaFiles(_ urls: [URL], deviceClass: Manifest.DeviceClass,
                        previews: Bool = false, store: Store? = nil) {
         // A picture dropped on one store's column belongs to that store, so
-        // the size splits before it lands rather than reaching both.
-        if let store, !previews, stores.count > 1, !mediaIsSplit(deviceClass) {
+        // the size splits before it lands rather than reaching both. Which
+        // store does not matter here: the split makes a list for each of them,
+        // and `addMediaPaths` below is what puts the files in the right one.
+        if store != nil, !previews, stores.count > 1, !mediaIsSplit(deviceClass) {
             manifest.splitMedia(locale: locale, deviceClass: deviceClass)
         }
         if previews {
@@ -2211,9 +2217,13 @@ final class AppState {
         case .plan: target = nil
         default: return nil
         }
-        let findings = tab == .plan
+        // A hold earns no badge. A badge is a count of open items, and a
+        // version in review is not an item: nothing on any tab closes it, and
+        // a number beside Summary that never falls is a number nobody reads.
+        let findings = (tab == .plan
             ? plan.findings
-            : plan.findings.filter { $0.fix == target }
+            : plan.findings.filter { $0.fix == target })
+            .filter { $0.severity != .held }
         guard !findings.isEmpty else { return nil }
         let errors = findings.filter { $0.severity == .error }.count
         return TabBadge(errors: errors, warnings: findings.count - errors)

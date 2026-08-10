@@ -36,6 +36,23 @@ private func mediaReviewSource(_ relativePath: String) throws -> String {
     #expect(MediaTab.takers(.tablet10) == [.apple, .google])
 }
 
+/// The lock message takes a place in the column instead of floating over it.
+///
+/// As an overlay it was drawn on top of the first card, centred, across the
+/// sentence that says what the tab is for. Two messages in one place, and the
+/// one that says why the whole tab is dim was the one underneath. It also has
+/// to sit outside `.disabled`, because it is the reason for the dimming and it
+/// has to stay legible to say so.
+@Test func theReviewLockStandsAboveTheTabAndNotOnTopOfIt() throws {
+    let tab = try mediaReviewSource("Sources/SuperSubmitter/Tabs/MediaTab.swift")
+
+    #expect(tab.contains("if mediaLockedByReview { lockNote }"))
+    #expect(tab.contains("private var lockNote"))
+    // The whole tab still refuses a swap while Apple is reading the pictures.
+    #expect(tab.contains(".disabled(mediaLockedByReview)"))
+    #expect(!tab.contains("overlay(alignment: .top)"))
+}
+
 /// Nothing the tab already did may leave with the rearrangement: the drop
 /// wells, the live strip, the two Google graphics and the YouTube URL all stay.
 @Test func theTilesAndTheGraphicsSurvive() throws {
