@@ -68,6 +68,26 @@ import Testing
                                       territory: "US") == "USD 4.99 · base plan p1y")
     }
 
+    /// Apple sells at a rung of a published ladder. The tier number is gone
+    /// from the API, so the rung is counted rather than named.
+    @Test func anApplePriceCarriesItsLadderPosition() {
+        var state = actual(apple: ["pro_annual"])
+        state.apple?.pricePoints = [0.99, 1.99, 2.99, 3.99, 4.99]
+        state.apple?.pricePointTerritory = "USA"
+
+        #expect(MoneyTab.ladderPoint("USD 4.99", in: state) == 5)
+        #expect(MoneyTab.storeSummary("pro_annual", store: .apple, actual: state,
+                                      territory: "USA") == "USD 4.99 · point 5")
+    }
+
+    /// An unread ladder prints the price and no rung, rather than a guess.
+    @Test func anUnreadLadderPrintsNoPoint() {
+        let state = actual(apple: ["pro_annual"])
+        #expect(MoneyTab.ladderPoint("USD 4.99", in: state) == nil)
+        #expect(MoneyTab.storeSummary("pro_annual", store: .apple, actual: state,
+                                      territory: "USA") == "USD 4.99")
+    }
+
     /// A store that has never answered is not a store that answered zero.
     @Test func anUnreadStoreSaysNothingRatherThanNought() {
         #expect(MoneyTab.storeSummary("tip_jar", store: .google, actual: actual(),
@@ -89,5 +109,9 @@ import Testing
         #expect(tab.contains("purchaseEditor(index: index)"))
         #expect(tab.contains("OfferEditor(target: .purchase(index))"))
         #expect(tab.contains("Add in-app purchase"))
+        // The plans took the same row, and kept their own fields behind it.
+        #expect(tab.contains("togglePlan(groupIndex, planIndex)"))
+        #expect(tab.contains("OfferEditor(target: .plan(group: groupIndex, plan: planIndex))"))
+        #expect(tab.contains("Add plan"))
     }
 }
