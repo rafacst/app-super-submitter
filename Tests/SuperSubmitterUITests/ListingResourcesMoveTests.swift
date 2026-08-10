@@ -83,7 +83,6 @@ import Testing
                            source("Sources/SuperSubmitter/Tabs/MoneyTab.swift")]
 
         for anchor in ["details.eula", "details.accessibility",
-                       "marketing.customPages", "marketing.experiments",
                        "marketing.events", "marketing.routing",
                        "marketing.nomination", "marketing.appClip"] {
             let holder = try #require(sources.first { $0.contains("\"\(anchor)\"") },
@@ -97,13 +96,7 @@ import Testing
     /// A folding `Section_` draws its own box. A call site that wraps its whole
     /// content in a second one puts a panel inside a panel, which is the one
     /// mistake this component documents.
-    ///
-    /// The two lists are the ones that carried their own. A card per row inside
-    /// a folding section is a different thing and stays: the events list draws
-    /// one per event, and those are rows and not the section.
     @Test func aFoldingSectionDoesNotWrapItsContentInASecondBox() throws {
-        #expect(!(try marketing()).contains(".storePanel(padding: 0)"))
-        // The two blocks that moved carry none either.
         let details = try details()
         for anchor in ["details.eula", "details.accessibility"] {
             let call = try #require(sectionCall(for: anchor, in: details))
@@ -111,13 +104,24 @@ import Testing
         }
     }
 
-    /// A list runs its rows to the edge of its card, so the box it folds into
-    /// adds no inset of its own and the header takes the rows' instead.
-    @Test func aListSectionFoldsWithoutInsettingItsRows() throws {
-        let section = try source("Sources/SuperSubmitter/Design/Section.swift")
-        #expect(section.contains("foldPadding"))
-        #expect(section.contains("headerInset"))
-        #expect((try marketing()).contains("foldPadding: 0"))
+    /// No accordion inside an accordion.
+    ///
+    /// The two lists hold rows that already open onto their own editors, so a
+    /// fold on the section put a field three clicks from the tab. They draw
+    /// their own card and their header row carries the count, which is the
+    /// summary a shut fold would have been standing in for.
+    @Test func theListsThatOpenTheirOwnRowsDoNotFoldAsWell() throws {
+        let marketing = try marketing()
+
+        for anchor in ["marketing.customPages", "marketing.experiments"] {
+            let call = try #require(sectionCall(for: anchor, in: marketing))
+            #expect(!call.contains("folds: true"), "\(anchor) folds around folding rows")
+        }
+        // A row still opens. The nesting went, not the accordion.
+        #expect(marketing.contains("openPages.contains(index)"))
+        #expect(marketing.contains("openExperiments.contains(index)"))
+        // And a section that draws no box of its own still gets one.
+        #expect(marketing.contains(".storePanel(padding: 0)"))
     }
 
     /// The text of one `Section_(...)` call, from its name to the brace that
