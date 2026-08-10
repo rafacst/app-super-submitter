@@ -1,6 +1,6 @@
 import Foundation
-import SubmitKit
 import Testing
+@testable import SubmitKit
 @testable import SuperSubmitter
 
 private let summaryReviewRepositoryRoot = URL(fileURLWithPath: #filePath)
@@ -62,6 +62,77 @@ private func summaryReviewSource(_ relativePath: String) throws -> String {
     #expect(tab.contains("chevron.right"))
     // The same growth the Build folds use, and for the same reason.
     #expect(tab.contains("clipped()"))
+}
+
+// MARK: - What the stores are holding
+
+@MainActor
+private func summaryState(findings: [Finding]) -> AppState {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    // A dry run needs no paid capability, so `canApply` answers the question
+    // this asks rather than the paywall's.
+    state.dryRun = true
+    var plan = PlanResult()
+    plan.steps = [PlanStep(id: "apple.name", system: .apple, kind: .change,
+                           summary: "name", title: "Name", requests: [],
+                           operation: .appleVersionLocale("en-US"))]
+    plan.findings = findings
+    state.plan = plan
+    return state
+}
+
+/// A version in review stops the apply and is not a fault.
+///
+/// The screen used to answer the ordinary act of shipping with two red errors,
+/// a red "2" beside Summary, and a red dot on the store. Every one of those
+/// says the developer broke something. The apply still has to stop, because
+/// Apple refuses the write, and that is the only part that survives.
+@MainActor
+@Test func aVersionInReviewHoldsTheApplyAndRaisesNoBadge() throws {
+    let hold = try #require(Validator.appleVersion("WAITING_FOR_REVIEW", version: "1.5"))
+    let state = summaryState(findings: [hold])
+
+    #expect(hold.severity == .held)
+    #expect(!state.canApply)
+    #expect(state.planIsBlocked)
+    // Nothing on any tab closes a hold, so no tab wears a number for it.
+    #expect(state.badge(for: .plan) == nil)
+    #expect(state.badge(for: .details) == nil)
+}
+
+/// A refusal is the developer's turn again: one warning, one acknowledgement,
+/// and a button that lands on the first field rather than the top of a tab.
+@MainActor
+@Test func aRefusedListingWarnsAndNamesTheFieldToChange() throws {
+    let refusal = try #require(Validator.appleVersion("METADATA_REJECTED", version: "1.5"))
+    let state = summaryState(findings: [refusal])
+
+    #expect(refusal.severity == .warning)
+    #expect(state.badge(for: .details)?.warnings == 1)
+    #expect(state.badge(for: .details)?.errors == 0)
+    // The apply unlocks once the warning is acknowledged. A refusal blocks
+    // nothing: the version is editable and the fixed listing goes to it.
+    #expect(!state.canApply)
+    state.acknowledged.insert(refusal.id)
+    #expect(state.canApply)
+
+    // The anchor is a field that exists. A jump to a name nothing carries
+    // scrolls nowhere, silently.
+    let anchor = try #require(refusal.fixAnchor)
+    let entry = try #require(FieldIndex.all.first { $0.id == anchor })
+    #expect(entry.tab == state.tab(for: refusal.fix))
+}
+
+/// A build the store would not take is an error, and it reads as one.
+@MainActor
+@Test func aRefusedBinaryIsAnErrorOnTheBuildTab() throws {
+    let refused = try #require(Validator.appleVersion("INVALID_BINARY", version: "1.5"))
+    let state = summaryState(findings: [refused])
+
+    #expect(refused.severity == .error)
+    #expect(state.badge(for: .build)?.errors == 1)
+    #expect(!state.canApply)
 }
 
 /// The diff is still the reason the tab exists, and the runway may not push it

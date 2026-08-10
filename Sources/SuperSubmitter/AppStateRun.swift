@@ -280,6 +280,7 @@ extension AppState {
         case .marketing: .marketing
         case .reviewInfo: .reviewInfo
         case .plan: .plan
+        case .release: .release
         }
     }
 

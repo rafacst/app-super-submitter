@@ -304,8 +304,78 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
     actual.apple = apple
 
     let finding = try #require(findings(manifest, actual).first { $0.id == "state.appleVersion" })
-    #expect(finding.severity == .error)
+    // Held and not error. Sending a version is how the product is used, and
+    // the screen reported the result of using it as two faults.
+    #expect(finding.severity == .held)
     #expect(finding.fix == .plan)
+    // The raw `AppVersionState` never reaches the screen.
+    #expect(!finding.message.contains("WAITING_FOR_REVIEW"))
+}
+
+/// Every state the App Store publishes gets a sentence, and none of them gets
+/// the API's own word for it.
+///
+/// The list is `AppVersionState` plus the `AppStoreVersionState` values the
+/// reader still falls back to. An unlisted value is held rather than waved
+/// through: Apple adds states, and a write aimed at a version that refuses it
+/// fails halfway through the apply.
+@Test func everyAppleVersionStateSaysSomethingInPlainWords() {
+    let held = ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
+                "WAITING_FOR_EXPORT_COMPLIANCE", "ACCEPTED",
+                "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE",
+                "PROCESSING_FOR_DISTRIBUTION", "PROCESSING_FOR_APP_STORE",
+                "READY_FOR_DISTRIBUTION", "READY_FOR_SALE",
+                "PREORDER_READY_FOR_SALE", "REMOVED_FROM_SALE",
+                "DEVELOPER_REMOVED_FROM_SALE", "REPLACED_WITH_NEW_VERSION",
+                "NOT_APPLICABLE", "A_STATE_APPLE_HAS_NOT_INVENTED_YET"]
+    for state in held {
+        let finding = Validator.appleVersion(state, version: "1.5")
+        #expect(finding?.severity == .held, "\(state) was not held")
+    }
+
+    // Review answered no. The version is the developer's again, so it is a
+    // warning that names where the change starts.
+    for (state, target) in [("METADATA_REJECTED", FixTarget.details),
+                            ("REJECTED", FixTarget.reviewInfo)] {
+        let finding = Validator.appleVersion(state, version: "1.5")
+        #expect(finding?.severity == .warning, "\(state) was not a warning")
+        #expect(finding?.fix == target)
+        #expect(finding?.fixAnchor != nil, "\(state) named no field to fix")
+    }
+
+    // The store refused what was sent. Nothing was accepted.
+    #expect(Validator.appleVersion("INVALID_BINARY", version: "1.5")?.severity == .error)
+    #expect(Validator.appleVersion("PENDING_CONTRACT", version: "1.5")?.severity == .error)
+
+    // The version is the developer's and takes every write.
+    #expect(Validator.appleVersion("PREPARE_FOR_SUBMISSION", version: "1.5") == nil)
+    #expect(Validator.appleVersion("DEVELOPER_REJECTED", version: "1.5") == nil)
+    #expect(Validator.appleVersion(nil, version: "1.5") == nil)
+
+    // No message anywhere carries an API state, an underscore, or a shout.
+    for state in held + ["METADATA_REJECTED", "REJECTED", "INVALID_BINARY",
+                         "PENDING_CONTRACT"] {
+        let message = Validator.appleVersion(state, version: "1.5")?.message ?? ""
+        #expect(!message.contains("_"), "\(state) leaked the raw state")
+        #expect(message.contains("1.5"), "\(state) never named the version")
+    }
+}
+
+/// A version in review and an open submission are one event, so the tab says
+/// it once. It used to print both, in red, as two separate errors.
+@Test func aVersionInReviewReportsItselfOnceAndNotAsAnError() {
+    let manifest = base()
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.versionState = "IN_REVIEW"
+    apple.hasOpenReviewSubmission = true
+    actual.apple = apple
+
+    let found = findings(manifest, actual).filter {
+        $0.id == "state.appleVersion" || $0.id == "state.openSubmission"
+    }
+    #expect(found.count == 1)
+    #expect(found.allSatisfy { $0.severity == .held })
 }
 
 /// Cancelling a submission puts the version back in the developer's hands.
@@ -319,15 +389,21 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
 /// could not send the rebuilt binary at all.
 @Test func aWithdrawnOrRejectedVersionStillTakesWrites() {
     let manifest = base()
+    // A refusal reports itself, and it does not block: a warning takes one
+    // acknowledgement and the apply then writes the fixed listing to the same
+    // version. `INVALID_BINARY` is the one exception and it is not a metadata
+    // problem: Apple accepted nothing, and no edit on any tab replaces the
+    // build, so that one blocks.
     for state in ["DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED",
-                  "INVALID_BINARY", "PREPARE_FOR_SUBMISSION"] {
+                  "PREPARE_FOR_SUBMISSION"] {
         var actual = ActualState()
         var apple = ActualState.Apple()
         apple.versionState = state
         actual.apple = apple
 
-        #expect(!has(findings(manifest, actual), "state.appleVersion"),
-                "\(state) blocked the apply")
+        var plan = PlanResult()
+        plan.findings = findings(manifest, actual)
+        #expect(!plan.isBlocked, "\(state) blocked the apply")
     }
 }
 

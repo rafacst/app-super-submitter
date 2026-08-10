@@ -61,6 +61,11 @@ private func liveState(_ live: String = "3.1.0") -> ActualState {
     #expect(!findings(liveApp(), liveState()).contains { $0.id == "state.appleVersion" })
 }
 
+/// It blocks, and it is not an error.
+///
+/// Apple takes no write while it holds the version, so the apply still has to
+/// stop. Nothing about that is the developer's mistake, so the row that says so
+/// is `.held` and the plan is blocked by the hold rather than by an error.
 @Test func aVersionStuckOutsidePreparationStillBlocksTheApply() {
     var actual = liveState()
     actual.apple?.versionId = "version-9"
@@ -68,7 +73,14 @@ private func liveState(_ live: String = "3.1.0") -> ActualState {
 
     let finding = try! #require(findings(liveApp(), actual)
         .first { $0.id == "state.appleVersion" })
-    #expect(finding.severity == .error)
+    #expect(finding.severity == .held)
+
+    // The hold alone is enough to stop the apply. This fixture carries an
+    // unrelated error too, so the block is asserted on the hold by itself.
+    var plan = PlanResult()
+    plan.findings = [finding]
+    #expect(plan.isBlocked)
+    #expect(plan.errors.isEmpty)
 }
 
 // MARK: - The version has to climb

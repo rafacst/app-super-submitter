@@ -490,7 +490,7 @@ struct PlanTab: View {
             if !state.planReadFailures.isEmpty { readFailure(state.planReadFailures) }
             columns(plan)
             counters(plan)
-            if !plan.findings.isEmpty { validations(plan) }
+            if !shownFindings(plan).isEmpty { validations(plan) }
             applyRow(plan)
         }
     }
@@ -565,43 +565,80 @@ struct PlanTab: View {
         }
     }
 
+    /// The panel takes the colour of the loudest thing in it, and a hold is not
+    /// loud. A box that is red because a version is in review says the
+    /// developer broke something, on the one screen whose job is to say what is
+    /// true. Red for an error, yellow for a warning, and the plain card for a
+    /// hold on its own.
+    /// The rows the card draws, which is not every finding.
+    ///
+    /// The banner at the top of this tab already carries Apple's answer, in
+    /// more words and with the two ways forward attached. Repeating it as a row
+    /// underneath said the same sentence twice on one screen, which is the
+    /// habit this whole pass is undoing. The finding itself stays in the plan:
+    /// it is what blocks the apply, and the note under the button reads it.
+    private func shownFindings(_ plan: PlanResult) -> [Finding] {
+        guard state.reviewOutcome != nil else { return plan.findings }
+        return plan.findings.filter { $0.id != Validator.appleVersionFindingID }
+    }
+
     private func validations(_ plan: PlanResult) -> some View {
-        let blocked = plan.isBlocked
-        let accent = blocked ? Theme.red : Theme.yellow
+        let shown = shownFindings(plan)
+        let errors = shown.contains { $0.severity == .error }
+        let warnings = shown.contains { $0.severity == .warning }
+        let accent = errors ? Theme.red : (warnings ? Theme.yellow : Theme.sep)
+        let fill = errors ? Theme.redBg : (warnings ? Theme.yellowBg : Theme.raised)
         return VStack(spacing: 0) {
             HStack(spacing: 9) {
-                Text(headline(plan))
+                Text(headline(shown))
                     .font(Theme.font(size: 12.5, weight: .semibold))
-                    .foregroundStyle(accent)
-                // Only the blocking case needs a sentence. Every warning row
-                // carries its own "Acknowledge", which says the rest.
-                if blocked {
-                    Text("Fix the errors to unlock the apply.")
-                        .font(Theme.font(size: 11.5))
-                        .foregroundStyle(Theme.text2)
-                }
+                    .foregroundStyle(errors ? Theme.red
+                                     : (warnings ? Theme.yellow : Theme.text))
+                Text(subhead(shown))
+                    .font(Theme.font(size: 11.5))
+                    .foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 10)
 
-            ForEach(plan.findings) { finding in
+            ForEach(shown) { finding in
                 ValidationRow(finding: finding)
             }
         }
-        .background(blocked ? Theme.redBg : Theme.yellowBg,
-                    in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(accent, lineWidth: 1))
+        .background(fill, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9)
+            .strokeBorder(accent, lineWidth: errors || warnings ? 1 : Theme.hairline))
         .clipShape(RoundedRectangle(cornerRadius: 9))
     }
 
-    private func headline(_ plan: PlanResult) -> String {
-        let errors = plan.errors.count
-        let warnings = plan.warnings.count
+    private func headline(_ shown: [Finding]) -> String {
+        let errors = shown.filter { $0.severity == .error }.count
+        let warnings = shown.filter { $0.severity == .warning }.count
+        let held = shown.filter { $0.severity == .held }.count
         var pieces: [String] = []
         if errors > 0 { pieces.append("\(errors) \(errors == 1 ? "error" : "errors")") }
         if warnings > 0 { pieces.append("\(warnings) \(warnings == 1 ? "warning" : "warnings")") }
+        // "1 held" reads as a count of nothing. The store is the subject here,
+        // because the store is what everybody is waiting for.
+        if held > 0 { pieces.append(held == 1 ? "1 on hold" : "\(held) on hold") }
         return pieces.joined(separator: ", ")
+    }
+
+    /// One sentence, and only where it adds something the rows do not.
+    ///
+    /// A warning carries its own "Acknowledge", which says the rest. A hold has
+    /// no control at all, so it is the case that has to say out loud that
+    /// nothing is broken: the apply button is off and the reason is not the
+    /// developer's doing.
+    private func subhead(_ shown: [Finding]) -> String {
+        if shown.contains(where: { $0.severity == .error }) {
+            return "Fix the errors to unlock the apply."
+        }
+        if shown.contains(where: { $0.severity == .held }) {
+            return "Nothing here is wrong. The apply waits for the store to answer."
+        }
+        return ""
     }
 
     /// Apple on the left, Google in the middle, the provider on the right.
@@ -826,9 +863,17 @@ struct PlanTab: View {
         if !state.can(.storeWrite) {
             return "Store writes need paid access. Reading and dry runs stay free."
         }
-        if plan.isBlocked {
+        if !plan.errors.isEmpty {
             let count = plan.errors.count
             return "\(count) \(count == 1 ? "error blocks" : "errors block") the apply."
+        }
+        // The hold's own sentence, not a summary of it. It already says which
+        // version and which store, and this is the line right under the button
+        // it switched off.
+        if let hold = plan.held.first {
+            return plan.held.count == 1
+                ? hold.message
+                : "The stores are holding this version. The apply waits until they answer."
         }
         if state.unacknowledgedWarnings > 0 {
             let count = state.unacknowledgedWarnings
@@ -901,12 +946,44 @@ private struct ValidationRow: View {
     let finding: Finding
 
     private var isError: Bool { finding.severity == .error }
+    /// Only a warning is waved through. An error is fixed and a hold is
+    /// waited out, and neither is dismissed by a tick.
+    private var isWarning: Bool { finding.severity == .warning }
+
+    /// The field the fix starts at, where the finding named one.
+    ///
+    /// "Fix on Details" opened a tab of forty rows at the top. A refusal that
+    /// knows which half of the listing Apple objected to can land on the first
+    /// box of it, which is the difference between a route and a direction.
+    private var jump: FieldEntry? {
+        finding.fixAnchor.flatMap { anchor in
+            FieldIndex.all.first { $0.id == anchor }
+        }
+    }
+
+    /// The tab this row would open, unless that is the tab the row is on. A
+    /// "Fix on Summary" button under a message on the Summary tab goes
+    /// nowhere, and the screen drew one beside every store finding.
+    private var destination: Tab? {
+        let tab = state.tab(for: finding.fix)
+        guard jump != nil || tab != .plan else { return nil }
+        return tab
+    }
+
+    private var pill: (text: String, foreground: Color, background: Color) {
+        switch finding.severity {
+        case .error: ("Error", Theme.red, Theme.redBg)
+        case .warning: ("Warning", Theme.yellow, Theme.yellowBg)
+        // Grey, and the one word that says who is waiting for whom. It is not
+        // an amber "almost an error": nothing is wrong.
+        case .held: ("Held", Theme.text2, Theme.sunken)
+        }
+    }
 
     var body: some View {
         HStack(spacing: 11) {
-            StatePill(text: isError ? "Error" : "Warning",
-                      foreground: isError ? Theme.red : Theme.yellow,
-                      background: isError ? Theme.redBg : Theme.yellowBg)
+            StatePill(text: pill.text, foreground: pill.foreground,
+                      background: pill.background)
                 // Through `Theme.scaled`, because the pill inside it is text.
                 // Left at a flat 58 the column held "Error" and cut "Warning"
                 // in half, and it will do it again on the next type change.
@@ -918,7 +995,7 @@ private struct ValidationRow: View {
                 Text(finding.location).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
-            if !isError {
+            if isWarning {
                 let acked = state.acknowledged.contains(finding.id)
                 Button {
                     if acked { state.acknowledged.remove(finding.id) }
@@ -943,8 +1020,16 @@ private struct ValidationRow: View {
                 .buttonStyle(.plain)
                 .accessibilityValue(acked ? "Acknowledged" : "Not acknowledged")
             }
-            QuietButton(title: "Fix on \(state.tab(for: finding.fix).title)") {
-                state.selectedTab = state.tab(for: finding.fix)
+            if let destination {
+                // "Fix" only where there is something to fix. A hold is
+                // somebody else's turn, so its button offers the place the
+                // work continues rather than promising a repair. The anchor
+                // changes where the button lands, never what it says.
+                QuietButton(title: isError || isWarning
+                            ? "Fix on \(destination.title)"
+                            : "Go to \(destination.title)") {
+                    if let jump { state.jump(to: jump) } else { state.selectedTab = destination }
+                }
             }
         }
         .padding(.horizontal, 15)
