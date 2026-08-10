@@ -571,7 +571,14 @@ public enum Planner {
         // read of its own. A resource that carries some keeps its step, and
         // that step says that nobody compared the text.
         if let pages = marketing.customProductPages, !pages.isEmpty {
-            let missing = pages.filter { actual?.customProductPageNames[$0.name] == nil }
+            // Either spelling, the same rule the apply uses. See
+            // `StoreIdentity`: this asked by name while the apply asked by
+            // key, so the plan could call a page missing that the apply was
+            // about to find, and the other way round.
+            let missing = pages.filter {
+                !StoreIdentity.holds(key: $0.key, name: $0.name,
+                                     in: actual?.customProductPageNames ?? [:])
+            }
             let localized = pages.contains { $0.locales?.isEmpty == false }
             if !read || !missing.isEmpty || localized {
                 steps.append(PlanStep(
@@ -587,7 +594,10 @@ public enum Planner {
         }
         if let experiments = marketing.experiments, !experiments.isEmpty {
             let treatments = experiments.reduce(0) { $0 + $1.treatments.count }
-            let missing = experiments.filter { actual?.experiments[$0.name] == nil }
+            let missing = experiments.filter {
+                !StoreIdentity.holds(key: $0.key, name: $0.name,
+                                     in: actual?.experiments ?? [:])
+            }
             // Every experiment carries treatments, and no read returns them.
             if !read || !missing.isEmpty || treatments > 0 {
                 steps.append(PlanStep(
