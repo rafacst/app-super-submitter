@@ -219,6 +219,118 @@ struct StoreImportReaderTests {
         #expect(manifest.listingText(locale: "en-US", field: .supportURL) == "https://example.com/s")
         #expect(manifest.release?.versionName == "3.1")
     }
+
+    // MARK: - The money, on its own
+
+    /// An app that is already on sale opened the Monetization tab on an empty
+    /// price and an empty product list. The catalogue only ever arrived with a
+    /// whole listing import from another tab, and the price with nothing at
+    /// all: `ImportedStoreListing` carries none.
+    @Test func theTabReadsThePriceAndTheCatalogueWithoutAWholeImport() async throws {
+        ImportStubProtocol.state.configure([
+            "inAppPurchasesV2?limit=200": #"""
+            {"data":[{"id":"p1","attributes":{"productId":"com.example.pro",
+             "name":"Pro Unlock","inAppPurchaseType":"NON_CONSUMABLE",
+             "reviewNote":"Tap Settings."}}]}
+            """#,
+            "subscriptionGroups?include=subscriptions&limit=200": #"""
+            {"data":[{"id":"g1","attributes":{"referenceName":"Premium"}}],
+             "included":[{"type":"subscriptions","id":"s1",
+              "attributes":{"productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH"},
+              "relationships":{"group":{"data":{"id":"g1"}}}}]}
+            """#,
+            "/v1/apps/123/appPriceSchedule": #"{"data":{"id":"sched1"}}"#,
+            // The filter reaches Apple, so the tail of the path is also the
+            // proof that this route was asked for one territory and not for
+            // every country the app sells in.
+            "filter%5Bterritory%5D=USA": #"""
+            {"data":[{"attributes":{"endDate":null},
+              "relationships":{"appPricePoint":{"data":{"id":"usa-point"}},
+                               "territory":{"data":{"id":"USA"}}}}],
+             "included":[{"type":"appPricePoints","id":"can-point",
+                          "attributes":{"customerPrice":"12.99"}},
+                         {"type":"territories","id":"CAN","attributes":{"currency":"CAD"}},
+                         {"type":"appPricePoints","id":"usa-point",
+                          "attributes":{"customerPrice":"9.99"}},
+                         {"type":"territories","id":"USA","attributes":{"currency":"USD"}}]}
+            """#,
+        ])
+
+        let money = try await StoreImportReader(
+            credentials: StoreCredentials(apple: testCredential()),
+            session: importStubSession()).appleMoney(appID: "123", territory: "USA")
+
+        #expect(money.purchases.map(\.id) == ["com.example.pro"])
+        #expect(money.subscriptions.first?.groupName == "Premium")
+        #expect(money.subscriptions.first?.plans.map(\.id) == ["com.example.monthly"])
+        // The money of the territory asked about. The schedule answers for
+        // several, and Canada's numbers under a request for the United States
+        // are the wrong price in the wrong currency.
+        #expect(money.price?.amount == Decimal(string: "9.99"))
+        #expect(money.price?.currency == "USD")
+        #expect(money.price?.territory == "USA")
+        #expect(money.failures.isEmpty)
+    }
+
+    /// A store that refuses one of the four reads costs that block alone.
+    @Test func aRefusedMoneyReadCostsItsOwnBlockAndNotTheOthers() async throws {
+        ImportStubProtocol.state.configure([
+            "inAppPurchasesV2?limit=200": #"""
+            {"data":[{"id":"p1","attributes":{"productId":"com.example.pro",
+             "inAppPurchaseType":"CONSUMABLE"}}]}
+            """#,
+        ])
+
+        let money = try await StoreImportReader(
+            credentials: StoreCredentials(apple: testCredential()),
+            session: importStubSession()).appleMoney(appID: "123", territory: "USA")
+
+        #expect(money.purchases.map(\.id) == ["com.example.pro"])
+        #expect(money.price == nil)
+        #expect(!money.failures.isEmpty)
+    }
+
+    /// The tab reads this when it opens, so it may only fill blanks. A price
+    /// typed this morning must survive a screen the developer walked past.
+    @Test func theStoreAnswerNeverOverwritesWhatTheFileAlreadySays() {
+        var manifest = Manifest()
+        manifest.pricing = Manifest.Pricing(base: Price(amount: Decimal(string: "4.99")!,
+                                                        currency: "EUR", territory: "DEU"))
+        manifest.purchases = [Manifest.Purchase(id: "com.example.mine", kind: .consumable)]
+
+        var money = AppleMoney()
+        money.price = Price(amount: Decimal(string: "9.99")!, currency: "USD", territory: "USA")
+        money.purchases = [Manifest.Purchase(id: "com.example.theirs", kind: .nonConsumable)]
+        money.subscriptions = [Manifest.SubscriptionGroup(groupId: "g1", groupName: "Premium",
+                                                          plans: [])]
+
+        let wrote = manifest.mergeAppleMoney(money)
+
+        #expect(wrote)
+        #expect(manifest.pricing?.base.amount == Decimal(string: "4.99"))
+        #expect(manifest.pricing?.base.currency == "EUR")
+        #expect(manifest.purchases?.map(\.id) == ["com.example.mine"])
+        // The one blank it did fill.
+        #expect(manifest.subscriptions?.map(\.groupId) == ["g1"])
+    }
+
+    /// Nothing to write is not an edit. The tab saves the file after a merge,
+    /// and a save per visit would rewrite `store.yaml` under every developer
+    /// who opened the tab to read it.
+    @Test func aFullFileTakesNoMoneyWriteAtAll() {
+        var manifest = Manifest()
+        manifest.pricing = Manifest.Pricing(base: Price(amount: Decimal(string: "4.99")!,
+                                                        currency: "EUR"))
+        manifest.purchases = [Manifest.Purchase(id: "com.example.mine", kind: .consumable)]
+        manifest.subscriptions = [Manifest.SubscriptionGroup(groupId: "g1", plans: [])]
+
+        var money = AppleMoney()
+        money.price = Price(amount: Decimal(string: "9.99")!, currency: "USD")
+        money.purchases = [Manifest.Purchase(id: "com.example.theirs", kind: .nonConsumable)]
+
+        let wrote = manifest.mergeAppleMoney(money)
+        #expect(!wrote)
+    }
 }
 
 /// The payload shape App Store Connect really answers with.

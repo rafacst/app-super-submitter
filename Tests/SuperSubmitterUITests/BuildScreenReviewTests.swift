@@ -299,3 +299,41 @@ private func buildReviewState() -> AppState {
     let project = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
     #expect(project.contains("flow.blockingReason"))
 }
+
+// MARK: - The platform is a choice
+
+/// One app id ships iOS and macOS and the two are not in step: the Mac app can
+/// be the only one on sale. The row that chooses between them was written and
+/// then left out of the body by a layout change, so every apple project
+/// archived `generic/platform=iOS` and nothing on screen could say otherwise.
+/// The scheme, the Gradle variant, and the JDK live in the same row and were
+/// unreachable with it.
+///
+/// A view nobody draws still compiles, so this reads the body.
+@Test func theProjectFlowDrawsTheRowThatChoosesThePlatform() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let body = try #require(view.range(of: "var body: some View"))
+    let end = try #require(view.range(of: "private func twoColumns"))
+
+    #expect(String(view[body.lowerBound..<end.lowerBound]).contains("selectionRow"))
+    #expect(view.contains("flow.choosePlatform($0)"))
+    #expect(view.contains("Text(\"macOS\").tag(BuildPlatform.macos)"))
+}
+
+/// The choice has to outlive the launch. `loadSavedProject` restores the
+/// platform from the saved link, so an answer that stopped at the run came
+/// back as iOS the next morning.
+@MainActor
+@Test func choosingMacOSReachesTheLinkAndNotOnlyTheRun() {
+    let flow = BuildFlow(app: nil)
+    flow.project = LinkedSourceProject(
+        platform: .ios, rootPath: "/Users/me/apps/deck",
+        containerPath: "/Users/me/apps/deck/Deck.xcodeproj",
+        containerKind: .project, manifestPath: "/Users/me/apps/deck/store.yaml")
+
+    flow.choosePlatform(.macos)
+
+    #expect(flow.run.platform == .macos)
+    #expect(flow.project?.platform == .macos)
+    #expect(flow.snapshot.destination != "generic/platform=iOS")
+}

@@ -173,28 +173,27 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// everywhere else in the app, and Release is the tab that is.
     var tint: Color { self == .release ? Theme.red : Theme.accent }
 
-    /// The question the tab answers. Spec section 16.3.
-    var question: String {
+    /// What the tab is for, under its name. Spec section 16.3.
+    ///
+    /// A statement of the work, not a question about it. Twelve questions read
+    /// as an interview: the line under the title was the one place that could
+    /// say what a screen holds, and it spent that place asking the developer
+    /// something instead. Each of these names the things the tab edits, so a
+    /// developer who has never opened it knows what is inside before scrolling.
+    var summary: String {
         switch self {
-        // One question, not two. It asked "Where does this app go, and who am
-        // I?", and the two halves were unrelated: a destination and an
-        // identity. The tab holds one thing, the store accounts, and picking
-        // an account is what turns a store on.
-        case .stores: "Which store accounts do I use?"
-        case .build: "What do I submit?"
-        case .details: "What does the listing say?"
-        case .media: "What does the listing show?"
-        // "what can I buy" put the developer in the customer's seat. Every
-        // other line here is the developer's own question, and the developer
-        // is the one selling.
-        case .money: "What does it cost, and what is for sale inside it?"
-        case .marketing: "How does the App Store sell it?"
-        case .reviewInfo: "What does the reviewer need?"
-        case .plan: "What changes, exactly?"
-        case .release: "Is it ready, and shall I send it?"
-        case .liveApp: "What are the customers seeing, and what can I fix?"
-        case .account: "Who am I, and what does my plan cover?"
-        case .settings: "How does Super Submitter work on this Mac?"
+        case .stores: "Connect the App Store and Google Play accounts"
+        case .build: "Import or build the package, and set the release version"
+        case .details: "Write the listing text, the keywords and the support links"
+        case .media: "Add the screenshots, the icon and the promotional video"
+        case .money: "Define selling price, in-app purchases, subscriptions and more"
+        case .marketing: "Set up custom product pages, tests and in-app events"
+        case .reviewInfo: "Give the reviewer the contact, the demo account and the notes"
+        case .plan: "Check every change before it reaches a store"
+        case .release: "Send the version to review and release it to customers"
+        case .liveApp: "Follow the ratings, the crashes and the sales of the live app"
+        case .account: "Manage the account, the plan and the payment"
+        case .settings: "Set how Super Submitter works on this Mac"
         }
     }
 

@@ -565,6 +565,31 @@ public extension Manifest {
         }
     }
 
+    /// What the App Store already charges and sells, into the blanks only.
+    ///
+    /// The Monetization tab reads this when it opens, so it writes nothing over
+    /// an answer that is already in the file: a developer who typed a new price
+    /// this morning must not have last week's price put back by a screen they
+    /// walked past. It reports whether it wrote anything, because a write is
+    /// what the tab has to save and offer back through undo.
+    @discardableResult
+    mutating func mergeAppleMoney(_ money: AppleMoney) -> Bool {
+        var wrote = false
+        if purchases?.isEmpty != false, !money.purchases.isEmpty {
+            purchases = money.purchases
+            wrote = true
+        }
+        if subscriptions?.isEmpty != false, !money.subscriptions.isEmpty {
+            subscriptions = money.subscriptions
+            wrote = true
+        }
+        if pricing == nil, let price = money.price {
+            pricing = Pricing(base: price)
+            wrote = true
+        }
+        return wrote
+    }
+
     /// A store answer never clears an answer that another store already gave.
     private mutating func mergeImportedReview(_ imported: ImportedReview) {
         var review = self.review ?? Review()

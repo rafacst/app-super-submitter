@@ -63,6 +63,8 @@ struct MoneyTab: View {
             Task { await state.loadApplePricePoints() }
         }
         .task { await state.loadApplePricePoints() }
+        // What the store already charges and sells, for an app that is on it.
+        .task { await state.loadStoreMonetization() }
     }
 
     /// The price, under the store whose ladder decides it.

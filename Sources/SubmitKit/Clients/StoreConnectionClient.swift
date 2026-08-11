@@ -63,6 +63,24 @@ public struct ImportedStoreListing: Sendable, Equatable {
     public init() {}
 }
 
+/// What one store charges for an app and sells inside it, read on its own.
+///
+/// The price is here and not in `ImportedStoreListing`, because a listing
+/// import never carried one: see `StoreImportReader.appleMoney`.
+public struct AppleMoney: Sendable, Equatable {
+    public var purchases: [Manifest.Purchase] = []
+    public var subscriptions: [Manifest.SubscriptionGroup] = []
+    public var price: Price?
+    /// The reads the store refused, in the words the import uses.
+    public var failures: [String] = []
+
+    public var isEmpty: Bool {
+        purchases.isEmpty && subscriptions.isEmpty && price == nil
+    }
+
+    public init() {}
+}
+
 /// The review answers that a store already holds. The demo account user name
 /// and password are never here; they live in the Keychain. Spec section 9.5.
 public struct ImportedReview: Sendable, Equatable {

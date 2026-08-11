@@ -20,6 +20,14 @@ struct BuildFromProjectView: View {
                     if !flow.containers.isEmpty, flow.state == .needsSelection {
                         containerChooser
                     }
+                    // What the build is for. One app id ships iOS and macOS
+                    // and the two are not in step, so the platform is a
+                    // choice on every apple project and not a fact of the
+                    // container. Without this row the flow archived whatever
+                    // the link had guessed, which is iOS for every Xcode
+                    // project, and the scheme, the Gradle variant and the JDK
+                    // had no control either.
+                    selectionRow
                 }
                 preflightCard
                 if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
