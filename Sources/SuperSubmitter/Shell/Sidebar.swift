@@ -323,18 +323,37 @@ private struct AppsSection: View {
 /// It draws nothing while the app has no answer: see `appReviewMark`.
 private struct AppStatusChip: View {
     let mark: AppleStanding?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dim = false
 
     var body: some View {
         if let mark {
-            Text(mark.label)
-                .font(Theme.font(size: 9.5, weight: .medium))
-                .foregroundStyle(mark.tint)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1.5)
-                .background(mark.fill, in: Capsule())
-                .accessibilityLabel("App Store: \(mark.label)")
+            HStack(spacing: 4) {
+                // The one state worth an animation. A reviewer has the app
+                // open, it is the state a developer refreshes the sidebar to
+                // see, and it is the only one of the fifteen that changes
+                // within the hour.
+                if mark.active {
+                    Circle()
+                        .fill(mark.tint)
+                        .frame(width: 5, height: 5)
+                        .opacity(dim ? 0.3 : 1)
+                        .animation(reduceMotion ? nil
+                                   : .easeInOut(duration: 0.9).repeatForever(),
+                                   value: dim)
+                        .onAppear { dim = true }
+                }
+                Text(mark.label)
+                    .font(Theme.font(size: 9.5, weight: .medium))
+                    .foregroundStyle(mark.tint)
+                    .lineLimit(1)
+            }
+            .fixedSize()
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(mark.fill, in: Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("App Store: \(mark.label)")
         }
     }
 }
