@@ -87,22 +87,7 @@ import Testing
         #expect(AccountTab.bestValue(in: plans(monthly: nil).plans) == nil)
     }
 
-    // MARK: - The headline price
-
-    /// The badge over the headline reads the cheapest plan that is on sale,
-    /// split into the amount and the unit under it.
-    @Test func theHeadlinePriceIsTheCheapestPlanOnSale() throws {
-        let price = try #require(AccountTab.headlinePrice(plans()))
-
-        #expect(price.amount.contains("9"))
-        #expect(price.unit == "/ month")
-    }
-
-    /// A plan the server has not opened yet is not a price anybody can pay, so
-    /// it may not be the number in the headline.
-    @Test func aPlanThatIsNotOnSaleIsNotTheHeadlinePrice() {
-        #expect(AccountTab.headlinePrice(plans(available: false)) == nil)
-    }
+    // MARK: - The unit
 
     @Test func theUnitFollowsTheInterval() {
         #expect(AccountTab.unit(BillingPlan(id: "monthly", amount: 900,
@@ -143,12 +128,36 @@ import Testing
                      "Indie developer?", "Ask for a code.",
                      "Discount code", "Enter code", "Apply",
                      "Continue to secure checkout",
-                     "Checkout by Stripe. Card details are never seen by us.",
                      "Secure checkout by Stripe",
                      "Your card details are never seen by us.",
                      "We never store or access your keys.",
                      "You review and release on your terms."] {
             #expect(source.contains(line), "the tab lost: \(line)")
+        }
+    }
+
+    /// What the screen was told to drop, and why each one had to go.
+    ///
+    /// The tab has to stand in one window with no scroll bar, so every line on
+    /// it is paying rent. These five were struck out on the review: three of
+    /// them said something a second element on the same screen already said,
+    /// and two of them claimed something the app does not do.
+    @Test func theTabDropsWhatTheReviewTookOut() throws {
+        let source = try tabSource()
+
+        for gone in [
+            // The trust bar carries the same sentence at full length.
+            "Checkout by Stripe",
+            // The bar under the plans reads the price already.
+            "SUPER SUBMITTER",
+            // Reads are free and always were, so this sold nothing.
+            "Unlimited store reads",
+            // No support tier exists to promise.
+            "Priority support",
+            // The gate's sentence, above a screen that answers it in full.
+            "PaywallTrigger",
+        ] {
+            #expect(!source.contains(gone), "the tab still carries: \(gone)")
         }
     }
 
