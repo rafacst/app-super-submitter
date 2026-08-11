@@ -370,6 +370,11 @@ final class AppState {
     // Tab 6.
     var reviewerUsername = ""
     var reviewerPassword = ""
+    /// The one-button read of the reviewer sign-in App Store Connect holds:
+    /// whether it is running, and what it has to say when it filled nothing.
+    /// See `readDemoAccountFromStore`.
+    var demoAccountReading = false
+    var demoAccountReadNote: String?
     var showAgeRating = false
     var showDataSafety = false
 
@@ -2023,6 +2028,47 @@ final class AppState {
         reviewerCredentialsChanged()
     }
 
+    /// Asks App Store Connect for the reviewer sign-in it already holds.
+    ///
+    /// The offer above appears only once something has read the store, and the
+    /// only thing that read it was the whole pass on the Summary tab. So a
+    /// developer standing on this tab with two empty fields, on an app that has
+    /// shipped with a demo account several times, had nothing here to press:
+    /// the account was in App Store Connect the whole time and the way to it
+    /// was another tab and a full read of both stores.
+    ///
+    /// The press is the decision, so an empty pair fills itself. A field that
+    /// already holds something is left alone and the offer above says what the
+    /// store has, because a value being typed now is newer than a store's.
+    func readDemoAccountFromStore() async {
+        guard let appID = manifest.apps.apple?.appId, !appID.isEmpty else {
+            demoAccountReadNote = "No App Store app is connected. The Stores tab holds the app id."
+            return
+        }
+        demoAccountReading = true
+        demoAccountReadNote = nil
+        defer { demoAccountReading = false }
+        do {
+            let signIn = try await AppleActionsClient(api: readOnlyAPI()).reviewSignIn(appID: appID)
+            var apple = actualState.apple ?? ActualState.Apple()
+            apple.reviewDemoAccountName = signIn.name ?? apple.reviewDemoAccountName
+            apple.reviewDemoAccountPassword = signIn.password ?? apple.reviewDemoAccountPassword
+            actualState.apple = apple
+            guard signIn.name != nil else {
+                demoAccountReadNote = "App Store Connect holds no reviewer account for this app."
+                return
+            }
+            if reviewerUsername.isEmpty, reviewerPassword.isEmpty {
+                fillDemoAccountFromStore()
+                demoAccountReadNote = signIn.password == nil
+                    ? "Filled from \(signIn.versionString ?? "the App Store"). Apple does not return the password, so type it."
+                    : "Filled from \(signIn.versionString ?? "the App Store")."
+            }
+        } catch {
+            demoAccountReadNote = "The App Store could not be read. \(error.localizedDescription)"
+        }
+    }
+
     /// The reviewer sign-in as text, for the one console field no API reaches.
     ///
     /// Play Console asks for both halves under App access and the Android
@@ -2705,12 +2751,6 @@ final class AppState {
         }
     }
 
-    var googleCredentialSummary: String {
-        googleCredentialChoice == .oauth
-            ? (googleOAuthCredential == nil ? "" : "Google OAuth")
-            : googleAccountEmail
-    }
-
     private var googleCredentialIdentity: String {
         switch googleCredentialChoice {
         case .oauth: googleOAuthCredential?.refreshToken ?? ""
@@ -2820,6 +2860,7 @@ final class AppState {
         planReading = false
         plan = nil
         acknowledged = []
+        clearStoppedRun()
     }
 
     func persistLinkedApps() {

@@ -111,6 +111,30 @@ private func buildReviewState() -> AppState {
     #expect(row.contains(".fixedSize(horizontal: false, vertical: true)"))
 }
 
+/// The command that starts the work belongs to the checks that decide whether
+/// it may run.
+///
+/// It stood at the foot of the screen, under the live run, the artifact card
+/// and the error panel, so on a tall window the one button that builds was
+/// below the fold while the card that says whether it can was at the top.
+@Test func theBuildCommandIsInThePreflightCard() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let card = try #require(view.range(of: "private var preflightCard"))
+    let rows = try #require(view.range(of: "private func preflightRows"))
+    let preflight = String(view[card.lowerBound..<rows.lowerBound])
+    let actions = try #require(view.range(of: "private var actionRow"))
+    let confirmations = try #require(view.range(of: "private var buildConfirmation"))
+    let row = String(view[actions.lowerBound..<confirmations.lowerBound])
+
+    #expect(preflight.contains("Build Archive"))
+    #expect(preflight.contains("showBuildConfirmation = true"))
+    #expect(!row.contains("Build Archive"))
+    // The upload and the artifact are still answered at the foot of the screen,
+    // beside the artifact they describe.
+    #expect(row.contains("Upload to the store"))
+    #expect(row.contains("Keep the artifact and stop"))
+}
+
 // MARK: - The two flows
 
 /// A field that only a first submission uses is noise on an update, and the

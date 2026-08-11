@@ -141,7 +141,7 @@ struct StoreDiagnosticsPanel: View {
     }
 
     private var referenceData: some View {
-        DisclosureGroup("Territories and app categories") {
+        Fold("Territories and app categories") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if !territories.isEmpty {

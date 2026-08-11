@@ -225,7 +225,7 @@ struct SettingsTab: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Note("A draft copies the list of linked apps and the text of every store.yaml into Application Support, where an app update cannot reach them. Restoring puts back only what is missing: a store.yaml that is still on disk is never written over. A draft holds no key and no password. Those stay in the Keychain.")
                     HStack(spacing: 7) {
-                        QuietButton(title: "Save a draft") { state.saveDraft() }
+                        QuietButton(title: "Save progress") { state.saveDraft() }
                         QuietButton(title: "Restore the newest") { restoring = true }
                             .disabled(drafts.isEmpty)
                         QuietButton(title: "Reveal") { state.revealDrafts() }

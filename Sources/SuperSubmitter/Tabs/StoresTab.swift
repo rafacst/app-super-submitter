@@ -105,7 +105,6 @@ private struct AppleCredentialPanel: View {
         CredentialCard(
             store: .apple,
             status: state.appleConnection,
-            summary: state.appleKeyID,
             open: state.credentialDetailsOpen(.apple),
             toggle: { state.toggleCredentialDetails(.apple) },
             guide: .apple,
@@ -160,7 +159,6 @@ private struct GoogleCredentialPanel: View {
         CredentialCard(
             store: .google,
             status: state.googleConnection,
-            summary: state.googleCredentialSummary,
             open: state.credentialDetailsOpen(.google),
             toggle: { state.toggleCredentialDetails(.google) },
             guide: state.googleCredentialChoice == .oauth ? .googleOAuth : .google,

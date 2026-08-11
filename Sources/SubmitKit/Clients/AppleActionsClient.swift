@@ -153,6 +153,75 @@ public struct AppleActionsClient: Sendable {
         }
     }
 
+    // MARK: - The reviewer sign-in
+
+    /// What App Store Connect holds under App Review Information.
+    public struct ReviewSignIn: Sendable, Equatable {
+        /// The version the answer came from, so the screen can say which one.
+        public var versionString: String?
+        public var required: Bool?
+        public var name: String?
+        /// Apple withholds this on most accounts. Half a sign-in is still the
+        /// useful half.
+        public var password: String?
+
+        public init(versionString: String? = nil, required: Bool? = nil,
+                    name: String? = nil, password: String? = nil) {
+            self.versionString = versionString
+            self.required = required
+            self.name = name
+            self.password = password
+        }
+
+        public var isEmpty: Bool { name == nil && required == nil }
+    }
+
+    /// The reviewer sign-in this app has already sent Apple.
+    ///
+    /// The detail belongs to a version, and Apple carries it into the next one,
+    /// so the answer sits on the draft when there is one and on the last
+    /// released version the rest of the time. This asks the newest versions in
+    /// turn and stops at the first that names an account.
+    ///
+    /// Read-only, and it writes nothing anywhere. A version with no review
+    /// detail answers 404, which is a state and not a failure, so each detail
+    /// is a `try?` and only the version list can throw.
+    public func reviewSignIn(appID: String, platform: String? = nil,
+                             depth: Int = 5) async throws -> ReviewSignIn {
+        let payload = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/appStoreVersions",
+            query: [URLQueryItem(name: "limit", value: "200")]).data)
+        // Newest first, by the app's own version comparison. App Store Connect
+        // fixes no order here, so taking the first five as they arrive would
+        // ask five versions from 2019 on an app with twenty releases.
+        let versions = StoreImportReader
+            .applePlatformVersions(payload, platform: platform)
+            .sorted { Self.version($0, above: $1) }
+        var fallback = ReviewSignIn()
+        for version in versions.prefix(depth) {
+            guard let id = version["id"].string,
+                  let detail = try? await api.apple(
+                    "GET", "/v1/appStoreVersions/\(id)/appStoreReviewDetail") else { continue }
+            let attributes = JSON(data: detail.data)["data"]["attributes"]
+            // Apple returns "" for a value it will not hand back, and a blank
+            // that reads as an answer would offer to fill a field with nothing.
+            let result = ReviewSignIn(
+                versionString: version["attributes"]["versionString"].string,
+                required: attributes["demoAccountRequired"].bool,
+                name: attributes["demoAccountName"].string.flatMap { $0.isEmpty ? nil : $0 },
+                password: attributes["demoAccountPassword"].string
+                    .flatMap { $0.isEmpty ? nil : $0 })
+            if result.name != nil { return result }
+            if fallback.isEmpty { fallback = result }
+        }
+        return fallback
+    }
+
+    private static func version(_ left: JSON, above right: JSON) -> Bool {
+        Validator.isVersion(left["attributes"]["versionString"].string ?? "",
+                            above: right["attributes"]["versionString"].string ?? "")
+    }
+
     // MARK: - The tags the App Store puts on the app
 
     /// One label the App Store applies to the app.

@@ -1697,6 +1697,32 @@ public enum Planner {
 
     // MARK: - The media
 
+    /// Why a set of pictures is being sent again, in one clause.
+    ///
+    /// Screenshots are the whole weight of an update, so "replace with 5
+    /// screenshots · 12 MB" is the row a developer stops at, and it used to
+    /// give no reason at all. The commonest question about this app was why it
+    /// wanted to send pictures the store already had, and the plan knew the
+    /// answer every time: the version it writes to holds none, or the bytes on
+    /// this Mac are not the bytes the store took.
+    ///
+    /// The comparison is by content, never by file name: Apple returns the MD5
+    /// it was given at upload and Google returns a SHA-256. Re-exporting an
+    /// identical-looking image changes those, and that is a real difference —
+    /// the store holds the older bytes.
+    static func mediaReason(read: Bool, starting: [String]?, desired: [String]) -> String {
+        guard read else { return "the store was not read" }
+        guard let starting, !starting.isEmpty else { return "the store holds none" }
+        if Set(starting) == Set(desired) { return "the same pictures, in another order" }
+        let shared = Set(starting).intersection(desired).count
+        guard shared > 0 else {
+            return desired.count == starting.count
+                ? "all \(desired.count) differ"
+                : "the store holds \(starting.count)"
+        }
+        return "\(desired.count - shared) of \(desired.count) differ"
+    }
+
     private static func mediaSteps(_ input: Input, store: Store) -> [PlanStep] {
         let manifest = input.manifest
         var steps: [PlanStep] = []
@@ -1713,14 +1739,13 @@ public enum Planner {
                                            root: input.root)
                 guard !uploads.isEmpty else { continue }
 
+                let key = "\(code)/\(uploads[0].bucket)"
                 let held: Set<String>
                 switch store {
                 case .apple:
-                    held = input.actual.apple?
-                        .screenshotChecksums["\(code)/\(uploads[0].bucket)"] ?? []
+                    held = input.actual.apple?.screenshotChecksums[key] ?? []
                 case .google:
-                    held = input.actual.google?
-                        .imageHashes["\(code)/\(uploads[0].bucket)"] ?? []
+                    held = input.actual.google?.imageHashes[key] ?? []
                 }
                 let desired = uploads.map { store == .apple ? $0.md5 : $0.sha256 }
                 // The pictures the next version starts with, which for an
@@ -1728,10 +1753,14 @@ public enum Planner {
                 // version. A set that already matches uploads nothing, and
                 // that is the whole cost of an update: the text is bytes and
                 // the screenshots are megabytes.
+                //
+                // Apple keeps its order and Google does not, so Apple compares
+                // the list and Google compares the set.
+                let starting = store == .apple
+                    ? input.actual.apple?.startingScreenshotOrder(key)
+                    : Array(held)
                 let orderedMatches = store == .apple
-                    ? input.actual.apple.flatMap {
-                        $0.startingScreenshotOrder("\(code)/\(uploads[0].bucket)")
-                    } == desired
+                    ? starting == desired
                     : held == Set(desired)
                 guard !orderedMatches else { continue }
                 // Whether anybody checked. With no read there are no checksums,
@@ -1745,10 +1774,11 @@ public enum Planner {
                     : input.actual.google != nil
                 let bytes = uploads.reduce(Int64(0)) { $0 + $1.bytes }
                 let label = store == .apple ? "screenshots" : "\(uploads[0].bucket)"
+                let reason = mediaReason(read: read, starting: starting, desired: desired)
                 steps.append(PlanStep(
                     id: "\(store.rawValue).media.\(code).\(deviceClass.rawValue)",
                     system: store == .apple ? .apple : .google, kind: .add,
-                    summary: "replace with \(uploads.count) \(label)  ·  \(bytesText(bytes))  (\(code))",
+                    summary: "replace with \(uploads.count) \(label)  ·  \(bytesText(bytes))  ·  \(reason)  (\(code))",
                     title: "Reconcile \(uploads.count) \(label) for \(code)",
                     requests: store == .apple
                         ? [RequestSketch("DELETE", "/v1/appScreenshots/{id}"),
