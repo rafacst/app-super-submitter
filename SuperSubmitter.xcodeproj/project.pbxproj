@@ -1730,7 +1730,7 @@
 				);
 				LICENSING_BASE_URL = "https://super-submitter.rafacst.me";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rafacst.supersubmitter;
 				PRODUCT_NAME = SuperSubmitter;
 				SDKROOT = macosx;
@@ -1814,7 +1814,7 @@
 				);
 				LICENSING_BASE_URL = "https://super-submitter.rafacst.me";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rafacst.supersubmitter;
 				PRODUCT_NAME = SuperSubmitter;
 				SDKROOT = macosx;
