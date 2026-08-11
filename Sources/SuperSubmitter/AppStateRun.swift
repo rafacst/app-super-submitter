@@ -791,6 +791,10 @@ extension AppState {
                 }
                 statuses[.apple] = StoreStatus(store: .apple, phase: .inQueue,
                                                detail: detail(for: .apple), checkedAt: Date())
+                // The submitted binary is the first thing on this Mac that
+                // carries an Apple icon, and this is the moment it exists. The
+                // preview has drawn initials until now. See `captureAppleIcon`.
+                await captureAppleIcon()
             case .google:
                 guard let packageName = manifest.apps.google?.packageName, !packageName.isEmpty
                 else { throw ReleaseInputError.noGooglePackage }

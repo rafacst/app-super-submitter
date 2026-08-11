@@ -740,9 +740,16 @@ public struct StoreImportReader: Sendable {
     /// placeholders. Every image attribute in the API uses this one shape.
     static func imageURL(_ asset: JSON, side: Int? = nil) -> URL? {
         guard let template = asset["templateUrl"].string else { return nil }
-        let width = side ?? asset["width"].int ?? 1_290
-        let height = side ?? asset["height"].int ?? 2_796
-        return URL(string: template
+        return imageURL(template: template,
+                        width: side ?? asset["width"].int ?? 1_290,
+                        height: side ?? asset["height"].int ?? 2_796)
+    }
+
+    /// The same substitution, for a caller holding the template and no asset
+    /// around it. `StoreDiagnostics.buildIcons` answers with the template
+    /// alone, and an icon is square, so that caller knows the side already.
+    public static func imageURL(template: String, width: Int, height: Int) -> URL? {
+        URL(string: template
             .replacingOccurrences(of: "{w}", with: String(width))
             .replacingOccurrences(of: "{h}", with: String(height))
             .replacingOccurrences(of: "{f}", with: "png")

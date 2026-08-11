@@ -747,6 +747,13 @@ final class AppState {
         selectedAppIndex = index
         guard !linkedApps.isEmpty else { return }
         activateLinkedApp(at: index)
+        // Picking an app opens its store page. The row used to switch the app
+        // under whatever tab was already open, so choosing an app from the
+        // Money tab answered a question about money that nobody had asked
+        // about this app yet. The first thing anybody wants of an app they
+        // just picked is to look at it, and every other tab is one click away
+        // and still shows this app when it gets there.
+        selectedTab = .preview
         // Where App Store review has each of them. Picking an app is the
         // moment a developer needs to know whether this one is frozen, and
         // whether the others are, so the sweep runs on every change as well as

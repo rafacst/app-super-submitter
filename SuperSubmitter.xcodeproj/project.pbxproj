@@ -93,6 +93,7 @@
 		4B76E33517B6594891F7FCD3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FC1FA910D79B3D3ED2FB4F /* Theme.swift */; };
 		4BBF9997B69994DE3558D2DD /* AppStateGoogleActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A1913387574636BF5B1062 /* AppStateGoogleActions.swift */; };
 		4BC324E614F59FD96565A459 /* AppleTeamPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B46D17E6960247A0925B392 /* AppleTeamPanel.swift */; };
+		4BE69D75B5C7E31801419A34 /* PreviewTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE8926FA7D5730D809F5269D /* PreviewTab.swift */; };
 		4C5125281AB8833C02CE6B86 /* ExistingAppImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FDC311FE6663720F580BBA /* ExistingAppImportTests.swift */; };
 		4C7D3C429F394F95DAD68DED /* Entitlement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 940B8873D4BB5BAF35036269 /* Entitlement.swift */; };
 		4CA3A601A81E0CC018CF74D9 /* PriceDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 624A241FEC59B61D4122D435 /* PriceDraft.swift */; };
@@ -619,6 +620,7 @@
 		DA1117E3BE5331194E42ADC9 /* ProjectDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDiscovery.swift; sourceTree = "<group>"; };
 		DD81D4B5724302E529BD064E /* AppStateMarketing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateMarketing.swift; sourceTree = "<group>"; };
 		DE68BE6466E075A815F827DF /* ManifestEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestEditing.swift; sourceTree = "<group>"; };
+		DE8926FA7D5730D809F5269D /* PreviewTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewTab.swift; sourceTree = "<group>"; };
 		DFD7619426280E4CA610CC1D /* GoogleOAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthTests.swift; sourceTree = "<group>"; };
 		E023895E24988E09D1B1480A /* ValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidatorTests.swift; sourceTree = "<group>"; };
 		E075EE9B857A20170572CCAE /* AppleUpdateFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleUpdateFlowTests.swift; sourceTree = "<group>"; };
@@ -1213,6 +1215,7 @@
 				88FFBAD82D86A4775D0AF48C /* MoneyTab.swift */,
 				92CC10AAB4F6572C96CD9F98 /* OfferEditor.swift */,
 				A516E6CD3FCB821FB333310F /* PlanTab.swift */,
+				DE8926FA7D5730D809F5269D /* PreviewTab.swift */,
 				FC097DCA30B2597397FCC4A8 /* ReleaseTab.swift */,
 				2E94EBFCF27BC91D2059A774 /* ReportsPanel.swift */,
 				041F7F4AB25F8958647863BA /* ReviewInfoTab.swift */,
@@ -1635,6 +1638,7 @@
 				F82ADF7D6568471646AD461D /* OnboardingPanel.swift in Sources */,
 				30691A3DA2AEAA507A299B09 /* PlanTab.swift in Sources */,
 				7BAC8763E43C84592CEA6BAF /* PostHogClient.swift in Sources */,
+				4BE69D75B5C7E31801419A34 /* PreviewTab.swift in Sources */,
 				FF2F6356DE35924F91D4B964 /* QuickLook.swift in Sources */,
 				BAD1B5516B9F9D81FCA2EC27 /* ReleaseSheet.swift in Sources */,
 				B67BA79BC0F7F125C4078730 /* ReleaseTab.swift in Sources */,

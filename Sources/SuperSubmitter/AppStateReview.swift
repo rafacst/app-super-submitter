@@ -410,6 +410,30 @@ extension AppState {
         if !listing.failures.isEmpty { reviewRetrievalError = listing.failures.first }
     }
 
+    /// The icon the App Store will show, out of the binary Apple now holds.
+    ///
+    /// It runs after a submission and after nothing else, because before one
+    /// there is nothing to read. `media.icon` is a Play field: Apple never
+    /// takes an icon file, it extracts the icon from the build, so an app that
+    /// has not sent a build has no Apple icon anywhere on this Mac. The
+    /// preview draws the initials until this answers, and says why.
+    ///
+    /// Apple keys the icon to the build and not to a language, so one call
+    /// covers every locale the listing has.
+    ///
+    /// A failure costs the picture and nothing else. The submission has already
+    /// gone by the time this runs and no part of it wanted an icon.
+    func captureAppleIcon() async {
+        guard let buildID = actualState.apple?.buildIdForVersion,
+              let template = try? await diagnostics().buildIcons(buildID: buildID).first,
+              let url = StoreImportReader.imageURL(template: template, width: 512, height: 512)
+        else { return }
+        var snapshot = storeSnapshot
+        snapshot.setAppleIcon(url)
+        storeSnapshot = snapshot
+        snapshot.save(toRoot: manifestRoot)
+    }
+
     /// The refusal the banner has to carry a tick for, or nil when nothing is
     /// waiting on one.
     ///
