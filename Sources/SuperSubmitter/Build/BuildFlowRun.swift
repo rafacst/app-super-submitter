@@ -555,6 +555,7 @@ extension BuildFlow {
                     processingLabel = nil
                     successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
                     run.move(to: .complete)
+                    storeGainedABuild()
                     PostHogSDK.shared.capture("artifact_upload_completed", properties: [
                         "platform": "apple"
                     ])
@@ -626,6 +627,7 @@ extension BuildFlow {
         run.cleanupState = .complete
         successLink = "https://play.google.com/console"
         run.move(to: .complete)
+        storeGainedABuild()
         PostHogSDK.shared.capture("artifact_upload_completed", properties: [
             "platform": "android"
         ])
@@ -673,6 +675,8 @@ extension BuildFlow {
             processingLabel = "The upload had already reached Google Play, so it was not undone."
             run.cleanupState = .complete
             run.move(to: .complete)
+            // A cancel that arrived too late still left a build on the store.
+            storeGainedABuild()
             return
         }
         if let editID = run.remoteIDs["googleEdit"] {
@@ -894,6 +898,22 @@ extension BuildFlow {
         guard let startedAt else { return "" }
         let seconds = Int((run.finishedAt ?? Date()).timeIntervalSince(startedAt))
         return String(format: "%d:%02d", max(0, seconds) / 60, max(0, seconds) % 60)
+    }
+
+    /// The store now holds something it did not hold when the plan was read.
+    ///
+    /// The plan, the runway steps and the release blockers are all built from
+    /// one store read, and nothing in them noticed an upload. `adoptBuiltArtifact`
+    /// invalidates the plan, but only the **Continue to Summary** button calls
+    /// it, so a developer who reached the Summary from the sidebar was shown
+    /// the store as it stood before the build existed: a blocker describing a
+    /// build from an earlier read, beside a build that had just landed.
+    ///
+    /// It invalidates and does not read. `readStores` refuses to run while a
+    /// run is unfinished, and this is called from inside one; the Summary
+    /// reads for itself when it opens and finds no plan.
+    private func storeGainedABuild() {
+        app?.invalidatePlan()
     }
 
     func reveal(_ path: String) {

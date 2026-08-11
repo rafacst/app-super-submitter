@@ -33,12 +33,39 @@ enum RunwayStep {
             }
             return !(path ?? "").isEmpty
         }
-        guard !named.isEmpty else { return "no artifact named" }
+        guard !named.isEmpty else { return storeBuild(state) ?? "no artifact named" }
         let here = named.filter { state.missingBuildNote($0) == nil }.count
         let word = named.count == 1 ? "artifact" : "artifacts"
         if here == 0 { return "\(named.count) \(word) named, none found" }
         if here == named.count { return "\(named.count) \(word) ready" }
         return "\(named.count) \(word) named, \(here) found"
+    }
+
+    /// What App Store Connect already holds for this version.
+    ///
+    /// An Apple build names no file on purpose: `xcodebuild -exportArchive`
+    /// sends the binary itself, so `adoptBuiltArtifact` writes no path and the
+    /// artifact that ships is the one in the store. Reading the manifest alone,
+    /// this step answered "no artifact named" for every Apple app that ever
+    /// existed, including the minute after a build reached the store, which is
+    /// the minute a developer comes here to check.
+    ///
+    /// The number is the highest in this version's train, which is the build
+    /// the upload just added. It is named only when it is the build being
+    /// described: a version can hold an older build than the newest one on the
+    /// store, and printing the highest number beside "attached" would name a
+    /// build that is not the attached one. When the number cannot be trusted
+    /// the row still says a build is there, because the build is the answer
+    /// and its number is the detail.
+    @MainActor
+    private static func storeBuild(_ state: AppState) -> String? {
+        guard let apple = state.actualState.apple else { return nil }
+        let newest = apple.highestBuildNumber.map { "build \($0)" } ?? "a build"
+        if let attached = apple.attachedBuildId {
+            return "\(attached == apple.buildIdForVersion ? newest : "a build") attached"
+        }
+        if apple.buildIdForVersion != nil { return "\(newest) uploaded, not attached" }
+        return nil
     }
 
     /// The two numbers the whole tab produces, or the fact that it has not
