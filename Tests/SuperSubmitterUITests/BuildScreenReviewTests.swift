@@ -71,9 +71,16 @@ private func buildReviewState() -> AppState {
 
 // MARK: - Nothing uneditable is clickable
 
-/// The bundle id and the package name belong to the store. Drawn as a control
-/// that opens another tab, they read as a field you may edit and answer a
-/// press by navigating away from the work.
+/// The bundle id belongs to the store. Drawn as a control that opens another
+/// tab, it reads as a field you may edit and answers a press by navigating away
+/// from the work.
+///
+/// The package name is the exception, and it is not one the rule ever meant to
+/// cover. Apple assigns a bundle id and the Menu beside it lists the real apps
+/// a credential can see; the Android Publisher API publishes no way to list
+/// anything, so nobody can pick a package name and somebody has to type it. A
+/// fact-shaped box was all this row had, the value it wanted lived on another
+/// tab, and a developer standing on this one had no way to supply it.
 @Test func anIdentityWithNothingToChooseIsNotAControl() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
     let start = try #require(build.range(of: "private var appleIdentity"))
@@ -83,7 +90,10 @@ private func buildReviewState() -> AppState {
     #expect(!identity.contains("PickerActionRow(value: state.appleBundleID"))
     #expect(!identity.contains("PickerActionRow(value: state.googlePackageName"))
     #expect(identity.contains("identityValue(state.appleBundleID"))
-    #expect(identity.contains("identityValue(state.googlePackageName"))
+    // Typed, and typed here. Not a control that answers a press by leaving.
+    #expect(identity.contains("TextField(\"Package name\""))
+    #expect(identity.contains("state.updateGoogleAppFields()"))
+    #expect(!identity.contains("identityValue(state.googlePackageName"))
 }
 
 // MARK: - Build from project uses the width

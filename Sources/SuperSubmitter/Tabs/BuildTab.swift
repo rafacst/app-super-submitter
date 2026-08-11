@@ -218,9 +218,24 @@ struct BuildTab: View {
             StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
             Text("Package name")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            identityValue(state.googlePackageName, placeholder: "Package name")
+            // Typed here, not only on Stores. The Android Publisher API
+            // publishes no way to list the apps a service account can see, so
+            // there is no picker to offer the way App Store Connect gets one,
+            // and a fact-shaped box was all this row had. The value it wanted
+            // was on another tab, and the developer standing on this one had
+            // no way to supply it.
+            TextField("Package name", text: Binding(
+                get: { state.googlePackageName },
+                set: { state.googlePackageName = $0 }))
+                .textFieldStyle(.roundedBorder)
+                .font(Theme.mono(12))
+                .frame(maxWidth: 340)
+                .onSubmit { state.updateGoogleAppFields() }
+                // The manifest takes it when the field is left, so a value
+                // typed and not confirmed with Return is still kept.
+                .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
             if state.googlePackageName.isEmpty {
-                missingIdentityNote("Set and test a package name on Stores.")
+                missingIdentityNote("Test the package name on Stores once it is set.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -176,6 +176,28 @@ public enum Validator {
 
     // MARK: - 10.2 Media
 
+    /// How many screenshots land in each of Apple's own display types.
+    ///
+    /// The pixel size names the set, which is the same rule the upload obeys.
+    /// A file whose size Apple does not recognise is left out: the size check
+    /// above has already reported it, and counting it under a made-up heading
+    /// would report the same file twice under two different words.
+    static func appleDisplayTypeCounts(_ paths: [String], root: URL?,
+                                       deviceClass: Manifest.DeviceClass) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for path in paths {
+            guard let url = Planner.resolve(path, root: root),
+                  let info = try? AssetInspector.image(at: url),
+                  // `try?` on a call returning `String?` flattens, so this one
+                  // binding covers both the throw and the unrecognised size.
+                  let type = try? AssetInspector.appleDisplayType(for: info,
+                                                                  deviceClass: deviceClass)
+            else { continue }
+            counts[type, default: 0] += 1
+        }
+        return counts
+    }
+
     static func media(_ input: Planner.Input) -> [Finding] {
         let manifest = input.manifest
         var result: [Finding] = []
@@ -218,11 +240,24 @@ public enum Validator {
                 }
 
                 // Apple takes 10 per display type, Google takes 8 per locale.
-                if input.stores.contains(.apple), applePaths.count > 10 {
-                    result.append(Finding(
-                        id: "media.count.apple.\(code).\(deviceClass.rawValue)", severity: .error,
-                        message: "\(applePaths.count) screenshots exceed the App Store limit of 10.",
-                        location: "Media · \(code) · \(deviceClass.rawValue)", fix: .media))
+                //
+                // Per display type, and the count was per device class. Apple
+                // keeps a separate set for each iPhone size and the app has one
+                // Phone bucket holding all of them, so importing an app that
+                // ships 6.9 inch and 6.5 inch pictures brought back the same
+                // five shots twice and the check called eleven of them eleven
+                // against a limit of ten. The upload has always split them:
+                // `Planner` sends each file to the set its own pixel size
+                // names, which is the grouping Apple counts.
+                if input.stores.contains(.apple) {
+                    for (displayType, count) in Self.appleDisplayTypeCounts(
+                        applePaths, root: input.root, deviceClass: deviceClass)
+                    where count > 10 {
+                        result.append(Finding(
+                            id: "media.count.apple.\(code).\(displayType)", severity: .error,
+                            message: "\(count) screenshots exceed the App Store limit of 10 for \(displayType).",
+                            location: "Media · \(code) · \(deviceClass.rawValue)", fix: .media))
+                    }
                 }
                 if input.stores.contains(.google), googlePaths.count > 8,
                    AssetInspector.googleImageType(for: deviceClass) != nil {
