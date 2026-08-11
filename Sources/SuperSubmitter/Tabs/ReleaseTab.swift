@@ -279,6 +279,21 @@ struct ReleaseTab: View {
         // disabled button with no explanation is the worst of both.
         let locked = !released && !state.can(.storeRelease)
         let blocked = !locked && !released && (!state.hasDraft(store) || !blockers.isEmpty)
+        // The submission is with the store right now.
+        //
+        // `releasing` has always been set for the length of the call and
+        // nothing on any screen read it. The sheet dismisses itself the moment
+        // it is confirmed, so the tab underneath looked exactly as it had
+        // before the press, for as long as Apple took to answer. The one
+        // irreversible button in the app appeared to have done nothing, which
+        // is the state that invites a second press.
+        //
+        // `undoRelease` sets the same flag, so the direction has to be told
+        // apart or a cancel would be announced as a send. `released` answers
+        // it: it holds its value for the whole of either call, because both
+        // move the status only once the store has replied.
+        let sending = state.releasing == store && !released
+        let takingBack = state.releasing == store && released
         let name = store == .apple ? "App Store" : "Google Play"
         let approvedApple = store == .apple
             && state.actualState.apple?.versionState == "PENDING_DEVELOPER_RELEASE"
@@ -286,13 +301,21 @@ struct ReleaseTab: View {
         return ReleaseColumn(
             store: store,
             lines: lines(store),
-            label: released ? "Sent to \(name) review"
+            label: sending ? "Sending to \(name)"
+                : released ? "Sent to \(name) review"
                 : approvedApple ? "Release the approved App Store version"
                 : "Send to \(name) review",
             done: released,
             blocked: blocked,
-            hint: hint(store, released: released, blockers: blockers, other: other),
-            hintColor: blocked && !released ? Theme.yellow : Theme.text2,
+            sending: sending,
+            hint: sending
+                ? "The submission is with \(name) now. This takes a moment, and pressing again does nothing."
+                : takingBack
+                ? "\(name) is being asked to take it back. This takes a moment."
+                : hint(store, released: released, blockers: blockers, other: other),
+            hintColor: sending || takingBack ? Theme.text2
+                : blocked && !released ? Theme.yellow : Theme.text2,
+            undoing: takingBack,
             undoTitle: state.canUndoRelease(store)
                 ? (store == .apple ? "Cancel the submission" : "Halt the rollout")
                 : nil,
@@ -618,15 +641,22 @@ private struct ReleaseColumn: View {
     let label: String
     let done: Bool
     let blocked: Bool
+    /// The submission is in flight. This button is the only thing on the screen
+    /// that can say so: the confirmation sheet has already closed, and the
+    /// status card above still holds what the last read found.
+    var sending = false
     let hint: String
     let hintColor: Color
+    /// The take-back is in flight. It runs through the same call as the send
+    /// and was just as silent.
+    var undoing = false
     /// The take-back. It appears only while the store still accepts one, so a
     /// missing title is the normal case and not an error.
     var undoTitle: String?
     var undo: () -> Void = {}
     let action: () -> Void
 
-    private var inactive: Bool { done || blocked }
+    private var inactive: Bool { done || blocked || sending }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -638,19 +668,26 @@ private struct ReleaseColumn: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button(action: action) {
-                Text(label)
-                    .font(Theme.font(size: 13.5, weight: .semibold))
-                    .foregroundStyle(inactive ? Theme.text3 : .white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 13)
-                    .frame(maxWidth: .infinity)
-                    .background(inactive ? Theme.sep2 : Theme.redFill,
-                                in: RoundedRectangle(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9)
-                        .strokeBorder(inactive ? Theme.sep : Theme.redFill, lineWidth: 1))
+                HStack(spacing: 9) {
+                    if sending { Spinner() }
+                    Text(label)
+                        .font(Theme.font(size: 13.5, weight: .semibold))
+                        .foregroundStyle(inactive ? Theme.text3 : .white)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 13)
+                .frame(maxWidth: .infinity)
+                .background(inactive ? Theme.sep2 : Theme.redFill,
+                            in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9)
+                    .strokeBorder(inactive ? Theme.sep : Theme.redFill, lineWidth: 1))
             }
             .buttonStyle(.plain)
             .disabled(inactive)
+            // The label changes under the pointer, so the change has to be
+            // announced or a screen reader is told nothing at all.
+            .accessibilityLabel(label)
+            .motion(.easeInOut(duration: 0.2), value: sending)
 
             Text(hint)
                 .font(Theme.font(size: 11.5))
@@ -659,7 +696,12 @@ private struct ReleaseColumn: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let undoTitle {
-                QuietButton(title: undoTitle, action: undo)
+                HStack(spacing: 8) {
+                    if undoing { Spinner() }
+                    QuietButton(title: undoTitle, action: undo)
+                        .disabled(undoing)
+                }
+                .motion(.easeInOut(duration: 0.2), value: undoing)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
