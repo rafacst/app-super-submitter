@@ -222,6 +222,19 @@ extension AppState {
             : "Removed \(removed.count) run \(removed.count == 1 ? "folder" : "folders"). Every retained archive and App Bundle is untouched."
     }
 
+    /// The archives this app built and kept, removed.
+    ///
+    /// `prune` leaves them on purpose and the row above says so, which left a
+    /// developer with the Finder or the nuclear option as the only ways to
+    /// reclaim the disk. `BuildStorage` decides what may go: an Android App
+    /// Bundle sits in the developer's own project and is refused there.
+    func deleteRetainedArchives() {
+        let removed = BuildStorage().removeRetainedArchives()
+        errorMessage = removed.isEmpty
+            ? "There is no retained archive to delete."
+            : "Deleted \(removed.count) \(removed.count == 1 ? "archive" : "archives"). Your projects are untouched."
+    }
+
     /// Carries what Build from Project produced into `store.yaml`, so the
     /// existing Plan reads it. upload-spec section 13.
     ///

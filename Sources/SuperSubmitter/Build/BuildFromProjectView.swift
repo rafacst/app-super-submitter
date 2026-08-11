@@ -10,6 +10,9 @@ struct BuildFromProjectView: View {
     /// The failure panel's own fold, open when the panel appears. See
     /// `errorPanel`.
     @State private var diagnosticsOpen = true
+    /// One dialog for two buttons. The artifact card and the success card both
+    /// offer the delete, and the file they mean is the same one.
+    @State private var deleting = false
 
     private var flow: BuildFlow { state.buildFlow }
 
@@ -49,6 +52,13 @@ struct BuildFromProjectView: View {
         }
         .sheet(isPresented: Bindable(flow).showBuildConfirmation) { buildConfirmation }
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
+        .confirmationDialog("Delete the built artifact?", isPresented: $deleting,
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { flow.deleteArtifact() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The archive Super Submitter built is removed from this Mac. Your project is untouched, and a build the store has already accepted stays where it is. Building again makes a new one.")
+        }
     }
 
     /// A card's rows, in two columns.
@@ -329,6 +339,37 @@ struct BuildFromProjectView: View {
                 }
             }
 
+            if let override = flow.marketingVersionOverride {
+                Divider().padding(.vertical, 7)
+                HStack(alignment: .top, spacing: 9) {
+                    Text("This run builds version \(override), the release version in store.yaml. Your project keeps the version it has, and Super Submitter changes nothing in it.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    QuietButton(title: "Use the project's version") {
+                        flow.useProjectVersion()
+                    }
+                }
+            } else if let wanted = flow.versionFromManifest {
+                Divider().padding(.vertical, 7)
+                HStack(alignment: .top, spacing: 9) {
+                    StatePill(text: "Version", foreground: Theme.yellow,
+                              background: Theme.yellowBg)
+                    // Said here, before the archive. The same disagreement was
+                    // already caught after the build, where it blocks the
+                    // upload and costs the whole build to find out.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("store.yaml names release version \(wanted) and this project builds \(flow.snapshot.marketingVersion ?? "another one"). The upload is refused while they disagree.")
+                            .font(Theme.font(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                        QuietButton(title: "Build version \(wanted) instead") {
+                            flow.useManifestVersion()
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+
             if let blocking = flow.blockingReason {
                 Divider().padding(.vertical, 7)
                 HStack(alignment: .top, spacing: 9) {
@@ -389,7 +430,16 @@ struct BuildFromProjectView: View {
         }
         add("Product", snapshot.productName, key: "productName")
         add("Identifier", snapshot.productIdentifier, key: "productIdentifier")
-        add("Version", snapshot.marketingVersion, key: "marketingVersion")
+        // Yellow, and it names the other number. Green beside a version the
+        // upload is going to refuse is the app agreeing with itself and not
+        // with the developer, who has the release version on screen above.
+        if let wanted = flow.versionFromManifest {
+            rows.append(("Version",
+                         "\(snapshot.marketingVersion ?? "Not read") · store.yaml names \(wanted)",
+                         .warning))
+        } else {
+            add("Version", snapshot.marketingVersion, key: "marketingVersion")
+        }
         add("Build", snapshot.buildVersion, key: "buildVersion")
         if let conflict = snapshot.remoteConflict {
             rows.append(("Store", conflict,
@@ -529,7 +579,15 @@ struct BuildFromProjectView: View {
                 }
             }
             HStack(spacing: 7) {
-                QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
+                if flow.artifactDeleted {
+                    Text("Deleted from this Mac. The record above is what was built.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                } else {
+                    QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
+                    if flow.artifactIsDeletable {
+                        QuietButton(title: "Delete artifact") { deleting = true }
+                    }
+                }
                 Spacer(minLength: 0)
             }
         }
@@ -713,10 +771,16 @@ struct BuildFromProjectView: View {
                         state.open(link)
                     }
                 }
-                if let candidate = flow.candidate {
+                if let candidate = flow.candidate, !flow.artifactDeleted {
                     QuietButton(title: candidate.platform == .android
                                 ? "Reveal AAB" : "Reveal Archive") {
                         flow.reveal(candidate.artifactPath)
+                    }
+                    // The moment it is most wanted: the store holds the build,
+                    // so the copy on this Mac is a few hundred megabytes that
+                    // have done their job.
+                    if flow.artifactIsDeletable {
+                        QuietButton(title: "Delete Archive") { deleting = true }
                     }
                 }
                 QuietButton(title: "Continue to Summary") {
