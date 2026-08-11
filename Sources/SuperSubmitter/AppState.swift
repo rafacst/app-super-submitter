@@ -175,6 +175,10 @@ final class AppState {
 
     /// Settings opens as a panel over the window, not as a second window.
     var showSettings = false
+    /// What is stopping the release. The header band opens it from any tab,
+    /// because the question is asked from every screen and the answer used to
+    /// live only at the head of the last one.
+    var showBlockers = false
     /// What the app is, who makes it, and how to reach a person. It sits at
     /// the foot of the sidebar and under the app menu, the two places a Mac
     /// user looks for it.
@@ -226,6 +230,8 @@ final class AppState {
         showExistingAppImport = false
         showAddLocale = false
         showFieldSearch = false
+        showSignIn = false
+        showBlockers = false
         releaseSheet = nil
     }
 
@@ -237,11 +243,6 @@ final class AppState {
     @ObservationIgnored var accessController: AccessController?
     @ObservationIgnored var authController: SupabaseAuth?
     var entitlement = Entitlement.free(at: .distantPast)
-    /// What sent the developer to the Account tab, or nil if they walked
-    /// there themselves. It is the line at the top of that tab and nothing
-    /// else: the plans, the code, and the checkout live on the tab whether a
-    /// gate opened it or not.
-    var paywallReason: PaywallTrigger?
     var billingPlans: BillingPlans?
     var billingOperation: BillingOperation = .idle
     var billingMessage: String?

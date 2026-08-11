@@ -3,29 +3,22 @@ import Foundation
 import PostHog
 import SubmitKit
 
-/// Why the pricing sheet opened. It picks the one line at the top of the
-/// sheet, so the developer reads what they were doing and not a price list.
+/// Which gate sent the developer to the Account tab.
+///
+/// It is reported and never printed. Each case used to carry a sentence for
+/// the top of the pricing sheet, and when the sheet became a tab that sentence
+/// stood above a screen that answers the same question in full: a headline, a
+/// card per plan, and the button that buys one. The tab has to stand in one
+/// window, and a paragraph saying what the screen under it says was the first
+/// thing struck out.
+///
+/// What is left is the analytics property. `paywall_gate_hit` and
+/// `paywall_shown` both carry it, so which gate a developer met stays a
+/// question the numbers can answer.
 enum PaywallTrigger: String, Identifiable {
     case apply, upload, release, marketing, settings, expired
 
     var id: String { rawValue }
-
-    var line: String {
-        switch self {
-        case .apply:
-            "Store writes need paid access. Your plan is kept, and reading the stores and running a dry run stay free."
-        case .upload:
-            "Your build is ready. Subscribe or apply a promotion code to upload it. The archive is kept either way."
-        case .release:
-            "Releasing to review needs paid access. Your draft stays exactly as it is."
-        case .marketing:
-            "Writing these marketing resources to App Store Connect needs paid access."
-        case .settings:
-            "Super Submitter is free to configure, validate, build, read, and plan. Paid access adds every store write."
-        case .expired:
-            "Your paid access has ended. Every local edit, plan, and dry run still works."
-        }
-    }
 }
 
 enum BillingOperation: Equatable {
@@ -274,12 +267,15 @@ extension AppState {
     ///
     /// The Account tab is part of the window, so none of that is left. It is
     /// reachable from anywhere, including with no app linked, and it carries
-    /// the plans, the promotion code, and the checkout button itself. A gate
-    /// now moves you to it and writes the reason at the top.
+    /// the plans, the promotion code, and the checkout button itself.
+    ///
+    /// The trigger is what the gate reports and no longer what the screen
+    /// says. It wrote a line at the top of the tab for a while, above a screen
+    /// whose whole job is to answer the same question at length, and the line
+    /// went on the review that made the tab stand in one window.
     func openPaywall(_ trigger: PaywallTrigger) {
         billingMessage = nil
         PostHogSDK.shared.capture("paywall_shown", properties: ["trigger": trigger.rawValue])
-        paywallReason = trigger
         showSettings = false
         selectedTab = .account
         Task { await loadBillingPlans() }
@@ -490,7 +486,6 @@ extension AppState {
                 if fresh.isPaid {
                     billingOperation = .idle
                     billingMessage = nil
-                    paywallReason = nil
                     defaults.removeObject(forKey: checkoutDefaultsKey())
                     PostHogSDK.shared.capture("checkout_confirmed",
                                               properties: ["plan": selectedPlan])
@@ -527,7 +522,6 @@ extension AppState {
             entitlement = try await controller.refresh()
             billingMessage = entitlement.isPaid ? nil : "No paid access was found for this account."
             if entitlement.isPaid {
-                paywallReason = nil
                 PostHogSDK.shared.capture("entitlement_restored")
             }
         } catch {

@@ -11,9 +11,9 @@ import SwiftUI
 /// first.
 ///
 /// Everything is on the tab now. The gates that used to present the sheet move
-/// you here and write the reason at the top; the plans, the promotion code, and
-/// the checkout button are the page; and signing in opens beside them rather
-/// than over them, so the plan you are buying stays in view while you do it.
+/// you here; the plans, the promotion code, and the checkout button are the
+/// page; and signing in is the one panel left, because an account is a machine
+/// you use once and the offer is what the screen is for.
 ///
 /// The screen reads top to bottom as one argument: what the app is for, who is
 /// signed in, what each plan costs, and the one button that buys it. Nothing
@@ -24,10 +24,8 @@ struct AccountTab: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let reason = state.paywallReason { reasonCard(reason) }
-
-            HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .top, spacing: 11) {
                 // The offer first, while there is one to make. The tab opened
                 // with an account row, then a build warning, then a loader that
                 // had failed, and the answer to the one question a developer
@@ -35,17 +33,8 @@ struct AccountTab: View {
                 // signed in as is the mechanism; what the app does is the
                 // reason.
                 if !state.isPaid { hero.frame(maxWidth: .infinity) }
-                // The panel opens under the card whose button opened it, rather
-                // than beside the whole tab. The plan you are buying stays on
-                // screen, which is the point of signing in at that moment.
-                VStack(alignment: .leading, spacing: 14) {
-                    identity
-                    if state.showSignIn {
-                        SignInPanel()
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
-                    }
-                }
-                .frame(width: state.isPaid ? nil : Self.sideColumn, alignment: .leading)
+                identity
+                    .frame(width: state.isPaid ? nil : Self.sideColumn, alignment: .leading)
             }
 
             if !state.isPaid { plans }
@@ -54,7 +43,6 @@ struct AccountTab: View {
             trust
         }
         .frame(maxWidth: Self.column, alignment: .leading)
-        .motion(.smooth(duration: 0.22), value: state.showSignIn)
         .task { await state.loadBillingPlans() }
     }
 
@@ -66,64 +54,52 @@ struct AccountTab: View {
     /// folds to two by two before any card gets too narrow to hold a line.
     static let column: CGFloat = 1180
 
-    /// The right-hand column: the account card, the sign-in panel under it, and
-    /// the indie note below the plans. `SignInPanel` fixes its own width, and
-    /// this is that number, so the column has one edge and not three.
+    /// The right-hand column: the account card, over the indie note below the
+    /// plans. Narrow enough that the offer beside it keeps the width its
+    /// headline was measured for.
     static let sideColumn: CGFloat = 300
 
     private var signedIn: Bool { state.accountEmail != nil }
 
     // MARK: - What the app is for
 
-    /// The headline, the promise under it, the price, and the four things that
-    /// make the promise true.
+    /// The headline, the promise under it, and the four things that make the
+    /// promise true.
     ///
-    /// It carries the price because a buyer comparing tools asks the cost
-    /// first, and a page that makes them press something to find out has
-    /// already lost the comparison. The badge says nothing at all until the
-    /// service has answered, rather than guessing a number.
+    /// No price and no name over the headline. The plan cards a few rows down
+    /// carry every amount the service offers, so a badge here read the cheapest
+    /// of them a second time, and a wordmark over the app's own window names
+    /// what the title bar already names.
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "paperplane.circle.fill")
-                            .font(Theme.font(size: 11))
-                        Text("SUPER SUBMITTER")
-                            .font(Theme.font(size: 9.5, weight: .semibold))
-                            .kerning(0.9)
-                    }
-                    .foregroundStyle(Theme.accent)
-
-                    Text("Ship both stores from one workflow.")
-                        .font(Theme.font(size: 24, weight: .bold))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Prepare App Store and Google Play drafts in one place.")
-                        Text("Review every change, then release on your terms.")
-                    }
-                    .font(Theme.font(size: 12.5))
-                    .foregroundStyle(Theme.text2)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Ship both stores from one workflow.")
+                    .font(Theme.font(size: 24, weight: .bold))
                     .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Prepare App Store and Google Play drafts in one place.")
+                    Text("Review every change, then release on your terms.")
                 }
-                Spacer(minLength: 8)
-                if let plans = state.billingPlans,
-                   let price = Self.headlinePrice(plans) {
-                    priceBadge(price)
-                }
+                .font(Theme.font(size: 12.5))
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Four across, always, and deliberately not a `ViewThatFits`.
             // That view measures the ideal width, and the ideal width of a
             // caption is the caption on one unwrapped line, so it would fold
             // the row to two by two at every window this app can open. The
             // captions are written to wrap.
+            //
+            // No `fixedSize` on the row. The card reaches the bottom of its
+            // own row, and the tiles take whatever height is left over, so the
+            // air lands inside the tiles instead of under them.
             HStack(alignment: .top, spacing: 9) { tiles(Self.promises) }
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         // `maxHeight`, so the card reaches the bottom of the row rather than
         // stopping where its own text ends. The account column beside it grows
         // with every warning it has to carry, and a short hero left a band of
@@ -183,63 +159,6 @@ struct AccountTab: View {
         }
     }
 
-    private func priceBadge(_ price: (amount: String, unit: String)) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("From")
-                .font(Theme.font(size: 10.5))
-                .foregroundStyle(Theme.text2)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(price.amount)
-                    .font(Theme.font(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-                Text(price.unit)
-                    .font(Theme.font(size: 11))
-                    .foregroundStyle(Theme.text2)
-            }
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
-        .background(Theme.content, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(Theme.accent.opacity(0.35), lineWidth: Theme.hairline))
-        .fixedSize()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("From \(price.amount) \(price.unit)")
-    }
-
-    // MARK: - Why you are here
-
-    /// What sent you, when a gate did. It is the sentence the sheet used to
-    /// open with, and it belongs at the top of the screen it sent you to.
-    private func reasonCard(_ reason: PaywallTrigger) -> some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: "sparkles")
-                .font(Theme.font(size: 13))
-                .foregroundStyle(Theme.purple)
-                .padding(.top, 1)
-            Text(reason.line)
-                .font(Theme.font(size: 12.5))
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Button { state.paywallReason = nil } label: {
-                Image(systemName: "xmark")
-                    .font(Theme.font(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.text3)
-                    .frame(width: 22, height: 22)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss")
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11)
-            .strokeBorder(Theme.purple.opacity(0.35), lineWidth: Theme.hairline))
-    }
-
     // MARK: - Who, and on what
 
     /// The address and the plan, in one card.
@@ -269,7 +188,7 @@ struct AccountTab: View {
                 Spacer(minLength: 0)
             }
 
-            if !signedIn, !state.showSignIn {
+            if !signedIn {
                 Button { state.openAccount() } label: {
                     Text("Sign in or create account")
                         .font(Theme.font(size: 12.5, weight: .semibold))
@@ -284,14 +203,11 @@ struct AccountTab: View {
 
             Hairline()
 
-            // The two promises that decide whether a developer hands this app
-            // their store keys at all. They are the reason the account card is
-            // the right place for them, and not a footnote.
-            assurance("lock.fill", "Keys stay in Keychain")
-            assurance("checkmark.shield.fill", "Drafts never go live on their own")
-
-            Hairline()
-
+            // Two assurance rows stood here too, on the Keychain and on the
+            // drafts, and the bar at the foot of this screen makes both
+            // promises at full length. The screen has to stand in one window
+            // with no scroll bar, and a sentence printed twice was the cheapest
+            // fifty points on it.
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: state.isPaid ? "sparkles" : "circle.dashed")
                     .font(Theme.font(size: 12))
@@ -330,26 +246,13 @@ struct AccountTab: View {
             }
         }
         .padding(.horizontal, 15)
-        .padding(.vertical, 13)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        // The same bottom edge as the hero beside it. Two cards on one top edge
+        // and two different bottom ones read as one of them being unfinished.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
-    }
-
-    private func assurance(_ symbol: String, _ text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(Theme.font(size: 11))
-                .foregroundStyle(Theme.text2)
-                .frame(width: 14)
-            Text(text)
-                .font(Theme.font(size: 11.5))
-                .foregroundStyle(Theme.text2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - What it costs
@@ -370,7 +273,7 @@ struct AccountTab: View {
     private var plans: some View {
         if let available = state.billingPlans, !available.plans.isEmpty {
             let best = Self.bestValue(in: available.plans)
-            Grid(alignment: .topLeading, horizontalSpacing: 11, verticalSpacing: 13) {
+            Grid(alignment: .topLeading, horizontalSpacing: 11, verticalSpacing: 11) {
                 GridRow {
                     freeCard
                     paidCards(available, best: best)
@@ -481,7 +384,7 @@ struct AccountTab: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 13)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(selected ? tint.opacity(0.10) : Theme.raised,
                     in: RoundedRectangle(cornerRadius: 11))
@@ -521,25 +424,30 @@ struct AccountTab: View {
     /// `AppState.entitlementLabel`, which makes the same promise in one
     /// sentence. Editing, reading, building and dry runs are free; the three
     /// capabilities in `AccessCapability` are what a plan opens.
+    /// The last line was two, and the first of them promised the applies and
+    /// the uploads that the card beside it charges for. One row of this screen
+    /// gave a write away and sold it at the same time. A free account runs
+    /// every write dry and sends none of them, which is one line.
     static let free = [
         "Editing & validation",
         "Builds & reads",
         "Unlimited drafts",
-        "Applies & uploads",
-        "Releases (dry runs)",
+        "Dry runs of every write",
     ]
 
     static let features: [String: [String]] = [
+        // A line about store reads without limit stood here, and reads are
+        // free, so it sold what the free card beside it already gives away.
         "monthly": [
             "Everything in Free",
             "Apply, upload and release",
-            "Unlimited store reads",
             "Cancel anytime",
         ],
+        // A line promising a faster answer from support stood here, and
+        // nothing answers for it: there is one address and one queue.
         "annual": [
             "Everything in Monthly",
             "Lower yearly cost",
-            "Priority support",
             "Best for teams shipping often",
         ],
         "lifetime": [
@@ -574,7 +482,9 @@ struct AccountTab: View {
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Fills its cell. It is one short card beside a wide one, and the
+            // page under it was the only hole left on the screen.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background(Theme.pink.opacity(0.10), in: RoundedRectangle(cornerRadius: 11))
             .overlay(RoundedRectangle(cornerRadius: 11)
                 .strokeBorder(Theme.pink.opacity(0.32), lineWidth: Theme.hairline))
@@ -606,20 +516,12 @@ struct AccountTab: View {
     private var purchase: some View {
         HStack(alignment: .top, spacing: 16) {
             coupon.frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .leading, spacing: 7) {
-                checkout
-                if let blocked = checkoutBlocked { WarningNote(blocked) }
-                Text("Checkout by Stripe. Card details are never seen by us.")
-                    .font(Theme.font(size: 11))
-                    .foregroundStyle(Theme.text2)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity)
+            // The bar at the foot of the screen carries the Stripe sentence at
+            // full length, so the button stands on its own here.
+            checkout.frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 15)
-        .padding(.vertical, 14)
+        .padding(.vertical, 13)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11)
@@ -696,8 +598,13 @@ struct AccountTab: View {
                         .font(Theme.font(size: 13.5, weight: .semibold))
                 }
                 .foregroundStyle(Theme.accentText)
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
+                // The height comes before the fill, so the gradient and the
+                // click land on the same rectangle. Stretching the frame after
+                // the background left the pill its own size inside a taller
+                // hit area, and the empty page under the button opened a
+                // checkout.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
                     LinearGradient(colors: [Theme.accentFill, Theme.purpleFill],
                                    startPoint: .leading, endPoint: .trailing),
@@ -707,6 +614,10 @@ struct AccountTab: View {
             .buttonStyle(.plain)
             .disabled(state.billingOperation != .idle || checkoutBlocked != nil)
             .opacity(state.billingOperation != .idle || checkoutBlocked != nil ? 0.55 : 1)
+            // The reason the button is shut, where it costs no height. It had a
+            // line of its own under the button and said what the card beside it
+            // already says: sign in, and here is the button that does it.
+            .help(checkoutBlocked ?? "")
 
             if state.billingOperation == .confirming {
                 HStack(spacing: 8) {
@@ -721,8 +632,8 @@ struct AccountTab: View {
         }
     }
 
-    /// Why the checkout button is shut, or nil when it is open. A disabled
-    /// button with nothing beside it reads as a broken button.
+    /// Why the checkout button is shut, or nil when it is open. It reaches the
+    /// reader as the button's own tooltip.
     private var checkoutBlocked: String? {
         if !signedIn { return "Sign in before you continue to checkout." }
         if state.billingPlans?.plans.first(where: { $0.id == state.selectedPlan })?
@@ -797,7 +708,7 @@ struct AccountTab: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11)
@@ -851,22 +762,6 @@ struct AccountTab: View {
         case "month": "per month"
         case "year": "per year"
         default: "once"
-        }
-    }
-
-    /// The cheapest plan on sale, split into the amount and the unit beside it,
-    /// or nil while the service has answered nothing anybody can buy.
-    ///
-    /// No monthly equivalent of a yearly plan: the amount shown is the amount
-    /// charged.
-    static func headlinePrice(_ plans: BillingPlans) -> (amount: String, unit: String)? {
-        guard let cheapest = plans.plans.filter(\.available)
-            .min(by: { $0.amount < $1.amount }) else { return nil }
-        let amount = money(cheapest.amount, plans.currency)
-        switch cheapest.interval {
-        case "month": return (amount, "/ month")
-        case "year": return (amount, "/ year")
-        default: return (amount, "once")
         }
     }
 

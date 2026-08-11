@@ -81,52 +81,22 @@ struct ReleaseTab: View {
     /// tab. The blocking rows are a handful — the app already knows which,
     /// because they are the ones `releaseBlockers` hands the two buttons — so
     /// they stand first, and the rail below keeps the whole list.
+    ///
+    /// No way out of each row here, which the same list carries in the header
+    /// panel. The whole checklist is a few hundred points below this card, and
+    /// the row's own console link is on it.
     @ViewBuilder
     private var blockersHead: some View {
-        let blockers = Store.allCases
-            .filter(state.stores.contains)
-            .flatMap { state.releaseBlockers(for: $0) }
+        let blockers = state.blockersEverywhere
         if !blockers.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 9) {
-                    Text(blockers.count == 1
-                         ? "1 thing is stopping \(releaseVersion)"
-                         : "\(blockers.count) things are stopping \(releaseVersion)")
-                        .font(Theme.font(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.red)
-                    Spacer(minLength: 8)
-                    QuietButton(title: "Re-check") { Task { await state.recheck() } }
-                }
-                .padding(.horizontal, 15).padding(.vertical, 10)
-
-                ForEach(blockers) { row in
-                    Hairline(color: Theme.red.opacity(0.3))
-                    HStack(alignment: .top, spacing: 9) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.title).font(Theme.font(size: 12.5, weight: .medium))
-                            Text(row.reason)
-                                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 8)
-                        Text(row.system).font(Theme.font(size: 11))
-                            .foregroundStyle(Theme.text3)
-                    }
-                    .padding(.horizontal, 15).padding(.vertical, 9)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.redBg, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.red, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 9))
+            BlockersList(rows: blockers,
+                         headline: state.blockersHeadline(blockers.count),
+                         recheck: { Task { await state.recheck() } })
         }
     }
 
     /// The version the two buttons send, named the way the manifest names it.
-    private var releaseVersion: String {
-        let version = state.manifest.release?.versionName ?? ""
-        return version.isEmpty ? "this release" : version
-    }
+    private var releaseVersion: String { state.releaseVersionName }
 
     // MARK: - The checklist
 

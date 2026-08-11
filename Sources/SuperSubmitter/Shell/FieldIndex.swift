@@ -171,7 +171,7 @@ enum FieldIndex {
     }
 }
 
-private extension String {
+extension String {
     /// `.caseInsensitive` alone still separates "e" from "é", and a developer
     /// searching a listing tab types the plain letter.
     static let loose: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]

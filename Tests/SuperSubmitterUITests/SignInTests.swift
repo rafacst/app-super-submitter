@@ -65,11 +65,16 @@ private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
             "The ASWebAuthenticationSession handler must not inherit the main actor.")
 }
 
-/// Sign in is a panel beside the Account tab, not a sheet. It was a sheet, and
-/// the paywall presented one too, so signing in on the way to a purchase put
-/// two modal layers between the developer and the plan they were buying.
+/// Sign in is a panel over the window, the way Settings is.
+///
+/// It stood inside the Account tab for a while, because the paywall was a sheet
+/// too and signing in on the way to a purchase put two modal layers between the
+/// developer and the plan they were buying. The paywall is a tab now, so there
+/// is no second layer left to stack under, and a form that opens in the middle
+/// of the offer pushes the plans off the bottom of a screen that has to stand
+/// in one window.
 @MainActor
-@Test func signingInOpensBesideTheAccountTabAndNotOverIt() {
+@Test func signingInOpensAsAPanelOverTheWindow() throws {
     let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                          storeAccount: "test-\(UUID().uuidString)")
     #expect(!state.showSignIn)
@@ -77,9 +82,12 @@ private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async {
     state.openAccount()
 
     #expect(state.showSignIn)
-    let shell = try! source("Sources/SuperSubmitter/Shell/RootView.swift")
-    #expect(!shell.contains("showSignIn"),
-            "The shell must not present sign in as a sheet.")
+    let shell = try source("Sources/SuperSubmitter/Shell/RootView.swift")
+    #expect(shell.contains(".sheet(isPresented: $state.showSignIn)"),
+            "The shell must present sign in the way it presents Settings.")
+    let tab = try source("Sources/SuperSubmitter/Tabs/AccountTab.swift")
+    #expect(!tab.contains("SignInPanel"),
+            "The Account tab must not draw the sign-in form inside itself.")
 }
 
 @MainActor

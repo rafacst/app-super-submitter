@@ -9,8 +9,12 @@ import Testing
 ///
 /// None of that is left. The Account tab is part of the window, it is reachable
 /// from anywhere including with no app linked, and it carries the plans, the
-/// discount code, and the checkout button itself. A gate moves you to it and
-/// writes the reason at the top.
+/// discount code, and the checkout button itself. A gate moves you to it, and
+/// the tab is the answer.
+///
+/// The gate no longer writes a line on the tab either. The trigger survives as
+/// the analytics property on `paywall_gate_hit` and `paywall_shown`, so what a
+/// gate is asserted to do is now where it sends you and nothing more.
 @MainActor
 private func state() -> AppState {
     AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
@@ -18,12 +22,11 @@ private func state() -> AppState {
 }
 
 @MainActor
-@Test func aGateSendsYouToTheAccountTabAndSaysWhy() {
+@Test func aGateSendsYouToTheAccountTab() {
     let app = state()
     app.openPaywall(.apply)
 
     #expect(app.selectedTab == .account)
-    #expect(app.paywallReason == .apply)
 }
 
 /// The detour Settings needed is gone: nothing waits, because nothing is
@@ -37,22 +40,9 @@ private func state() -> AppState {
 
     #expect(app.showSettings == false)
     #expect(app.selectedTab == .account)
-    #expect(app.paywallReason == .settings)
 }
 
-/// The reason is a line on a tab, so it has to be dismissable without leaving
-/// the tab. The plans stay either way.
-@MainActor
-@Test func theReasonClearsAndTheTabStays() {
-    let app = state()
-    app.openPaywall(.upload)
-
-    app.paywallReason = nil
-
-    #expect(app.selectedTab == .account)
-}
-
-/// A gate that is satisfied moves nobody and writes no reason.
+/// A gate that is satisfied moves nobody.
 ///
 /// A Debug build with no licensing service configured allows every capability
 /// and says so on stderr, which is exactly the satisfied case. The Release
@@ -64,7 +54,6 @@ private func state() -> AppState {
 
     #expect(app.requirePaid(.storeWrite, .apply))
     #expect(app.selectedTab == .build)
-    #expect(app.paywallReason == nil)
 }
 
 /// Debug may bypass the write gate for local development, but that bypass is

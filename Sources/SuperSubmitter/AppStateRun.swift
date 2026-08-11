@@ -630,8 +630,15 @@ extension AppState {
     /// Spec 16.6: the checklist sits between the draft and the review, and a
     /// needed row holds the button back.
     func releaseBlockers(for store: Store) -> [ConsoleRow] {
-        let system = store == .apple ? "App Store" : "Google Play"
-        return consoleRows.filter { $0.system == system && markedState($0) == .needed }
+        consoleRows.filter { $0.store == store && markedState($0) == .needed }
+    }
+
+    /// Every step still open, in the order the checklist sets, whichever store
+    /// or provider owns it. The blockers list above is the release's own view
+    /// of this one: it takes a single store and only the rows that hold its
+    /// button back.
+    var openConsoleSteps: [ConsoleRow] {
+        consoleRows.filter { markedState($0) != .done && markedState($0) != .notApplicable }
     }
 
     /// Why a store may take nothing right now, because Apple is holding the

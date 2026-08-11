@@ -32,6 +32,18 @@ public struct ConsoleRow: Sendable, Identifiable, Equatable {
     /// is never done in one place and open in the other.
     public var onEditingTab: Bool
 
+    /// The store this step belongs to, or nil where it belongs to a purchase
+    /// provider instead. `system` is what the row prints; this is what the row
+    /// is filtered and marked by, so the two never have to be compared as
+    /// strings twice in the app.
+    public var store: Store? {
+        switch system {
+        case "App Store": .apple
+        case "Google Play": .google
+        default: nil
+        }
+    }
+
     public init(id: String, system: String, title: String, reason: String, link: String,
                 state: ConsoleState, onEditingTab: Bool = false) {
         self.id = id

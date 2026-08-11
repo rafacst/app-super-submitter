@@ -1,36 +1,40 @@
 import SubmitKit
 import SwiftUI
 
-/// Sign in, or create an account, beside the Account tab.
+/// Sign in, or create an account. A panel over the window, the way Settings is.
 ///
-/// It was a sheet, and the paywall presented one too, so signing in on the way
-/// to a purchase put two modal layers between the developer and the plan they
-/// were trying to buy. Each layer hid the thing the layer under it was about.
+/// It stood inside the Account tab for a while, because the paywall was a sheet
+/// too and signing in on the way to a purchase put two modal layers between the
+/// developer and the plan they were buying. The paywall is a tab now, so there
+/// is no second layer left to stack under, and this goes back to being the one
+/// panel it always read as.
 ///
-/// A panel on the right instead. The plan, the price, and the reason you were
-/// sent here all stay on screen while you sign in, which is the whole point of
-/// signing in at that moment.
+/// Standing in the tab also charged the offer for it. The screen has to hold
+/// one window with no scroll bar, and a form that appears in the middle of it
+/// pushes the plans off the bottom edge at the exact moment they matter.
 struct SignInPanel: View {
     @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        @Bindable var state = state
-        VStack(alignment: .leading, spacing: 13) {
-            HStack(spacing: 8) {
-                Text(state.accountCreating ? "Create account" : "Sign in")
-                    .font(Theme.font(size: 14, weight: .semibold))
-                Spacer(minLength: 0)
-                Button { state.showSignIn = false } label: {
-                    Image(systemName: "xmark")
-                        .font(Theme.font(size: 10, weight: .semibold))
-                        .foregroundStyle(Theme.text2)
-                        .frame(width: 24, height: 24)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close sign in")
+        VStack(spacing: 0) {
+            PanelTitleBar(title: state.accountCreating ? "Create account" : "Sign in") {
+                dismiss()
             }
+            form
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .background(Theme.content)
+        }
+        .frame(width: 340)
+        .background(Theme.bg)
+        .foregroundStyle(Theme.text)
+        .onExitCommand { dismiss() }
+    }
 
+    private var form: some View {
+        @Bindable var state = state
+        return VStack(alignment: .leading, spacing: 13) {
             Text("Use the same account on every Mac. Your purchase is attached to it.")
                 .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text2)
@@ -83,11 +87,7 @@ struct SignInPanel: View {
                 if state.accountBusy { Spinner() }
             }
         }
-        .padding(16)
-        .frame(width: 300, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11)
-            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The identity providers, one to a row.

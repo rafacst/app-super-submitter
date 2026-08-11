@@ -1,14 +1,64 @@
+import SubmitKit
 import SwiftUI
 
-/// ⌘F. "Which tab holds the privacy policy URL?"
+/// One answer the palette can give.
+///
+/// Two kinds, and one list. A developer who types "privacy" wants the field
+/// they fill in and the console step that field cannot satisfy, and asking
+/// which of the two they meant is asking them to know the answer first.
+enum PaletteMatch: Identifiable, Equatable {
+    /// A place in this app, which the palette walks to.
+    case field(FieldEntry)
+    /// A step in somebody else's console, which the palette opens in a browser
+    /// because there is nothing here that can perform it.
+    case step(ConsoleRow)
+
+    var id: String {
+        switch self {
+        case .field(let entry): "field.\(entry.id)"
+        case .step(let row): "step.\(row.id)"
+        }
+    }
+
+    /// The steps still open, matched on the words a developer would type: the
+    /// title, the store that asks for it, and the sentence that says why.
+    ///
+    /// Only the open ones. A palette that lists a step already done offers a
+    /// trip to a console to read a tick.
+    static func steps(_ query: String, in rows: [ConsoleRow]) -> [ConsoleRow] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return [] }
+        return rows.filter {
+            $0.title.containsCaseInsensitive(needle)
+                || $0.system.containsCaseInsensitive(needle)
+                || $0.reason.containsCaseInsensitive(needle)
+        }
+    }
+}
+
+/// ⌘F. "Which tab holds the privacy policy URL?" — and "what does the App
+/// Store still want from me about privacy?"
+///
+/// One query, two kinds of answer, because a developer who types a word does
+/// not know in advance whether this app can satisfy it. A field is a place
+/// here and the palette walks to it. A console step is work in somebody else's
+/// website and the palette opens it, which is the whole of what any screen in
+/// this app can do about one.
+///
+/// No docs section, and the design draws one. There is no help corpus to
+/// index: the explanations in this app are notes attached to the fields they
+/// explain, and a third of a palette that answers nothing is worse than a
+/// palette with two thirds.
 ///
 /// Built by hand, and it has to be. `.searchable` needs a `NavigationStack` or
 /// a `NavigationSplitView` above it, and this shell has neither by design: it
 /// is an `HStack` of a floating panel and a content column. `.searchable` on
 /// this hierarchy renders nothing at all.
 ///
-/// It matches `FieldIndex`, a static list, because SwiftUI only ever builds
-/// the open tab and a self-registering index would know one tab out of ten.
+/// The fields match `FieldIndex`, a static list, because SwiftUI only ever
+/// builds the open tab and a self-registering index would know one tab out of
+/// ten. The steps match `consoleRows`, which is the opposite: it is read from
+/// the stores and it is empty until a run fills it.
 ///
 /// Every row is a path and not a pair. The old rows put the field name on the
 /// left and the tab name hard against the right edge, forty points of gap
@@ -31,7 +81,15 @@ struct FieldSearchSheet: View {
     private static let visibleRows = 8
     private static let rowHeight: CGFloat = 34
 
-    private var results: [FieldEntry] { FieldIndex.matches(query) }
+    /// The fields first, then the steps. A field is somewhere to go and a step
+    /// is a trip out of the app, so the cheaper answer is offered first.
+    private var results: [PaletteMatch] {
+        FieldIndex.matches(query).map(PaletteMatch.field)
+            + PaletteMatch.steps(query, in: state.openConsoleSteps).map(PaletteMatch.step)
+    }
+
+    private var fields: [PaletteMatch] { results.filter { if case .field = $0 { true } else { false } } }
+    private var steps: [PaletteMatch] { results.filter { if case .step = $0 { true } else { false } } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,7 +124,7 @@ struct FieldSearchSheet: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(Theme.font(size: 13)).foregroundStyle(Theme.text3)
-            TextField("Find a field", text: $query)
+            TextField("Find a field or a step", text: $query)
                 .textFieldStyle(.plain)
                 .font(Theme.font(size: 15))
                 .focused($focused)
@@ -83,12 +141,12 @@ struct FieldSearchSheet: View {
     private var empty: some View {
         VStack(spacing: 6) {
             Spacer()
-            Text(query.isEmpty ? "Type the name of a field."
-                 : "No field matches \(query).")
+            Text(query.isEmpty ? "Type the name of a field or a console step."
+                 : "Nothing matches \(query).")
                 .font(Theme.font(size: 12.5))
                 .foregroundStyle(Theme.text2)
             if query.isEmpty {
-                Text("Super Submitter opens the tab and scrolls to it.")
+                Text("A field opens its tab. A step opens the console that asks for it.")
                     .font(Theme.font(size: 11.5))
                     .foregroundStyle(Theme.text3)
             }
@@ -100,41 +158,101 @@ struct FieldSearchSheet: View {
     // MARK: - The routes
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Go to")
-                .font(Theme.font(size: 10.5, weight: .semibold))
-                .foregroundStyle(Theme.text3)
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
-                .padding(.bottom, 4)
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(results.enumerated()), id: \.element.id) { index, entry in
-                            row(entry, selected: index == selection)
-                                .id(entry.id)
-                        }
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.bottom, 6)
+        ScrollViewReader { proxy in
+            ScrollView {
+                // One flat selection over two headed groups. The arrow keys
+                // walk from the last field into the first step without
+                // stopping, because a heading is a label and not a row.
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
+                    if !fields.isEmpty { heading("Fields") }
+                    rows(fields, from: 0)
+                    if !steps.isEmpty { heading("Do") }
+                    rows(steps, from: fields.count)
                 }
-                // The arrow keys walk past the eighth row, so the eighth row
-                // has to come with them.
-                .onChange(of: selection) {
-                    guard results.indices.contains(selection) else { return }
-                    proxy.scrollTo(results[selection].id, anchor: .bottom)
-                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 6)
             }
-            .frame(maxHeight: CGFloat(Self.visibleRows) * Self.rowHeight + 12)
+            // The arrow keys walk past the eighth row, so the eighth row
+            // has to come with them.
+            .onChange(of: selection) {
+                guard results.indices.contains(selection) else { return }
+                proxy.scrollTo(results[selection].id, anchor: .bottom)
+            }
+        }
+        .frame(maxHeight: CGFloat(Self.visibleRows) * Self.rowHeight + 12)
+    }
+
+    private func heading(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.font(size: 10.5, weight: .semibold))
+            .foregroundStyle(Theme.text3)
+            .padding(.horizontal, 8)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+    }
+
+    private func rows(_ matches: [PaletteMatch], from offset: Int) -> some View {
+        ForEach(Array(matches.enumerated()), id: \.element.id) { index, match in
+            row(match, selected: index + offset == selection)
+                .id(match.id)
         }
     }
 
+    @ViewBuilder
+    private func row(_ match: PaletteMatch, selected: Bool) -> some View {
+        switch match {
+        case .field(let entry): fieldRow(entry, selected: selected)
+        case .step(let step): stepRow(step, selected: selected)
+        }
+    }
+
+    /// One console step: whose console it is, what it wants, and the arrow that
+    /// says this one leaves the app.
+    private func stepRow(_ step: ConsoleRow, selected: Bool) -> some View {
+        Button { open(.step(step)) } label: {
+            HStack(spacing: 9) {
+                if let store = step.store {
+                    StoreMark(store: store, size: 13).frame(width: 17)
+                } else {
+                    Image(systemName: "cart.fill")
+                        .font(Theme.font(size: 11))
+                        .foregroundStyle(Theme.text3)
+                        .frame(width: 17)
+                }
+
+                Text(step.system)
+                    .font(Theme.font(size: 12.5))
+                    .foregroundStyle(Theme.text2)
+                Image(systemName: "chevron.right")
+                    .font(Theme.font(size: 8, weight: .semibold))
+                    .foregroundStyle(Theme.text3)
+                Self.highlighted(step.title, matching: query)
+                    .font(Theme.font(size: 12.5))
+                    .foregroundStyle(Theme.text)
+
+                Spacer(minLength: 10)
+                Image(systemName: "arrow.up.forward.square")
+                    .font(Theme.font(size: 11))
+                    .foregroundStyle(selected ? Theme.accent : Theme.text3)
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: Self.rowHeight)
+            .background(selected ? Theme.accent.opacity(0.15) : .clear,
+                        in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(step.title), a step in \(step.system)")
+        .accessibilityHint("Opens the console in your browser")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
     /// One route: the tab it lives on, then the field itself.
-    private func row(_ entry: FieldEntry, selected: Bool) -> some View {
+    private func fieldRow(_ entry: FieldEntry, selected: Bool) -> some View {
         // A real Button, so a click works and VoiceOver reads it as something
         // you can press.
-        Button { open(entry) } label: {
+        Button { open(.field(entry)) } label: {
             HStack(spacing: 9) {
                 Image(systemName: entry.tab.symbol)
                     .font(Theme.font(size: 12))
@@ -195,7 +313,7 @@ struct FieldSearchSheet: View {
             hint(["arrow.up", "arrow.down"], "to navigate")
             hint(["return"], "to open")
             Spacer(minLength: 0)
-            Text("\(results.count) \(results.count == 1 ? "field" : "fields")")
+            Text("\(results.count) \(results.count == 1 ? "result" : "results")")
                 .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text3)
                 .monospacedDigit()
@@ -227,11 +345,14 @@ struct FieldSearchSheet: View {
         return .handled
     }
 
-    private func open(_ entry: FieldEntry) {
+    private func open(_ match: PaletteMatch) {
         // Dismiss first. The shell hosts one sheet, and the scroll it is about
         // to run happens behind this one.
         dismiss()
-        state.jump(to: entry)
+        switch match {
+        case .field(let entry): state.jump(to: entry)
+        case .step(let step): state.open(step.link)
+        }
     }
 }
 
