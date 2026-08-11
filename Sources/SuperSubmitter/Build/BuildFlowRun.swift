@@ -108,6 +108,7 @@ extension BuildFlow {
             platform: run.platform, archivePath: archivePath,
             authentication: authentication,
             allowProvisioningUpdates: allowProvisioningUpdates,
+            buildNumber: project.selection.buildNumberOverride,
             onLine: { [weak self] _, line in
                 Task { @MainActor in self?.append(line) }
             })
@@ -317,7 +318,13 @@ extension BuildFlow {
                 blocks: true)
         compare("Marketing version", snapshot.marketingVersion, candidate.marketingVersion,
                 blocks: false)
-        compare("Build number", snapshot.buildVersion, candidate.buildVersion, blocks: false)
+        // A build script that bumps the number is ordinary, so the difference
+        // is reported and does not stop the upload. It does stop it when the
+        // number was chosen here: a project that hardcodes `CFBundleVersion`
+        // ignores the setting override, and uploading the number the developer
+        // was trying to get past is the one outcome that helps nobody.
+        compare("Build number", snapshot.buildVersion, candidate.buildVersion,
+                blocks: buildNumberOverride != nil)
         compare("Team", snapshot.team, candidate.signingSummary.team ?? snapshot.team ?? "",
                 blocks: false)
 
@@ -390,9 +397,15 @@ extension BuildFlow {
                     buildVersion: candidate.buildVersion)
                 snapshot.remoteConflict = check.blocking ?? "No conflict."
                 blocking = check.blocking
+                nextFreeBuildNumber = nil
                 if check.existingBuildID != nil {
                     // upload-spec 5.2 step 3.
                     blocking = "\(check.blocking ?? "") Use the existing build instead of uploading it again."
+                    // The other way out. The store took this number while this
+                    // archive was being built, and the number is the only thing
+                    // wrong with it, so the offer is to build the next one.
+                    nextFreeBuildNumber = String(max(check.highestBuildNumber ?? 0,
+                                                     Int(candidate.buildVersion) ?? 0) + 1)
                 }
             case .android:
                 guard let packageName = app.manifest.apps.google?.packageName,

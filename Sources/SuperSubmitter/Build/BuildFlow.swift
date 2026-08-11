@@ -63,6 +63,10 @@ final class BuildFlow {
     var blocking: String?
     var warnings: [String] = []
     var startedAt: Date?
+    /// The first build number the store does not hold, when it holds the one
+    /// this project carries. Nil the rest of the time, and nil is the usual
+    /// state: it is set only by a conflict that a higher number would clear.
+    var nextFreeBuildNumber: String?
 
     /// Off by default, and shown on every confirmation. Xcode may create App
     /// IDs, certificates, and profiles with it on. upload-spec 8.6.
@@ -321,6 +325,7 @@ final class BuildFlow {
         candidate = nil
         artifactOnly = false
         blocking = nil
+        nextFreeBuildNumber = nil
         failure = nil
         snapshot = PreflightSnapshot()
         snapshot.containerPath = project.containerPath
@@ -375,7 +380,8 @@ final class BuildFlow {
 
         let settings = try await service.settings(
             container: project.containerURL, kind: project.containerKind, scheme: scheme,
-            configuration: configuration, platform: run.platform)
+            configuration: configuration, platform: run.platform,
+            buildNumber: buildNumberOverride)
         snapshot.productName = settings.productName
         snapshot.productIdentifier = settings.bundleIdentifier
         snapshot.marketingVersion = settings.marketingVersion
@@ -397,6 +403,7 @@ final class BuildFlow {
     }
 
     private func appleRemoteCheck(settings: AppleBuildSettings) async {
+        nextFreeBuildNumber = nil
         guard let app, let appID = app.manifest.apps.apple?.appId, !appID.isEmpty,
               let bundleIdentifier = settings.bundleIdentifier else {
             snapshot.remoteConflict = "No App Store app is connected, so no conflict check ran."
@@ -410,6 +417,14 @@ final class BuildFlow {
             snapshot.remoteConflict = check.blocking
                 ?? "No conflict. The highest build in App Store Connect is \(check.highestBuildNumber.map(String.init) ?? "none")."
             if let message = check.blocking { blocking = message }
+            // Only the duplicate. A missing app and a bundle identifier that
+            // belongs to another app both block too, and no build number
+            // clears either of them.
+            if check.existingBuildID != nil {
+                let held = max(check.highestBuildNumber ?? 0,
+                               Int(settings.currentProjectVersion ?? "") ?? 0)
+                nextFreeBuildNumber = String(held + 1)
+            }
         } catch {
             snapshot.remoteConflict = "The App Store could not be read: \(error.localizedDescription)"
         }
@@ -490,6 +505,36 @@ final class BuildFlow {
 
     func chooseJDK(_ home: String) {
         project?.selection.javaHome = home
+        restartPreflight()
+    }
+
+    /// The build number this run archives with, or nil while the project
+    /// decides. It belongs to the link, so it outlives a relaunch the way the
+    /// scheme and the configuration do.
+    var buildNumberOverride: String? { project?.selection.buildNumberOverride }
+
+    /// Build the next number the store does not hold.
+    ///
+    /// App Store Connect refuses a build number it already has, and the only
+    /// way past it was Xcode: change the number in the project, come back, and
+    /// press Recheck. The number now travels as a command-line setting
+    /// override, so nothing in the project is opened or written, and the
+    /// preflight runs again from the top: the store is asked a second time
+    /// with the new number, and the archive that follows carries it too.
+    func useNextBuildNumber() {
+        guard let number = nextFreeBuildNumber else { return }
+        project?.selection.buildNumberOverride = number
+        persistProject()
+        restartPreflight()
+    }
+
+    /// Back to the number the project itself carries. An override that nobody
+    /// can see off is an app quietly deciding a developer's version numbers
+    /// for every build after this one.
+    func useProjectBuildNumber() {
+        guard buildNumberOverride != nil else { return }
+        project?.selection.buildNumberOverride = nil
+        persistProject()
         restartPreflight()
     }
 
