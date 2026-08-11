@@ -306,6 +306,30 @@ extension BuildFlow {
         }
     }
 
+    /// Whether the artifact's build number came out below the one this run
+    /// asked for.
+    ///
+    /// The override exists to get past a number App Store Connect already
+    /// holds, so the only artifact that defeats it is one carrying a number
+    /// that is no higher than before: a project hardcoding `CFBundleVersion`
+    /// ignores the setting, and uploading the number the developer was trying
+    /// to get past is the one outcome that helps nobody.
+    ///
+    /// Higher is not wrong, and blocking it was the bug. A project that stamps
+    /// its own number, as a commit-count script phase does, lands above the
+    /// chosen one and clears the same conflict. The app was refusing an upload
+    /// the store would have taken, and the only way on was to build again.
+    ///
+    /// Nothing asked for means nothing falls short. Two plain numbers compare
+    /// numerically, because 215 against 191 is a question about counting and
+    /// not about text. Anything that is not a plain number cannot be reasoned
+    /// about at all, so a difference blocks and the developer decides.
+    nonisolated static func buildNumberFallsShort(asked: String?, built: String) -> Bool {
+        guard let asked, !asked.isEmpty, asked != built else { return false }
+        guard let wanted = Int(asked), let carried = Int(built) else { return true }
+        return carried < wanted
+    }
+
     /// upload-spec 8.12 and 9.12.
     private func mismatches(for candidate: BuildCandidate) -> [BuildCandidate.Mismatch] {
         var result: [BuildCandidate.Mismatch] = []
@@ -320,12 +344,11 @@ extension BuildFlow {
         compare("Marketing version", snapshot.marketingVersion, candidate.marketingVersion,
                 blocks: false)
         // A build script that bumps the number is ordinary, so the difference
-        // is reported and does not stop the upload. It does stop it when the
-        // number was chosen here: a project that hardcodes `CFBundleVersion`
-        // ignores the setting override, and uploading the number the developer
-        // was trying to get past is the one outcome that helps nobody.
+        // is reported and does not stop the upload. It stops the upload only
+        // when the number went the wrong way. See `buildNumberFallsShort`.
         compare("Build number", snapshot.buildVersion, candidate.buildVersion,
-                blocks: buildNumberOverride != nil)
+                blocks: Self.buildNumberFallsShort(asked: buildNumberOverride,
+                                                   built: candidate.buildVersion))
         compare("Team", snapshot.team, candidate.signingSummary.team ?? snapshot.team ?? "",
                 blocks: false)
 

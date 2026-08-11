@@ -236,6 +236,7 @@
 		CA3A815E6C174DD0ABE630C5 /* ReadBackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157C66C68A124365FC98C9F5 /* ReadBackTests.swift */; };
 		CB864ED3360981839F130C9D /* AppStateMarketing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD81D4B5724302E529BD064E /* AppStateMarketing.swift */; };
 		CBA1B78E2E08E3D16B8266D8 /* StatusPillContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E612A467105AF3D35B6BF6E2 /* StatusPillContrastTests.swift */; };
+		CBA8AAB27D569DF271BDC27F /* BuildNumberAheadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BCADF032075DACE60300C1 /* BuildNumberAheadTests.swift */; };
 		CBEE2D0BAA9DCB417001DD74 /* StoreGapClosureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6751768A741891C9C7230B8C /* StoreGapClosureTests.swift */; };
 		CDDFBD9FDB67715EBCC81A89 /* AppleProductImages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21153400C36EB480AEA73C8C /* AppleProductImages.swift */; };
 		CE17E36BCBA0C984BD250AC8 /* AppIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = FF23AA4C0151543B1900E997 /* AppIcon.png */; };
@@ -505,6 +506,7 @@
 		7FE78CA68577267148B61B1E /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
 		82E391F22B07A76FF80ED693 /* SubmitKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SubmitKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8324CF340D082632FA9E7B1B /* SupportMailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportMailTests.swift; sourceTree = "<group>"; };
+		85BCADF032075DACE60300C1 /* BuildNumberAheadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildNumberAheadTests.swift; sourceTree = "<group>"; };
 		8690CCB0E9C9FD9C329AD043 /* Section.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Section.swift; sourceTree = "<group>"; };
 		87C39C6E83F9C71336D3E2AC /* AppleWebhooksClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleWebhooksClient.swift; sourceTree = "<group>"; };
 		88FFBAD82D86A4775D0AF48C /* MoneyTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyTab.swift; sourceTree = "<group>"; };
@@ -769,6 +771,7 @@
 				4DD6651F8318B42732684163 /* AppRowStoresTests.swift */,
 				0A0C38D73C94CD59F98C5DC9 /* BlockersEverywhereTests.swift */,
 				3D6BDBEB8AF3D774B94B2B18 /* BuildLogTests.swift */,
+				85BCADF032075DACE60300C1 /* BuildNumberAheadTests.swift */,
 				360506813C5CC582DF217F11 /* BuildPathNoticeTests.swift */,
 				FD1A01A03264D799F8047155 /* BuildScreenReviewTests.swift */,
 				A7C77E78F475B91BAA4EB5A8 /* CheckoutKeyTests.swift */,
@@ -1643,6 +1646,7 @@
 				12B61CBF632C65881AD260D0 /* AppRowStoresTests.swift in Sources */,
 				45D6F0B45E60ACC8BA4FED19 /* BlockersEverywhereTests.swift in Sources */,
 				149692CF8C34C30DDA2B3A34 /* BuildLogTests.swift in Sources */,
+				CBA8AAB27D569DF271BDC27F /* BuildNumberAheadTests.swift in Sources */,
 				35698200EBCA20CB147E2B3A /* BuildPathNoticeTests.swift in Sources */,
 				4B054D8DEE985963ED99B5F1 /* BuildScreenReviewTests.swift in Sources */,
 				DF28F237257414B7CB789DEF /* CheckoutKeyTests.swift in Sources */,
