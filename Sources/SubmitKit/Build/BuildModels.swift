@@ -77,16 +77,27 @@ public struct LinkedSourceProject: Codable, Sendable, Equatable, Identifiable {
         /// Off by default. Xcode may create App IDs, certificates, and
         /// profiles with it on. upload-spec section 8.6.
         public var allowProvisioningUpdates = false
+        /// The build number to archive with, when the store already holds the
+        /// one the project carries.
+        ///
+        /// It reaches Xcode as a command-line setting override, so the project
+        /// file keeps its own number and this app still edits nothing. Nil is
+        /// the usual state: the project decides.
+        ///
+        /// Optional, so a link saved before this field existed still decodes.
+        public var buildNumberOverride: String?
 
         public init(scheme: String? = nil, configuration: String? = nil,
                     module: String? = nil, variantTask: String? = nil,
-                    javaHome: String? = nil, allowProvisioningUpdates: Bool = false) {
+                    javaHome: String? = nil, allowProvisioningUpdates: Bool = false,
+                    buildNumberOverride: String? = nil) {
             self.scheme = scheme
             self.configuration = configuration
             self.module = module
             self.variantTask = variantTask
             self.javaHome = javaHome
             self.allowProvisioningUpdates = allowProvisioningUpdates
+            self.buildNumberOverride = buildNumberOverride
         }
 
         public var isComplete: Bool {

@@ -382,6 +382,14 @@ private struct LiveWriteBar: View {
 
 private struct EmptyAppView: View {
     @Environment(AppState.self) private var state
+    /// The newest local draft, read once when this screen appears.
+    ///
+    /// This screen is where a developer whose app list went missing lands, and
+    /// it used to offer two doors that both start again from nothing. Settings
+    /// holds the same recovery, and Settings is a tab: with an empty sidebar
+    /// there is no way to it. Read in a task and not in `body`, because `body`
+    /// runs on every redraw and this is the disk.
+    @State private var newestDraft: Draft?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -465,6 +473,19 @@ private struct EmptyAppView: View {
             // store.yaml continues work that already exists, so it lives in
             // the File menu with the rest of the file commands.
 
+            // The third door, and it is only ever open when it is the right
+            // one: apps were linked here once, a draft holds them, and the
+            // sidebar is empty now.
+            if state.linkedApps.isEmpty, let draft = newestDraft, !draft.apps.isEmpty {
+                VStack(spacing: 9) {
+                    Text("A draft from \(draft.savedAt.formatted(date: .abbreviated, time: .shortened)) holds \(draft.apps.count) \(draft.apps.count == 1 ? "app" : "apps").")
+                        .font(Theme.font(size: 12.5))
+                        .foregroundStyle(Theme.text2)
+                    QuietButton(title: "Recover them") { state.restore(draft) }
+                }
+                .padding(.top, 26)
+            }
+
             // The way back, for a developer who opened this over an app they
             // already had. Without it "Add app" is a one-way door.
             if state.showEntryScreen, let open = state.currentApp {
@@ -476,6 +497,7 @@ private struct EmptyAppView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.content)
+        .task(id: state.draftSavedAt) { newestDraft = DraftStore().list().first }
     }
 
     private func storeTile(_ store: Store) -> some View {
@@ -613,6 +635,17 @@ private struct ContentHeader: View {
                                     readFailed: state.planError != nil,
                                     pendingRelease: state.hasPendingRelease,
                                     locales: state.locales.count)
+
+            // The copy that survives an update, one click from every screen.
+            //
+            // Every edit already writes `store.yaml`, so this is not the save
+            // a form needs; it is the copy this app's own storage needs. The
+            // list of linked apps lives in user defaults, and a developer who
+            // lost it lost the sidebar while every file was still on disk.
+            // Nothing to copy with no app linked, so it draws nothing there.
+            if !state.linkedApps.isEmpty {
+                HeaderCluster(morphOn: shape) { DraftButton() }
+            }
 
             // Light and dark, one click away, on every screen. It sits before
             // the search glyph and outside the `manifestURL` guard below:
@@ -896,6 +929,37 @@ struct AppMessage: ViewModifier {
 
 extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
+}
+
+/// Save a draft, and say it saved for as long as that is news.
+///
+/// The title carries the report rather than an alert, because this is a
+/// command a developer may run twice in a minute before an update and an alert
+/// each time is a dialog to dismiss twice. Settings holds the same command
+/// beside the folder and the restore.
+struct DraftButton: View {
+    @Environment(AppState.self) private var state
+    @State private var justSaved = false
+    @State private var tick = 0
+
+    var body: some View {
+        QuietButton(title: justSaved ? "Draft saved" : "Save a draft", glass: true,
+                    symbol: justSaved ? "checkmark" : "tray.and.arrow.down", tick: tick) {
+            tick += 1
+            state.saveDraft()
+        }
+        .help("Copy every linked app and its store.yaml where an update cannot reach them")
+        // The same cancellable timer as SavedChip, and for the same reason:
+        // two saves in three seconds must not fight over the title.
+        .task(id: state.draftSavedAt) {
+            guard state.draftSavedAt != nil else { return }
+            justSaved = true
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            justSaved = false
+        }
+        .motion(.smooth(duration: 0.2), value: justSaved)
+    }
 }
 
 /// States that the work is on disk, for as long as that is news.

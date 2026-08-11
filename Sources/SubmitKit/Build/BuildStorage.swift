@@ -32,6 +32,12 @@ public struct BuildStorage: Sendable {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }
+    /// Where the local drafts go: one file per press of Save a draft, holding
+    /// the list of linked apps and the text of every `store.yaml` in it.
+    ///
+    /// Outside the app bundle on purpose. A draft exists for the update that
+    /// replaces the bundle, and anything kept inside it goes with it.
+    public var drafts: URL { root.appendingPathComponent("Drafts", isDirectory: true) }
     public var archives: URL { root.appendingPathComponent("Archives", isDirectory: true) }
     public var artifacts: URL { root.appendingPathComponent("Artifacts", isDirectory: true) }
     public var runs: URL { root.appendingPathComponent("Runs", isDirectory: true) }

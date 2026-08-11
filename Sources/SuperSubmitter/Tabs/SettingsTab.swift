@@ -24,8 +24,21 @@ struct SettingsTab: View {
     @AppStorage("pollIntervalMinutes") private var pollMinutes = 5
     @AppStorage("dryRunByDefault") private var dryRun = true
     @AppStorage("showYAMLToggle") private var showYAMLToggle = false
+    /// The drafts on disk, read when the screen appears and after each save.
+    /// See `Draft`.
+    @State private var drafts: [Draft] = []
+    @State private var restoring = false
 
     private static let intervals = [1, 5, 10, 15, 30, 60]
+
+    private var draftSummary: String {
+        guard let newest = drafts.first else {
+            return "No draft yet. One press copies every linked app."
+        }
+        return "\(drafts.count) \(drafts.count == 1 ? "draft" : "drafts") · newest "
+            + "\(newest.savedAt.formatted(date: .abbreviated, time: .shortened)) · "
+            + "\(newest.apps.count) \(newest.apps.count == 1 ? "app" : "apps")"
+    }
 
     /// Four cards, in the order a developer meets them, and the last one is
     /// the one that erases everything.
@@ -202,6 +215,30 @@ struct SettingsTab: View {
                     }
                     .disabled(state.manifestURL == nil)
                 }
+            }
+
+            SettingRow("Drafts", symbol: "clock.arrow.circlepath", alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(draftSummary)
+                        .font(Theme.font(size: 12))
+                        .frame(maxWidth: Self.controlWidth, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Note("A draft copies the list of linked apps and the text of every store.yaml into Application Support, where an app update cannot reach them. Restoring puts back only what is missing: a store.yaml that is still on disk is never written over. A draft holds no key and no password. Those stay in the Keychain.")
+                    HStack(spacing: 7) {
+                        QuietButton(title: "Save a draft") { state.saveDraft() }
+                        QuietButton(title: "Restore the newest") { restoring = true }
+                            .disabled(drafts.isEmpty)
+                        QuietButton(title: "Reveal") { state.revealDrafts() }
+                    }
+                }
+            }
+            .task(id: state.draftSavedAt) { drafts = DraftStore().list() }
+            .confirmationDialog("Restore the draft of \(drafts.first.map { $0.savedAt.formatted(date: .abbreviated, time: .shortened) } ?? "")?",
+                                isPresented: $restoring, titleVisibility: .visible) {
+                Button("Restore") { if let draft = drafts.first { state.restore(draft) } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every app in the draft that is no longer in the sidebar comes back, and every store.yaml that is no longer on disk is written again. A file that is still there is left exactly as it is.")
             }
 
             SettingRow("Build storage", symbol: "internaldrive", alignment: .top) {

@@ -48,8 +48,7 @@ struct BuildFromProjectView: View {
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
     }
 
-    /// A card's rows, in two columns when the values are short enough for two
-    /// to fit, and in one when they are not.
+    /// A card's rows, in two columns.
     ///
     /// An app that ships on one store builds one platform, and this screen was
     /// then a single column of cards whose contents are label and value pairs
@@ -60,17 +59,21 @@ struct BuildFromProjectView: View {
     /// Splitting the rows rather than standing the cards side by side, because
     /// a row shrinks and a card does not: the project card carries five buttons
     /// on one line, and two of those cards on one row overflow the window
-    /// instead of folding. `ViewThatFits` measures what a column wants, so a
-    /// long path puts the rows back in one column by itself.
+    /// instead of folding.
+    ///
+    /// It was a `ViewThatFits`, with one column behind the two. That measures
+    /// what the *contents* want rather than what the card has, so one long
+    /// value — an Android SDK path, a store message of a full sentence, a
+    /// developer directory — restacked the whole card into a single column and
+    /// the list changed shape as the values arrived. The layout is a property
+    /// of the card, not of the longest string in it: the columns stay, and a
+    /// value too long for its half wraps onto the next line inside it.
     private func twoColumns<Row, Cell: View>(
         _ rows: [Row], @ViewBuilder cell: @escaping (Row) -> Cell) -> some View {
         let half = (rows.count + 1) / 2
-        return ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 22) {
-                column(Array(rows.prefix(half)), cell: cell)
-                column(Array(rows.dropFirst(half)), cell: cell)
-            }
-            column(rows, cell: cell)
+        return HStack(alignment: .top, spacing: 22) {
+            column(Array(rows.prefix(half)), cell: cell)
+            column(Array(rows.dropFirst(half)), cell: cell)
         }
     }
 
@@ -295,12 +298,36 @@ struct BuildFromProjectView: View {
                 .toggleStyle(.checkbox)
             }
 
+            if let override = flow.buildNumberOverride {
+                Divider().padding(.vertical, 7)
+                HStack(alignment: .top, spacing: 9) {
+                    Text("This run builds number \(override). Your project keeps the number it has, and Super Submitter changes nothing in it.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    QuietButton(title: "Use the project's number") {
+                        flow.useProjectBuildNumber()
+                    }
+                }
+            }
+
             if let blocking = flow.blockingReason {
                 Divider().padding(.vertical, 7)
                 HStack(alignment: .top, spacing: 9) {
                     StatePill(text: "Blocked", foreground: Theme.red, background: Theme.redBg)
-                    Text(blocking).font(Theme.font(size: 12))
-                        .fixedSize(horizontal: false, vertical: true)
+                    // The way out beside what is stopping it. A duplicate build
+                    // number is the one block on this card that the app itself
+                    // can clear, and the trip to Xcode to raise the number by
+                    // one was the whole of the old answer.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(blocking).font(Theme.font(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let next = flow.nextFreeBuildNumber {
+                            QuietButton(title: "Build number \(next) instead") {
+                                flow.useNextBuildNumber()
+                            }
+                        }
+                    }
                     Spacer(minLength: 0)
                 }
             }
@@ -576,15 +603,20 @@ struct BuildFromProjectView: View {
         }
     }
 
-    /// The note must state the two things that change what happens next.
+    /// The note must state the two things that change what happens next, and
+    /// the build number when it is not the project's own.
     private var buildNote: String {
-        let provisioning = flow.allowProvisioningUpdates
+        var note = flow.allowProvisioningUpdates
             ? "Xcode may contact Apple and create or change an App ID, a certificate, or a profile during this build."
             : "Xcode will not change any App ID, certificate, or profile."
-        guard flow.project?.platform != .android else {
-            return provisioning + " The build stops afterwards, and you confirm the upload separately."
+        if let override = flow.buildNumberOverride {
+            note = "This build carries the number \(override), which you chose here. "
+                + "The project file keeps its own number. " + note
         }
-        return provisioning + (flow.alwaysReviewArtifact
+        guard flow.project?.platform != .android else {
+            return note + " The build stops afterwards, and you confirm the upload separately."
+        }
+        return note + (flow.alwaysReviewArtifact
             ? " The build stops afterwards, and you confirm the upload separately."
             : " When the built archive matches this summary exactly, the upload starts by itself.")
     }

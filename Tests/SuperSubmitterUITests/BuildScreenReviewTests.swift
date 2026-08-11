@@ -91,13 +91,24 @@ private func buildReviewState() -> AppState {
 /// One store means one platform, and the column of full-width cards left half
 /// the screen empty next to it. The rows fill it, because a row shrinks and a
 /// card of five buttons on one line does not.
+///
+/// The two columns are unconditional. They were a `ViewThatFits` with one
+/// column behind them, and that measures the contents rather than the card: one
+/// long value — an SDK path, a store message of a full sentence — restacked the
+/// whole list, so the preflight changed shape as its values arrived. The layout
+/// belongs to the card, and a value too long for its half wraps inside it.
 @Test func buildFromProjectFillsTheWidthWithItsRows() throws {
     let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
 
-    #expect(view.contains("ViewThatFits(in: .horizontal)"))
+    #expect(!view.contains("ViewThatFits(in: .horizontal)"))
     #expect(view.contains("private func twoColumns"))
     #expect(view.contains("twoColumns(preflightRows(snapshot))"))
     #expect(view.contains("twoColumns(artifactRows(candidate))"))
+
+    // The wrap itself: a preflight value takes the height its text needs.
+    let start = try #require(view.range(of: "struct PreflightRow"))
+    let row = String(view[start.lowerBound...])
+    #expect(row.contains(".fixedSize(horizontal: false, vertical: true)"))
 }
 
 // MARK: - The two flows

@@ -183,7 +183,8 @@ public struct AppleBuildService: Sendable {
 
     public func settings(container: URL, kind: LinkedSourceProject.ContainerKind,
                          scheme: String, configuration: String?,
-                         platform: BuildPlatform) async throws -> AppleBuildSettings {
+                         platform: BuildPlatform,
+                         buildNumber: String? = nil) async throws -> AppleBuildSettings {
         var arguments = ["xcodebuild", kind == .workspace ? "-workspace" : "-project",
                          container.path, "-scheme", scheme]
         if let configuration, !configuration.isEmpty {
@@ -193,6 +194,10 @@ public struct AppleBuildService: Sendable {
             arguments += ["-destination", destination]
         }
         arguments += ["-showBuildSettings", "-json"]
+        // The same override the archive will carry, so the preflight reports
+        // the number the build will actually use and the conflict check runs
+        // against that one.
+        arguments += Self.buildNumberArguments(buildNumber)
 
         let outcome = try await run(Self.xcrun, arguments,
                                     workingDirectory: container.deletingLastPathComponent(),
@@ -218,6 +223,27 @@ public struct AppleBuildService: Sendable {
         return result
     }
 
+    /// A build number chosen in Super Submitter, as Xcode takes it.
+    ///
+    /// `xcodebuild CURRENT_PROJECT_VERSION=42` overrides the setting for that
+    /// one invocation. The project file is not opened and not written, which is
+    /// the whole reason the number travels this way: the store refuses a build
+    /// number it already holds, and the answer used to be a trip to Xcode.
+    ///
+    /// Digits only. The value reaches an argument array rather than a shell, so
+    /// nothing here can be injected, and a number is the only thing the store
+    /// counts with. Anything else, including an empty string, means "the
+    /// project decides" and adds no argument at all.
+    ///
+    /// A project whose `Info.plist` hardcodes `CFBundleVersion` ignores the
+    /// setting. That is not silent: the archive inspection reads the built
+    /// package and reports the difference before anything is uploaded.
+    static func buildNumberArguments(_ buildNumber: String?) -> [String] {
+        guard let buildNumber, !buildNumber.isEmpty,
+              buildNumber.allSatisfy({ $0.isASCII && $0.isNumber }) else { return [] }
+        return ["CURRENT_PROJECT_VERSION=\(buildNumber)"]
+    }
+
     // MARK: - 8.11 Archive
 
     /// The archive command. It appends no free-form user text, and an exit
@@ -226,7 +252,7 @@ public struct AppleBuildService: Sendable {
     public func archive(container: URL, kind: LinkedSourceProject.ContainerKind,
                         scheme: String, configuration: String?, platform: BuildPlatform,
                         archivePath: URL, authentication: AppleAuthenticationFiles?,
-                        allowProvisioningUpdates: Bool,
+                        allowProvisioningUpdates: Bool, buildNumber: String? = nil,
                         onLine: @escaping @Sendable (ToolStream, String) -> Void) async throws
         -> URL {
         var arguments = ["xcodebuild",
@@ -241,6 +267,7 @@ public struct AppleBuildService: Sendable {
         arguments += ["-archivePath", archivePath.deletingPathExtension().path, "archive"]
         arguments += authentication?.arguments ?? []
         if allowProvisioningUpdates { arguments.append("-allowProvisioningUpdates") }
+        arguments += Self.buildNumberArguments(buildNumber)
 
         let outcome = try await runner.run(
             ToolInvocation(executable: Self.xcrun, arguments: arguments,

@@ -140,6 +140,9 @@ final class AppState {
     /// When the app last wrote `store.yaml`. Every edit writes the file, so
     /// the shell shows this and the user knows the work is on disk.
     var lastSavedAt: Date?
+    /// When the app last wrote a local draft. The header button reports it,
+    /// and Settings re-reads the folder whenever it changes. See `Draft`.
+    var draftSavedAt: Date?
 
     // Navigation.
     /// Publishing or Managing. It is one choice for the app, not one per app,
