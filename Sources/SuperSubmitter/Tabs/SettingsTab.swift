@@ -28,6 +28,7 @@ struct SettingsTab: View {
     /// See `Draft`.
     @State private var drafts: [Draft] = []
     @State private var restoring = false
+    @State private var deletingArchives = false
 
     private static let intervals = [1, 5, 10, 15, 30, 60]
 
@@ -247,14 +248,27 @@ struct SettingsTab: View {
                         .font(Theme.font(size: 12))
                         .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Note("Archives and App Bundles are kept outside your repository. Deleting run data removes the logs and the temporary files. It never deletes a retained archive or a bundle, and it never touches your project.")
+                    Note("Archives and App Bundles are kept outside your repository. Deleting run data removes the logs and the temporary files and leaves every archive alone. Deleting the archives removes the builds this app made and kept. Neither one touches your project: an Android App Bundle is Gradle's own output inside it, so it is never one of these.")
                     HStack(spacing: 7) {
                         QuietButton(title: "Reveal") { state.revealBuildStorage() }
                         QuietButton(title: "Delete old run data") {
                             state.pruneBuildStorage()
                         }
+                        // Shut while a run is going. An upload reads the
+                        // archive it is sending.
+                        QuietButton(title: "Delete the archives") {
+                            deletingArchives = true
+                        }
+                        .disabled(state.buildFlow.isBusy)
                     }
                 }
+            }
+            .confirmationDialog("Delete every retained archive?",
+                                isPresented: $deletingArchives, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { state.deleteRetainedArchives() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every archive Super Submitter built and kept is removed from this Mac. Your projects and their build output are untouched, and a build the store already holds stays where it is.")
             }
         }
     }

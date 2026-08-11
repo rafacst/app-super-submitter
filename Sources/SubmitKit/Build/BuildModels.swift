@@ -86,11 +86,21 @@ public struct LinkedSourceProject: Codable, Sendable, Equatable, Identifiable {
         ///
         /// Optional, so a link saved before this field existed still decodes.
         public var buildNumberOverride: String?
+        /// The marketing version to archive with, when the project carries a
+        /// different one from the release version in `store.yaml`.
+        ///
+        /// The same command-line setting override as the build number above,
+        /// and chosen the same way: the developer presses the offer beside the
+        /// disagreement, and the project file keeps its own version.
+        ///
+        /// Optional, so a link saved before this field existed still decodes.
+        public var marketingVersionOverride: String?
 
         public init(scheme: String? = nil, configuration: String? = nil,
                     module: String? = nil, variantTask: String? = nil,
                     javaHome: String? = nil, allowProvisioningUpdates: Bool = false,
-                    buildNumberOverride: String? = nil) {
+                    buildNumberOverride: String? = nil,
+                    marketingVersionOverride: String? = nil) {
             self.scheme = scheme
             self.configuration = configuration
             self.module = module
@@ -98,6 +108,7 @@ public struct LinkedSourceProject: Codable, Sendable, Equatable, Identifiable {
             self.javaHome = javaHome
             self.allowProvisioningUpdates = allowProvisioningUpdates
             self.buildNumberOverride = buildNumberOverride
+            self.marketingVersionOverride = marketingVersionOverride
         }
 
         public var isComplete: Bool {

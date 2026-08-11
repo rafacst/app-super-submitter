@@ -109,6 +109,7 @@ extension BuildFlow {
             authentication: authentication,
             allowProvisioningUpdates: allowProvisioningUpdates,
             buildNumber: project.selection.buildNumberOverride,
+            marketingVersion: project.selection.marketingVersionOverride,
             onLine: { [weak self] _, line in
                 Task { @MainActor in self?.append(line) }
             })
@@ -351,7 +352,9 @@ extension BuildFlow {
     // MARK: - The upload
 
     var canUpload: Bool {
-        guard run.state == .needsUploadConfirmation, let candidate else { return false }
+        guard run.state == .needsUploadConfirmation, let candidate,
+              // Nothing to send. The developer deleted the file this run made.
+              !artifactDeleted else { return false }
         return candidate.blockingMismatches.isEmpty && blocking == nil
             && uploadBlockedByReview == nil
     }
@@ -753,6 +756,7 @@ extension BuildFlow {
         processingLabel = nil
         successLink = nil
         artifactOnly = false
+        artifactDeleted = false
         uploadProgress = 0
         startedAt = nil
         task = Task { [weak self] in await self?.refreshPreflight() }
@@ -778,6 +782,7 @@ extension BuildFlow {
         processingLabel = nil
         successLink = nil
         artifactOnly = false
+        artifactDeleted = false
         uploadProgress = 0
     }
 
@@ -870,6 +875,34 @@ extension BuildFlow {
 
     func reveal(_ path: String) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+
+    /// Whether the artifact on screen is one this app made and may remove.
+    ///
+    /// Never during a run: the upload is reading the file it is sending. And
+    /// never for an Android bundle, which is not a platform rule but the same
+    /// path rule `BuildStorage` enforces: Gradle writes the `.aab` inside the
+    /// developer's own project, and a bundle chosen by hand is any file on the
+    /// disk.
+    var artifactIsDeletable: Bool {
+        guard let candidate, !artifactDeleted, !state.isActive else { return false }
+        return storage.owns(candidate.artifactURL)
+    }
+
+    /// Removes the artifact this run made.
+    ///
+    /// An archive is the largest thing this app leaves behind, and until now
+    /// the only way to be rid of one was the Finder or the nuclear option in
+    /// Settings, which also forgets every account.
+    func deleteArtifact() {
+        guard let candidate, artifactIsDeletable else { return }
+        do {
+            try storage.removeArtifact(at: candidate.artifactURL)
+            artifactDeleted = true
+            app?.errorMessage = "The artifact was deleted. \(candidate.productIdentifier) \(candidate.marketingVersion) (\(candidate.buildVersion)) is no longer on this Mac."
+        } catch {
+            app?.errorMessage = "The artifact could not be deleted: \(error.localizedDescription)"
+        }
     }
 
     func openInIDE() {

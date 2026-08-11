@@ -172,6 +172,61 @@ public struct BuildStorage: Sendable {
         }
     }
 
+    // MARK: - Removing what this app made
+
+    /// Why a deletion was refused.
+    public enum Refusal: Error, Equatable {
+        /// The path is outside the app's own folders. The file is the
+        /// developer's, so this app does not delete it.
+        case notThisApp
+    }
+
+    /// Whether a path is inside the app's own folders.
+    ///
+    /// The one question that decides whether this app may delete a file, and
+    /// the platform does not answer it. An Apple archive is written into
+    /// `Archives/`, so it is ours. Gradle writes the `.aab` under
+    /// `build/outputs/bundle/` inside the developer's project, and **Choose
+    /// Built AAB** takes any file on the disk. Deleting either would break the
+    /// promise at the top of this file.
+    ///
+    /// Compared by path component and not by string prefix. A neighbouring
+    /// folder named "Super Submitter Backup" carries the root's whole path as
+    /// its own first characters, and a `hasPrefix` check would hand it to
+    /// `removeItem`.
+    public func owns(_ url: URL) -> Bool {
+        let ours = Self.parts(root)
+        let theirs = Self.parts(url)
+        return theirs.count > ours.count && Array(theirs.prefix(ours.count)) == ours
+    }
+
+    /// Removes one artifact this app made, and refuses everything else.
+    public func removeArtifact(at url: URL) throws {
+        guard owns(url) else { throw Refusal.notThisApp }
+        try FileManager.default.removeItem(at: url)
+    }
+
+    /// Every retained archive, removed, and reported back.
+    ///
+    /// Separate from `prune`, which keeps these on purpose: an archive is the
+    /// one thing in here a developer may still want after a run is over. This
+    /// is the answer to that, so it is never automatic and never on a timer.
+    @discardableResult
+    public func removeRetainedArchives() -> [URL] {
+        var removed: [URL] = []
+        for archive in retainedArchives() {
+            guard (try? removeArtifact(at: archive)) != nil else { continue }
+            removed.append(archive)
+        }
+        return removed
+    }
+
+    /// A path in the form the ownership check compares. Symlinks resolved, so
+    /// `/tmp` and `/private/tmp` are one answer and not two.
+    private static func parts(_ url: URL) -> [String] {
+        url.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+    }
+
     static func safe(_ value: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
         let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }

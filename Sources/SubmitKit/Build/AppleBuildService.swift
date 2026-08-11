@@ -184,7 +184,8 @@ public struct AppleBuildService: Sendable {
     public func settings(container: URL, kind: LinkedSourceProject.ContainerKind,
                          scheme: String, configuration: String?,
                          platform: BuildPlatform,
-                         buildNumber: String? = nil) async throws -> AppleBuildSettings {
+                         buildNumber: String? = nil,
+                         marketingVersion: String? = nil) async throws -> AppleBuildSettings {
         var arguments = ["xcodebuild", kind == .workspace ? "-workspace" : "-project",
                          container.path, "-scheme", scheme]
         if let configuration, !configuration.isEmpty {
@@ -194,10 +195,11 @@ public struct AppleBuildService: Sendable {
             arguments += ["-destination", destination]
         }
         arguments += ["-showBuildSettings", "-json"]
-        // The same override the archive will carry, so the preflight reports
-        // the number the build will actually use and the conflict check runs
-        // against that one.
+        // The same overrides the archive will carry, so the preflight reports
+        // the number and the version the build will actually use and the
+        // conflict check runs against those.
         arguments += Self.buildNumberArguments(buildNumber)
+        arguments += Self.marketingVersionArguments(marketingVersion)
 
         let outcome = try await run(Self.xcrun, arguments,
                                     workingDirectory: container.deletingLastPathComponent(),
@@ -244,6 +246,29 @@ public struct AppleBuildService: Sendable {
         return ["CURRENT_PROJECT_VERSION=\(buildNumber)"]
     }
 
+    /// The release version from `store.yaml`, as Xcode takes it.
+    ///
+    /// The same mechanism as the build number above, for the same reason.
+    /// `store.yaml` names the version the store will hold and the project
+    /// names the one the archive carries. When they disagree the upload is
+    /// refused, and it is refused after a whole archive has been built.
+    /// `MARKETING_VERSION=1.6` settles it for one invocation, and the project
+    /// file is neither opened nor written.
+    ///
+    /// Digits and dots, nothing else. `CFBundleShortVersionString` is a dotted
+    /// number, the value reaches an argument array unquoted, and anything else
+    /// means "the project decides" and adds no argument at all.
+    ///
+    /// A project whose `Info.plist` hardcodes `CFBundleShortVersionString`
+    /// ignores the setting. That is not silent: the archive inspection reads
+    /// the built package, and `store.yaml version` is a blocking mismatch.
+    static func marketingVersionArguments(_ version: String?) -> [String] {
+        guard let version, !version.isEmpty,
+              version.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") })
+        else { return [] }
+        return ["MARKETING_VERSION=\(version)"]
+    }
+
     // MARK: - 8.11 Archive
 
     /// The archive command. It appends no free-form user text, and an exit
@@ -253,6 +278,7 @@ public struct AppleBuildService: Sendable {
                         scheme: String, configuration: String?, platform: BuildPlatform,
                         archivePath: URL, authentication: AppleAuthenticationFiles?,
                         allowProvisioningUpdates: Bool, buildNumber: String? = nil,
+                        marketingVersion: String? = nil,
                         onLine: @escaping @Sendable (ToolStream, String) -> Void) async throws
         -> URL {
         var arguments = ["xcodebuild",
@@ -268,6 +294,7 @@ public struct AppleBuildService: Sendable {
         arguments += authentication?.arguments ?? []
         if allowProvisioningUpdates { arguments.append("-allowProvisioningUpdates") }
         arguments += Self.buildNumberArguments(buildNumber)
+        arguments += Self.marketingVersionArguments(marketingVersion)
 
         let outcome = try await runner.run(
             ToolInvocation(executable: Self.xcrun, arguments: arguments,

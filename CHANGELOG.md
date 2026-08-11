@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1 (272) - 2026-08-11
+## 1.1 (273) - 2026-08-11
 
 This entry covers the 24 hours to 2026-08-11, so it repeats the work that
 1.0.4 (269) shipped part way through that day.
@@ -9,6 +9,8 @@ This entry covers the 24 hours to 2026-08-11, so it repeats the work that
 
 - A build number App Store Connect already holds no longer stops the build. The chosen number reaches `xcodebuild` as a setting override, and the preflight reads the same number, so the project file stays untouched.
 - A failed build reports what the tool actually printed. Both output streams are read and named, and the tail of the log is kept.
+- A release version that disagrees with the project is named on the preflight, before the archive, with one press to build the version store.yaml holds. The project file is still neither opened nor written.
+- An artifact this app built can be deleted from the build screen, and every retained archive from Settings. Only what Super Submitter wrote: an Android App Bundle is Gradle's own output inside your project, so it is never one of them.
 - Settings became its own tab, the build screen settled, and the preflight columns hold their width.
 - A built archive says why it is held back.
 

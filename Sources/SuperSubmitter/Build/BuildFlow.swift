@@ -59,6 +59,11 @@ final class BuildFlow {
     var processingLabel: String?
     var successLink: String?
     var artifactOnly = false
+    /// The artifact this run made is no longer on the disk, because the
+    /// developer deleted it from the artifact card. The candidate stays: it is
+    /// the record of what was built, and the success card, the Summary hand-off
+    /// and the sidebar all read it.
+    var artifactDeleted = false
     var uploadProgress = 0.0
     var blocking: String?
     var warnings: [String] = []
@@ -381,7 +386,8 @@ final class BuildFlow {
         let settings = try await service.settings(
             container: project.containerURL, kind: project.containerKind, scheme: scheme,
             configuration: configuration, platform: run.platform,
-            buildNumber: buildNumberOverride)
+            buildNumber: buildNumberOverride,
+            marketingVersion: marketingVersionOverride)
         snapshot.productName = settings.productName
         snapshot.productIdentifier = settings.bundleIdentifier
         snapshot.marketingVersion = settings.marketingVersion
@@ -534,6 +540,51 @@ final class BuildFlow {
     func useProjectBuildNumber() {
         guard buildNumberOverride != nil else { return }
         project?.selection.buildNumberOverride = nil
+        persistProject()
+        restartPreflight()
+    }
+
+    /// The marketing version this run archives with, or nil while the project
+    /// decides. It belongs to the link, like the build number above.
+    var marketingVersionOverride: String? { project?.selection.marketingVersionOverride }
+
+    /// The release version `store.yaml` names, when the project builds another
+    /// one. Nil the rest of the time, and nil is the usual state.
+    ///
+    /// The identifier has been compared here since the beginning and the
+    /// version never was, although both are blocking mismatches once the
+    /// artifact exists. So a developer who typed 1.6 into Release version was
+    /// shown the project's 1.5 on this card with a green tick beside it, and
+    /// learnt that the two disagreed only after a whole archive had been
+    /// built and the upload was refused.
+    ///
+    /// Apple only. Gradle computes the version name, so the Android preflight
+    /// marks it uncertain rather than reading a number it does not have.
+    var versionFromManifest: String? {
+        guard run.platform != .android,
+              let wanted = app?.manifest.release?.versionName, !wanted.isEmpty,
+              let building = snapshot.marketingVersion, !building.isEmpty,
+              wanted != building else { return nil }
+        return wanted
+    }
+
+    /// Build the version `store.yaml` names.
+    ///
+    /// It travels as a command-line setting override, so nothing in the
+    /// project is opened or written, and the preflight runs again from the
+    /// top: the store is asked a second time about that version, and the
+    /// archive that follows carries it too.
+    func useManifestVersion() {
+        guard let version = versionFromManifest else { return }
+        project?.selection.marketingVersionOverride = version
+        persistProject()
+        restartPreflight()
+    }
+
+    /// Back to the version the project itself carries.
+    func useProjectVersion() {
+        guard marketingVersionOverride != nil else { return }
+        project?.selection.marketingVersionOverride = nil
         persistProject()
         restartPreflight()
     }
