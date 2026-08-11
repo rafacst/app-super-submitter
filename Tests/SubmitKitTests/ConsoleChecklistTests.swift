@@ -174,3 +174,46 @@ private func manifest(provider: Manifest.Provider = .none) -> Manifest {
     let unread = try row { _ in }
     #expect(unread.state == .unknown)
 }
+
+/// A version in review is a version, and the panel offered a button that could
+/// never clear it.
+///
+/// A first submission with Apple has no writable version and nothing live, so
+/// every field the row read was nil and it said **No version is prepared**.
+/// `releaseBlockers` then counted it, the header read "1 thing is stopping
+/// 1.6", and Re-check re-ran a read that answers nil again every time.
+@Test func aVersionInReviewClosesTheSubmittedVersionRow() throws {
+    func row(_ standing: ActualState.Apple.PlatformStanding) throws -> ConsoleRow {
+        var apple = ActualState.Apple()
+        apple.platforms = [standing]
+        var actual = ActualState()
+        actual.apple = apple
+        return try #require(ConsoleChecklist.rows(manifest: manifest(), actual: actual,
+                                                  stores: [.apple])
+            .first { $0.id == "apple.version" })
+    }
+
+    let inReview = try row(.init(platform: "IOS", pending: "1.6", pendingState: "IN_REVIEW"))
+    #expect(inReview.state == .done)
+    #expect(inReview.reason.contains("1.6"))
+    #expect(!inReview.reason.contains("No version is prepared"))
+
+    // Apple has answered and is waiting on the developer. Still not a gap.
+    let approved = try row(.init(platform: "IOS", pending: "1.6",
+                                 pendingState: "PENDING_DEVELOPER_RELEASE"))
+    #expect(approved.state == .done)
+
+    // A rejection hands the version back, and the checklist matters again.
+    let rejected = try row(.init(platform: "IOS", pending: "1.6", pendingState: "REJECTED"))
+    #expect(rejected.state == .needed)
+
+    // A plain draft is not "with the store" either, so nothing changes there.
+    let draft = try row(.init(platform: "IOS", pending: "1.6",
+                              pendingState: "PREPARE_FOR_SUBMISSION"))
+    #expect(draft.state == .needed)
+
+    // Another platform's review says nothing about the one being published.
+    let otherPlatform = try row(.init(platform: "MAC_OS", pending: "1.6",
+                                      pendingState: "IN_REVIEW"))
+    #expect(otherPlatform.state == .needed)
+}

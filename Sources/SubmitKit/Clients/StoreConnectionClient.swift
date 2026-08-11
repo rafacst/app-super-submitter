@@ -215,28 +215,63 @@ public struct StoreConnectionClient: Sendable {
     /// The Publishing API is package-scoped, but the Play Developer Reporting
     /// API can enumerate every app visible to the same service account.
     public func googleApps(credential: GoogleServiceAccount) async throws -> [RemoteStoreApp] {
-        let scope = "https://www.googleapis.com/auth/playdeveloperreporting"
-        let token = try await googleAccessToken(credential: credential, scope: scope)
-        var components = URLComponents(
-            string: "https://playdeveloperreporting.googleapis.com/v1beta1/apps:search")!
-        components.queryItems = [URLQueryItem(name: "pageSize", value: "1000")]
-        var result: [RemoteStoreApp] = []
-        while let url = components.url {
-            var request = URLRequest(url: url)
+        try await googleApps(token: googleAccessToken(credential: credential,
+                                                      scope: StoreAPI.reportingScope))
+    }
+
+    /// The same list, for the developer who connected with their Google account
+    /// instead of a service account file.
+    ///
+    /// `GoogleOAuth.scopes` already asks for the reporting scope, so this needs
+    /// no second consent. Without it the OAuth half of the app was the one
+    /// place a package name still had to be remembered and typed.
+    public func googleApps(credential: GoogleOAuthCredential) async throws -> [RemoteStoreApp] {
+        // Through `StoreAPI`, which owns the refresh. An OAuth access token
+        // lasts an hour and this is read on a screen that stays open longer.
+        let api = StoreAPI(credentials: StoreCredentials(googleOAuth: credential),
+                           record: { _ in }, session: session)
+        return try await googleApps { path in
+            try await api.googleReporting("GET", path).data
+        }
+    }
+
+    private func googleApps(token: String) async throws -> [RemoteStoreApp] {
+        try await googleApps { path in
+            var request = URLRequest(url: try Self.reportingURL(path))
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await self.session.data(for: request)
             try Self.requireSuccess(response, data: data)
-            let page = try JSONDecoder().decode(GoogleAppsResponse.self, from: data)
+            return data
+        }
+    }
+
+    /// One page after another, whichever credential paid for them.
+    private func googleApps(
+        page fetch: (String) async throws -> Data
+    ) async throws -> [RemoteStoreApp] {
+        var path = "/v1beta1/apps:search?pageSize=1000"
+        var result: [RemoteStoreApp] = []
+        while true {
+            let page = try JSONDecoder().decode(GoogleAppsResponse.self,
+                                                from: try await fetch(path))
             result += (page.apps ?? []).map {
                 RemoteStoreApp(id: $0.packageName,
                                name: $0.displayName ?? $0.packageName,
                                identifier: $0.packageName)
             }
-            guard let next = page.nextPageToken, !next.isEmpty else { break }
-            components.queryItems = [URLQueryItem(name: "pageSize", value: "1000"),
-                                     URLQueryItem(name: "pageToken", value: next)]
+            guard let next = page.nextPageToken, !next.isEmpty,
+                  let escaped = next.addingPercentEncoding(
+                    withAllowedCharacters: .urlQueryAllowed) else { break }
+            path = "/v1beta1/apps:search?pageSize=1000&pageToken=\(escaped)"
         }
         return result
+    }
+
+    private static func reportingURL(_ path: String) throws -> URL {
+        guard let url = URL(string: "https://playdeveloperreporting.googleapis.com\(path)") else {
+            throw ConnectionError.invalidResponse
+        }
+        return url
     }
 
     /// The icon of every named app, keyed by its App Store id.

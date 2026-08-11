@@ -194,7 +194,11 @@ struct BuildTab: View {
                 // The picker stays. It is the right way in when it is
                 // available, because it fills both fields from apps that
                 // really exist. It is no longer the only way in.
-                if !state.remoteAppleApps.isEmpty {
+                //
+                // One visible app never reaches here: the connect fills the
+                // field with it, because a menu of one asks the developer to
+                // confirm what the app has already read.
+                if state.remoteAppleApps.count > 1 {
                     Menu {
                         ForEach(state.remoteAppleApps) { app in
                             Button("\(app.name) · \(app.identifier)") {
@@ -225,24 +229,40 @@ struct BuildTab: View {
             StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
             Text("Package name")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-            // Typed here, not only on Stores. The Android Publisher API
-            // publishes no way to list the apps a service account can see, so
-            // there is no picker to offer the way App Store Connect gets one,
-            // and a fact-shaped box was all this row had. The value it wanted
-            // was on another tab, and the developer standing on this one had
-            // no way to supply it.
-            TextField("Package name", text: Binding(
-                get: { state.googlePackageName },
-                set: { state.googlePackageName = $0 }))
-                .textFieldStyle(.roundedBorder)
-                .font(Theme.mono(12))
-                .frame(maxWidth: 340)
-                .onSubmit { state.updateGoogleAppFields() }
-                // The manifest takes it when the field is left, so a value
-                // typed and not confirmed with Return is still kept.
-                .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
-            if state.googlePackageName.isEmpty {
-                missingIdentityNote("Test the package name on Stores once it is set.")
+            // Typed here, not only on Stores, and now picked as well. The
+            // Android Publisher API is package-scoped and lists nothing, which
+            // is why this row had no picker while App Store Connect got one,
+            // and why the package name was the one required identifier a
+            // developer had to remember. The Play Developer Reporting API
+            // answers it for the same credential.
+            HStack(spacing: 8) {
+                TextField("Package name", text: Binding(
+                    get: { state.googlePackageName },
+                    set: { state.googlePackageName = $0 }))
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.mono(12))
+                    .frame(maxWidth: 340)
+                    .onSubmit { state.updateGoogleAppFields() }
+                    // The manifest takes it when the field is left, so a value
+                    // typed and not confirmed with Return is still kept.
+                    .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
+                if state.remoteGoogleApps.count > 1 {
+                    Menu {
+                        ForEach(state.remoteGoogleApps) { app in
+                            Button("\(app.name) · \(app.identifier)") {
+                                state.chooseRemoteGoogleApp(app)
+                            }
+                        }
+                    } label: {
+                        PickerLabel(value: "Choose")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                Spacer(minLength: 0)
+            }
+            if state.googlePackageName.isEmpty, state.remoteGoogleApps.isEmpty {
+                missingIdentityNote("Connect Google Play to choose the app, or type it.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

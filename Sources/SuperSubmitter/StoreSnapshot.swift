@@ -33,6 +33,16 @@ struct StoreSnapshot: Codable, Equatable {
         text.isEmpty && appleLive.isEmpty && screenshots.isEmpty && previews.isEmpty
     }
 
+    /// Whether the snapshot kept the listing the customers are reading.
+    ///
+    /// `appleLive` fills from `liveVersionLocales` and from nothing else, so
+    /// this is true only for an app the App Store has actually shipped. The
+    /// rest of the snapshot says the store holds a record, which a draft does
+    /// too, and telling the two apart is the whole of `isUpdatingLiveApp`.
+    var hasAppleLiveListing: Bool {
+        appleLive.values.contains { $0.values.contains { !$0.isEmpty } }
+    }
+
     /// What the App Store shows customers for this field, when the draft that
     /// a run writes does not already say the same thing. Nil means the two
     /// agree, or that nothing is known, and the tab then says nothing.
