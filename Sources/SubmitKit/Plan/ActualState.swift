@@ -411,6 +411,34 @@ public struct ActualState: Sendable, Equatable {
             public var id: String?
             public var name: String?
             public var reviewNote: String?
+            /// Apple's own review state for the product, `APPROVED`,
+            /// `WAITING_FOR_REVIEW`, `READY_TO_SUBMIT` and the rest.
+            ///
+            /// A product is reviewed separately from the app, and an approved
+            /// one goes back into review when its name, its review note or its
+            /// localizations change. The developer has to be told that before
+            /// they type, not after the apply.
+            public var state: String?
+            /// The subscription group that holds this product, for a
+            /// subscription. Nil for a one-time purchase.
+            public var groupName: String?
+
+            /// Apple has already approved this product, so a change to its
+            /// name, its review note or its localizations sends it back into
+            /// review on its own, separately from the app.
+            ///
+            /// A product taken off sale counts as approved: it went through
+            /// review once and putting it back is not a fresh submission.
+            public var isApproved: Bool {
+                ["APPROVED", "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE"]
+                    .contains(state ?? "")
+            }
+
+            /// Apple has this product and has not answered yet.
+            public var isWithReview: Bool {
+                ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_BINARY_APPROVAL"]
+                    .contains(state ?? "")
+            }
             /// The locale to the store name and description.
             public var locales: [String: ProductLocale] = [:]
             /// True on a desired-state value when absence from `locales`
