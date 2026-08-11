@@ -389,7 +389,7 @@ public enum Validator {
             // compare against and the rule below cannot run. The apply reaches
             // the same wall later and says only "no version", so this names it
             // here, next to the field that fixes it.
-            let train = manifest.release?.versionName ?? ""
+            let train = manifest.versionName(for: .apple) ?? ""
             if train.isEmpty {
                 result.append(Finding(
                     id: "build.noVersionName", severity: .error,
@@ -402,7 +402,7 @@ public enum Validator {
                     message: "The build number \(current) is not greater than \(highest), which App Store Connect already holds for version \(train).",
                     location: "Build · iOS", fix: .build))
             }
-            if let versionName = manifest.release?.versionName, !versionName.isEmpty,
+            if let versionName = manifest.versionName(for: .apple), !versionName.isEmpty,
                let packageVersion = package.versionName, packageVersion != versionName {
                 result.append(Finding(
                     id: "build.versionName.apple", severity: .warning,
@@ -426,7 +426,10 @@ public enum Validator {
                     message: "The version code \(current) is not greater than \(highest) in the target track.",
                     location: "Build · Android", fix: .build))
             }
-            if let versionName = manifest.release?.versionName, !versionName.isEmpty,
+            // Google Play's own number. The App Store's is a different number
+            // and comparing the bundle against it is what refused an Android
+            // upload for holding the version its project has always held.
+            if let versionName = manifest.versionName(for: .google), !versionName.isEmpty,
                let packageVersion = package.versionName, packageVersion != versionName {
                 result.append(Finding(
                     id: "build.versionName.google", severity: .warning,
@@ -1168,7 +1171,7 @@ public enum Validator {
         if let standing { result.append(standing) }
         // Apple refuses a version that does not climb. Catching it here names
         // the live number and the fix; Apple's own error names neither.
-        let wanted = input.manifest.release?.versionName ?? ""
+        let wanted = input.manifest.versionName(for: .apple) ?? ""
         if writesMetadata, !wanted.isEmpty, let live = apple.liveVersionString,
            !isVersion(wanted, above: live) {
             result.append(Finding(

@@ -114,6 +114,9 @@ struct PastPreparationTests {
         #expect(AppleStanding(state: "READY_FOR_SALE").label == "Live")
         #expect(AppleStanding(state: "PREPARE_FOR_SUBMISSION").label == "Draft")
         #expect(AppleStanding(state: "REJECTED").label == "Refused")
-        #expect(AppleStanding(state: nil).label == "Not on the store")
+        // A store that answered and holds no version. Nobody having asked is
+        // the other thing, and the two were one word.
+        #expect(AppleStanding(state: "").label == "Not on the store")
+        #expect(AppleStanding(state: nil).label == "Unknown")
     }
 }

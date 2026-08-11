@@ -31,6 +31,20 @@ public enum AppleVersionState {
         "WAITING_FOR_EXPORT_COMPLIANCE",
     ]
 
+    /// The states of a version customers have had.
+    ///
+    /// It answers "has this app ever shipped?" off a bare version state, which
+    /// is all a sweep over every linked app has in hand. A version pulled from
+    /// sale still shipped, and one replaced by a newer one shipped too.
+    ///
+    /// `PENDING_DEVELOPER_RELEASE` is not here. Apple said yes and nobody can
+    /// buy it yet, so an app whose only version sits there has never been on
+    /// the store. `AppleStanding` draws the same line and calls it "Approved".
+    public static let shipped: Set<String> = [
+        "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION",
+        "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE",
+    ]
+
     /// What Apple said, once it has said anything.
     ///
     /// Three answers and not two. `waiting` is the state this app spent its

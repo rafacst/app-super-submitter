@@ -291,3 +291,101 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
     #expect(!removed.contains(folder))
     #expect(FileManager.default.fileExists(atPath: folder.path))
 }
+
+// MARK: - 9.6 What the module says it builds
+
+/// Four preflight rows read "Not read" on every Android project, over values
+/// that sit as literals in `build.gradle` in almost all of them. The developer
+/// learnt the version the build carried after the build.
+@Test func theModuleBuildFileAnswersTheIdentityRows() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try makeDirectory(root.appendingPathComponent("app"))
+    try Data("""
+    plugins { id("com.android.application") }
+    android {
+        namespace = "com.example.other"
+        defaultConfig {
+            applicationId = "com.rafacst.receitorio"
+            versionCode = 7
+            versionName = "1.4.1"
+            versionNameSuffix = "-beta"
+        }
+    }
+    """.utf8).write(to: root.appendingPathComponent("app/build.gradle.kts"))
+    try makeDirectory(root.appendingPathComponent("app/src/main/res/values"))
+    try Data("""
+    <resources>
+        <string name="app_name">Receitório</string>
+    </resources>
+    """.utf8).write(to: root.appendingPathComponent("app/src/main/res/values/strings.xml"))
+
+    let identity = AndroidBuildService.identity(root: root, module: ":app")
+
+    // `applicationId` and not `namespace`. The namespace is the fallback for
+    // a module that names no application id at all.
+    #expect(identity.applicationID == "com.rafacst.receitorio")
+    #expect(identity.versionCode == "7")
+    // And not `-beta`. `versionNameSuffix` starts with `versionName` and is a
+    // different setting.
+    #expect(identity.versionName == "1.4.1")
+    #expect(identity.appName == "Receitório")
+}
+
+/// Groovy writes the same settings without the `=`, and a module that names
+/// no application id ships under its namespace.
+@Test func theGroovyFormAndTheNamespaceFallbackBothRead() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try makeDirectory(root.appendingPathComponent("app"))
+    try Data("""
+    android {
+        namespace 'com.example.app'
+        defaultConfig {
+            // applicationId "com.example.old"
+            versionCode 12
+            versionName '2.0'
+        }
+    }
+    """.utf8).write(to: root.appendingPathComponent("app/build.gradle"))
+
+    let identity = AndroidBuildService.identity(root: root, module: ":app")
+
+    // The commented line is not an assignment. A version left behind under
+    // `//` is the one most likely to be read by a parser that ignores it.
+    #expect(identity.applicationID == "com.example.app")
+    #expect(identity.versionCode == "12")
+    #expect(identity.versionName == "2.0")
+}
+
+/// A value Gradle computes is absent, and the row says so rather than
+/// inventing one. A version catalog reference is not a version.
+@Test func aComputedValueStaysUnread() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try makeDirectory(root.appendingPathComponent("app"))
+    try Data("""
+    android {
+        defaultConfig {
+            applicationId = "com.example.app"
+            versionName = libs.versions.appVersion.get()
+            versionCode = gitCommitCount()
+        }
+    }
+    """.utf8).write(to: root.appendingPathComponent("app/build.gradle.kts"))
+
+    let identity = AndroidBuildService.identity(root: root, module: ":app")
+
+    #expect(identity.applicationID == "com.example.app")
+    #expect(identity.versionName == nil)
+    #expect(identity.versionCode == nil)
+    #expect(identity.appName == nil)
+}
+
+/// `:feature:login` is a folder path and not a name.
+@Test func aNestedModuleIsANestedFolder() {
+    let root = URL(fileURLWithPath: "/tmp/project")
+    #expect(AndroidBuildService.moduleFolder(root: root, module: ":feature:login").path
+        == "/tmp/project/feature/login")
+    #expect(AndroidBuildService.moduleFolder(root: root, module: nil).path == "/tmp/project")
+}

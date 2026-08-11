@@ -114,6 +114,9 @@ final class AppState {
     @ObservationIgnored private let linkedAppsDefaultsKey = "linkedApps.v1"
     @ObservationIgnored private let lastOpenAppKey = "lastOpenApp.v1"
     @ObservationIgnored private let modeDefaultsKey = "mode.v1"
+    /// Not private: `rememberAppLiveness` writes it, and it lives in the review
+    /// extension one file over.
+    @ObservationIgnored let liveAppsKey = "appLiveStates.v1"
     @ObservationIgnored private let googleCredentialChoiceKey = "googleCredentialChoice.v1"
 
     // The manifest and the file behind it.
@@ -156,6 +159,7 @@ final class AppState {
             if !selectedTab.modes.contains(mode) {
                 selectedTab = Tab.tabs(in: mode).first ?? .stores
             }
+            openALiveAppForManaging()
         }
     }
     var selectedTab: Tab = .stores {
@@ -427,6 +431,19 @@ final class AppState {
     /// App id -> the version state Apple last reported, for every linked app
     /// and not only the open one. See `refreshReviewStates`.
     var appReviewStates: [String: String] = [:]
+    /// What a store answered about each linked app, and not only the open one.
+    ///
+    /// Three answers and not two. True is an app a store has on sale or has
+    /// had, false is a read that answered and found none, and a missing key is
+    /// an app nobody has asked about. "Nobody asked" is not "not on the store",
+    /// the sidebar draws a different word for each, and the Manage side lists
+    /// the first of the three. See `isAppLive(appKey:)` and `appStoreMark`.
+    ///
+    /// Kept in the defaults, unlike `appReviewStates`. A review state is news
+    /// of the hour and this one is a fact that stands: the Manage side lists
+    /// these apps, and a sidebar that opens empty every morning and fills
+    /// itself once a read returns is a sidebar that looks broken.
+    var appLiveStates: [String: Bool] = [:]
     var consoleRows: [ConsoleRow] = []
     var consoleMarks: Set<String> = []
     var statuses: [Store: StoreStatus] = [:]
@@ -502,6 +519,7 @@ final class AppState {
            let decoded = try? JSONDecoder().decode([LinkedAppRecord].self, from: data) {
             linkedApps = decoded.filter { FileManager.default.fileExists(atPath: $0.manifestPath) }
         }
+        appLiveStates = defaults.dictionary(forKey: liveAppsKey) as? [String: Bool] ?? [:]
         appleVendorNumber = defaults.string(forKey: "appleVendorNumber") ?? ""
         googleDeveloperId = defaults.string(forKey: "googleDeveloperId") ?? ""
         if let value = defaults.string(forKey: googleCredentialChoiceKey),
@@ -532,8 +550,9 @@ final class AppState {
         return linkedApps.enumerated().map { index, record in
             let url = URL(fileURLWithPath: record.manifestPath)
             let loaded = index == selectedAppIndex ? manifest : (try? ManifestFile.load(from: url))
-            let version = loaded?.release?.versionName ?? "No version"
+            let version = loaded?.displayVersionName ?? "No version"
             let selected = index == selectedAppIndex
+            let key = appKey(loaded, record: record)
             return AppSummary(
                 id: record.id,
                 name: record.name,
@@ -547,8 +566,30 @@ final class AppState {
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
                 apple: health(.apple, manifest: loaded, selected: selected),
                 google: health(.google, manifest: loaded, selected: selected),
-                appleAppID: loaded?.apps.apple?.appId)
+                key: key,
+                // The open app answers from the read it already has, which is
+                // the freshest answer anywhere: an app that goes live while it
+                // is open joins the Manage list on that read rather than on the
+                // next launch. Every other row answers from what was learned.
+                isLive: (selected && isUpdatingLiveApp) || isAppLive(appKey: key))
         }
+    }
+
+    /// The key one app is remembered under, open or not.
+    ///
+    /// Its store identifier, because that is what a store answers about, and
+    /// the linked record for an app that has neither yet. `currentAppKey` is
+    /// this same question about the open app, and the two may not drift: the
+    /// sweep writes what it learns under the id it read, and the open app reads
+    /// it back under the id in its own manifest.
+    /// An id the manifest carries and leaves empty is no id. `apps.apple` is a
+    /// block with an empty `appId` for every app whose store row is half
+    /// filled, so `??` alone handed all of them the same key: one bucket, and
+    /// every app in it wearing whatever the last one learned.
+    func appKey(_ loaded: Manifest?, record: LinkedAppRecord?) -> String {
+        if let appID = loaded?.apps.apple?.appId, !appID.isEmpty { return appID }
+        if let package = loaded?.apps.google?.packageName, !package.isEmpty { return package }
+        return record?.id.uuidString ?? "unlinked"
     }
 
     private func summary(for loaded: Manifest?, selected: Bool) -> String {
@@ -715,6 +756,26 @@ final class AppState {
         Task { await refreshReviewStates() }
     }
 
+    /// Leaves an app the Manage side does not list, for one it does.
+    ///
+    /// The same rule the mode already follows for a tab, one level up:
+    /// Managing runs the app that is already live, so a draft is not one of its
+    /// apps and the sidebar stops listing it there. Without this the developer
+    /// arrived on the Manage tabs of an app the column beside them had just
+    /// stopped showing, with the tick nowhere and the live listing of an app
+    /// that has no customers.
+    ///
+    /// It moves only when there is somewhere to go. A developer whose apps are
+    /// all drafts has nothing to manage, and putting them on another draft
+    /// would be a move that changes nothing.
+    private func openALiveAppForManaging() {
+        guard mode == .managing, !linkedApps.isEmpty else { return }
+        let rows = appRows
+        guard !(rows.indices.contains(selectedAppIndex) && rows[selectedAppIndex].isLive),
+              let next = rows.firstIndex(where: \.isLive) else { return }
+        selectApp(at: next)
+    }
+
     /// The name in the removal question, so the user reads which app leaves.
     var removalName: String {
         guard let index = appPendingRemoval, linkedApps.indices.contains(index) else {
@@ -834,6 +895,15 @@ final class AppState {
             persistLinkedApps()
             activateLinkedApp(at: linkedApps.count - 1)
             selectedTab = .stores
+            // What the stores hold for this one app, asked once, here. Linking
+            // is the moment a developer hands the app over, it is the only
+            // moment that names one app rather than all of them, and both
+            // stores answer for the price of the app being added.
+            //
+            // After `activateLinkedApp`, which loads this app's keys out of the
+            // Keychain. A read fired before that line would sign with whatever
+            // the app before it used.
+            Task { await readAppLiveness(for: record) }
         } catch {
             errorMessage = "That file is not a valid store file. \(error.localizedDescription)"
         }
@@ -1279,6 +1349,46 @@ final class AppState {
                 self.saveManifestReportingErrors()
             })
     }
+
+    /// The number one store is being given.
+    ///
+    /// The two stores do not number together. An app that shipped on the App
+    /// Store first is on 1.4.1 there and on 1.0.0 in Play, and one field for
+    /// both of them refused the Android upload against a number Apple owns.
+    func releaseVersionBinding(for store: Store) -> Binding<String> {
+        Binding(
+            get: { self.manifest.versionName(for: store) ?? "" },
+            set: {
+                self.manifest.setReleaseVersionName($0, for: store)
+                self.saveManifestReportingErrors()
+            })
+    }
+
+    /// Whether one number covers both stores. See `Manifest.sharesOneVersion`.
+    ///
+    /// Setting it is the developer answering "are these the same release?".
+    /// Sharing takes the App Store's number where there is one, because that
+    /// is the store whose number a customer sees first, and gives it to both.
+    /// Splitting hands each store the number it already had.
+    var sharesOneVersion: Bool {
+        get { manifest.sharesOneVersion }
+        set {
+            let apple = manifest.versionName(for: .apple) ?? ""
+            let google = manifest.versionName(for: .google) ?? ""
+            if newValue {
+                manifest.setReleaseVersionName(apple.isEmpty ? google : apple)
+            } else {
+                manifest.setReleaseVersionName(apple, for: .apple)
+                manifest.setReleaseVersionName(google, for: .google)
+            }
+            saveManifestReportingErrors()
+        }
+    }
+
+    /// Whether the tab has two versions to draw at all. One store is one
+    /// number, and a checkbox offering to share it with nobody is a control
+    /// that does nothing.
+    var showsVersionPerStore: Bool { stores.count > 1 }
 
     /// What the App Store shows customers, once a read has said so.
     var liveAppleVersion: String? { actualState.apple?.liveVersionString }
@@ -1993,6 +2103,30 @@ final class AppState {
     /// be new against.
     var isUpdatingLiveApp: Bool { appleHasShipped || googleHasShipped }
 
+    /// Whether this store has fixed the identifiers of the open app.
+    ///
+    /// A published app cannot change its bundle id, its App Store app id, or
+    /// its Play package name. Each one is the app's identity in that store:
+    /// every install, review, purchase and crash report hangs off it, and
+    /// neither store publishes a call that changes one. A new value typed into
+    /// the box moves no app. It points this workspace at a different app, or at
+    /// none, and the apply then writes this app's listing over somebody else's
+    /// or fails on an id that names nothing.
+    ///
+    /// Per store, because an app can be shipped in one and unwritten in the
+    /// other. Locking the bundle id of a first iOS submission because the
+    /// Android app is out would block the submission the box exists for.
+    ///
+    /// False before a read answers, which is the only safe way round. A box
+    /// held shut against a store nobody has asked about is a developer who
+    /// cannot type the id that would let the app ask.
+    func storeFixedTheIdentifiers(_ store: Store) -> Bool {
+        switch store {
+        case .apple: appleHasShipped
+        case .google: googleHasShipped
+        }
+    }
+
     /// The App Store has taken this app to customers at least once.
     ///
     /// Three readings of one fact, because they arrive at different moments.
@@ -2654,6 +2788,11 @@ final class AppState {
             resetRunState()
             loadConsoleMarks()
             applyDryRunDefault()
+            // After `resetRunState`, which clears the read the app before this
+            // one left behind. The snapshot on disk holds the listing customers
+            // are reading, so an app read in an earlier session proves itself
+            // live here without waiting for the sweep.
+            rememberOpenAppLiveState()
         } catch {
             errorMessage = "Could not open \(url.lastPathComponent). \(error.localizedDescription)"
         }

@@ -40,7 +40,7 @@ struct MenuBarPopover: View {
 
     private var title: String {
         let name = state.currentApp?.name ?? "Super Submitter"
-        guard let version = state.manifest.release?.versionName, !version.isEmpty else {
+        guard let version = state.manifest.displayVersionName, !version.isEmpty else {
             return name
         }
         return "\(name) \(version)"

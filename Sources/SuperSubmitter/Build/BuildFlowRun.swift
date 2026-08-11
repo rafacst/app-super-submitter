@@ -297,6 +297,11 @@ extension BuildFlow {
         }
         run.move(to: .needsUploadConfirmation)
 
+        // The other store's build, when one press asked for both. It comes
+        // before the upload below: the second artifact is built, never sent,
+        // and sending is a separate confirmation either way.
+        if queuedStore != nil { return await startQueuedBuild() }
+
         // upload-spec 8.14. The app continues by itself only when the first
         // confirmation said it would, no material field changed, and nothing
         // blocks. Android always pauses, because its preflight is a guess.
@@ -359,8 +364,12 @@ extension BuildFlow {
                 : manifest.apps.apple?.bundleId
             compare("store.yaml identifier", expectedIdentifier, candidate.productIdentifier,
                     blocks: true)
-            if let versionName = manifest.release?.versionName, !versionName.isEmpty,
-               versionName != candidate.marketingVersion {
+            // The version of the store this artifact is going to. Comparing an
+            // App Bundle against the App Store's number is what blocked an
+            // upload of the version the Android project has always built.
+            if let versionName = manifest.versionName(
+                for: candidate.platform == .android ? .google : .apple),
+               !versionName.isEmpty, versionName != candidate.marketingVersion {
                 result.append(.init(field: "store.yaml version", expected: versionName,
                                     actual: candidate.marketingVersion, blocksUpload: true))
             }
@@ -653,6 +662,7 @@ extension BuildFlow {
 
     func finishCancel() async {
         storage.removeScratch(runID: run.id)
+        queuedStore = nil
         if run.state == .uploading || run.cleanupState == .pending {
             await reconcileAfterCancel()
         } else {
@@ -727,6 +737,7 @@ extension BuildFlow {
 
     func fail(_ value: BuildFailure) {
         storage.removeScratch(runID: run.id)
+        queuedStore = nil
         failure = value
         run.lastError = value
         // The panel tells the developer to read the log, so the log is on the
@@ -811,6 +822,9 @@ extension BuildFlow {
         artifactOnly = false
         artifactDeleted = false
         uploadProgress = 0
+        // A queue outlives nothing. A second build that fires after the first
+        // was reset, cancelled, or failed is a build nobody asked for.
+        queuedStore = nil
     }
 
     // MARK: - Logging

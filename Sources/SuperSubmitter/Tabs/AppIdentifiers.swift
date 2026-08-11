@@ -19,20 +19,23 @@ struct AppIdentifiers: View {
         Section_("This app in the stores", icon: "number", tint: Theme.accent,
                  anchor: "build.identifiers") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("The store owns these, so the app reads them from the store. Connecting a credential on the Stores tab fills them in, and where that credential sees more than one app, the list beside the field picks between them. The box stays open for a value you are copying from the store yourself: an id that names no app fails the apply, and an id that names another app writes to it.")
+                Text(intro)
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if state.stores.contains(.apple) {
+                    let fixed = state.storeFixedTheIdentifiers(.apple)
                     IdentifierValue(label: "App id",
                                     value: Binding(get: { state.appleAppID },
                                                    set: { state.appleAppID = $0 }),
                                     placeholder: "Numeric App Store ID",
+                                    locked: fixed,
                                     commit: state.updateAppleAppFields)
                     IdentifierValue(label: "Bundle id",
                                     value: Binding(get: { state.appleBundleID },
                                                    set: { state.appleBundleID = $0 }),
                                     placeholder: "Reverse-DNS bundle identifier",
+                                    locked: fixed,
                                     commit: state.updateAppleAppFields)
                     // A universal app has a version train per platform, each
                     // with its own numbers, text, and screenshots. This says
@@ -58,28 +61,45 @@ struct AppIdentifiers: View {
                     }
                     // The apps the tested credential can see. It fills both
                     // fields above, so it belongs beside them and not beside
-                    // the key that produced the list.
-                    VisibleAppsMenu(apps: state.remoteAppleApps,
-                                    choose: state.chooseRemoteAppleApp)
+                    // the key that produced the list. It goes with them on a
+                    // shipped app: picking another app rewrites both, which is
+                    // the change the store refuses.
+                    if !fixed {
+                        VisibleAppsMenu(apps: state.remoteAppleApps,
+                                        choose: state.chooseRemoteAppleApp)
+                    }
                 }
 
                 if state.stores.contains(.google) {
+                    let fixed = state.storeFixedTheIdentifiers(.google)
                     IdentifierValue(label: "Package name",
                                     value: Binding(get: { state.googlePackageName },
                                                    set: { state.googlePackageName = $0 }),
                                     placeholder: "Reverse-DNS package name",
+                                    locked: fixed,
                                     commit: state.updateGoogleAppFields)
                     // The same menu Apple has had all along. Play's Publishing
                     // API is package-scoped and lists nothing, which is why
                     // this field had no way in but the keyboard, and the
                     // Reporting API answers it for the same credential.
-                    VisibleAppsMenu(apps: state.remoteGoogleApps,
-                                    choose: state.chooseRemoteGoogleApp)
+                    if !fixed {
+                        VisibleAppsMenu(apps: state.remoteGoogleApps,
+                                        choose: state.chooseRemoteGoogleApp)
+                    }
                 }
 
                 RegistrationNote()
             }.storePanel()
         }
+    }
+
+    /// What the panel says about itself, minus the sentence that stops being
+    /// true once every store on screen has fixed its identifiers.
+    private var intro: String {
+        let base = "The store owns these, so the app reads them from the store. Connecting a credential on the Stores tab fills them in, and where that credential sees more than one app, the list beside the field picks between them."
+        let open = " The box stays open for a value you are copying from the store yourself: an id that names no app fails the apply, and an id that names another app writes to it."
+        let shown = state.stores.isEmpty ? [Store.apple] : Array(state.stores)
+        return base + (shown.allSatisfy(state.storeFixedTheIdentifiers) ? "" : open)
     }
 }
 
@@ -164,19 +184,37 @@ private struct RegistrationNote: View {
 ///
 /// So the box is back and the paragraph is what does the work. An invitation
 /// is answered by saying what is true, not by taking the keyboard away.
+/// The one case the paragraph above does not cover is the app that has already
+/// shipped. Its identifiers are what every install, review and purchase in the
+/// store hangs off, neither store publishes a call that changes one, and a new
+/// value typed here would move no app: it points the workspace at a different
+/// app, or at none. So the box holds the value and takes no characters. See
+/// `AppState.storeFixedTheIdentifiers`.
 private struct IdentifierValue: View {
     let label: String
     @Binding var value: String
     let placeholder: String
+    var locked = false
     let commit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+            HStack(spacing: 5) {
+                Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                if locked {
+                    Image(systemName: "lock.fill").font(Theme.font(size: 9))
+                    Text("the store assigned this and it cannot change")
+                        .font(Theme.font(size: 11))
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.text3)
             TextField(placeholder, text: $value)
                 .textFieldStyle(.plain)
                 .font(Theme.mono(12))
                 .lineLimit(1)
+                .disabled(locked)
+                .foregroundStyle(locked ? Theme.text2 : Theme.text)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)

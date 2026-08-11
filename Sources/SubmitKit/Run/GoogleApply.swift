@@ -328,7 +328,7 @@ extension Runner {
         }
         let notes = releaseNotes()
         if !notes.isEmpty { release["releaseNotes"] = notes }
-        if let name = manifest.release?.versionName { release["name"] = name }
+        if let name = manifest.versionName(for: .google) { release["name"] = name }
 
         try await api.google("PATCH", try editPath("/tracks/\(track)"),
                              body: ["track": track, "releases": [release]])

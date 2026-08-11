@@ -364,7 +364,7 @@ struct PlanTab: View {
 
     /// The release this pass sends, named by the version in the manifest.
     private var shipTitle: String {
-        let version = state.manifest.release?.versionName ?? ""
+        let version = state.manifest.displayVersionName ?? ""
         return version.isEmpty ? "Ship this release" : "Ship \(version)"
     }
 

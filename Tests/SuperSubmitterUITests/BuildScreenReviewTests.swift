@@ -90,7 +90,10 @@ private func buildReviewState() -> AppState {
     #expect(!identity.contains("PickerActionRow(value: state.appleBundleID"))
     #expect(!identity.contains("PickerActionRow(value: state.googlePackageName"))
     #expect(!identity.contains("identityValue("))
-    #expect(identity.contains("TextField(\"Package name\""))
+    // The label above the box already says it, and the box repeated the word
+    // directly under it.
+    #expect(!identity.contains("TextField(\"Package name\""))
+    #expect(identity.contains("Text(\"Package name\")"))
     #expect(identity.contains("state.updateGoogleAppFields()"))
     #expect(identity.contains("state.updateAppleAppFields()"))
     // The picker is the safer way in when there is one. It survives.

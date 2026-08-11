@@ -330,7 +330,7 @@ struct ReleaseTab: View {
     }
 
     private func lines(_ store: Store) -> String {
-        let version = state.manifest.release?.versionName ?? "no version"
+        let version = state.manifest.versionName(for: store) ?? "no version"
         switch store {
         case .apple:
             let release = state.manifest.release?.apple?.releaseType?.rawValue ?? "MANUAL"

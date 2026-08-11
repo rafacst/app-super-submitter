@@ -359,7 +359,7 @@ extension Runner {
     func appleBuildUpload(path: String, index: Int) async throws {
         guard let url = resolve(path) else { throw RunError.missingBuild }
         let data = try Data(contentsOf: url, options: .mappedIfSafe)
-        let versionName = manifest.release?.versionName ?? ""
+        let versionName = manifest.versionName(for: .apple) ?? ""
         let buildNumber = appleBuildNumber()
 
         let upload = JSON(data: try await api.apple("POST", "/v1/buildUploads", body: [

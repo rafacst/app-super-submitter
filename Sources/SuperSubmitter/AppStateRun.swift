@@ -182,6 +182,9 @@ extension AppState {
         actualState = actual
         storeSnapshot.merge(actual)
         storeSnapshot.save(toRoot: manifestRoot)
+        // A read is where an app first proves it has shipped, and the Manage
+        // side asks that about apps this read says nothing about.
+        rememberOpenAppLiveState()
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actual, stores: stores)
         refreshDockBadge()
         planReadFailures = result.readFailures
@@ -253,10 +256,13 @@ extension AppState {
             build.android = candidate.artifactPath
             release.build = build
         }
-        if release.versionName?.isEmpty != false {
-            release.versionName = candidate.marketingVersion
-        }
         manifest.release = release
+        // The store this artifact goes to, and not both of them. An App Bundle
+        // holding 1.0.0 used to name the version for the App Store as well.
+        let store = candidate.platform.store
+        if manifest.versionName(for: store) == nil, !candidate.marketingVersion.isEmpty {
+            manifest.setReleaseVersionName(candidate.marketingVersion, for: store)
+        }
         saveManifest()
         // The plan must read the store again now that a build landed.
         invalidatePlan()
@@ -567,7 +573,7 @@ extension AppState {
             return
         }
         consoleMarks = ConsoleStateStore(root: root).marks(
-            app: currentAppKey, version: manifest.release?.versionName ?? "")
+            app: currentAppKey, version: manifest.displayVersionName ?? "")
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actualState,
                                             stores: stores)
         refreshDockBadge()
@@ -578,18 +584,20 @@ extension AppState {
         do {
             try ConsoleStateStore(root: root).save(
                 consoleMarks, app: currentAppKey,
-                version: manifest.release?.versionName ?? "")
+                version: manifest.displayVersionName ?? "")
         } catch {
             errorMessage = "The console checklist could not be saved. \(error.localizedDescription)"
         }
     }
 
     /// Also read by the review choice, which is remembered per app and version.
+    ///
+    /// Through `appKey`, which the sidebar asks the same question of every
+    /// linked app. Two spellings of one key would put the open app in one
+    /// bucket and its own row in another.
     var currentAppKey: String {
-        manifest.apps.apple?.appId
-            ?? manifest.apps.google?.packageName
-            ?? credentialAccount
-            ?? "unlinked"
+        appKey(manifest, record: linkedApps.indices.contains(selectedAppIndex)
+                                    ? linkedApps[selectedAppIndex] : nil)
     }
 
     /// Runs the read calls again and updates the states. It writes nothing.
@@ -679,7 +687,7 @@ extension AppState {
     }
 
     func detail(for store: Store) -> String {
-        let version = manifest.release?.versionName ?? "no version"
+        let version = manifest.versionName(for: store) ?? "no version"
         switch store {
         case .apple:
             return "Version \(version)"
@@ -791,7 +799,7 @@ extension AppState {
                     track: manifest.googlePrimaryTrack,
                     status: manifest.release?.google?.status ?? "completed",
                     userFraction: manifest.release?.google?.userFraction,
-                    versionName: manifest.release?.versionName)
+                    versionName: manifest.versionName(for: .google))
                 statuses[.google] = StoreStatus(store: .google, phase: .inQueue,
                                                 detail: detail(for: .google), checkedAt: Date())
             }

@@ -46,7 +46,7 @@ public enum Planner {
     private static func appleSteps(_ input: Input) -> [PlanStep] {
         let manifest = input.manifest
         let actual = input.actual.apple
-        let versionName = manifest.release?.versionName ?? ""
+        let versionName = manifest.versionName(for: .apple) ?? ""
         var steps: [PlanStep] = []
 
         guard let appID = manifest.apps.apple?.appId, !appID.isEmpty else { return [] }

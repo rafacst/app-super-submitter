@@ -62,30 +62,46 @@ import Testing
             "6666": "DEVELOPER_REJECTED",
         ]
 
-        #expect(state.appReviewMark(appKey: "1111")?.label == "In review")
+        #expect(state.appMark(appKey: "1111").label == "In review")
         // Apple said yes and nobody can buy it yet. The release is still a
         // button somebody has to press.
-        #expect(state.appReviewMark(appKey: "2222")?.label == "Approved")
-        #expect(state.appReviewMark(appKey: "3333")?.label == "Refused")
+        #expect(state.appMark(appKey: "2222").label == "Approved")
+        #expect(state.appMark(appKey: "3333").label == "Refused")
         // A draft is the ordinary state, and it is the answer for most of the
         // apps in the list on most days. It said nothing at all before.
-        #expect(state.appReviewMark(appKey: "4444")?.label == "Draft")
+        #expect(state.appMark(appKey: "4444").label == "Draft")
         // The one the column exists for: on sale, and not merely approved.
-        #expect(state.appReviewMark(appKey: "5555")?.label == "Live")
+        #expect(state.appMark(appKey: "5555").label == "Live")
         // The developer withdrew it. Apple never refused it, so it is a draft
         // and not a refusal. See `AppleVersionState.outcome`.
-        #expect(state.appReviewMark(appKey: "6666")?.label == "Draft")
+        #expect(state.appMark(appKey: "6666").label == "Draft")
     }
 
-    /// A read that never happened claims nothing. Every other row wears a word,
-    /// so this one has to stay the absence of an answer rather than becoming
-    /// the "Draft" the states below it earn.
-    @Test func anAppNobodyReadWearsNoWord() {
+    /// A read that never happened claims nothing, and says so in a word.
+    ///
+    /// A blank was the answer before, and a blank is not a claim being
+    /// withheld: the row read as an app with nothing to say, beside rows that
+    /// all wore a word. It is also the state every app is in between being
+    /// linked and its first read answering, which is a moment the developer is
+    /// looking straight at.
+    @Test func anAppNobodyReadSaysSo() {
         let state = state()
         state.appReviewStates = ["1111": ""]
 
-        #expect(state.appReviewMark(appKey: "1111") == nil)
-        #expect(state.appReviewMark(appKey: "9999") == nil)
+        #expect(state.appMark(appKey: "1111").label == "Unknown")
+        #expect(state.appMark(appKey: "9999").label == "Unknown")
+    }
+
+    /// Google Play publishes no review state at all, so a Play app has one fact
+    /// to wear: whether the store has ever had it. A read that answered is a
+    /// word either way, and only a read that never happened is "Unknown".
+    @Test func anAppWithNoAppleStateWearsWhatTheStoresAnswered() {
+        let state = state()
+        state.appLiveStates = ["com.example.live": true, "com.example.draft": false]
+
+        #expect(state.appMark(appKey: "com.example.live").label == "Live")
+        #expect(state.appMark(appKey: "com.example.draft").label == "Not on the store")
+        #expect(state.appMark(appKey: "com.example.unread").label == "Unknown")
     }
 
     // MARK: - The open app agrees with the sweep
@@ -123,7 +139,7 @@ import Testing
         #expect(shell.contains("await state.refreshReviewStates()"))
 
         let sidebar = try source("Sources/SuperSubmitter/Shell/Sidebar.swift")
-        #expect(sidebar.contains("appReviewMark"))
+        #expect(sidebar.contains("appMark"))
     }
 
     /// The keys are in the Keychain at launch, so the app asks the stores about

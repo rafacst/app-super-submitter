@@ -118,6 +118,16 @@ extension Manifest {
 
 extension Manifest {
     public struct Release: Codable, Sendable, Equatable {
+        /// The version both stores get, where neither names its own.
+        ///
+        /// It was the only version there was, and the two stores do not number
+        /// together. An App Store app on 1.4.1 whose Android twin has never
+        /// left 1.0.0 is the ordinary state of a project that shipped on one
+        /// store first, and one field for both of them meant the Android build
+        /// was refused against a number the App Store owns.
+        ///
+        /// A manifest written before that keeps this key and keeps its
+        /// meaning: one version, both stores. See `versionName(for:)`.
         public var versionName: String?
         public var build: Build?
         public var apple: AppleRelease?
@@ -152,6 +162,8 @@ extension Manifest {
         }
 
         public struct AppleRelease: Codable, Sendable, Equatable {
+            /// The version the App Store gets. Nil takes the shared one above.
+            public var versionName: String?
             public var releaseType: ReleaseType?
             public var phasedRelease: Bool?
             /// Controls an existing phased release as well as creating one.
@@ -160,9 +172,11 @@ extension Manifest {
             /// Google tester groups, and it reaches real testers, so nothing
             /// here runs before the plan shows it.
             public var testFlight: TestFlight?
-            public init(releaseType: ReleaseType? = nil, phasedRelease: Bool? = nil,
+            public init(versionName: String? = nil, releaseType: ReleaseType? = nil,
+                        phasedRelease: Bool? = nil,
                         phasedReleaseState: PhasedReleaseState? = nil,
                         testFlight: TestFlight? = nil) {
+                self.versionName = versionName
                 self.releaseType = releaseType
                 self.phasedRelease = phasedRelease
                 self.phasedReleaseState = phasedReleaseState
@@ -253,6 +267,8 @@ extension Manifest {
         }
 
         public struct GoogleRelease: Codable, Sendable, Equatable {
+            /// The version Google Play gets. Nil takes the shared one above.
+            public var versionName: String?
             /// The track that the release button releases. It is one track,
             /// because a release is one irreversible call. Spec section 7.9.
             public var track: String?
@@ -293,13 +309,15 @@ extension Manifest {
             /// manifest names no individual address.
             public var testers: [String: [String]]?
 
-            public init(track: String? = nil, tracks: [String]? = nil, status: String? = nil,
+            public init(versionName: String? = nil,
+                        track: String? = nil, tracks: [String]? = nil, status: String? = nil,
                         userFraction: Double? = nil, inAppUpdatePriority: Int? = nil,
                         countries: [String]? = nil, includeRestOfWorld: Bool? = nil,
                         mappingFile: String? = nil, nativeDebugSymbols: String? = nil,
                         expansionFileMain: String? = nil, expansionFilePatch: String? = nil,
                         externalApk: ExternalApk? = nil, deviceTierConfig: String? = nil,
                         testers: [String: [String]]? = nil) {
+                self.versionName = versionName
                 self.track = track
                 self.tracks = tracks
                 self.status = status
@@ -363,6 +381,56 @@ extension Manifest {
             case afterApproval = "AFTER_APPROVAL"
             case scheduled = "SCHEDULED"
         }
+    }
+}
+
+// MARK: - the release version, per store
+
+public extension Manifest {
+    /// The version this one store is being given.
+    ///
+    /// The store's own number where it has one, and the shared number where it
+    /// does not. Two stores do not number together: an app that shipped on the
+    /// App Store first is on 1.4.1 there and on 1.0.0 in Play, and one field
+    /// for both of them refused the Android upload against a number that
+    /// belongs to Apple.
+    ///
+    /// Empty is nil. A key written and then emptied is the developer taking
+    /// the override off, and it falls back the same as a key never written.
+    func versionName(for store: Store) -> String? {
+        let own = switch store {
+        case .apple: release?.apple?.versionName
+        case .google: release?.google?.versionName
+        }
+        if let own, !own.isEmpty { return own }
+        guard let shared = release?.versionName, !shared.isEmpty else { return nil }
+        return shared
+    }
+
+    /// Whether one number covers both stores.
+    ///
+    /// It is the shape of the manifest and not a switch beside it: a shared
+    /// number and no store naming its own is what "the same version on both"
+    /// looks like written down, and it is what every manifest written before
+    /// the stores could differ looks like.
+    ///
+    /// A new app shares nothing, so the tab offers a field per store, which is
+    /// the honest default: the two numbers are independent until a developer
+    /// says otherwise.
+    var sharesOneVersion: Bool {
+        guard release?.apple?.versionName?.isEmpty != false,
+              release?.google?.versionName?.isEmpty != false else { return false }
+        return release?.versionName?.isEmpty == false
+    }
+
+    /// One version to show where there is only room for one: a sidebar row, a
+    /// window title, a sentence about the submission.
+    ///
+    /// The shared number wins, because where there is one it is the answer for
+    /// both stores. Otherwise the App Store's, then Play's.
+    var displayVersionName: String? {
+        if let shared = release?.versionName, !shared.isEmpty { return shared }
+        return versionName(for: .apple) ?? versionName(for: .google)
     }
 }
 

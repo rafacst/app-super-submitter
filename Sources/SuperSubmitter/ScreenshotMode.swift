@@ -249,6 +249,11 @@ enum ScreenshotMode {
         // driven by the flag and never by the screen name.
         for path in manifestPaths {
             state.link(manifestAt: URL(fileURLWithPath: path))
+            // The Manage side lists the apps a store has shipped, and a demo
+            // run reads no store: without this its Apps group is empty in
+            // every Manage picture. The seed is safe for the same reason the
+            // review seed is: the throwaway defaults go with the run.
+            state.rememberAppLiveness(state.currentAppKey, live: true)
         }
         // After the linking and before the screen: the seed reads the manifest
         // that linking loaded, and every tab below draws from what it leaves.

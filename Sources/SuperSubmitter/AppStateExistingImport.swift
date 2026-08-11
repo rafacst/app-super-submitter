@@ -126,6 +126,20 @@ extension AppState {
         // A publisher lands on the build they are about to send. A manager has
         // nothing to build, so they land on the reviews of the live app.
         selectedTab = mode == .managing ? .liveApp : .build
+        // Which of the apps just imported the App Store has shipped. The Manage
+        // side lists those and no others, and an import is the usual way a live
+        // app arrives: without this the developer imported five published apps
+        // and the Manage column listed none of them until the next launch.
+        await refreshReviewStates()
+        // And which of them Google Play has, which the sweep above cannot ask.
+        // `link` asks this as each app is added, and an import is the one door
+        // where that is too early: the keys the read has to sign with are put
+        // in the Keychain by the lines after it. Nothing already answered for
+        // is asked again.
+        for record in linkedApps
+        where importedURLs.contains(where: { $0.path == record.manifestPath }) {
+            await readAppLiveness(for: record)
+        }
         if !skipped.isEmpty {
             errorMessage = "The apps were imported. These parts stayed empty:\n"
                 + skipped.map { "· \($0)" }.joined(separator: "\n")
