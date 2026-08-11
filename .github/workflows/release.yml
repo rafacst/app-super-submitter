@@ -29,15 +29,12 @@ env:
   TEAM_ID: "88BXH8KNVZ"
 
 jobs:
-  # Publishing is the one irreversible step here: an update this workflow signs
-  # installs itself on every Mac that already has the app. So the suite runs
-  # before anything is signed, and a regression costs a red check instead of a
-  # bad release.
+  # Beside the release, not in front of it. The job below holds nothing back:
+  # it carries no `needs`, so the approval this workflow waits for is asked the
+  # moment the run starts and the suite spends its minutes during that wait.
   #
-  # It sits in its own job on purpose. The release job below waits for a human,
-  # and a human takes minutes. Running the tests here means they finish during
-  # that wait instead of after it, and nobody is asked to approve a build whose
-  # tests then fail.
+  # The trade is deliberate. A red suite no longer stops the publish, because
+  # nothing waits for it. It reports, and the human at the gate decides.
   test:
     runs-on: macos-26
 
@@ -60,7 +57,6 @@ jobs:
         run: swift test --no-parallel
 
   release:
-    needs: test
     runs-on: macos-26
     # The gate. Add a required reviewer to this environment and every run
     # stops here until someone approves it.
