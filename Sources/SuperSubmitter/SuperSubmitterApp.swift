@@ -35,11 +35,26 @@ struct SuperSubmitterApp: App {
                         return
                     }
                     state.configureAccess()
+                    // The keys are already in the Keychain. This is the app
+                    // asking the stores about them, rather than the developer
+                    // pressing Connect on every launch to tell it what it
+                    // could have found out itself.
+                    state.verifyStoredConnections()
                     // The onboarding states the one promise of the product
                     // before the first credential.
                     // RootView writes the flag when the panel closes. A flag
                     // written here burns the onboarding if the panel never opens.
                     if !hasSeenOnboarding { state.showOnboarding = true }
+                    // And where the App Store has each of the linked apps.
+                    // The sweep ran on every app change and never at launch,
+                    // so the status column opened empty every morning and
+                    // filled itself only once you had clicked something.
+                    //
+                    // Last, and awaited. Everything above it is a local read
+                    // that has to happen before the window is usable; this is a
+                    // request per linked app, and a first run has neither a key
+                    // nor an app, so it returns at its own door.
+                    await state.refreshReviewStates()
                 }
         }
         .defaultSize(width: 1280, height: 820)
@@ -121,11 +136,17 @@ struct SuperSubmitterApp: App {
             // mode *is* choosing a row: a second control for it would move the
             // selection out from under the user to a row they did not pick.
             //
-            // The app has no Settings scene. Command-comma opens the panel over
-            // the window, which is the one place Settings has ever opened.
+            // The app has no Settings scene. Command-comma opens the Settings
+            // tab in this window, which is where Settings lives: it is one of
+            // the three screens about this Mac in the box at the foot of the
+            // sidebar, and a second window for it would be a second place to
+            // look for one screen.
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") { state.showSettings = true }
-                    .keyboardShortcut(",", modifiers: .command)
+                Button("Settings…") {
+                    state.showEntryScreen = false
+                    state.selectedTab = .settings
+                }
+                .keyboardShortcut(",", modifiers: .command)
             }
             CommandGroup(replacing: .help) {
                 Button("Super Submitter Onboarding") { state.showOnboarding = true }

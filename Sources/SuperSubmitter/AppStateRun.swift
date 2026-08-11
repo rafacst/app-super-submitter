@@ -57,11 +57,7 @@ extension AppState {
 
     /// Takes a failed plan read to the credentials that can fix it.
     func fixReadFailure(_ message: String) {
-        if message.hasPrefix("Provider:") {
-            showSettings = true
-        } else {
-            selectedTab = .stores
-        }
+        selectedTab = message.hasPrefix("Provider:") ? .settings : .stores
     }
 
     var credentials: StoreCredentials {

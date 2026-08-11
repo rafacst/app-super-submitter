@@ -26,7 +26,7 @@ struct ExistingAppImportSheet: View {
             }
             footer
         }
-        .frame(width: 900, height: model.step == .credentials ? 480 : 720)
+        .frame(width: 900, height: 720)
         .background(Theme.content)
         // The keys the app already holds. Without this the sheet asked for
         // them on every import, one line under the sentence that promises it

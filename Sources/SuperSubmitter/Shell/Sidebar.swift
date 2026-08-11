@@ -85,22 +85,18 @@ struct Sidebar: View {
             List(selection: selection) {
                 AppsSection(isOpen: $appsOpen)
 
+                // Every group wears its heading, including a job that has only
+                // one. Manage was the lone group of its job and drew none, so
+                // its four rows stood loose under the app list with nothing
+                // naming them, and the group could not be collapsed at all:
+                // the heading is the control that folds it.
                 ForEach(SidebarSection.allCases.filter { $0.mode == state.mode }) { section in
                     let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
                     if !rows.isEmpty {
-                        if section.showsHeader(in: state.mode) {
-                            Section(isExpanded: isOpen(section)) {
-                                ForEach(rows) { DestinationRow(destination: $0) }
-                            } header: {
-                                GroupHeader(title: section.title, isOpen: isOpen(section))
-                            }
-                        } else {
-                            // No heading, so nothing to press to collapse it,
-                            // and nothing to collapse it away from: it is the
-                            // only group the job has.
-                            Section {
-                                ForEach(rows) { DestinationRow(destination: $0) }
-                            }
+                        Section(isExpanded: isOpen(section)) {
+                            ForEach(rows) { DestinationRow(destination: $0) }
+                        } header: {
+                            GroupHeader(title: section.title, isOpen: isOpen(section))
                         }
                     }
                 }
@@ -142,20 +138,28 @@ struct Sidebar: View {
     /// because the switch is text.
     private var switchHeight: CGFloat { Theme.scaled(38) }
 
-    /// Enough for the account row, and for the offer when it shows.
+    /// Enough for the three rows about this Mac, and for the offer when it
+    /// shows.
     ///
     /// ponytail: a measured constant, not a `GeometryReader` reading the
-    /// overlay back into the margin. The footer is two known controls; when it
-    /// grows a third, measure it again.
+    /// overlay back into the margin. The footer is a known set of rows; when it
+    /// grows another one, measure it again.
     ///
-    /// Through `Theme.scaled`, because both controls are text and the reserve
-    /// has to move with the type. Left fixed, a larger font makes the footer
-    /// taller than the room kept for it and the last row hides underneath.
+    /// Through `Theme.scaled`, because every row is text and the reserve has to
+    /// move with the type. Left fixed, a larger font makes the footer taller
+    /// than the room kept for it and the last row hides underneath.
     private var footerHeight: CGFloat {
-        Theme.scaled(state.showsUpgradeCard ? 132 : 44)
+        Theme.scaled(state.showsUpgradeCard ? 190 : 102)
     }
 
-    /// The account, then the offer, pinned to the floor of the column.
+    /// This Mac, then the offer, pinned to the floor of the column.
+    ///
+    /// Three rows and not one control. The groups above are the steps of one
+    /// app's submission, and these three are answered once for the whole
+    /// machine: the store keys, what this program does on it, and who is signed
+    /// in. Stores used to head the Publish group and the Manage group both,
+    /// which is one screen listed twice in a column whose selection can only
+    /// stand on one of them, and Settings was a gear with no word beside it.
     ///
     /// An overlay and not a `VStack` or a `safeAreaInset`. Both of those wrap
     /// the list, and `NavigationSplitView` gives its sidebar column to a list
@@ -164,27 +168,73 @@ struct Sidebar: View {
     /// photographed, and tried again after the switcher changed. An overlay
     /// leaves the list as the column and draws on top of it.
     ///
-    /// The offer sits below the account on purpose. The account is a control
-    /// the developer uses; the offer is something the app is asking for, and
-    /// the thing being asked for does not get to sit closer to the work.
+    /// The offer sits below all of it on purpose. These are controls the
+    /// developer uses; the offer is something the app is asking for, and the
+    /// thing being asked for does not get to sit closer to the work.
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
             Divider()
-            HStack(spacing: 6) {
-                AccountControl()
-                Spacer(minLength: 0)
-                SettingsButton()
-            }
-            .padding(.horizontal, 10)
+                .padding(.bottom, 6)
+            FooterRow(tab: .stores)
+            FooterRow(tab: .settings)
+            AccountControl()
             if state.showsUpgradeCard {
                 UpgradeCard()
                     .padding(.horizontal, 10)
+                    .padding(.top, 6)
             }
         }
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         // The rows scroll under this, so it cannot be transparent.
         .background(.thickMaterial)
+    }
+}
+
+/// One destination in the box at the foot of the column.
+///
+/// It draws its own selected band, which every row inside the `List` above is
+/// forbidden to do. The reason that rule exists is that a hand-drawn band
+/// beside the system's is a second answer to a question already answered; down
+/// here there is no system answer, because a `List` selection reaches its own
+/// rows and nothing else. Without a band, opening Settings left the whole
+/// sidebar looking as though nothing was open.
+///
+/// The fill is the app's accent at the corner radius the mode switch uses, so
+/// the two hand-drawn selections in this column are the same shape.
+private struct FooterRow: View {
+    @Environment(AppState.self) private var state
+    let tab: Tab
+
+    private var selected: Bool { state.selectedTab == tab && !state.showsEntryScreen }
+
+    var body: some View {
+        Button {
+            // The tab is about the Mac and not about an app, so it opens over
+            // the entry screen rather than waiting for a folder to be picked.
+            state.showEntryScreen = false
+            state.selectedTab = tab
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: tab.symbol)
+                    .font(Theme.font(size: 12))
+                    .foregroundStyle(selected ? AnyShapeStyle(Theme.accentText)
+                                              : AnyShapeStyle(.tint))
+                    .frame(width: 17)
+                Text(tab.title)
+                    .font(Theme.font(size: 12.5))
+                    .foregroundStyle(selected ? Theme.accentText : Theme.text)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(selected ? Theme.accent : .clear,
+                        in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 3)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -212,19 +262,12 @@ private struct AppsSection: View {
                     HStack(spacing: 7) {
                         AppIconBadge(icon: app.icon, initials: app.initials, size: 16)
                         Text(app.name).lineLimit(1)
-                        Spacer(minLength: 6)
-                        // Where App Store review has this app, before it is
+                        // Where the App Store has this app, before it is
                         // opened. Every rule about a review used to read the
                         // open app alone, so a developer with six linked apps
                         // opened each one to find out which were frozen.
-                        if let mark = state.appReviewMark(appKey: app.appleAppID ?? "") {
-                            Text(mark.text)
-                                .font(Theme.font(size: 9.5, weight: .medium))
-                                .foregroundStyle(mark.colour)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(mark.colour.opacity(0.14), in: Capsule())
-                                .accessibilityLabel("App Store: \(mark.text)")
-                        }
+                        AppStatusChip(mark: state.appReviewMark(appKey: app.appleAppID ?? ""))
+                        Spacer(minLength: 6)
                         if index == state.selectedAppIndex {
                             Image(systemName: "checkmark")
                                 .font(Theme.font(size: 10, weight: .semibold))
@@ -233,6 +276,9 @@ private struct AppsSection: View {
                     }
                     .contentShape(.rect)
                 }
+                // The name truncates at the column edge, and the status column
+                // takes room the name used to have.
+                .help(app.name)
                 .buttonStyle(.plain)
                 // The two actions that belong to one app, on that app. They
                 // were in the pull-down, where they read as actions on
@@ -255,11 +301,39 @@ private struct AppsSection: View {
             Button { state.showEntryScreen = true } label: {
                 Label("Add App…", systemImage: "plus")
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
         } header: {
             GroupHeader(title: "Apps", isOpen: $isOpen)
+        }
+    }
+}
+
+/// Where the App Store has one app, beside the name it belongs to.
+///
+/// It follows the name and takes only the width of its own word. The chip
+/// answers a question about that app, so it reads as part of that row rather
+/// than as a column the eye has to carry across. The name truncates before the
+/// chip does: a row that runs out of room loses letters of a name the tooltip
+/// still carries, not the state word the list exists to show.
+///
+/// It draws nothing while the app has no answer: see `appReviewMark`.
+private struct AppStatusChip: View {
+    let mark: AppleStanding?
+
+    var body: some View {
+        if let mark {
+            Text(mark.label)
+                .font(Theme.font(size: 9.5, weight: .medium))
+                .foregroundStyle(mark.tint)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1.5)
+                .background(mark.fill, in: Capsule())
+                .accessibilityLabel("App Store: \(mark.label)")
         }
     }
 }
@@ -463,10 +537,10 @@ private struct AppSwitcher: View {
 
 /// Who is signed in, and the actions that belong to them.
 ///
-/// It replaced a "Super Submitter" heading over an Account row, a Settings row
-/// and an About row. The heading was the name of this program over three rows
-/// that had only that in common, and two of the three were not destinations at
-/// all: they opened panels. Settings and About are in the app menu now.
+/// A menu and not a row, alone among the three in this box. Stores and Settings
+/// are one destination each; this one carries Sign Out as well, and it says the
+/// address you are signed in under rather than the word "Account". Both of
+/// those are answers a row cannot hold.
 ///
 /// The button says the account, because that is the level of the hierarchy it
 /// sits at. The Account screen is still a screen, and this is the way in.
@@ -475,9 +549,16 @@ private struct AccountControl: View {
 
     private var label: String { state.accountEmail ?? "Not signed in" }
 
+    private var selected: Bool {
+        state.selectedTab == .account && !state.showsEntryScreen
+    }
+
     var body: some View {
         Menu {
-            Button("Account") { state.selectedTab = .account }
+            Button("Account") {
+                state.showEntryScreen = false
+                state.selectedTab = .account
+            }
             if state.showsUpgradeCard {
                 Button("See the Plans…") { state.openPaywall(.settings) }
             }
@@ -487,47 +568,38 @@ private struct AccountControl: View {
             }
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: "person.crop.circle")
-                    .font(Theme.font(size: 15))
-                    .foregroundStyle(.secondary)
-                Text(label).lineLimit(1).truncationMode(.middle)
+                Image(systemName: Tab.account.symbol)
+                    .font(Theme.font(size: 12))
+                    .foregroundStyle(selected ? AnyShapeStyle(Theme.accentText)
+                                              : AnyShapeStyle(.tint))
+                    .frame(width: 17)
+                Text(label)
+                    .font(Theme.font(size: 12.5))
+                    .foregroundStyle(selected ? Theme.accentText : Theme.text)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 4)
+                // The indicator, drawn rather than asked for. `menuIndicator`
+                // is honoured by the styles that draw a bezel, and this one has
+                // none, so the row would otherwise look exactly like the two
+                // destinations above it and open a menu instead.
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(Theme.font(size: 8, weight: .semibold))
+                    .foregroundStyle(selected ? Theme.accentText : Theme.text3)
             }
-            .font(Theme.font(size: 12.5))
         }
-        .controlSize(.small)
+        // No bezel. The two rows above it are plain, and a bordered control
+        // between them and the offer card read as a third kind of thing in a
+        // box of three of one kind.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(selected ? Theme.accent : .clear,
+                    in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 3)
         .accessibilityLabel("Account")
         .accessibilityValue(label)
-    }
-}
-
-/// The way into Settings that is on the screen.
-///
-/// It was in the app menu alone, at ⌘,. That is where a Mac keeps Settings and
-/// it stays there, but the app menu is not a place a developer looks while they
-/// are working, and every other panel in this app has a control that opens it.
-/// A window whose only route to its own settings is a menu bar reads as a
-/// window with no settings.
-///
-/// Beside the account and not among the navigation rows. Settings is not a
-/// destination: it opens a panel over the window, the same way About does, and
-/// a row in a `List` that opens a sheet is a row that lies about where it goes.
-/// That was the objection to the old Settings row, and it still stands.
-private struct SettingsButton: View {
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        Button { state.showSettings = true } label: {
-            Image(systemName: "gearshape")
-                .font(Theme.font(size: 13))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
-        // The shortcut sits in the tooltip, so the button teaches the faster
-        // way to what it does. See the field search glyph in the header.
-        .help("Settings  ⌘,")
     }
 }
 

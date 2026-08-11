@@ -67,6 +67,10 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     // clicks from the paywall and behind a sheet, so the one screen that says
     // what the account costs and what it covers was the hardest to find.
     case account
+    // This Mac, not the app. It was a sheet over the window with a strip of
+    // four sections across the top: a second navigation system, inside a
+    // panel, over the first one. A screen of this size is a screen.
+    case settings
 
     var id: Int { rawValue }
 
@@ -101,6 +105,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .release: "Release"
         case .liveApp: "Live app"
         case .account: "Account"
+        case .settings: "Settings"
         }
     }
 
@@ -119,8 +124,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // import loses nothing.
         case .marketing, .liveApp: [.managing]
         // The account covers every app on the machine, so it belongs to both
-        // jobs the same way the store credentials do.
-        case .account: [.publishing, .managing]
+        // jobs the same way the store credentials do. Settings is the same
+        // machine again, in its other half: what this program does on it.
+        case .account, .settings: [.publishing, .managing]
         }
     }
 
@@ -150,6 +156,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .release: "airplane"
         case .liveApp: "waveform.path.ecg.rectangle"
         case .account: "person.crop.circle"
+        case .settings: "gearshape"
         }
     }
 
@@ -187,6 +194,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .release: "Is it ready, and shall I send it?"
         case .liveApp: "What are the customers seeing, and what can I fix?"
         case .account: "Who am I, and what does my plan cover?"
+        case .settings: "How does Super Submitter work on this Mac?"
         }
     }
 
@@ -212,8 +220,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     var zone: Zone {
         switch self {
-        case .stores, .account, .build, .details, .media, .money, .marketing,
-             .reviewInfo: .edits
+        case .stores, .account, .settings, .build, .details, .media, .money,
+             .marketing, .reviewInfo: .edits
         case .plan: .reads
         case .release, .liveApp: .releases
         }
@@ -224,27 +232,28 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     }
 
 
-    /// Whether the tab works with no app open, in the sense the sidebar means.
+    /// Whether the tab is about this Mac rather than about one app.
     ///
-    /// Two tabs do, and neither is a step of the work. Account answers who you
-    /// are and what you have paid for. Stores holds one App Store Connect key
-    /// for the whole team and one Play service account for the whole developer
-    /// account, so it is answered once and covers every app, including the ones
-    /// not added yet.
+    /// Three are, and none of them is a step of the work. Stores holds one App
+    /// Store Connect key for the whole team and one Play service account for
+    /// the whole developer account. Account answers who you are and what you
+    /// have paid for. Settings is what this program does on the machine: the
+    /// appearance, the poll interval, the provider, the files it writes.
     ///
-    /// Stores also has to be reachable with nothing linked, because "Forget"
-    /// lives there and it is the only way to remove a store key on purpose.
-    /// The sidebar already said both of these work with no app; the row was
-    /// greyed anyway, so the one screen that could undo a credential was shut
-    /// exactly when a developer went looking for it.
+    /// Each is answered once and covers every app, including the ones not added
+    /// yet, so each of them opens with nothing linked. Stores has to: "Forget"
+    /// lives there and it is the only way to remove a store key on purpose. The
+    /// sidebar used to grey that row on an empty window, so the one screen that
+    /// could undo a credential was shut exactly when a developer went looking
+    /// for it.
     ///
-    /// Every other tab edits or reads one app, so without one there is nothing
-    /// on it. Stores is the only row the sidebar keeps on an empty window,
-    /// because a key is what the rest waits on. Account is reached from the
-    /// control at the foot of the column, which is available at all times.
+    /// It is also what the sidebar sorts by. These three sit in the box at the
+    /// foot of the column, away from the groups, because the groups are the
+    /// steps of one app's submission and these three are not steps at all. Every
+    /// other tab edits or reads one app, so without one there is nothing on it.
     var standsAlone: Bool {
         switch self {
-        case .stores, .account: true
+        case .stores, .account, .settings: true
         default: false
         }
     }
@@ -296,15 +305,6 @@ enum SidebarSection: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether the group needs a heading over it.
-    ///
-    /// Only where the job has more than one. The switch above the column names
-    /// the job already, so a lone "Manage" heading under a "Manage" button is
-    /// the same word twice with two rows between them. Publishing has two
-    /// steps and they still have to be told apart.
-    func showsHeader(in mode: Mode) -> Bool {
-        SidebarSection.allCases.filter { $0.mode == mode }.count > 1
-    }
 }
 
 /// One row of the sidebar: a tab, and the job it is opened for.
@@ -330,24 +330,26 @@ struct Destination: Hashable, Identifiable {
 
     /// The rows of one section, in order.
     ///
-    /// Stores survives an empty window and no other row does: the rest edit an
-    /// app. They used to show greyed, which reads as a place you have not
-    /// earned rather than a place that does not apply.
+    /// Every row here is a step of one app's submission, and every one of them
+    /// needs that app: with nothing linked the groups are empty and the sidebar
+    /// draws none of them. They used to show greyed, which reads as a place you
+    /// have not earned rather than a place that does not apply.
     ///
-    /// The account is in no section. It is not a step of the work, and the
-    /// control at the foot of the sidebar opens it.
+    /// Stores, Settings and Account are in no section. None of them is a step of
+    /// the work — each is answered once for the whole Mac — and the box at the
+    /// foot of the column holds all three. Stores was listed under Publish and
+    /// again under Manage, which is the same screen twice in a column whose
+    /// selection can only be standing on one of them.
     static func rows(in section: SidebarSection, hasApp: Bool) -> [Destination] {
+        guard hasApp else { return [] }
         let mode: Mode = section == .manage ? .managing : .publishing
         let tabs = switch section {
         case .publish: Tab.tabs(in: .publishing).filter { $0.zone == .edits }
         case .send: Tab.tabs(in: .publishing).filter { $0.zone != .edits }
-        // Stores stands here too. It was listed once, under Publish, which
-        // was right while every group was on screen at once; with one job
-        // showing, that same rule hid the credentials from a manager.
         case .manage: Tab.tabs(in: .managing)
         }
         return tabs
-            .filter { $0 != .account && (hasApp || $0.standsAlone) }
+            .filter { !$0.standsAlone }
             .map { Destination(tab: $0, mode: mode) }
     }
 

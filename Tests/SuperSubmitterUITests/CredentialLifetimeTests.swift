@@ -64,15 +64,17 @@ private func freshState(account: String) -> AppState {
             "Forget must reach the Keychain, not only the fields.")
 }
 
-/// The sidebar has said for a while that these two work with no app. The rows
-/// were greyed anyway, so the one screen that can undo a credential was shut
-/// exactly when a developer went looking for it.
+/// The sidebar has said for a while that these work with no app. The rows were
+/// greyed anyway, so the one screen that can undo a credential was shut exactly
+/// when a developer went looking for it.
 @Test func theStandAloneTabsWorkWithNoAppLinked() {
     #expect(Tab.stores.standsAlone)
     #expect(Tab.account.standsAlone)
-    // These two and no others. The sidebar draws them outside the work column,
-    // so a third one added here would go missing rather than show up twice.
-    #expect(Set(Tab.allCases.filter(\.standsAlone)) == [.stores, .account])
+    #expect(Tab.settings.standsAlone)
+    // These three and no others. Each is answered once for the whole Mac, and
+    // the sidebar draws them in the box at the foot of the column rather than
+    // among the steps of one app's submission.
+    #expect(Set(Tab.allCases.filter(\.standsAlone)) == [.stores, .account, .settings])
     // Everything else edits or reads one app.
     #expect(!Tab.build.standsAlone)
     #expect(!Tab.details.standsAlone)

@@ -100,6 +100,10 @@ enum Theme {
                                 dark: Color(hex: 0xE2A336).opacity(0.15))
     static let redBg = Color(light: Color(hex: 0xC42A24).opacity(0.09),
                              dark: Color(hex: 0xFF7A6E).opacity(0.14))
+    static let orangeBg = Color(light: Color(hex: 0xB4531A).opacity(0.10),
+                                dark: Color(hex: 0xFF9A52).opacity(0.14))
+    static let accentBg = Color(light: Color(hex: 0x0A6FD8).opacity(0.10),
+                                dark: Color(hex: 0x4D9BF7).opacity(0.15))
 
     // MARK: - The type
 

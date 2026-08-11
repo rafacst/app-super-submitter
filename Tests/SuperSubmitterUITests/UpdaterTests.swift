@@ -23,7 +23,6 @@ private func source(_ relativePath: String) throws -> String {
 @Test func closingEverySheetLeavesNothingForAppKitToBlockOn() {
     let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                          storeAccount: "test-\(UUID().uuidString)")
-    state.showSettings = true
     state.showAbout = true
     state.showOnboarding = true
     state.showExistingAppImport = true
@@ -33,7 +32,6 @@ private func source(_ relativePath: String) throws -> String {
 
     state.closeEverySheet()
 
-    #expect(!state.showSettings)
     #expect(!state.showAbout)
     #expect(!state.showOnboarding)
     #expect(!state.showExistingAppImport)

@@ -78,11 +78,7 @@ struct RootView: View {
                 // app. It is the same test the band makes, so the title bar and
                 // the band can never disagree about which screen this is.
                 .navigationTitle(state.showsEntryScreen ? "" : windowTitle)
-                // The app being edited, and never the name of this program.
-                // The program name is on the menu bar, in the Dock, and in
-                // About. This window edits a file, and a document window on the
-                // Mac names its file: that is what makes the proxy icon below
-                // work.
+                // The app being edited. See `windowSubtitle`.
                 .navigationSubtitle(state.showsEntryScreen ? "" : windowSubtitle)
                 // The proxy icon. `store.yaml` is a real file that the app
                 // writes on every keystroke, so this window is a document
@@ -121,7 +117,6 @@ struct RootView: View {
         .font(Theme.font(size: 13))
         // Every sheet carries the message alert. See AppMessage: an alert on
         // this view alone cannot appear while a sheet covers it.
-        .sheet(isPresented: $state.showSettings) { SettingsPanel().appMessage() }
         .sheet(isPresented: $state.showSignIn) { SignInPanel().appMessage() }
         .sheet(isPresented: $state.showBlockers) { BlockersPanel().appMessage() }
         .sheet(isPresented: $state.showAbout) { AboutPanel().appMessage() }
@@ -154,17 +149,21 @@ struct RootView: View {
         }
     }
 
-    private var windowTitle: String {
-        state.selectedTab == .stores
-            ? state.currentApp?.name ?? "Super Submitter"
-            : state.selectedTab.title(in: state.mode)
-    }
+    /// The screen, then the app it is showing. Every tab, with no exception.
+    ///
+    /// Stores used to be one: it put the app's name on the title and
+    /// `store.yaml` under it, on the grounds that a window with a proxy icon
+    /// names its file. It cost more than it bought. One tab out of twelve
+    /// answered "what am I looking at" with a different pair of facts, so the
+    /// title bar changed meaning as you moved down the sidebar, and the file
+    /// name is the one fact of the three that nobody needs: the proxy icon is
+    /// the file, the Files card gives the path, and there is only ever one
+    /// `store.yaml` per app.
+    private var windowTitle: String { state.selectedTab.title(in: state.mode) }
 
-    private var windowSubtitle: String {
-        state.selectedTab == .stores
-            ? state.manifestURL?.lastPathComponent ?? ""
-            : state.currentApp?.name ?? ""
-    }
+    /// The app being edited, and never the name of this program. The program
+    /// name is on the menu bar, in the Dock, and in About.
+    private var windowSubtitle: String { state.currentApp?.name ?? "" }
 }
 
 /// The content column: the header, then the tab.
@@ -568,20 +567,15 @@ private struct ContentHeader: View {
     var body: some View {
         @Bindable var state = state
         HStack(spacing: 10) {
+            // The question, and no name. The title bar carries the name of
+            // every screen now, so a 21-point "Stores" here would be the same
+            // word twice on one screen — which is the reason the other eleven
+            // tabs stopped drawing one. Stores kept it only because the title
+            // bar was showing the app and the file up there instead.
             if !state.showsEntryScreen {
-                if state.selectedTab == .stores {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(state.selectedTab.title(in: state.mode))
-                            .font(Theme.screenTitle)
-                        Text(state.selectedTab.question)
-                            .font(Theme.screenSubtitle)
-                            .foregroundStyle(Theme.text2)
-                    }
-                } else {
-                    Text(state.selectedTab.question)
-                        .font(Theme.screenSubtitle)
-                        .foregroundStyle(Theme.text2)
-                }
+                Text(state.selectedTab.question)
+                    .font(Theme.screenSubtitle)
+                    .foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 8)
 
@@ -760,7 +754,9 @@ private struct ContentHeader: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 18)
-        .frame(height: state.selectedTab == .stores ? 64 : Theme.headerHeight)
+        // One height for every tab. The extra 20 points were the two-line
+        // title Stores used to draw here.
+        .frame(height: Theme.headerHeight)
         .confirmationDialog("Turn the dry run off?", isPresented: $armingLiveWrites,
                             titleVisibility: .visible) {
             Button("Turn it off", role: .destructive) { state.dryRun = false }

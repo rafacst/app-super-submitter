@@ -13,9 +13,17 @@ import SwiftUI
 struct TestFlightSection: View {
     @Environment(AppState.self) private var state
 
+    /// It folds, and the title rides inside the card it folds.
+    ///
+    /// The block is five field groups tall beside a Google column of two, so
+    /// open is a screen of TestFlight for every developer who came to this tab
+    /// to drop a package. The header carries the chevron and the one line that
+    /// says what is inside, which is what a shut fold owes the reader.
     var body: some View {
         Section_("TestFlight", icon: "paperplane.circle.fill", tint: Theme.accent,
-                 anchor: "build.testFlight") {
+                 anchor: "build.testFlight", folds: true,
+                 startsOpen: state.testFlight != nil,
+                 note: "Groups, what to test, the page, and the licence") {
             if state.testFlight == nil {
                 empty
             } else {
@@ -30,7 +38,6 @@ struct TestFlightSection: View {
                     Divider().overlay(Theme.sep)
                     switches
                 }
-                .storePanel()
             }
         }
     }
@@ -42,7 +49,7 @@ struct TestFlightSection: View {
                 .fixedSize(horizontal: false, vertical: true)
             Button("Set up TestFlight") { state.addTestFlight() }.controlSize(.small)
         }
-        .storePanel()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - The groups

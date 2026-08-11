@@ -56,7 +56,7 @@ import Testing
         let state = state()
         ScreenshotMode.seedReview(state, versionState: "IN_REVIEW")
 
-        #expect(state.appReviewMark(appKey: state.currentAppKey)?.text == "In review")
+        #expect(state.appReviewMark(appKey: state.currentAppKey)?.label == "In review")
         #expect(state.isAppLocked(appKey: state.currentAppKey))
     }
 

@@ -49,15 +49,22 @@ extension AppState {
 
     /// The mark the sidebar puts beside one row.
     ///
-    /// A draft earns none. It is the ordinary state, and a column where every
-    /// row wears a badge is a column with no signal left in it.
-    func appReviewMark(appKey: String) -> (text: String, colour: Color)? {
-        switch AppleVersionState.outcome(of: appReviewStates[appKey]) {
-        case .waiting: ("In review", Theme.yellow)
-        case .approved: ("Approved", Theme.green)
-        case .refused: ("Refused", Theme.red)
-        case nil: nil
-        }
+    /// `AppleStanding` and not a second vocabulary. It went through
+    /// `Outcome`, which knows three answers, and the column paid for both ends
+    /// of that: a live app and an approved one both read "Approved", so the
+    /// word never said the thing a developer opens the list to see, and every
+    /// draft read as nothing at all. `AppleStanding` is the same fifteen states
+    /// the Build tab collapses, so one app cannot be "Approved" in the column
+    /// and "Live" on the tab.
+    ///
+    /// Nil only where no read has answered for this app. An app nobody asked is
+    /// in no state, and a chip on it would be a claim about a store nobody
+    /// read. A state that was read is always worth a word, including
+    /// `PREPARE_FOR_SUBMISSION`: "this one is yours to write" is the answer for
+    /// most of the apps in the list on most days.
+    func appReviewMark(appKey: String) -> AppleStanding? {
+        guard let state = appReviewStates[appKey], !state.isEmpty else { return nil }
+        return AppleStanding(state: state)
     }
 
     /// The open app is read twice, by the plan read and by the sweep below,

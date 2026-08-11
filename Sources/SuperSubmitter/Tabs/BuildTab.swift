@@ -8,9 +8,8 @@ struct BuildTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            source.frame(maxWidth: .infinity, alignment: .trailing)
             storeIdentitySection
-            exportCompliance
+            questionRow
             if state.showBuildFromProject {
                 BuildFromProjectView()
             } else {
@@ -21,82 +20,116 @@ struct BuildTab: View {
         .frame(maxWidth: 1040, alignment: .leading)
     }
 
+    /// The two questions this tab asks before there is a package: where the
+    /// build comes from, and what Apple is owed about it.
+    ///
+    /// One row of two boxes of one height. The source switch was a bare
+    /// segmented control floating over the top of the tab with nothing to say
+    /// what it switched, and the answer to it changes everything below.
+    private var questionRow: some View {
+        HStack(alignment: .top, spacing: 14) {
+            buildSource
+                .frame(minWidth: 0, maxWidth: .infinity,
+                       maxHeight: .infinity, alignment: .top)
+            if state.stores.contains(.apple) {
+                exportCompliance
+                    .frame(minWidth: 0, maxWidth: .infinity,
+                           maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
     /// Two ways to get a build: run the project, or import a package that
     /// something else produced. Both feed the same inspection and the same
     /// upload confirmation. upload-spec 10.1 and 13.3.
-    ///
-    /// The chips above it are `ApplePlatformStandings`.
-    private var source: some View {
-        HStack(spacing: 0) {
-            ForEach([false, true], id: \.self) { fromProject in
-                let selected = state.showBuildFromProject == fromProject
-                Button {
-                    state.showBuildFromProject = fromProject
-                } label: {
-                    Text(fromProject ? "Build from project" : "Import a package")
-                        .font(Theme.font(size: 12, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? Theme.accentText : Theme.text)
-                        .padding(.horizontal, 14).padding(.vertical, 5)
-                        .background(selected ? Theme.accent : .clear)
-                        .contentShape(.rect)
+    private var buildSource: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            panelHead("shippingbox.fill", tint: Theme.accent, title: "Build source",
+                      detail: "Where the package comes from")
+            HStack(spacing: 0) {
+                ForEach([false, true], id: \.self) { fromProject in
+                    let selected = state.showBuildFromProject == fromProject
+                    Button {
+                        state.showBuildFromProject = fromProject
+                    } label: {
+                        Text(fromProject ? "Build from project" : "Import a package")
+                            .font(Theme.font(size: 12, weight: selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? Theme.accentText : Theme.text)
+                            .padding(.horizontal, 14).padding(.vertical, 5)
+                            .frame(maxWidth: .infinity)
+                            .background(selected ? Theme.accent : .clear)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
             }
+            .background(Theme.sunken)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
         }
-        .background(Theme.sunken)
-        .clipShape(RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7)
-            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .storePanel(padding: 10, horizontal: 13)
     }
 
     /// Apple's export compliance answer, on the tab that makes the build that
     /// owes it.
     ///
-    /// One row. It is a yes or no question, and it was a card two tabs away on
-    /// the Details inspector, under a toggle that read an absent answer as a
+    /// It is a yes or no question, and it was a card two tabs away on the
+    /// Details inspector, under a toggle that read an absent answer as a
     /// settled "no". Apple asks it once per build and refuses the submission
     /// without one, so the Build button waits for it: see
-    /// `BuildFlow.blockingReason`, which tests exactly what this row shows.
-    @ViewBuilder
+    /// `BuildFlow.blockingReason`, which tests exactly what this box shows.
     private var exportCompliance: some View {
-        if state.stores.contains(.apple) {
-            let unanswered = state.encryptionAnswer == nil
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 9) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(Theme.font(size: 11.5))
-                        .foregroundStyle(unanswered ? Theme.red : Theme.green)
-                    Text("Export compliance").font(Theme.font(size: 12.5, weight: .medium))
-                    Text("Apple asks this once per build")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    if unanswered {
-                        StatePill(text: "Needed", foreground: Theme.red,
-                                  background: Theme.redBg)
-                    }
-                    Spacer(minLength: 10)
-                    // Two answers and no third, so a question nobody has
-                    // answered selects neither segment. A Bool could not say
-                    // that, which is how an unasked question came to draw a
-                    // settled "no" over every app that had never been asked.
-                    Picker("Export compliance", selection: Binding(
-                        get: { state.encryptionAnswer },
-                        set: { state.setEncryptionAnswer($0) })) {
-                        Text("Uses no non-exempt encryption").tag(Bool?.some(false))
-                        Text("It does use encryption").tag(Bool?.some(true))
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
+        let unanswered = state.encryptionAnswer == nil
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 9) {
+                panelHead("lock.shield.fill",
+                          tint: unanswered ? Theme.red : Theme.green,
+                          title: "Export compliance",
+                          detail: "Apple asks this once per build")
+                if unanswered {
+                    StatePill(text: "Needed", foreground: Theme.red,
+                              background: Theme.redBg)
                 }
-                // The answer above is what creates the need for this, so the
-                // paperwork appears with the answer that owes it and stays out
-                // of the way of every app that does not.
-                if state.encryptionAnswer == true { ExportCompliance() }
             }
-            .storePanel(padding: 10, horizontal: 13,
-                        border: unanswered ? Theme.red.opacity(0.3) : Theme.sep)
-            .fieldAnchor("build.encryption")
+            // Two answers and no third, so a question nobody has answered
+            // selects neither segment. A Bool could not say that, which is how
+            // an unasked question came to draw a settled "no" over every app
+            // that had never been asked.
+            Picker("Export compliance", selection: Binding(
+                get: { state.encryptionAnswer },
+                set: { state.setEncryptionAnswer($0) })) {
+                Text("Uses no non-exempt encryption").tag(Bool?.some(false))
+                Text("It does use encryption").tag(Bool?.some(true))
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            // The answer above is what creates the need for this, so the
+            // paperwork appears with the answer that owes it and stays out
+            // of the way of every app that does not.
+            if state.encryptionAnswer == true { ExportCompliance() }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .storePanel(padding: 10, horizontal: 13,
+                    border: unanswered ? Theme.red.opacity(0.3) : Theme.sep)
+        .fieldAnchor("build.encryption")
+    }
+
+    /// The head both boxes wear: a glyph, the question, and who asks it.
+    private func panelHead(_ icon: String, tint: Color, title: String,
+                           detail: String) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(Theme.font(size: 11.5))
+                .foregroundStyle(tint)
+            Text(title).font(Theme.font(size: 12.5, weight: .medium))
+            Text(detail)
+                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                .lineLimit(1)
+            Spacer(minLength: 8)
         }
     }
 
@@ -611,87 +644,39 @@ private struct WarningLine: View {
     }
 }
 
-/// Where each platform of this app id stands on the App Store.
+/// One app's `AppVersionState`, in the words a developer uses.
 ///
-/// One app id carries a version train per platform and they are not in step:
-/// a Mac app can be on sale while its iOS twin has never left the draft. Every
-/// other number on this tab is narrowed to the platform being submitted, so
-/// before this the developer had one line, "1.5 is live on the App Store", and
-/// no way to tell which platform it was talking about — or that the other one
-/// was not out at all.
+/// Apple names fifteen states and they answer a question nobody asked in a
+/// list of apps. What a developer wants is whether an app is out, on its way,
+/// stuck, or has never shipped, so the fifteen collapse into five.
 ///
-/// It costs no request of its own. `/v1/apps/{id}/appStoreVersions` answers for
-/// every platform at once, and the state reader was already discarding all but
-/// one. See `StoreImportReader.applePlatformStandings`.
+/// One colour for one holder. Green means the customers have it. Yellow means
+/// Apple has it. Orange means the developer has it, and it is the state most of
+/// this app's screens are written for. Red means it came back. Grey means there
+/// is nothing on the store to hold.
 ///
-/// It draws nothing until a read has happened. A row of chips that all said
-/// "Not on the store" before the app had asked would be a wrong answer, and a
-/// wrong answer about what is live is worse than no answer.
-struct ApplePlatformStandings: View {
-    @Environment(AppState.self) private var state
-
-    /// The platforms the manifest declares, each with what the store said, and
-    /// the ones the store answered for that the manifest does not name.
-    private var rows: [(platform: Manifest.Platform,
-                        standing: ActualState.Apple.PlatformStanding?)] {
-        let read = state.actualState.apple?.platforms ?? []
-        let declared = state.manifest.apps.apple?.platforms ?? []
-        let extra = read.compactMap { Manifest.Platform(rawValue: $0.platform) }
-            .filter { !declared.contains($0) }
-        return (declared + extra).map { platform in
-            (platform, read.first { $0.platform == platform.rawValue })
-        }
-    }
-
-    var body: some View {
-        let rows = rows
-        if state.stores.contains(.apple), !(state.actualState.apple?.platforms ?? []).isEmpty,
-           !rows.isEmpty {
-            HStack(spacing: 7) {
-                Text("On the App Store")
-                    .font(Theme.font(size: 10.5, weight: .medium))
-                    .foregroundStyle(Theme.text3)
-                    .textCase(.uppercase)
-                    .kerning(0.3)
-                ForEach(rows, id: \.platform) { row in
-                    let standing = AppleStanding(row.standing)
-                    StatePill(text: "\(row.platform.shortName) · \(standing.label)",
-                              foreground: standing.tint, background: standing.fill)
-                        .help(standing.detail(for: row.platform))
-                        .accessibilityLabel("\(row.platform.shortName). \(standing.detail(for: row.platform))")
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.top, 2)
-        }
-    }
-}
-
-/// One platform's `AppVersionState`, in the words a developer uses.
+/// Blue is the one that is neither: approved, and one press of Release away
+/// from green. Blue is what this app paints the thing you act on, and that is
+/// exactly what the state is. It is not orange, because nothing is left to
+/// write, and not green, because nobody can buy it yet.
 ///
-/// Apple names fifteen states and they answer a question nobody asked on this
-/// tab. What a developer wants before choosing a platform to submit is whether
-/// that platform is out, on its way, stuck, or has never shipped, so the
-/// fifteen collapse into five.
+/// "Refused" and not "Rejected", because that is the word the review banner,
+/// the validator and the Summary row all use for the same answer.
 ///
-/// The live version decides the word. That is the question the chips exist for:
-/// one app id ships on two platforms and only one of them is on sale. A version
-/// on its way is the second question, and it goes in the tooltip with the
-/// numbers, where the detail belongs.
-///
-/// Green means a customer can buy it. Yellow means Apple has it. Red means it
-/// came back. Grey means nothing is on sale. No blue: blue is the accent this
-/// app uses for a choice, and none of these is one.
+/// `DEVELOPER_REJECTED` is a draft and not a refusal. The developer withdrew
+/// it, Apple never answered, and a red chip would send somebody looking for a
+/// reason nobody ever wrote. See `AppleVersionState.outcome`, which drops it
+/// for the same reason.
 struct AppleStanding {
     let label: String
     let tint: Color
     let fill: Color
-    private let standing: ActualState.Apple.PlatformStanding?
 
-    init(_ standing: ActualState.Apple.PlatformStanding?) {
-        self.standing = standing
-        (label, tint, fill) = Self.words(
-            for: standing?.liveState ?? standing?.pendingState, hasVersion: standing != nil)
+    /// One bare `AppVersionState`. The sidebar caches one per linked app, and
+    /// the chip beside the app name is what it asks this question for.
+    init(state: String?) {
+        (label, tint, fill) = Self.words(for: state,
+                                         hasVersion: !(state ?? "").isEmpty)
     }
 
     private static func words(for state: String?, hasVersion: Bool)
@@ -704,33 +689,21 @@ struct AppleStanding {
         case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
             ("Off sale", Theme.text3, Theme.sunken)
         case "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "ACCEPTED":
-            ("Approved", Theme.green, Theme.greenBg)
+            // Apple said yes and nobody can buy it yet. It is not "Live": the
+            // release is still a button somebody has to press, and that button
+            // is the Release tab.
+            ("Approved", Theme.accent, Theme.accentBg)
         case "WAITING_FOR_REVIEW", "IN_REVIEW", "READY_FOR_REVIEW",
              "PROCESSING_FOR_DISTRIBUTION", "WAITING_FOR_EXPORT_COMPLIANCE":
             ("In review", Theme.yellow, Theme.yellowBg)
-        case "REJECTED", "METADATA_REJECTED", "DEVELOPER_REJECTED", "INVALID_BINARY":
-            ("Rejected", Theme.red, Theme.redBg)
+        case "REJECTED", "METADATA_REJECTED", "INVALID_BINARY":
+            ("Refused", Theme.red, Theme.redBg)
         default:
-            // PREPARE_FOR_SUBMISSION, and anything Apple adds after this ships.
-            // A state this app has never heard of is still a draft: a version
-            // that exists and is not on sale.
-            ("Draft", Theme.text2, Theme.sunken)
+            // PREPARE_FOR_SUBMISSION, DEVELOPER_REJECTED, and anything Apple
+            // adds after this ships. A state this app has never heard of is
+            // still a draft: a version that exists and is not on sale.
+            ("Draft", Theme.orange, Theme.orangeBg)
         }
-    }
-
-    /// The numbers and the version on its way. The chip carries the word.
-    func detail(for platform: Manifest.Platform) -> String {
-        guard let standing else {
-            return "\(platform.shortName) has no version on the App Store yet."
-        }
-        var parts: [String] = []
-        if let live = standing.live { parts.append("\(live) is \(label.lowercased())") }
-        if let pending = standing.pending {
-            let word = Self.words(for: standing.pendingState, hasVersion: true).0
-            parts.append("\(pending) is \(word.lowercased())")
-        }
-        if parts.isEmpty { return "\(platform.shortName): \(label)." }
-        return "\(platform.shortName). " + parts.joined(separator: ", ") + "."
     }
 }
 

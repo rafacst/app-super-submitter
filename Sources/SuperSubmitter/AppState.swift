@@ -173,8 +173,6 @@ final class AppState {
     }
     var selectedAppIndex = 0
 
-    /// Settings opens as a panel over the window, not as a second window.
-    var showSettings = false
     /// What is stopping the release. The header band opens it from any tab,
     /// because the question is asked from every screen and the answer used to
     /// live only at the head of the last one.
@@ -221,10 +219,9 @@ final class AppState {
     /// update. See Updater.
     ///
     /// Every sheet in `RootView`, and the test below it holds this list to
-    /// that: an eighth sheet added to the shell and forgotten here brings the
-    /// bug straight back, and it looks like the app simply refusing to quit.
+    /// that: a sheet added to the shell and forgotten here brings the bug
+    /// straight back, and it looks like the app simply refusing to quit.
     func closeEverySheet() {
-        showSettings = false
         showAbout = false
         showOnboarding = false
         showExistingAppImport = false
@@ -692,8 +689,10 @@ final class AppState {
         activateLinkedApp(at: index)
         // Where App Store review has each of them. Picking an app is the
         // moment a developer needs to know whether this one is frozen, and
-        // whether the others are, so the sweep runs on every change and not
-        // once per launch.
+        // whether the others are, so the sweep runs on every change as well as
+        // at launch. See `SuperSubmitterApp` for the launch half: without it
+        // the status column opened empty and filled only once something had
+        // been clicked.
         Task { await refreshReviewStates() }
     }
 
@@ -935,6 +934,33 @@ final class AppState {
         do { try persistAppleCredential() }
         catch { errorMessage = error.localizedDescription }
         appleConnection = .notConnected
+    }
+
+    /// Checks the keys the Keychain already holds, once, at launch.
+    ///
+    /// The two connection states live in memory and start at `.notConnected`,
+    /// so every launch opened on "App Store is not connected" beside a key id,
+    /// an issuer id and the name of the `.p8` the app had just read back out of
+    /// the Keychain. Nothing was missing and nothing had expired: the app had
+    /// simply not asked yet, and it made the developer ask for it, every day,
+    /// on a screen that had every answer already.
+    ///
+    /// It presses the same button. A refusal is the refusal that button
+    /// reports, because a key that stopped working overnight is news whether or
+    /// not anybody asked, and a launch is exactly when it is cheapest to hear.
+    ///
+    /// Google's OAuth route is not checked. Connecting there opens a browser
+    /// authorization window, and a window that opens itself at launch is not a
+    /// check, it is an interruption.
+    func verifyStoredConnections() {
+        if appleConnection == .notConnected, !applePrivateKeyPEM.isEmpty,
+           !appleKeyID.isEmpty, !appleIssuerID.isEmpty {
+            connectAppleStore()
+        }
+        if googleConnection == .notConnected, googleCredentialChoice == .serviceAccount,
+           googleCredential != nil {
+            connectGoogleStore()
+        }
     }
 
     /// Saves the key, then calls App Store Connect with it. The button that
@@ -2463,8 +2489,15 @@ final class AppState {
         manifestURL = nil
 
         // Back to the first-run screen, which is where a new install starts.
+        //
+        // The tab first, and the order is the whole of it. Settings is where
+        // the button was pressed and it stands on an empty window, so the
+        // selection has to move or the erase finishes on the screen it was
+        // ordered from. Moving it *after* the flag undoes the flag:
+        // `selectedTab` clears the entry screen whenever it lands on a tab that
+        // stands alone, which is exactly what Stores is.
+        selectedTab = .stores
         showEntryScreen = true
-        showSettings = false
         showOnboarding = true
     }
 

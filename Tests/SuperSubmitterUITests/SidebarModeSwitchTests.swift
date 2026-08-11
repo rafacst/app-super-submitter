@@ -33,15 +33,15 @@ import Testing
         #expect(Mode.managing.title == "Manage")
     }
 
-    /// A job with one group needs no heading over it.
+    /// Every group wears its heading, including the job that has only one.
     ///
-    /// The switch names the job two rows above, so a lone "Manage" heading
-    /// under a "Manage" button is the same word twice with nothing between
-    /// them. Publishing has two steps and they still have to be told apart.
-    @Test func aLoneGroupDoesNotRepeatTheSwitch() {
-        #expect(!SidebarSection.manage.showsHeader(in: .managing))
-        #expect(SidebarSection.publish.showsHeader(in: .publishing))
-        #expect(SidebarSection.send.showsHeader(in: .publishing))
+    /// Manage drew none for a while, on the grounds that the switch two rows
+    /// above says the same word. It cost more than it saved: the four rows
+    /// stood loose under the app list with nothing naming them, and the heading
+    /// is also the control that folds a group, so the one job that could not be
+    /// collapsed was the job with no heading.
+    @Test func everyGroupIsNamedByItsHeading() {
+        #expect(SidebarSection.allCases.map(\.title) == ["Publish", "Send", "Manage"])
     }
 
     @Test func everyGroupBelongsToOneJob() {
@@ -53,28 +53,29 @@ import Testing
         #expect(SidebarSection.allCases.filter { $0.mode == .managing } == [.manage])
     }
 
-    /// Stores holds the keys both jobs read, so it stands in the column
-    /// whichever job is showing.
+    /// Stores holds the keys both jobs read, and it is in neither group.
     ///
-    /// It was listed once, under Publish, which was right while every group was
-    /// on screen at once. With one job showing, that same rule hides the
-    /// credentials from a manager entirely.
-    @Test func storesStandsInBothJobsAndOnceInEach() {
+    /// It was listed under Publish, which was right while every group was on
+    /// screen at once. With one job showing, that rule hid the credentials from
+    /// a manager, and listing it under Manage as well put one screen in two
+    /// rows of a column whose selection can only stand on one of them. It is in
+    /// the box at the foot of the column now, with the other two screens that
+    /// are about this Mac rather than about an app, and the switch above cannot
+    /// reach it at all.
+    @Test func theGroupsHoldNoScreenThatIsAboutTheMachine() {
         for mode in Mode.allCases {
             let shown = SidebarSection.allCases
                 .filter { $0.mode == mode }
                 .flatMap { Destination.rows(in: $0, hasApp: true) }
 
-            #expect(shown.contains { $0.tab == .stores }, "\(mode.title) hides Stores")
-            // And once. Two rows to one screen is a `List` selection that
-            // cannot say which of them you are standing on.
-            #expect(shown.filter { $0.tab == .stores }.count == 1,
-                    "\(mode.title) lists Stores twice")
+            #expect(shown.allSatisfy { !$0.tab.standsAlone },
+                    "\(mode.title) lists a screen the footer already holds")
         }
     }
 
-    /// Nothing leaves the app with the switch. Every tab is still reachable,
-    /// and Account is still the one the control at the foot opens.
+    /// Nothing leaves the app with the switch. Every step of the work is still
+    /// reachable, and the three screens about this Mac are in the footer box,
+    /// which no mode can hide.
     @Test func theSwitchHidesNoTab() {
         let reachable = Set(Mode.allCases.flatMap { mode in
             SidebarSection.allCases
@@ -82,7 +83,7 @@ import Testing
                 .flatMap { Destination.rows(in: $0, hasApp: true) }
                 .map(\.tab)
         })
-        #expect(Set(Tab.allCases).subtracting(reachable) == [.account])
+        #expect(Set(Tab.allCases).subtracting(reachable) == [.stores, .settings, .account])
     }
 
     /// The column is shorter for it. That is the whole point: a manager reads
@@ -108,14 +109,25 @@ import Testing
         #expect(sidebar.contains("$0.mode == state.mode"))
     }
 
-    /// An empty window has no app to manage, so the switch still lands on the
-    /// one row that survives it.
-    @Test func anEmptyWindowKeepsStoresInBothJobs() {
+    /// An empty window has no app, and every row in these groups is a step of
+    /// one app's submission. Both jobs draw nothing, and the footer box below
+    /// still holds the store keys, the settings and the account.
+    @Test func anEmptyWindowListsNothingInEitherJob() {
         for mode in Mode.allCases {
             let shown = SidebarSection.allCases
                 .filter { $0.mode == mode }
                 .flatMap { Destination.rows(in: $0, hasApp: false) }
-            #expect(shown.map(\.title) == ["Stores"], "\(mode.title) is not just Stores")
+            #expect(shown.isEmpty, "\(mode.title) lists a step with no app to take it")
         }
+    }
+
+    /// The footer box is drawn from the tabs that stand alone, so a fourth one
+    /// added to that set appears there without a second list to maintain.
+    @Test func theFooterBoxHoldsTheThreeScreensAboutThisMac() throws {
+        let sidebar = try source("Sources/SuperSubmitter/Shell/Sidebar.swift")
+
+        #expect(sidebar.contains("FooterRow(tab: .stores)"))
+        #expect(sidebar.contains("FooterRow(tab: .settings)"))
+        #expect(sidebar.contains("AccountControl()"))
     }
 }
