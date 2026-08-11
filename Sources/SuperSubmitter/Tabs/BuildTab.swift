@@ -671,12 +671,18 @@ struct AppleStanding {
     let label: String
     let tint: Color
     let fill: Color
+    /// A reviewer has it open right now, rather than Apple holding it in a
+    /// queue. The chip animates on this and on nothing else: a pulse that
+    /// meant "somewhere between submitted and answered" would pulse for the
+    /// days a version spends waiting, which is motion that says nothing.
+    let active: Bool
 
     /// One bare `AppVersionState`. The sidebar caches one per linked app, and
     /// the chip beside the app name is what it asks this question for.
     init(state: String?) {
         (label, tint, fill) = Self.words(for: state,
                                          hasVersion: !(state ?? "").isEmpty)
+        active = state == "IN_REVIEW"
     }
 
     private static func words(for state: String?, hasVersion: Bool)
@@ -688,13 +694,21 @@ struct AppleStanding {
             ("Live", Theme.green, Theme.greenBg)
         case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
             ("Off sale", Theme.text3, Theme.sunken)
-        case "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "ACCEPTED":
+        case "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "ACCEPTED",
+             "PROCESSING_FOR_DISTRIBUTION":
             // Apple said yes and nobody can buy it yet. It is not "Live": the
             // release is still a button somebody has to press, and that button
-            // is the Release tab.
+            // is the Release tab. Processing for distribution is past the
+            // answer too: Apple is preparing to ship it, not reading it.
             ("Approved", Theme.accent, Theme.accentBg)
-        case "WAITING_FOR_REVIEW", "IN_REVIEW", "READY_FOR_REVIEW",
-             "PROCESSING_FOR_DISTRIBUTION", "WAITING_FOR_EXPORT_COMPLIANCE":
+        // Two states and not one. Waiting in Apple's queue and being read by a
+        // reviewer are days apart and were the same word, so the chip could
+        // not tell a developer whether anything had started. `applePhase`
+        // already draws this line for the status card; this is the same line,
+        // in the same vocabulary.
+        case "WAITING_FOR_REVIEW", "READY_FOR_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE":
+            ("In queue", Theme.yellow, Theme.yellowBg)
+        case "IN_REVIEW":
             ("In review", Theme.yellow, Theme.yellowBg)
         case "REJECTED", "METADATA_REJECTED", "INVALID_BINARY":
             ("Refused", Theme.red, Theme.redBg)

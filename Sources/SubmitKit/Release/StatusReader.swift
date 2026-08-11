@@ -28,6 +28,14 @@ public struct StoreStatus: Sendable, Equatable {
         public var needsPolling: Bool {
             self == .inQueue || self == .inReview || self == .approved
         }
+
+        /// The store has the version and there is nothing left to prepare.
+        ///
+        /// A rejection is deliberately not here. That is the one answer that
+        /// hands the version back and makes the checklist matter again.
+        public var isPastPreparation: Bool {
+            self == .inQueue || self == .inReview || self == .approved || self == .live
+        }
     }
 
     public var store: Store

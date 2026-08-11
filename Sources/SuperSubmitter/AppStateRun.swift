@@ -682,8 +682,35 @@ extension AppState {
 
     /// Spec 16.6: the checklist sits between the draft and the review, and a
     /// needed row holds the button back.
+    ///
+    /// Between the draft and the review, and not after it. Every row here is
+    /// advice about a draft: fill this field, attach that build, answer this
+    /// question. None of it can be acted on once Apple has the version, the
+    /// version is not editable, and `sendBlockedByReview` already refuses a
+    /// second submission. Left in place, the header read "1 thing is stopping
+    /// 1.6" over an app whose 1.6 was with App Store review, with a Re-check
+    /// button that could never clear it and a row nobody could act on.
     func releaseBlockers(for store: Store) -> [ConsoleRow] {
-        consoleRows.filter { $0.store == store && markedState($0) == .needed }
+        guard !isPastPreparation(store) else { return [] }
+        return consoleRows.filter { $0.store == store && markedState($0) == .needed }
+    }
+
+    /// Whether the store has the version and preparation is over.
+    ///
+    /// The version state is the better answer and is not always there: the
+    /// reader only carries a version it can name, and a version with Apple is
+    /// not the editable one it looks for. The status card is the fallback, and
+    /// it is the thing the developer is reading anyway.
+    ///
+    /// A refusal is in neither answer. Apple handing the version back is
+    /// exactly when the checklist starts mattering again.
+    func isPastPreparation(_ store: Store) -> Bool {
+        if store == .apple, let version = actualState.apple?.versionState,
+           AppleVersionState.withApple.contains(version)
+               || version == "PENDING_DEVELOPER_RELEASE" {
+            return true
+        }
+        return statuses[store]?.phase.isPastPreparation ?? false
     }
 
     /// Every step still open, in the order the checklist sets, whichever store
