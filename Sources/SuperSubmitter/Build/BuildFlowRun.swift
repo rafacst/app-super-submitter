@@ -699,6 +699,11 @@ extension BuildFlow {
         storage.removeScratch(runID: run.id)
         failure = value
         run.lastError = value
+        // The panel tells the developer to read the log, so the log is on the
+        // screen when the panel arrives, and it holds every line rather than
+        // every line but the last tenth of a second's worth.
+        flushLog()
+        if !logLines.isEmpty { logOpen = true }
         run.move(to: value.category.needsReconciliation ? .recoveryRequired : .failed)
         PostHogSDK.shared.capture("build_flow_failed", properties: [
             "stage": value.stage
@@ -813,6 +818,18 @@ extension BuildFlow {
         logFlush = nil
         logBuffer = []
         logLines = []
+    }
+
+    /// Publishes the buffer now, and drops the flush that was going to.
+    ///
+    /// The scheduled flush covers the end of a run on its own, which is right
+    /// while the run is only printing. A failure is the one moment worth a
+    /// hundred milliseconds: the panel appears in the same frame and it says to
+    /// read the log, so the log may not be a tenth of a second behind it.
+    func flushLog() {
+        logFlush?.cancel()
+        logFlush = nil
+        if logLines != logBuffer { logLines = logBuffer }
     }
 
     /// The flush that publishes the buffer, a tenth of a second from now.

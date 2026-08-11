@@ -883,6 +883,7 @@ struct PlanTab: View {
                     .contentTransition(.numericText())
             }
             .frame(maxWidth: 560, alignment: .leading)
+            .motion(.easeInOut(duration: 0.22), value: showingAcknowledged)
         }
     }
 

@@ -7,6 +7,9 @@ import SwiftUI
 /// inspect, confirm again, upload. Nothing skips a confirmation.
 struct BuildFromProjectView: View {
     @Environment(AppState.self) private var state
+    /// The failure panel's own fold, open when the panel appears. See
+    /// `errorPanel`.
+    @State private var diagnosticsOpen = true
 
     private var flow: BuildFlow { state.buildFlow }
 
@@ -272,6 +275,21 @@ struct BuildFromProjectView: View {
                 Text("Preflight").font(Theme.font(size: 12.5, weight: .semibold))
                 Spacer(minLength: 8)
                 if flow.state == .preflight { Spinner() }
+                // The command belongs to the checks it reads.
+                //
+                // It stood at the foot of the screen, under the live run, the
+                // artifact card and the error panel, so on a tall window the
+                // one button that starts the work was below the fold and the
+                // card that says whether it may run was at the top. Building
+                // is free, so this one wears no lock however the account
+                // stands.
+                if flow.state == .readyToBuild || flow.state == .failed {
+                    ActionButton(title: flow.project?.platform == .android
+                                 ? "Build App Bundle" : "Build Archive",
+                                 enabled: flow.canBuild) {
+                        flow.showBuildConfirmation = true
+                    }
+                }
             }
             .padding(.bottom, 9)
 
@@ -453,6 +471,9 @@ struct BuildFromProjectView: View {
             if flow.logOpen { LogView(lines: flow.logLines) }
         }
         .storePanel(horizontal: 15)
+        // The log is a fold like every other one, including when a failure
+        // opens it rather than the button.
+        .motion(.easeInOut(duration: 0.22), value: flow.logOpen)
     }
 
     private var explanation: String {
@@ -539,15 +560,8 @@ struct BuildFromProjectView: View {
 
     private var actionRow: some View {
         HStack(spacing: 10) {
-            if flow.state == .readyToBuild || flow.state == .failed {
-                // Building is free. Only the send is paid, so this one wears
-                // no lock however the account stands.
-                ActionButton(title: flow.project?.platform == .android
-                             ? "Build App Bundle" : "Build Archive",
-                             enabled: flow.canBuild) {
-                    flow.showBuildConfirmation = true
-                }
-            }
+            // Build is not here. It sits in the preflight card, at the top of
+            // the screen, beside the checks that decide whether it may run.
             if flow.state == .needsUploadConfirmation {
                 ActionButton(title: "Upload to the store", enabled: flow.canUpload,
                              paid: (.storeUpload, .upload)) {
@@ -753,8 +767,11 @@ struct BuildFromProjectView: View {
                 QuietButton(title: "Copy Redacted Diagnostics") { flow.copyDiagnostics() }
                 Spacer(minLength: 0)
             }
+            // Open. A failure panel that hides what the tool said behind a
+            // triangle is a panel that reports an exit status and nothing
+            // else, and the exit status is the one part nobody can act on.
             if let diagnostics = failure.diagnostics, !diagnostics.isEmpty {
-                DisclosureGroup("Diagnostics") {
+                DisclosureGroup("Diagnostics", isExpanded: $diagnosticsOpen) {
                     ScrollView {
                         Text(diagnostics).font(Theme.mono(10.5))
                             .foregroundStyle(Theme.text2).textSelection(.enabled)
@@ -763,6 +780,7 @@ struct BuildFromProjectView: View {
                     .frame(height: 160)
                 }
                 .font(Theme.font(size: 11.5))
+                .motion(.smooth(duration: 0.22), value: diagnosticsOpen)
             }
         }
         .storePanel(horizontal: 15, background: Theme.redBg, border: Theme.red, borderWidth: 1)

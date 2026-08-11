@@ -311,6 +311,33 @@ extension AppState {
         runDone = false
     }
 
+    /// Takes a stopped run off the Summary tab, and never a running one.
+    ///
+    /// A run's result is an answer about the manifest that produced it. Every
+    /// edit calls `invalidatePlan`, which throws the plan away for exactly that
+    /// reason, and the run it produced was left standing.
+    ///
+    /// A failed run was the bad case, because a failure is not `runDone`:
+    /// `showsRun` stayed true, so the Summary drew the old failure over the
+    /// screen; `readStores` refuses to run while a run is unfinished, so no
+    /// fresh plan could arrive behind it; and `startRun` needs a plan, so Retry
+    /// did nothing either. A developer who fixed the very thing the failure
+    /// named — a version number that had to climb — was shown the same sentence
+    /// about the number they had just changed, with no way forward on the tab.
+    ///
+    /// `isRunning` is the guard and it is exact: a run in flight is neither
+    /// done nor failed, and a manifest write during a run must not clear the
+    /// screen the run is reporting on.
+    func clearStoppedRun() {
+        guard !isRunning else { return }
+        runIndex = -1
+        runDone = false
+        runProgress = 0
+        runDetail = ""
+        runFailure = nil
+        providerFailure = nil
+    }
+
     var runSteps: [PlanStep] { plan?.steps ?? [] }
 
     var logText: String { logLines.joined(separator: "\n") }

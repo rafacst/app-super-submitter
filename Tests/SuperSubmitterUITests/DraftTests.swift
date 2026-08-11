@@ -126,6 +126,26 @@ struct DraftTests {
         #expect(try String(contentsOf: url, encoding: .utf8).contains("pt-BR"))
     }
 
+    /// The command is on every tab, in the corner of the band, and it is the
+    /// last thing in the row so that it is the corner on every one of them.
+    @Test func theSaveCommandIsTheLastThingInTheBand() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let shell = try String(
+            contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/RootView.swift"),
+            encoding: .utf8)
+        let header = try #require(shell.range(of: "private struct ContentHeader"))
+        let cluster = try #require(shell.range(of: "private struct HeaderCluster"))
+        let band = String(shell[header.lowerBound..<cluster.lowerBound])
+        let button = try #require(band.range(of: "DraftButton()"))
+        let padding = try #require(band.range(of: ".padding(.leading, 20)"))
+
+        #expect(shell.contains("Save progress"))
+        #expect(button.upperBound < padding.lowerBound, "it is inside the row")
+        // Nothing else in the row is drawn after it.
+        #expect(!band[button.upperBound..<padding.lowerBound].contains("HeaderCluster"))
+    }
+
     @Test func aRecoveryAddsNoAppTwice() throws {
         let (state, _, folder) = try workspace(name: "six")
         defer { try? FileManager.default.removeItem(at: folder) }

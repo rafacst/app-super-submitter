@@ -12,6 +12,16 @@ public struct RunFailure: Sendable, Equatable {
     /// After the commit the draft sits in the Play Console and no undo removes
     /// it. Spec section 11.1 states both limits on the panel.
     public var canUndoGoogleEdit: Bool
+
+    /// The runner is the only thing that makes one in the app. The initialiser
+    /// is public so a test can stand a stopped run up without one.
+    public init(stepIndex: Int, system: PlanSystem, message: String,
+                canUndoGoogleEdit: Bool = false) {
+        self.stepIndex = stepIndex
+        self.system = system
+        self.message = message
+        self.canUndoGoogleEdit = canUndoGoogleEdit
+    }
 }
 
 public enum RunEvent: Sendable {

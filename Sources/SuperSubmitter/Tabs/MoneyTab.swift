@@ -451,7 +451,7 @@ struct MoneyTab: View {
                         //
                         // `DisclosureGroup` is what the Build tab already uses
                         // for the same job on the Android artifacts.
-                        DisclosureGroup("Store options") {
+                        Fold("Store options") {
                             VStack(alignment: .leading, spacing: 8) {
                                 FieldRow {
                                     LabeledField("Review screenshot", width: 300) {

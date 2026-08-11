@@ -20,10 +20,6 @@ struct CredentialCard<Content: View>: View {
     /// yet. The sheet connects from its own footer, and a card that reported
     /// "Not connected" there would name a step the sheet does not have.
     var status: ConnectionStatus?
-    /// What the card says about itself while it is folded away: the key id, or
-    /// the service account address. It is the answer to "connected as what",
-    /// which is the only question a folded card still has to answer.
-    let summary: String
     /// The whole card below the header. What decides it is the caller's, and
     /// both callers hide the same thing: a key that is in and covers every app
     /// on the account is four controls nobody touches again, sitting above the
@@ -84,6 +80,9 @@ struct CredentialCard<Content: View>: View {
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
         .motion(.snappy(duration: 0.18), value: open)
+        // The guide inside the card is a fold of its own, and it opened and
+        // shut in one frame while the card around it slid.
+        .motion(.easeInOut(duration: 0.2), value: guideOpen)
         // The shake itself. Reduce Motion is honoured by hand here rather than
         // through `.motion`, because the answer is not a shorter animation but
         // no movement at all: `shaking` is never set, so the offset never
@@ -137,16 +136,14 @@ struct CredentialCard<Content: View>: View {
                 Text("Developer credentials")
                     .font(Theme.font(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                // What the fold hides. A folded card that says only
-                // "Connected" cannot answer "as which account", which is the
-                // one thing a second developer on the machine has to check.
-                if !open, !summary.isEmpty {
-                    Text(summary)
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.text2)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                // The name and the state, and nothing else.
+                //
+                // The folded row also carried the key id or the service account
+                // address, to answer "connected as what" without opening the
+                // card. Two of those on one screen is a row of machine
+                // identifiers across the top of the tab that nobody reads and
+                // the eye still has to skip, and the card that holds the value
+                // is one click under the words.
                 Spacer(minLength: 6)
                 // Four states, four words, four glyphs. A refused key used to
                 // draw the same grey "Not connected" as a key nobody has tried

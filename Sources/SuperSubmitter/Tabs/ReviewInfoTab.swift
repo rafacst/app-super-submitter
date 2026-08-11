@@ -142,6 +142,23 @@ struct ReviewInfoTab: View {
                             QuietButton(title: "Use it") { state.fillDemoAccountFromStore() }
                         }
                     }
+                    // The way to the account without leaving this tab. The
+                    // offer above waits for a read, and the only read was the
+                    // whole pass over both stores on the Summary tab.
+                    HStack(spacing: 8) {
+                        QuietButton(title: "Retrieve from App Store") {
+                            Task { await state.readDemoAccountFromStore() }
+                        }
+                        .disabled(state.demoAccountReading)
+                        if state.demoAccountReading { Spinner() }
+                        Spacer(minLength: 0)
+                    }
+                    if let note = state.demoAccountReadNote {
+                        Text(note)
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Text("Credentials stay in the macOS Keychain and never reach the repository.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)

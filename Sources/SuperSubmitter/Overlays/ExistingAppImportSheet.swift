@@ -85,7 +85,6 @@ struct ExistingAppImportSheet: View {
         @Bindable var model = model
         return CredentialCard(
             store: .apple,
-            summary: model.appleKeyID,
             open: model.credentialDetailsOpen(.apple),
             toggle: { model.toggleCredentialDetails(.apple) },
             guide: .apple,
@@ -117,7 +116,6 @@ struct ExistingAppImportSheet: View {
     private var googleCard: some View {
         CredentialCard(
             store: .google,
-            summary: model.googleCredential?.clientEmail ?? "",
             open: model.credentialDetailsOpen(.google),
             toggle: { model.toggleCredentialDetails(.google) },
             guide: .google,

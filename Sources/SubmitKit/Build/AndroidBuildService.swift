@@ -197,7 +197,7 @@ public struct AndroidBuildService: Sendable {
             throw BuildFailure(
                 category: .configuration, stage: "List the Gradle tasks",
                 message: "Gradle could not evaluate this project.",
-                diagnostics: outcome.standardError,
+                diagnostics: outcome.failureDetail,
                 recovery: "Open the project once in Android Studio, or fix the Gradle configuration, then press Recheck.")
         }
         let variants = Self.parseBundleTasks(outcome.standardOutput)
@@ -271,12 +271,12 @@ public struct AndroidBuildService: Sendable {
                 recovery = "Resolve the dependencies once in the project, then build again."
             } else {
                 category = .build
-                recovery = "Read the Gradle output below, fix the build, then run it again."
+                recovery = "Read the diagnostics and the Gradle log, fix the build, then run it again."
             }
             throw BuildFailure(
                 category: category, stage: "Build the App Bundle",
                 message: "Gradle failed with exit status \(outcome.status).",
-                diagnostics: outcome.standardError, recovery: recovery)
+                diagnostics: outcome.failureDetail, recovery: recovery)
         }
 
         let after = Self.bundleSnapshot(root: root)

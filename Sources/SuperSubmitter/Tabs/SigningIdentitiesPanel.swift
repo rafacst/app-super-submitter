@@ -123,6 +123,7 @@ struct SigningIdentitiesPanel: View {
         } label: {
             groupLabel(kind, group)
         }
+        .motion(.easeInOut(duration: 0.22), value: expansion(kind).wrappedValue)
     }
 
     private func groupLabel(_ kind: AppleProvisioningClient.Item.Kind,
@@ -235,6 +236,7 @@ struct SigningIdentitiesPanel: View {
             }
             .contentShape(.rect)
         }
+        .motion(.easeInOut(duration: 0.22), value: addOpen)
     }
 
     /// A tester whose phone is not on this list cannot install a build, which

@@ -100,6 +100,41 @@ struct Section_<Content: View>: View {
     }
 }
 
+/// A plain titled fold, for the few blocks a `Section_` is too heavy for: a row
+/// of store-specific options inside a card, a reference list at the foot of a
+/// panel.
+///
+/// It is a `DisclosureGroup` holding its own state, and it exists for the one
+/// line at the bottom. Left to itself, whether a `DisclosureGroup` animates
+/// depends on which control moved the binding, so two folds on one screen
+/// opened two different ways: one slid, one appeared. Every fold in this app
+/// now takes the same fifth of a second and answers Reduce Motion the same way.
+struct Fold<Content: View>: View {
+    let title: String
+    var startsOpen = false
+    @ViewBuilder let content: Content
+
+    @State private var open: Bool?
+
+    init(_ title: String, startsOpen: Bool = false,
+         @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.startsOpen = startsOpen
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: Binding(
+            get: { open ?? startsOpen },
+            set: { open = $0 })) {
+            content
+        } label: {
+            Text(title)
+        }
+        .motion(.easeInOut(duration: 0.22), value: open ?? startsOpen)
+    }
+}
+
 private extension View {
     /// The box a fold draws around itself: a title-high card while it is shut
     /// and the whole block once it is open.

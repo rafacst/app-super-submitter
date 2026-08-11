@@ -85,6 +85,41 @@ struct BuildLogTests {
         #expect(flow.logText.isEmpty)
     }
 
+    /// A failure is the one moment worth a hundred milliseconds.
+    ///
+    /// The panel appears in the same frame and tells the developer to read the
+    /// log, so the log may not be a tenth of a second behind it. The scheduled
+    /// flush covers the end of a run that is only printing; it does not cover
+    /// the frame a panel arrives in.
+    @Test func aFailureFlushesTheLogInTheSameFrame() {
+        let flow = flow()
+        flow.append("error: no such module 'Foo'")
+        #expect(flow.logLines.isEmpty, "the flush is still a tenth of a second away")
+
+        flow.flushLog()
+
+        #expect(flow.logLines == ["error: no such module 'Foo'"])
+        #expect(flow.logFlush == nil, "the scheduled flush was left to fire again")
+    }
+
+    /// The panel says "read the diagnostics and the build log". The log is on
+    /// the screen when the panel arrives, and not behind Show log.
+    @Test func aFailureOpensTheLogItTellsTheDeveloperToRead() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appending(path: "Sources/SuperSubmitter/Build/BuildFlowRun.swift"),
+            encoding: .utf8)
+        let start = try #require(source.range(of: "func fail(_ value: BuildFailure)"))
+        let end = try #require(source.range(of: "func retry()"))
+        let fail = String(source[start.lowerBound..<end.lowerBound])
+
+        #expect(fail.contains("flushLog()"))
+        #expect(fail.contains("logOpen = true"))
+        // An empty log box under "read the log" is worse than no box.
+        #expect(fail.contains("!logLines.isEmpty"))
+    }
+
     /// The box draws the tail. Copy has to give every line the run printed.
     @Test func theCopiedLogIsTheWholeRunAndNotTheTail() async throws {
         let flow = flow()

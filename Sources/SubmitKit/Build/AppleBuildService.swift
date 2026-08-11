@@ -282,7 +282,7 @@ public struct AppleBuildService: Sendable {
             throw BuildFailure(
                 category: .artifactDiscovery, stage: "Build the archive",
                 message: "xcodebuild reported success and no archive exists at the requested path.",
-                diagnostics: outcome.standardError,
+                diagnostics: outcome.failureDetail,
                 recovery: "Check the build log for a script that moved or removed the archive.")
         }
         return archivePath
@@ -302,12 +302,12 @@ public struct AppleBuildService: Sendable {
             recovery = "Resolve the dependencies in the project once, then build again. Super Submitter never edits a dependency file."
         } else {
             category = .build
-            recovery = "Read the log below, fix the build in the project, then run it again."
+            recovery = "Read the diagnostics and the build log, fix the build in the project, then run it again."
         }
         return BuildFailure(
             category: category, stage: "Build the archive",
             message: "The archive failed with exit status \(outcome.status).",
-            diagnostics: outcome.standardError,
+            diagnostics: outcome.failureDetail,
             recovery: recovery)
     }
 
@@ -448,8 +448,8 @@ public struct AppleBuildService: Sendable {
                 category: text.contains("validation") ? .remoteValidation : .upload,
                 stage: "Export and upload",
                 message: "The export failed with exit status \(outcome.status).",
-                diagnostics: outcome.standardError,
-                recovery: "The archive is kept. Read the validation issue below, fix it, then export again.",
+                diagnostics: outcome.failureDetail,
+                recovery: "The archive is kept. Read the validation issue in the diagnostics, fix it, then export again.",
                 retainedArtifact: archive.path)
         }
     }

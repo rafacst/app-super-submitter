@@ -48,6 +48,38 @@ public struct ToolOutcome: Sendable, Equatable {
 
     public var succeeded: Bool { status == 0 && signal == nil && !timedOut }
 
+    /// What a failure panel shows, from whichever stream the tool used.
+    ///
+    /// It was the standard error alone, and that is the wrong half for the two
+    /// tools this app runs. `xcodebuild` prints compile errors, "The following
+    /// build commands failed", and the whole reason for exit status 65 on
+    /// **standard output**; Gradle splits its failure across both. So the panel
+    /// reported an exit status and then offered an empty Diagnostics box, on
+    /// the one screen a developer opens to find out what broke.
+    ///
+    /// The tail, because a failure is at the end and the head of a build log is
+    /// a thousand lines of compiling. Both streams when both spoke, each named,
+    /// because "The following build commands failed" on one and the command
+    /// itself on the other is one answer in two places.
+    public var failureDetail: String {
+        let error = Self.tail(standardError)
+        let output = Self.tail(standardOutput)
+        if error.isEmpty { return output }
+        if output.isEmpty { return error }
+        return "Standard error\n\(error)\n\nStandard output\n\(output)"
+    }
+
+    /// The last lines, and nothing when the stream said nothing. The panel
+    /// scrolls, and a hundred lines is more than any failure needs.
+    static func tail(_ text: String, lines: Int = 100) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let all = trimmed.components(separatedBy: "\n")
+        guard all.count > lines else { return trimmed }
+        return "[\(all.count - lines) earlier lines. Copy the log to read them.]\n"
+            + all.suffix(lines).joined(separator: "\n")
+    }
+
     public init(status: Int32, signal: Int32? = nil, standardOutput: String = "",
                 standardError: String = "", timedOut: Bool = false) {
         self.status = status

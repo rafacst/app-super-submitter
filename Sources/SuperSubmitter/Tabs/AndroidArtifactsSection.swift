@@ -53,6 +53,7 @@ struct AndroidArtifactsSection: View {
                     .padding(.top, 8)
                 }
                 .font(Theme.font(size: 12))
+                .motion(.easeInOut(duration: 0.22), value: showRare)
                 externalApk
             }
             .onAppear { showRare = Self.rare.contains { !state.artifactBinding($0).wrappedValue.isEmpty } }

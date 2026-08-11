@@ -306,7 +306,8 @@ private struct AppsSection: View {
             }
             .buttonStyle(.plain)
         } header: {
-            GroupHeader(title: "Apps", isOpen: $isOpen)
+            // No rule. The mode switch and its own divider sit directly above.
+            GroupHeader(title: "Apps", isOpen: $isOpen, rule: false)
         }
     }
 }
@@ -349,18 +350,43 @@ private struct AppStatusChip: View {
 private struct GroupHeader: View {
     let title: String
     @Binding var isOpen: Bool
+    /// The rule above the heading. Every group draws one except the first,
+    /// which has the mode switch above it instead.
+    var rule = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Text(title)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
-            .onTapGesture { isOpen.toggle() }
-            // The strip the system draws its own disclosure control in stays
-            // clear. Covering it would let one click reach both targets and
-            // toggle the group twice, which breaks the one way in that worked.
-            .padding(.trailing, 28)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityValue(isOpen ? "Open" : "Closed")
+        VStack(alignment: .leading, spacing: 0) {
+            // The groups are the steps of a submission and they read as one
+            // list of ten rows: four headings in the quietest tier the app has,
+            // separated by nothing, and a group that folds shut left its
+            // neighbour's rows sitting directly under its title. The floor of
+            // the column already draws this rule above the three rows that
+            // belong to the Mac rather than to the app, so the sidebar now
+            // divides its groups the way it already divided its footer.
+            if rule {
+                Divider()
+                    .padding(.trailing, 6)
+                    .padding(.bottom, 7)
+            }
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+                // Through `withMotion`, so the rows slide rather than vanish.
+                // `Section(isExpanded:)` animates the fold when its own
+                // disclosure control drives it, and this binding is set from a
+                // tap gesture, which carries no animation of its own.
+                .onTapGesture {
+                    withMotion(reduceMotion, .easeInOut(duration: 0.22)) { isOpen.toggle() }
+                }
+                // The strip the system draws its own disclosure control in
+                // stays clear. Covering it would let one click reach both
+                // targets and toggle the group twice, which breaks the one way
+                // in that worked.
+                .padding(.trailing, 28)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityValue(isOpen ? "Open" : "Closed")
+        }
     }
 }
 

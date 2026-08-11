@@ -636,17 +636,6 @@ private struct ContentHeader: View {
                                     pendingRelease: state.hasPendingRelease,
                                     locales: state.locales.count)
 
-            // The copy that survives an update, one click from every screen.
-            //
-            // Every edit already writes `store.yaml`, so this is not the save
-            // a form needs; it is the copy this app's own storage needs. The
-            // list of linked apps lives in user defaults, and a developer who
-            // lost it lost the sidebar while every file was still on disk.
-            // Nothing to copy with no app linked, so it draws nothing there.
-            if !state.linkedApps.isEmpty {
-                HeaderCluster(morphOn: shape) { DraftButton() }
-            }
-
             // Light and dark, one click away, on every screen. It sits before
             // the search glyph and outside the `manifestURL` guard below:
             // reading a screen is the one thing a person does whether an app is
@@ -785,6 +774,17 @@ private struct ContentHeader: View {
             default:
                 EmptyView()
             } }
+
+            // Last, so it is the corner itself on every tab.
+            //
+            // Every edit already writes `store.yaml`, so this is not the save
+            // a form needs; it is the copy this app's own storage needs. The
+            // list of linked apps lives in user defaults, and a developer who
+            // lost it lost the sidebar while every file was still on disk.
+            // Nothing to copy with no app linked, so it draws nothing there.
+            if !state.linkedApps.isEmpty {
+                HeaderCluster(morphOn: shape) { DraftButton() }
+            }
         }
         .padding(.leading, 20)
         .padding(.trailing, 18)
@@ -931,7 +931,7 @@ extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
 }
 
-/// Save a draft, and say it saved for as long as that is news.
+/// Save progress, and say it saved for as long as that is news.
 ///
 /// The title carries the report rather than an alert, because this is a
 /// command a developer may run twice in a minute before an update and an alert
@@ -943,7 +943,7 @@ struct DraftButton: View {
     @State private var tick = 0
 
     var body: some View {
-        QuietButton(title: justSaved ? "Draft saved" : "Save a draft", glass: true,
+        QuietButton(title: justSaved ? "Saved" : "Save progress", glass: true,
                     symbol: justSaved ? "checkmark" : "tray.and.arrow.down", tick: tick) {
             tick += 1
             state.saveDraft()

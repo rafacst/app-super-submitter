@@ -156,6 +156,25 @@ import Testing
         #expect(!tab.contains("blocksTheSend"))
     }
 
+    /// The reviewer sign-in App Store Connect holds, reachable from the box
+    /// that asks for it.
+    ///
+    /// The offer to use it appears only once something has filled
+    /// `actualState`, and the only thing that did was the whole pass over both
+    /// stores on the Summary tab. So the box sat there with two empty fields
+    /// and no way to ask, on an app that had already sent Apple the account.
+    @Test func theDemoAccountBoxCanAskTheAppStoreForTheAccount() throws {
+        let tab = try source("Sources/SuperSubmitter/Tabs/ReviewInfoTab.swift")
+
+        #expect(tab.contains("Retrieve from App Store"))
+        #expect(tab.contains("readDemoAccountFromStore"))
+        #expect(tab.contains("demoAccountReading"))
+        #expect(tab.contains("demoAccountReadNote"))
+        // The offer stays. A field that already holds something is not
+        // overwritten by a read.
+        #expect(tab.contains("fillDemoAccountFromStore"))
+    }
+
     /// The console row has always said "answer it on the Review info tab". The
     /// control was on the Details inspector, so the instruction was false.
     @Test func theEncryptionAnswerIsNoLongerOnTheDetailsInspector() throws {
