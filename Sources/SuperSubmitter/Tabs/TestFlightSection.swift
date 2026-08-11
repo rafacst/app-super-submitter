@@ -163,7 +163,7 @@ struct TestFlightSection: View {
                 .fieldAnchor("build.betaLicence")
             TextEditor(text: state.betaLicenseAgreementBinding)
                 .font(Theme.font(size: 12))
-                .frame(height: 90)
+                .resizableHeight("build.betaLicence", base: 90)
                 .scrollContentBackground(.hidden)
                 .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
             Text("Leave it empty and Apple's own standard licence stays. Every external tester accepts whatever is here before they install the build.")
