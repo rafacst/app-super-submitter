@@ -207,15 +207,20 @@ struct MoneyTab: View {
         return Section_("In-app purchases", icon: "cart.fill", tint: Theme.accent,
                         anchor: "money.purchases") {
             VStack(alignment: .leading, spacing: 10) {
+                importCatalogNote
                 if state.stores.count > 1 { productTableHeader }
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
+                    let id = state.purchaseBinding(index: index, field: .id).wrappedValue
                     VStack(alignment: .leading, spacing: 8) {
-                        productRow(id: state.purchaseBinding(index: index, field: .id).wrappedValue,
+                        productRow(id: id,
                                    kind: Self.kindLabel(purchases[index].kind),
                                    open: openProducts.contains(index)) {
                             toggleProduct(index)
                         }
                         if openProducts.contains(index) {
+                            // Above the fields, not below them. It is the
+                            // thing to read before typing.
+                            appleReviewNote(id)
                             purchaseEditor(index: index)
                         }
                     }.storePanel()
@@ -376,6 +381,67 @@ struct MoneyTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityValue(open ? "Expanded" : "Collapsed")
+    }
+
+    /// What Apple has already decided about this product.
+    ///
+    /// A product carries its own review, separately from the app: Apple
+    /// approves it once and sends it back through review when its name, its
+    /// review note or its localizations change. Nothing on this tab said so,
+    /// so an approved purchase looked exactly like a draft one and a developer
+    /// editing a live product had no way to know what it would cost.
+    @ViewBuilder
+    private func appleReviewNote(_ id: String) -> some View {
+        if let product = state.appleProductState(id), product.isApproved {
+            HStack(alignment: .top, spacing: 8) {
+                StatePill(text: "Approved", foreground: Theme.green,
+                          background: Theme.greenBg)
+                Text("The App Store has approved this product. Changing its name, its review note or its store text sends it back for review on its own. The price is not reviewed and changes at once.")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        } else if let product = state.appleProductState(id), product.isWithReview {
+            HStack(alignment: .top, spacing: 8) {
+                StatePill(text: "In review", foreground: Theme.yellow,
+                          background: Theme.yellowBg)
+                Text("App Store review has this product now. An edit here goes to the version being reviewed.")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// The way in for the products the store already holds.
+    ///
+    /// The read has always fetched every product on the App Store, and the
+    /// table only ever drew the ones `store.yaml` named. An app with approved
+    /// purchases showed an empty catalog, and the only way to manage one was
+    /// to retype its id exactly.
+    @ViewBuilder
+    private var importCatalogNote: some View {
+        let waiting = state.appleCatalogNotImported
+        if waiting > 0 {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.arrow.down")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.accent)
+                Text(waiting == 1
+                     ? "The App Store holds 1 product this app does not list"
+                     : "The App Store holds \(waiting) products this app does not list")
+                    .font(Theme.font(size: 12, weight: .semibold))
+                Spacer(minLength: 8)
+                QuietButton(title: "Bring them in") {
+                    let added = state.importAppleCatalog()
+                    state.errorMessage = added == 1
+                        ? "1 product came in from the App Store. Nothing you had typed was written over."
+                        : "\(added) products came in from the App Store. Nothing you had typed was written over."
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.accentBg, in: RoundedRectangle(cornerRadius: 8))
+        }
     }
 
 
@@ -543,6 +609,7 @@ struct MoneyTab: View {
                                     togglePlan(groupIndex, planIndex)
                                 }
                                 if openPlans.contains(PlanKey(groupIndex, planIndex)) {
+                                appleReviewNote(group.plans[planIndex].id)
                                 FieldRow {
                                     LabeledField("Plan id") {
                                         TextField("", text: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .id))

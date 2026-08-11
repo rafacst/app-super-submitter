@@ -147,6 +147,16 @@ public struct AppleCatalogClient: Sendable {
         for item in payload["data"].array {
             guard let name = item["attributes"]["referenceName"].string else { continue }
             groups.names.insert(name)
+            // Which group holds which subscription. `included` carries the
+            // subscriptions flat, with no way back to the group they belong
+            // to, and a subscription without its group cannot be written into
+            // `store.yaml`: the manifest nests plans under a group.
+            for linked in item["relationships"]["subscriptions"]["data"].array {
+                guard let id = linked["id"].string else { continue }
+                for (productId, product) in result where product.id == id {
+                    result[productId]?.groupName = name
+                }
+            }
             guard wantedGroups.contains(name), let id = item["id"].string,
                   let draft = try? await versions.latestVersion(kind: .group, productID: id),
                   let localizations = try? await versions.localizationMetadata(
@@ -224,6 +234,7 @@ public struct AppleCatalogClient: Sendable {
         result.id = item["id"].string
         result.name = attributes["name"].string
         result.reviewNote = attributes["reviewNote"].string
+        result.state = attributes["state"].string
         return result
     }
 
@@ -235,6 +246,7 @@ public struct AppleCatalogClient: Sendable {
         result.id = item["id"].string
         result.name = attributes["name"].string
         result.reviewNote = attributes["reviewNote"].string
+        result.state = attributes["state"].string
         result.duration = Self.duration(attributes["subscriptionPeriod"].string)
         return result
     }

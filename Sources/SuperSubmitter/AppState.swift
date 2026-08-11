@@ -1553,6 +1553,78 @@ final class AppState {
         }
     }
 
+    /// The products App Store Connect already holds and `store.yaml` has never
+    /// named, brought in so they can be read and edited here.
+    ///
+    /// The read has always fetched every product on the store, and the tab
+    /// only ever drew the ones the manifest listed. So an app with approved
+    /// purchases showed an empty catalog, and the only way to manage one was to
+    /// retype its id exactly and hope the apply matched it rather than creating
+    /// a second product.
+    ///
+    /// It adds and never overwrites. A product the manifest already names is
+    /// the developer's own text, and a store value must not land on top of it:
+    /// that is the same rule the listing import obeys.
+    @discardableResult
+    func importAppleCatalog() -> Int {
+        guard let catalog = actualState.apple?.catalog else { return 0 }
+        var purchases = manifest.purchases ?? []
+        var groups = manifest.subscriptions ?? []
+        let known = Set(purchases.map(\.id)) .union(groups.flatMap { $0.plans.map(\.id) })
+        var added = 0
+
+        for product in catalog.values.sorted(by: { $0.productId < $1.productId })
+        where !known.contains(product.productId) && !product.productId.isEmpty {
+            // A duration is what makes it a subscription. Apple returns the
+            // two kinds from two endpoints into one catalog, and only the
+            // subscription carries a billing period.
+            if let duration = product.duration {
+                // Without a group there is nowhere in the manifest to put it.
+                // The group read names them, so a nil here means the link was
+                // not returned, and inventing a group would create a second
+                // one on the next apply.
+                guard let groupName = product.groupName else { continue }
+                // No name on a plan. Apple's reference name is not a manifest
+                // field: what the customer reads lives in `locales`, and the
+                // apply writes those separately.
+                let plan = Manifest.SubscriptionGroup.Plan(id: product.productId,
+                                                           duration: duration)
+                if let index = groups.firstIndex(where: { $0.groupName == groupName }) {
+                    groups[index].plans.append(plan)
+                } else {
+                    groups.append(Manifest.SubscriptionGroup(
+                        groupId: groupName, groupName: groupName, plans: [plan]))
+                }
+            } else {
+                purchases.append(Manifest.Purchase(id: product.productId,
+                                                   kind: .nonConsumable,
+                                                   name: product.name))
+            }
+            added += 1
+        }
+
+        guard added > 0 else { return 0 }
+        manifest.purchases = purchases.isEmpty ? nil : purchases
+        manifest.subscriptions = groups.isEmpty ? nil : groups
+        saveManifestReportingErrors()
+        invalidatePlan()
+        return added
+    }
+
+    /// How many products on the store this app knows nothing about.
+    var appleCatalogNotImported: Int {
+        guard let catalog = actualState.apple?.catalog else { return 0 }
+        let known = Set((manifest.purchases ?? []).map(\.id))
+            .union((manifest.subscriptions ?? []).flatMap { $0.plans.map(\.id) })
+        return catalog.values.filter { !known.contains($0.productId) && !$0.productId.isEmpty }
+            .count
+    }
+
+    /// Apple's own review state for one product, or nil when no read has said.
+    func appleProductState(_ id: String) -> ActualState.Apple.CatalogProduct? {
+        actualState.apple?.catalog[id]
+    }
+
     func addPurchase() {
         var values = manifest.purchases ?? []
         values.append(Manifest.Purchase(id: "", kind: .nonConsumable))
