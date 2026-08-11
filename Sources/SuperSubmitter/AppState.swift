@@ -303,6 +303,14 @@ final class AppState {
     var appleConnection: ConnectionStatus = .notConnected
     var googleConnection: ConnectionStatus = .notConnected
     var remoteAppleApps: [RemoteStoreApp] = []
+    /// The Play apps the connected credential can see.
+    ///
+    /// The Publishing API is package-scoped and cannot list anything, which is
+    /// why this arrived late and why the package name was the one required
+    /// identifier with no way in but the keyboard. The Reporting API answers
+    /// it, `StoreConnectionClient.googleApps` has read it since the import
+    /// sheet was written, and nothing outside that sheet ever asked.
+    var remoteGoogleApps: [RemoteStoreApp] = []
     var listingImportStatus: ConnectionStatus = .notConnected
 
     // Tab 2.
@@ -997,6 +1005,7 @@ final class AppState {
                 let apps = try await StoreConnectionClient().appleApps(credential: credential)
                 guard generation == stateGeneration else { return }
                 remoteAppleApps = apps
+                adoptTheOnlyVisibleApp(.apple)
                 let suffix = apps.count == 1 ? "app" : "apps"
                 appleConnection = .connected("Connected · \(apps.count) \(suffix) visible")
             } catch {
@@ -1015,18 +1024,66 @@ final class AppState {
             googleConnection = .failed("Choose the service-account JSON first.")
             return
         }
+        let generation = stateGeneration
         googleConnection = .connecting
         Task {
             do {
                 try KeychainCredentials.save(credential, kind: .google,
                                              account: storeAccount)
+                await readVisibleGoogleApps(generation: generation) {
+                    try await StoreConnectionClient().googleApps(credential: credential)
+                }
                 let message = try await StoreConnectionClient().testGoogle(
                     credential: credential, packageName: googlePackageName)
+                guard generation == stateGeneration else { return }
                 googleConnection = .connected(message)
             } catch {
+                guard generation == stateGeneration else { return }
                 googleConnection = .failed(error.localizedDescription)
             }
         }
+    }
+
+    /// Reads the apps a Play credential can see, and never fails the connect
+    /// over it.
+    ///
+    /// The listing needs the Play Developer Reporting API switched on for the
+    /// project, and the Publishing API works whether or not it is. A developer
+    /// who has one and not the other stays connected and types the package
+    /// name, which is what everybody did before this read existed.
+    private func readVisibleGoogleApps(
+        generation: Int,
+        _ read: @Sendable () async throws -> [RemoteStoreApp]
+    ) async {
+        guard let apps = try? await read(), generation == stateGeneration else { return }
+        remoteGoogleApps = apps
+        adoptTheOnlyVisibleApp(.google)
+    }
+
+    /// Fills an identifier the store just answered, when there is only one
+    /// answer and nothing to overwrite.
+    ///
+    /// One visible app is not a choice, and presenting it as one asked the
+    /// developer to confirm a fact the app had already read. More than one is
+    /// a real choice and the picker makes it. A value already on screen is
+    /// never touched: a typed identifier is a decision, and a read is not
+    /// grounds to undo it.
+    func adoptTheOnlyVisibleApp(_ store: Store) {
+        switch store {
+        case .apple:
+            guard remoteAppleApps.count == 1, let app = remoteAppleApps.first,
+                  appleAppID.isEmpty, appleBundleID.isEmpty else { return }
+            chooseRemoteAppleApp(app)
+        case .google:
+            guard remoteGoogleApps.count == 1, let app = remoteGoogleApps.first,
+                  googlePackageName.isEmpty else { return }
+            chooseRemoteGoogleApp(app)
+        }
+    }
+
+    func chooseRemoteGoogleApp(_ app: RemoteStoreApp) {
+        googlePackageName = app.identifier
+        updateGoogleAppFields()
     }
 
     private func connectGoogleOAuth() {
@@ -1044,6 +1101,9 @@ final class AppState {
                                              account: storeAccount)
                 googleOAuthCredential = credential
                 if !stores.contains(.google) { setStore(.google, enabled: true) }
+                await readVisibleGoogleApps(generation: stateGeneration) {
+                    try await StoreConnectionClient().googleApps(credential: credential)
+                }
                 let message = try await StoreConnectionClient().testGoogle(
                     credential: credential, packageName: googlePackageName)
                 googleConnection = .connected(message)
@@ -1914,18 +1974,54 @@ final class AppState {
     ///
     /// It decides what a tab may assume the developer has to supply. An update
     /// starts from a listing that is already complete, so nothing on the Media
-    /// tab is required; a first submission starts from nothing, and both
-    /// stores refuse it without screenshots.
-    ///
-    /// Either answer counts, because they arrive at different moments: a
-    /// released App Store version from a read, or anything at all in the
-    /// snapshot, which is what an import and a Google read both leave behind.
+    /// tab is required and the App Store wants release notes; a first
+    /// submission starts from nothing, both stores refuse it without
+    /// screenshots, and there is no such thing as what is new in a version
+    /// nobody has ever seen.
     ///
     /// The safest default is false. Telling a developer with a shipped app
     /// that screenshots are required costs them a shrug; telling a first-time
     /// developer that they are optional costs them a rejection.
-    var isUpdatingLiveApp: Bool {
-        actualState.apple?.isUpdate == true || !storeSnapshot.isEmpty
+    ///
+    /// This used to be `isUpdate || !storeSnapshot.isEmpty`, and the second
+    /// half answered a different question than the one being asked. The
+    /// snapshot fills from `infoLocales` and `versionLocales`, which a **draft**
+    /// carries: an app record created in App Store Connect and never submitted
+    /// has a name, a subtitle and a description, so anything the store held at
+    /// all read as an app that ships. Every unpublished app was then told that
+    /// What is new is required, over a version that has no previous version to
+    /// be new against.
+    var isUpdatingLiveApp: Bool { appleHasShipped || googleHasShipped }
+
+    /// The App Store has taken this app to customers at least once.
+    ///
+    /// Three readings of one fact, because they arrive at different moments.
+    /// The first two need a fresh read of the store; the third is kept on disk
+    /// and answers on the launch before any read has finished.
+    private var appleHasShipped: Bool {
+        if actualState.apple?.isUpdate == true { return true }
+        // Any platform, not only the one being published. A Mac app that has
+        // shipped is a shipped app while its iOS train is still a draft.
+        if actualState.apple?.platforms.contains(where: { $0.live != nil }) == true {
+            return true
+        }
+        // The words the customers are reading. `appleLive` fills from
+        // `liveVersionLocales` alone, so a draft never puts anything here.
+        return storeSnapshot.hasAppleLiveListing
+    }
+
+    /// Google Play has published this app.
+    ///
+    /// The production track and not the primary one. A build on an internal or
+    /// a closed track is not an app the public can install, and the question
+    /// here is whether there is a released version to be an update to.
+    private var googleHasShipped: Bool {
+        // The status is unwrapped and not compared through the optional. A nil
+        // status is a read that did not answer, and `nil != "draft"` is true,
+        // so comparing it directly would call an unread track published.
+        guard let track = actualState.google?.tracks["production"],
+              let status = track.status else { return false }
+        return !track.versionCodes.isEmpty && status != "draft"
     }
 
     /// Whether the tabs draw the fields that only a first submission uses.
@@ -2767,6 +2863,8 @@ final class AppState {
             }
             if googleWas != googleCredentialIdentity {
                 googleConnection = .notConnected
+                // The visible apps came from the credential that just went away.
+                remoteGoogleApps = []
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -2806,6 +2904,7 @@ final class AppState {
                 googleCredentialFileName = ""
                 googleAccountEmail = ""
                 googleConnection = .notConnected
+                remoteGoogleApps = []
             }
         } catch {
             errorMessage = error.localizedDescription

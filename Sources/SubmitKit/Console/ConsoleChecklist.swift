@@ -80,11 +80,25 @@ public enum ConsoleChecklist {
     /// Each row reads the manifest first, then the store. A field the store
     /// already holds needs nothing from the manifest, because an absent key
     /// means "do not manage this field" and not "clear it".
-    private static func appleUpdateRows(manifest: Manifest, actual apple: ActualState.Apple?,
-                                        base: String) -> [ConsoleRow] {
+    /// What Apple demands of any version it is asked to review.
+    ///
+    /// These were gated on `liveVersionString != nil` and drawn for an update
+    /// alone, which read the distinction backwards. A build, an export
+    /// compliance answer and a review contact are not things an update needs
+    /// *more* than a first submission: they are what Apple refuses a
+    /// submission for, and a first submission is the one that has never
+    /// supplied any of them. The app checked them only for the developer who
+    /// had already done it once.
+    ///
+    /// Only the review contact differs between the two flows, because only it
+    /// is inherited, and it says so where it does.
+    private static func appleSubmissionRows(manifest: Manifest,
+                                            actual apple: ActualState.Apple?,
+                                            isUpdate: Bool,
+                                            base: String) -> [ConsoleRow] {
         var result: [ConsoleRow] = []
 
-        // A new version needs a new binary. Nothing inherits a build.
+        // Every version needs its own binary. Nothing inherits a build.
         //
         // Only an attached build closes this row. A named file and an uploaded
         // build are both one apply short of the thing Apple checks, and this
@@ -101,7 +115,7 @@ public enum ConsoleChecklist {
         } else if !namedBuild.isEmpty {
             reason = "The manifest names \(namedBuild). Run the apply to upload and attach it."
         } else {
-            reason = "An update needs a build. Build one on the Build tab, or attach one in App Store Connect."
+            reason = "Every submission needs a build. Build one on the Build tab, or attach one in App Store Connect."
         }
         result.append(ConsoleRow(
             id: "apple.updateBuild", system: "App Store", title: "A build for this version",
@@ -121,9 +135,15 @@ public enum ConsoleChecklist {
             link: "\(base)/ios/version/inflight",
             state: answered ? .done : .needed))
 
-        // Apple carries the contact over from the released version, so the
-        // app can only judge this once the next version exists. Before that
-        // the honest answer is "not read yet", and `.unknown` holds no button.
+        // An update carries the contact over from the released version, so the
+        // app can only judge one once the next version exists. Before that the
+        // honest answer is "not read yet", and `.unknown` holds no button.
+        //
+        // A first submission inherits nothing, and that same `.unknown` said
+        // "the app cannot read what it inherits" about an app with nothing to
+        // inherit from. There the manifest is the whole answer, and an empty
+        // one is a real gap: Apple refuses a first submission without a
+        // contact name, an email and a phone number.
         let review = manifest.review
         let missing = [
             ("first name", review?.contactFirstName, apple?.reviewContactFirstName),
@@ -133,17 +153,18 @@ public enum ConsoleChecklist {
         ].filter { _, wanted, stored in
             (wanted ?? "").isEmpty && (stored ?? "").isEmpty
         }.map(\.0)
+        let cannotJudge = isUpdate && apple?.versionId == nil
 
         result.append(ConsoleRow(
             id: "apple.updateReviewContact", system: "App Store",
             title: "App review contact",
-            reason: apple?.versionId == nil
+            reason: cannotJudge
                 ? "The next version does not exist yet, so the app cannot read what it inherits."
                 : (missing.isEmpty
                     ? "Confirmed: the contact is complete."
                     : "App review needs the \(missing.joined(separator: ", "))."),
             link: "\(base)/ios/version/inflight",
-            state: apple?.versionId == nil ? .unknown : (missing.isEmpty ? .done : .needed),
+            state: cannotJudge ? .unknown : (missing.isEmpty ? .done : .needed),
             onEditingTab: true))
 
         return result
@@ -154,6 +175,11 @@ public enum ConsoleChecklist {
         var result: [ConsoleRow] = []
         let appID = manifest.apps.apple?.appId ?? ""
         let apple = actual.apple
+        // The version with Apple, which is never the writable one. It reads off
+        // the platform this manifest publishes, the same one every other read
+        // here is narrowed to.
+        let submitted = apple?.submittedVersion(
+            platform: (manifest.apps.apple?.platforms.first ?? .ios).rawValue)
 
         if stores.contains(.apple) {
             let base = "https://appstoreconnect.apple.com/apps/\(appID)/distribution"
@@ -240,15 +266,25 @@ public enum ConsoleChecklist {
                 // a live version is not one. Reading any version here would
                 // report the released number as confirmed while the apply was
                 // still waiting to create the next one.
+                //
+                // A version in review is not writable either, so it answered
+                // nil here and this row read **No version is prepared** over an
+                // app whose version Apple was holding. `submitted` is that
+                // version, and the row is only `needed` when neither exists.
                 ConsoleRow(
                     id: "apple.version", system: "App Store", title: "The submitted version",
                     reason: apple?.versionString.map { "Confirmed: \($0)." }
+                        ?? submitted.map { standing in
+                            let phase = ReleaseStatusReader.applePhase(standing.state).label
+                            return standing.version.map { "\($0) is with the App Store. \(phase)." }
+                                ?? "A version is with the App Store. \(phase)."
+                        }
                         ?? apple?.liveVersionString.map {
                             "\($0) is live. The apply creates the next version."
                         }
                         ?? "No version is prepared.",
                     link: "\(base)/ios/version/inflight",
-                    state: apple?.versionString == nil ? .needed : .done),
+                    state: apple?.versionString == nil && submitted == nil ? .needed : .done),
                 // Once per account, not even once per app. A developer with an
                 // app on sale has signed the agreements and given Apple the
                 // bank details, or no version of this app would have shipped.
@@ -261,15 +297,15 @@ public enum ConsoleChecklist {
                     link: "https://appstoreconnect.apple.com/business",
                     state: published ? .done : .unknown),
             ]
-            // What Apple requires of an update, beyond the manifest.
+            // What Apple requires of a submission, beyond the manifest.
             //
             // These sit here and not in the validator on purpose. An apply
             // leaves a draft, and a draft may wait for its build. A release
             // may not: `releaseBlockers` holds the button while a row is
             // needed, which is the moment these actually have to be true.
-            if apple?.liveVersionString != nil {
-                result += appleUpdateRows(manifest: manifest, actual: apple, base: base)
-            }
+            result += appleSubmissionRows(manifest: manifest, actual: apple,
+                                          isUpdate: apple?.liveVersionString != nil,
+                                          base: base)
         }
 
         if stores.contains(.google) {

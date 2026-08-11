@@ -40,6 +40,7 @@
 		19E70913FBFF18CC55DB1B8E /* StoreOwnedFieldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71BF75F3F730AA8A851EC96 /* StoreOwnedFieldTests.swift */; };
 		19F67A83CCD24C23ECEB5629 /* AssetInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2F0E3557D54D9B3F946072 /* AssetInspector.swift */; };
 		1B25D24EE6D4C6D94E770D16 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386169BC69A8E699748AE3AC /* AppState.swift */; };
+		1BF80CCEB05A85A415FFA3D1 /* IdentifierFetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B32FDFFA5AA2708888CF80F0 /* IdentifierFetchTests.swift */; };
 		1CAA1EE5153F2DB7276E8451 /* TabStructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48B7D7160F37672B80B343B9 /* TabStructureTests.swift */; };
 		1EE99FE798E4B23C662567B0 /* PlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D8576A89F9578A2DA413B5 /* PlannerTests.swift */; };
 		2259C22F61A6FB8F68D7B79F /* UpdaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCDB80D12F9D17E4007443B /* UpdaterTests.swift */; };
@@ -571,6 +572,7 @@
 		B1F505B093A03899389FA208 /* SignInPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInPanel.swift; sourceTree = "<group>"; };
 		B222798FBF3DC0E4B6D9DCE6 /* VitalsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitalsPanel.swift; sourceTree = "<group>"; };
 		B250B0D5FEBCFE87793711BE /* LicensingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensingClient.swift; sourceTree = "<group>"; };
+		B32FDFFA5AA2708888CF80F0 /* IdentifierFetchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentifierFetchTests.swift; sourceTree = "<group>"; };
 		B398E96F90B45246A8783867 /* RunCrashTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunCrashTests.swift; sourceTree = "<group>"; };
 		B41DF84B54D31B54FACFEA4F /* AppStateCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateCatalog.swift; sourceTree = "<group>"; };
 		B4CDB9A4E6D89AF09E2C51A2 /* AndroidManifest.pb */ = {isa = PBXFileReference; path = AndroidManifest.pb; sourceTree = "<group>"; };
@@ -807,6 +809,7 @@
 				1DAAD75F29EE649FCFFD4CC1 /* FieldIndexTests.swift */,
 				EC99E5E8553B35654D469C10 /* FoldsAndRulesTests.swift */,
 				C555136432A192B5111694D2 /* GoogleActionsPanelTests.swift */,
+				B32FDFFA5AA2708888CF80F0 /* IdentifierFetchTests.swift */,
 				7D2FA18A1AB7F6C118CFE053 /* ListingResourcesMoveTests.swift */,
 				F2F7F98D039E2A0594237F01 /* LiveListingLockTests.swift */,
 				EA8D27AE556ADD5A95669DD1 /* MarketingScreenReviewTests.swift */,
@@ -1693,6 +1696,7 @@
 				A2B5EA3BEA1886312B053518 /* FieldIndexTests.swift in Sources */,
 				005D702894453CEB2B9CF697 /* FoldsAndRulesTests.swift in Sources */,
 				2B920DF6A3FBD642BAA29343 /* GoogleActionsPanelTests.swift in Sources */,
+				1BF80CCEB05A85A415FFA3D1 /* IdentifierFetchTests.swift in Sources */,
 				06FFDF286643DC2929FF83D5 /* ListingResourcesMoveTests.swift in Sources */,
 				9C4DE339A7F92698687A313E /* LiveListingLockTests.swift in Sources */,
 				00CBB662796D6FBF096CD4DA /* MarketingScreenReviewTests.swift in Sources */,

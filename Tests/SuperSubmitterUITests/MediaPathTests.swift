@@ -102,3 +102,50 @@ import Testing
     // then shows Google's rule alone.
     #expect(AssetInspector.appleSizeLabels(for: .tablet7).isEmpty)
 }
+
+/// A draft the store holds is not an app that has shipped.
+///
+/// `isUpdatingLiveApp` used to read `!storeSnapshot.isEmpty`, and the snapshot
+/// fills from `infoLocales` and `versionLocales`, which a draft carries. An app
+/// record created in App Store Connect and never submitted has a name, a
+/// subtitle and a description, so every unpublished app read as an update: the
+/// Details tab put a red **Required** on What is new, over a version with no
+/// previous version to be new against.
+@MainActor
+@Test func aDraftListingIsNotAShippedApp() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+
+    // The listing of an app record that exists and has never been submitted.
+    var apple = ActualState.Apple()
+    apple.infoLocales["en-US"] = {
+        var locale = ActualState.Apple.InfoLocale()
+        locale.name = "Artisan View"
+        locale.subtitle = "Costs and stock"
+        return locale
+    }()
+    apple.versionLocales["en-US"] = {
+        var locale = ActualState.Apple.VersionLocale()
+        locale.description = "A long description."
+        return locale
+    }()
+    var actual = ActualState()
+    actual.apple = apple
+    state.actualState = actual
+    state.storeSnapshot.merge(actual)
+
+    #expect(!state.storeSnapshot.isEmpty)
+    #expect(!state.isUpdatingLiveApp)
+    #expect(state.showsNewAppFields)
+
+    // The live listing is what tells the two apart, and only a shipped version
+    // puts anything there.
+    apple.liveVersionLocales["en-US"] = {
+        var locale = ActualState.Apple.VersionLocale()
+        locale.description = "The description the customers are reading."
+        return locale
+    }()
+    actual.apple = apple
+    state.storeSnapshot.merge(actual)
+    #expect(state.isUpdatingLiveApp)
+}

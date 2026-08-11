@@ -94,11 +94,34 @@ private func row(_ id: String, _ manifest: Manifest, _ actual: ActualState) -> C
 
 // MARK: - The build and the compliance answer hold the release button
 
-@Test func aFirstSubmissionShowsNoUpdateRows() {
+/// A first submission needs every one of these, and used to be asked for none.
+///
+/// The rows were drawn only for an app with a released version, which reads the
+/// distinction backwards. A build, an export compliance answer and a review
+/// contact are what Apple refuses a submission without, and the developer who
+/// has never shipped is the one who has never supplied any of them. The release
+/// button checked the developer who had already done it once, and waved the
+/// other one through.
+@Test func aFirstSubmissionIsCheckedForWhatAppleRefusesWithout() {
     let ids = Set(rows(updatable(), ActualState()).map(\.id))
-    #expect(!ids.contains("apple.updateBuild"))
-    #expect(!ids.contains("apple.updateEncryption"))
-    #expect(!ids.contains("apple.updateReviewContact"))
+    #expect(ids.contains("apple.updateBuild"))
+    #expect(ids.contains("apple.updateEncryption"))
+    #expect(ids.contains("apple.updateReviewContact"))
+
+    // Real gaps, and not decoration: each one holds the release button.
+    #expect(row("apple.updateBuild", updatable(), ActualState())?.state == .needed)
+    #expect(row("apple.updateEncryption", updatable(), ActualState())?.state == .needed)
+}
+
+/// The review contact is the one row where the two flows really differ.
+///
+/// Apple carries it forward from the released version, so an update with no
+/// next version yet has an answer the app cannot read. A first submission
+/// inherits nothing, and an empty manifest there is a gap and not an unread
+/// answer.
+@Test func onlyAnUpdateInheritsItsReviewContact() {
+    #expect(row("apple.updateReviewContact", updatable(), ActualState())?.state == .needed)
+    #expect(row("apple.updateReviewContact", updatable(), live())?.state == .unknown)
 }
 
 @Test func anUpdateWithNoBuildAnywhereHoldsTheReleaseButton() {

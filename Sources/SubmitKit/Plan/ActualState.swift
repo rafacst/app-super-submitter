@@ -316,6 +316,34 @@ public struct ActualState: Sendable, Equatable {
         /// app asks this one question.
         public var isUpdate: Bool { liveVersionString != nil }
 
+        /// The version Apple is holding for one platform, when it holds one.
+        ///
+        /// `versionId`, `versionString` and `versionState` name the version the
+        /// app may **write** to, and a version in review is not one, so the
+        /// reader leaves all three nil for as long as the review lasts. That is
+        /// right for planning a write and wrong for every question about what
+        /// the store is doing, and those questions were asking the same three
+        /// fields and hearing "no version at all". A first submission sitting in
+        /// review read **No version is prepared**, the blockers panel counted
+        /// that row, and Re-check re-ran a read that answers nil again every
+        /// time, so the row could not be cleared by the button offered to clear
+        /// it.
+        ///
+        /// The answer was already in hand: `platforms` carries the pending
+        /// number and its state for every platform of this app id, off the same
+        /// request, and nothing here consulted it.
+        ///
+        /// An editable state answers nil. A plain draft is not "with the
+        /// store", and a rejection hands the version back and makes the
+        /// checklist matter again.
+        public func submittedVersion(platform: String)
+            -> (version: String?, state: String)? {
+            guard let standing = platforms.first(where: { $0.platform == platform }),
+                  let state = standing.pendingState,
+                  !AppleVersionState.editable.contains(state) else { return nil }
+            return (standing.pending, state)
+        }
+
         /// The listing text the version this run writes to starts out holding.
         ///
         /// A draft that exists answers for itself: it is the resource the run

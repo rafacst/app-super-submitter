@@ -646,10 +646,22 @@ extension AppState {
     /// yet** on a version the store had been holding for a week, and the row
     /// went back to saying it every time the app was relaunched or another app
     /// was opened. The read that answers this already runs on every plan.
+    /// What Apple is doing with this app's version, whether or not that version
+    /// is one the app may write to.
+    ///
+    /// `versionState` alone answers nil for the whole of a review, so every
+    /// caller below took a version with Apple for no version at all. See
+    /// `ActualState.Apple.submittedVersion(platform:)`.
+    var appleVersionStanding: String? {
+        actualState.apple?.versionState
+            ?? actualState.apple?.submittedVersion(
+                platform: applePlatform.rawValue)?.state
+    }
+
     private func storePhase(_ store: Store) -> StoreStatus.Phase {
         switch store {
         case .apple:
-            guard let state = actualState.apple?.versionState else {
+            guard let state = appleVersionStanding else {
                 return applied ? .draft : .noDraft
             }
             return ReleaseStatusReader.applePhase(state)
@@ -705,7 +717,7 @@ extension AppState {
     /// A refusal is in neither answer. Apple handing the version back is
     /// exactly when the checklist starts mattering again.
     func isPastPreparation(_ store: Store) -> Bool {
-        if store == .apple, let version = actualState.apple?.versionState,
+        if store == .apple, let version = appleVersionStanding,
            AppleVersionState.withApple.contains(version)
                || version == "PENDING_DEVELOPER_RELEASE" {
             return true
@@ -730,9 +742,14 @@ extension AppState {
     /// version behind a rule written for an unanswered one. `withApple` is the
     /// unanswered set and does not contain it.
     func sendBlockedByReview(_ store: Store) -> String? {
-        guard store == .apple, let state = actualState.apple?.versionState,
+        guard store == .apple, let state = appleVersionStanding,
               AppleVersionState.withApple.contains(state) else { return nil }
-        return "\(actualState.apple?.versionString ?? "This version") is already with App Store review. A second submission on top of an open one is refused."
+        // The number comes from whichever field holds it. During a review the
+        // writable one is nil, and this gate used to open on the same nil.
+        let number = actualState.apple?.versionString
+            ?? actualState.apple?.submittedVersion(
+                platform: applePlatform.rawValue)?.version
+        return "\(number ?? "This version") is already with App Store review. A second submission on top of an open one is refused."
     }
 
     /// One store, one button, one failure. Spec 7.9 and 11.3.
