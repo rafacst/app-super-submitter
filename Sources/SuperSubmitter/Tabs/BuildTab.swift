@@ -188,9 +188,13 @@ struct BuildTab: View {
             Text("Bundle id · App id")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             HStack(spacing: 8) {
-                if state.remoteAppleApps.isEmpty {
-                    identityValue(state.appleBundleID, placeholder: "Bundle id")
-                } else {
+                identityField(Binding(get: { state.appleBundleID },
+                                      set: { state.appleBundleID = $0 }),
+                              placeholder: "Bundle id") { state.updateAppleAppFields() }
+                // The picker stays. It is the right way in when it is
+                // available, because it fills both fields from apps that
+                // really exist. It is no longer the only way in.
+                if !state.remoteAppleApps.isEmpty {
                     Menu {
                         ForEach(state.remoteAppleApps) { app in
                             Button("\(app.name) · \(app.identifier)") {
@@ -198,16 +202,19 @@ struct BuildTab: View {
                             }
                         }
                     } label: {
-                        PickerLabel(value: state.appleBundleID.isEmpty
-                                    ? "Choose an app" : state.appleBundleID)
+                        PickerLabel(value: "Choose")
                     }
                     .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
-                identityValue(state.appleAppID, placeholder: "App id", width: 120)
+                identityField(Binding(get: { state.appleAppID },
+                                      set: { state.appleAppID = $0 }),
+                              placeholder: "App id",
+                              width: 120) { state.updateAppleAppFields() }
                 Spacer(minLength: 0)
             }
             if state.appleBundleID.isEmpty, state.remoteAppleApps.isEmpty {
-                missingIdentityNote("Connect App Store Connect to choose the app.")
+                missingIdentityNote("Connect App Store Connect to choose the app, or type it.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -241,19 +248,34 @@ struct BuildTab: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func identityValue(_ value: String, placeholder: String,
-                               width: CGFloat? = nil) -> some View {
-        Text(value.isEmpty ? placeholder : value)
+    /// One identifier, typed.
+    ///
+    /// It was a value and not a box, on the grounds that the store decides
+    /// these and an editable field is an invitation to invent an App id. That
+    /// reasoning holds for what the field means and not for what it costs: a
+    /// required value with no way in is a dead end, and every way in this app
+    /// offered went through somewhere else. An import fills these, the picker
+    /// beside them fills these, and neither is available to a developer whose
+    /// credential cannot list the app or who has not connected one yet. The
+    /// answer to that was the YAML editor.
+    ///
+    /// So it is typed, and the paragraph above it still says where the value
+    /// comes from. The invitation is answered by saying what is true, not by
+    /// taking the keyboard away.
+    private func identityField(_ text: Binding<String>, placeholder: String,
+                               width: CGFloat? = nil,
+                               commit: @escaping () -> Void) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.plain)
             .font(Theme.mono(11.5))
-            .foregroundStyle(value.isEmpty ? Theme.text3 : Theme.text)
             .lineLimit(1)
-            .textSelection(.enabled)
             .padding(.horizontal, 9).padding(.vertical, 6)
             .frame(width: width, alignment: .leading)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
             .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+            .onChange(of: text.wrappedValue) { commit() }
     }
 
     private func missingIdentityNote(_ text: String) -> some View {

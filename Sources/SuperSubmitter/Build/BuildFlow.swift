@@ -243,7 +243,20 @@ final class BuildFlow {
         project.lastValidatedAt = Date()
         self.project = project
         var list = storage.loadProjects()
-        list.removeAll { $0.id == project.id || $0.rootPath == project.rootPath }
+        // One link per app per store, and it used to dedup on the folder. A
+        // monorepo holding an Xcode project beside a Gradle one is one folder
+        // and two links, so removing by `rootPath` deleted the sibling every
+        // time the other one was saved.
+        //
+        // `store` and not `platform`: iOS and macOS are one App Store app that
+        // archives from the same project, and two links for them would make
+        // the platform switch on this tab lose the scheme.
+        list.removeAll {
+            $0.id == project.id
+                || ($0.manifestPath == project.manifestPath
+                    && $0.platform.store == project.platform.store)
+                || ($0.manifestPath == nil && $0.rootPath == project.rootPath)
+        }
         list.append(project)
         try? storage.saveProjects(list)
     }
@@ -289,12 +302,36 @@ final class BuildFlow {
         }
     }
 
-    private func savedProjectForOpenApp() -> LinkedSourceProject? {
-        guard let manifest = app?.manifestURL?.standardizedFileURL.path else { return nil }
+    /// Every link this app has, one per store at most.
+    func savedProjectsForOpenApp() -> [LinkedSourceProject] {
+        guard let manifest = app?.manifestURL?.standardizedFileURL.path else { return [] }
         let root = (manifest as NSString).deletingLastPathComponent
         let list = storage.loadProjects()
-        return list.last { $0.manifestPath == manifest }
-            ?? list.last { $0.manifestPath == nil && Self.folder($0.rootPath, isInside: root) }
+        let named = list.filter { $0.manifestPath == manifest }
+        guard named.isEmpty else { return named }
+        // A link written before the manifest path existed still matches, by
+        // its folder.
+        return list.filter { $0.manifestPath == nil && Self.folder($0.rootPath, isInside: root) }
+    }
+
+    /// The link for one store, or nil when that store has none.
+    ///
+    /// An app can ship an Xcode project and a Gradle project, and they are two
+    /// folders as often as they are two folders inside one. This used to take
+    /// the last link the app had whatever store it built for, so linking the
+    /// Gradle folder replaced the Xcode one and the Build tab had one of the
+    /// two at a time.
+    func savedProject(for store: Store) -> LinkedSourceProject? {
+        savedProjectsForOpenApp().last { $0.platform.store == store }
+    }
+
+    private func savedProjectForOpenApp() -> LinkedSourceProject? {
+        // The store this tab is on. A run that has not chosen yet takes the
+        // link the app has, and prefers Apple when it has both, because that
+        // is the platform a fresh run starts on.
+        savedProject(for: run.platform.store)
+            ?? savedProjectsForOpenApp().last { $0.platform.store == .apple }
+            ?? savedProjectsForOpenApp().last
     }
 
     /// True when the project sits in the app's own folder or under it. Pure
@@ -599,7 +636,34 @@ final class BuildFlow {
     /// its own.
     func choosePlatform(_ platform: BuildPlatform) {
         run.platform = platform
-        project?.platform = platform
+        // Across the two stores it is a different project, not the same one
+        // relabelled. iOS and macOS archive from one Xcode project, so those
+        // two stay on the link they are on; Android is a Gradle folder, and
+        // rewriting the platform on the Apple link is what made an app able to
+        // hold one of the two at a time.
+        if project?.platform.store != platform.store {
+            // Nil is a state and not a failure: the other store has no folder
+            // linked yet, and the card offers to link one.
+            project = savedProject(for: platform.store)
+            // The link's own platform wins. An Apple link may be a macOS one,
+            // and forcing the platform the switch asked for would archive the
+            // wrong destination from the right project.
+            if let saved = project { run.platform = saved.platform }
+            run.linkedProjectID = project?.id
+            containers = []
+            containerInfo = nil
+            variants = []
+            snapshot = PreflightSnapshot()
+            candidate = nil
+            blocking = nil
+            warnings = []
+            guard project != nil else {
+                run.move(to: .unlinked)
+                return
+            }
+        } else {
+            project?.platform = platform
+        }
         restartPreflight()
     }
 

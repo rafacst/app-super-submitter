@@ -59,6 +59,7 @@
 		2EBA77B2C836B214F242EE28 /* MediaTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D91EA1D4DAB192A7E79D52C /* MediaTab.swift */; };
 		30691A3DA2AEAA507A299B09 /* PlanTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516E6CD3FCB821FB333310F /* PlanTab.swift */; };
 		30AE77C42FF2651A82541145 /* ActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330EA68F4E9E7C9DC72434BB /* ActionButton.swift */; };
+		31246BFEBA76AC7F460BF93C /* TwoStoreLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB06573A092456B44968809A /* TwoStoreLinkTests.swift */; };
 		316D131EA0C23D5E1610E128 /* StoreSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */; };
 		3196AF55A7448A7FAD213FE7 /* UploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7DF63306FED48988313FED2 /* UploadService.swift */; };
 		321F8A0AB936919FA72CF1CD /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233A3F24548DC6B4BC41FFA1 /* CommandRunner.swift */; };
@@ -659,6 +660,7 @@
 		F9B0FEB33B12A41A2C366087 /* ReleaseScreenReviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseScreenReviewTests.swift; sourceTree = "<group>"; };
 		FAF3B7E72801E00B4455AC46 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		FAF4FCFC4A59055B1BA4CDA8 /* ActualState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualState.swift; sourceTree = "<group>"; };
+		FB06573A092456B44968809A /* TwoStoreLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoStoreLinkTests.swift; sourceTree = "<group>"; };
 		FB55B4C53BDCF96EEBBA3656 /* StorePathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePathTests.swift; sourceTree = "<group>"; };
 		FBB41041C7A6A47CB6BA5FF6 /* AppleMarketing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMarketing.swift; sourceTree = "<group>"; };
 		FBBAC5334A20D0561755042D /* UpgradeCardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeCardTests.swift; sourceTree = "<group>"; };
@@ -840,6 +842,7 @@
 				505149DCFFEF3CDFE3A3C930 /* SummarySeesTheBuildTests.swift */,
 				8324CF340D082632FA9E7B1B /* SupportMailTests.swift */,
 				48B7D7160F37672B80B343B9 /* TabStructureTests.swift */,
+				FB06573A092456B44968809A /* TwoStoreLinkTests.swift */,
 				D13E0662DA10F7885A1CAA99 /* UndoTests.swift */,
 				EA51A86FD30AB3FD71F84F3B /* UnsurfacedFieldTests.swift */,
 				ADCDB80D12F9D17E4007443B /* UpdaterTests.swift */,
@@ -1725,6 +1728,7 @@
 				F29BB5A286686E9FB0AC6A05 /* SummarySeesTheBuildTests.swift in Sources */,
 				86A1B3A20817BDE8E9242B79 /* SupportMailTests.swift in Sources */,
 				1CAA1EE5153F2DB7276E8451 /* TabStructureTests.swift in Sources */,
+				31246BFEBA76AC7F460BF93C /* TwoStoreLinkTests.swift in Sources */,
 				E83842B121B6E2FB2634F149 /* UndoTests.swift in Sources */,
 				5A54496C005B65B5A14ABD07 /* UnsurfacedFieldTests.swift in Sources */,
 				2259C22F61A6FB8F68D7B79F /* UpdaterTests.swift in Sources */,

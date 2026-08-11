@@ -117,13 +117,25 @@ private func detailsReviewSource(_ relativePath: String) throws -> String {
     #expect(tab.contains("requirement"))
 }
 
-/// The identifiers belong to the store, and a box you can type in says the
-/// opposite. The Build tab already draws them as values; so does this one.
-@Test func theIdentifiersAreNotTypedIn() throws {
+/// The identifiers belong to the store and are required, and those two facts
+/// pull opposite ways. They were drawn as values, so that a box you can type in
+/// would not invite somebody to invent an App id. What that cost was the only
+/// way in: an import or a picker over apps a credential can see, and neither is
+/// available to a developer whose credential cannot list the app or who has not
+/// connected one. The screen exists so a wrong bundle id is fixable without the
+/// YAML editor, and it sent them to the YAML editor.
+///
+/// So they are typed, the picker stays because it is the safer way when it is
+/// there, and the paragraph above them is what warns.
+@Test func theIdentifiersCanBeTypedAndStillOfferThePicker() throws {
     let panel = try detailsReviewSource("Sources/SuperSubmitter/Tabs/AppIdentifiers.swift")
 
-    #expect(!panel.contains("TextField("))
+    #expect(panel.contains("TextField(placeholder, text: $value)"))
+    #expect(panel.contains("commit: state.updateAppleAppFields"))
+    #expect(panel.contains("commit: state.updateGoogleAppFields"))
+    // The safer way in has to survive the change that made typing possible.
     #expect(panel.contains("Choose visible app"))
+    #expect(panel.contains("an id that names another app writes to it"))
 }
 
 /// The reference column moves nothing but itself.

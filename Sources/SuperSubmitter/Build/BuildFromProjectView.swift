@@ -18,6 +18,7 @@ struct BuildFromProjectView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            storeRow
             if flow.project == nil, flow.candidate == nil, flow.failure == nil {
                 linkCard
             } else {
@@ -208,6 +209,35 @@ struct BuildFromProjectView: View {
             }
         }
         .storePanel(horizontal: 15)
+    }
+
+    /// Which store this tab is building for.
+    ///
+    /// An app on both stores builds from two projects, and this tab had no way
+    /// to say which one it meant: the platform came from whichever folder was
+    /// linked last, and linking the second replaced the first.
+    ///
+    /// Above the link card and not inside the project card, because the card
+    /// that shows when the store you switched to has no folder yet is the link
+    /// card, and a switch you cannot undo from the screen it lands on is a
+    /// trap.
+    @ViewBuilder
+    private var storeRow: some View {
+        if state.stores.count > 1 {
+            HStack(spacing: 9) {
+                Text("Store").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
+                    .frame(width: 92, alignment: .leading)
+                Picker("", selection: Binding(
+                    get: { flow.platform.store },
+                    set: { flow.choosePlatform($0 == .google ? .android : .ios) })) {
+                    Text("App Store").tag(Store.apple)
+                    Text("Google Play").tag(Store.google)
+                }
+                .labelsHidden().pickerStyle(.segmented).frame(width: 240)
+                .disabled(flow.isBusy)
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     private var selectionRow: some View {

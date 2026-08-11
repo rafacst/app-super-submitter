@@ -71,29 +71,30 @@ private func buildReviewState() -> AppState {
 
 // MARK: - Nothing uneditable is clickable
 
-/// The bundle id belongs to the store. Drawn as a control that opens another
-/// tab, it reads as a field you may edit and answers a press by navigating away
-/// from the work.
+/// A required value is typed where it is required.
 ///
-/// The package name is the exception, and it is not one the rule ever meant to
-/// cover. Apple assigns a bundle id and the Menu beside it lists the real apps
-/// a credential can see; the Android Publisher API publishes no way to list
-/// anything, so nobody can pick a package name and somebody has to type it. A
-/// fact-shaped box was all this row had, the value it wanted lived on another
-/// tab, and a developer standing on this one had no way to supply it.
-@Test func anIdentityWithNothingToChooseIsNotAControl() throws {
+/// These three were drawn as facts, and a fact-shaped box answered a press by
+/// sending the developer to another tab. The rule that put them there was
+/// aimed at a control that navigates away, and it took the keyboard with it:
+/// every way to supply an identifier went through an import or a picker over
+/// the apps a credential can see, and a developer with neither had the YAML
+/// editor. The Android Publisher API publishes no way to list anything at all,
+/// so a package name could never be picked and always had to be typed.
+@Test func aRequiredIdentityCanBeTyped() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
     let start = try #require(build.range(of: "private var appleIdentity"))
-    let end = try #require(build.range(of: "private func identityValue"))
+    let end = try #require(build.range(of: "/// One identifier, typed."))
     let identity = String(build[start.lowerBound..<end.lowerBound])
 
+    // Not a control that answers a press by leaving the work.
     #expect(!identity.contains("PickerActionRow(value: state.appleBundleID"))
     #expect(!identity.contains("PickerActionRow(value: state.googlePackageName"))
-    #expect(identity.contains("identityValue(state.appleBundleID"))
-    // Typed, and typed here. Not a control that answers a press by leaving.
+    #expect(!identity.contains("identityValue("))
     #expect(identity.contains("TextField(\"Package name\""))
     #expect(identity.contains("state.updateGoogleAppFields()"))
-    #expect(!identity.contains("identityValue(state.googlePackageName"))
+    #expect(identity.contains("state.updateAppleAppFields()"))
+    // The picker is the safer way in when there is one. It survives.
+    #expect(identity.contains("state.chooseRemoteAppleApp(app)"))
 }
 
 // MARK: - Build from project uses the width
