@@ -620,6 +620,23 @@ extension AppState {
         }
     }
 
+    /// Whether the store already holds a draft that the release button can
+    /// send.
+    ///
+    /// Not `applied`. That flag is a fact about this session, and the button
+    /// was using it to answer a question about the store. A draft written by
+    /// yesterday's apply, by the App Store Connect website, or by an apply from
+    /// before the app was relaunched all read as no draft at all, and switching
+    /// apps clears the flag as surely as a relaunch does. The advice under the
+    /// dead button was then impossible to follow: the Summary had nothing left
+    /// to apply, because everything it would have written was already there.
+    ///
+    /// `storePhase` was taught to ask the store once already, for the status
+    /// card above. The button kept asking the session.
+    func hasDraft(_ store: Store) -> Bool {
+        (statuses[store]?.phase ?? storePhase(store)) != .noDraft
+    }
+
     /// What the store itself holds, and this run only when the store said
     /// nothing.
     ///

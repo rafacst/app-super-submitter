@@ -278,7 +278,7 @@ struct ReleaseTab: View {
         // A locked button stays pressable and opens the pricing sheet. A
         // disabled button with no explanation is the worst of both.
         let locked = !released && !state.can(.storeRelease)
-        let blocked = !locked && !released && (!state.applied || !blockers.isEmpty)
+        let blocked = !locked && !released && (!state.hasDraft(store) || !blockers.isEmpty)
         let name = store == .apple ? "App Store" : "Google Play"
         let approvedApple = store == .apple
             && state.actualState.apple?.versionState == "PENDING_DEVELOPER_RELEASE"
@@ -331,7 +331,7 @@ struct ReleaseTab: View {
                 ? "You can cancel this submission only before the review starts."
                 : "You can halt a staged rollout only. A completed rollout cannot be halted."
         }
-        if !state.applied {
+        if !state.hasDraft(store) {
             return "Blocked: no draft exists yet. Run an apply on the Summary tab first."
         }
         if let first = blockers.first {
