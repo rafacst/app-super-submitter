@@ -34,12 +34,74 @@ public struct StoreVitalsClient: Sendable {
 
     // MARK: - Google Play
 
+    /// One day of one metric.
+    public struct SeriesPoint: Sendable, Equatable, Identifiable {
+        public var date: Date
+        public var value: Double
+
+        public var id: Date { date }
+
+        public init(date: Date, value: Double) {
+            self.date = date
+            self.value = value
+        }
+    }
+
+    /// One metric across the days the store answered for, oldest first.
+    public struct MetricSeries: Sendable, Equatable, Identifiable {
+        public var name: String
+        public var points: [SeriesPoint]
+
+        public var id: String { name }
+
+        public init(name: String, points: [SeriesPoint]) {
+            self.name = name
+            self.points = points
+        }
+
+        public var highest: Double { points.map(\.value).max() ?? 0 }
+        public var newest: SeriesPoint? { points.last }
+
+        /// Whether the second half of the window sits above the first.
+        ///
+        /// Two halves and not the last two days. A daily rate moves on its own,
+        /// and a line drawn from yesterday to today reports the noise.
+        public var isRising: Bool? {
+            guard points.count >= 4 else { return nil }
+            let half = points.count / 2
+            let older = points.prefix(half).map(\.value)
+            let newer = points.suffix(points.count - half).map(\.value)
+            let before = older.reduce(0, +) / Double(older.count)
+            let after = newer.reduce(0, +) / Double(newer.count)
+            // A hundredth of a point either way is the same rate twice.
+            guard abs(after - before) * 100 >= 0.01 else { return nil }
+            return after > before
+        }
+    }
+
+    /// What the vitals read answers with: the numbers, and their shape.
+    public struct GoogleVitals: Sendable, Equatable {
+        public var metrics: [Metric] = []
+        public var trends: [MetricSeries] = []
+
+        public init(metrics: [Metric] = [], trends: [MetricSeries] = []) {
+            self.metrics = metrics
+            self.trends = trends
+        }
+    }
+
     /// The crash rate and the ANR rate of the last 28 days.
     ///
     /// Google returns one row per day, so this averages the rows it gets and
     /// says how many days it covered.
-    public func googleVitals(packageName: String) async throws -> [Metric] {
-        var result: [Metric] = []
+    ///
+    /// The days themselves come back too, off the same request and the same
+    /// rows. An average is the honest summary of a month and it hides the one
+    /// thing a developer opens this panel to see: 0.4 % flat for four weeks and
+    /// 0.1 % climbing to 0.9 % are the same number. Nothing extra is asked of
+    /// the store to draw it.
+    public func googleVitals(packageName: String) async throws -> GoogleVitals {
+        var result = GoogleVitals()
         for (set, label) in [("crashRateMetricSet", "User-perceived crash rate"),
                              ("anrRateMetricSet", "User-perceived ANR rate")] {
             let metric = set == "crashRateMetricSet"
@@ -53,11 +115,54 @@ public struct StoreVitalsClient: Sendable {
                 ]) else { continue }
             let rows = JSON(data: response.data)["rows"].array
             guard let average = Self.average(rows, metric: metric) else { continue }
-            result.append(Metric(name: label,
-                                 value: Self.percent(average),
-                                 detail: "\(rows.count) days"))
+            result.metrics.append(Metric(name: label,
+                                         value: Self.percent(average),
+                                         detail: "\(rows.count) days"))
+            // Two points are a line and one is a dot. A single day draws
+            // nothing, and the number above already says it.
+            let points = Self.series(rows, metric: metric)
+            if points.count > 1 {
+                result.trends.append(MetricSeries(name: label, points: points))
+            }
         }
         return result
+    }
+
+    /// One point per day, oldest first.
+    ///
+    /// A row that names no day belongs to no day, and is dropped rather than
+    /// stacked onto whichever date sorts first.
+    static func series(_ rows: [JSON], metric: String) -> [SeriesPoint] {
+        rows.compactMap { row -> SeriesPoint? in
+            guard let date = Self.day(row["startTime"]),
+                  let value = Self.value(row, metric: metric) else { return nil }
+            return SeriesPoint(date: date, value: value)
+        }
+        .sorted { $0.date < $1.date }
+    }
+
+    /// The day a row covers.
+    ///
+    /// The Reporting API sends a date as its parts and not as a string, so this
+    /// reads them and answers nil for a row that carries none. UTC, because the
+    /// store counts a day in its own zone and not in the developer's.
+    static func day(_ time: JSON) -> Date? {
+        guard let year = time["year"].int, let month = time["month"].int,
+              let day = time["day"].int else { return nil }
+        return Calendar(identifier: .gregorian).date(
+            from: DateComponents(timeZone: TimeZone(identifier: "UTC"),
+                                 year: year, month: month, day: day))
+    }
+
+    /// The number one row carries for one metric.
+    ///
+    /// Google sends a decimal as a string inside `decimalValue`, and sometimes
+    /// as a number. Three readers wanted the same two lines, so they are here.
+    static func value(_ row: JSON, metric: String) -> Double? {
+        guard let entry = row["metrics"].array
+            .first(where: { $0["metric"].string == metric }) else { return nil }
+        return entry["decimalValue"]["value"].string.flatMap(Double.init)
+            ?? entry["decimalValue"]["value"].double
     }
 
     /// One version's rate, for the comparison a single number cannot make.
@@ -118,10 +223,7 @@ public struct StoreVitalsClient: Sendable {
                 .flatMap({ $0["stringValue"].string ?? $0["int64Value"].string
                     ?? $0["int64Value"].int.map(String.init) }),
                 !version.isEmpty,
-                let value = row["metrics"].array
-                    .first(where: { $0["metric"].string == metric })
-                    .flatMap({ $0["decimalValue"]["value"].string.flatMap(Double.init)
-                        ?? $0["decimalValue"]["value"].double })
+                let value = Self.value(row, metric: metric)
             else { continue }
             byVersion[version, default: []].append(value)
         }
@@ -151,18 +253,13 @@ public struct StoreVitalsClient: Sendable {
 
     /// The mean of one metric across the returned rows.
     static func average(_ rows: [JSON], metric: String) -> Double? {
-        let values = rows.compactMap { row -> Double? in
-            guard let entry = row["metrics"].array
-                .first(where: { $0["metric"].string == metric }) else { return nil }
-            return entry["decimalValue"]["value"].string.flatMap(Double.init)
-                ?? entry["decimalValue"]["value"].double
-        }
+        let values = rows.compactMap { Self.value($0, metric: metric) }
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
     }
 
     /// Google reports a rate as a fraction, and a reader wants a percentage.
-    static func percent(_ value: Double) -> String {
+    public static func percent(_ value: Double) -> String {
         String(format: "%.2f %%", value * 100)
     }
 

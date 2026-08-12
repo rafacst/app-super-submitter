@@ -12,6 +12,8 @@ struct VitalsPanel: View {
     @State private var loaded = false
     @State private var apple: [StoreVitalsClient.Metric] = []
     @State private var google: [StoreVitalsClient.Metric] = []
+    @State private var trends: [StoreVitalsClient.MetricSeries] = []
+    @State private var versions: [StoreVitalsClient.VersionRate] = []
     @State private var failures: [String] = []
     @State private var voided: [StoreVitalsClient.Voided] = []
     @State private var voidedError: String?
@@ -46,6 +48,7 @@ struct VitalsPanel: View {
                 }
                 if !apple.isEmpty { metricBlock(.apple, apple) }
                 if !google.isEmpty { metricBlock(.google, google) }
+                chartBlock
 
                 if state.stores.contains(.google) {
                     refundBlock
@@ -72,6 +75,25 @@ struct VitalsPanel: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// The same reads as the rows above, drawn.
+    ///
+    /// A rate is a number nobody can act on: 1.2 % is bad after 0.8 % and good
+    /// after 2 %. The average hides which of the two it is, and the days that
+    /// answer it were already in hand and thrown away.
+    ///
+    /// It draws only what the store answered for. A release nobody has run yet
+    /// reports one day and no versions, and a chart of one point is a dot.
+    @ViewBuilder private var chartBlock: some View {
+        if !trends.isEmpty || versions.count > 1 {
+            Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(trends) { RateChart(series: $0) }
+                if versions.count > 1 { VersionRateChart(rates: versions) }
+            }
+            .padding(.top, 4)
+        }
     }
 
     /// The refunds Google already issued. The app reads them and sends none:
@@ -193,6 +215,8 @@ struct VitalsPanel: View {
             let result = await state.storeVitals()
             apple = result.apple
             google = result.google
+            trends = result.trends
+            versions = result.versions
             failures = result.failures
             loaded = true
             busy = false

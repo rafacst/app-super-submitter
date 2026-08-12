@@ -48,23 +48,43 @@ extension AppState {
     ///
     /// Every call behind this is a read. A store that answers nothing adds no
     /// row, which is what a fresh release looks like.
-    func storeVitals() async -> (apple: [StoreVitalsClient.Metric],
-                                 google: [StoreVitalsClient.Metric],
-                                 failures: [String]) {
-        let client = StoreVitalsClient(api: readOnlyAPI())
+    /// What one fetch of the vitals answers with.
+    ///
+    /// `trends` and `versions` are the same reads as the numbers beside them.
+    /// Google answers a row per day and a row per version already, and the
+    /// panel used to average both away.
+    struct Vitals {
         var apple: [StoreVitalsClient.Metric] = []
         var google: [StoreVitalsClient.Metric] = []
+        var trends: [StoreVitalsClient.MetricSeries] = []
+        var versions: [StoreVitalsClient.VersionRate] = []
         var failures: [String] = []
+    }
+
+    func storeVitals() async -> Vitals {
+        let client = StoreVitalsClient(api: readOnlyAPI())
+        var result = Vitals()
 
         if stores.contains(.apple), let buildID = actualState.apple?.attachedBuildId {
-            do { apple = try await client.appleVitals(buildID: buildID) }
-            catch { failures.append("App Store: \(error.localizedDescription)") }
+            do { result.apple = try await client.appleVitals(buildID: buildID) }
+            catch { result.failures.append("App Store: \(error.localizedDescription)") }
         }
         if stores.contains(.google), let packageName = googleActionPackage {
-            do { google = try await client.googleVitals(packageName: packageName) }
-            catch { failures.append("Google Play: \(error.localizedDescription)") }
+            do {
+                let vitals = try await client.googleVitals(packageName: packageName)
+                result.google = vitals.metrics
+                result.trends = vitals.trends
+            } catch {
+                result.failures.append("Google Play: \(error.localizedDescription)")
+            }
+            // The per-version read is its own request and its own failure. A
+            // shape this app has never seen against a real account must not
+            // cost the developer the numbers above it, so it answers nothing
+            // rather than raising.
+            result.versions = (try? await client.googleCrashRateByVersion(
+                packageName: packageName)) ?? []
         }
-        return (apple, google, failures)
+        return result
     }
 
     /// Whether the newest release moved Play's crash rate, and by how much.
