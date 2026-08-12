@@ -180,6 +180,10 @@ extension AppState {
         providerFailure = nil
         plan = result
         actualState = actual
+        // The cache is keyed by the manifest and the generation, and a read
+        // changes neither, so every direct apply after a read was still
+        // planning against the state the read replaced.
+        directPlanCache = nil
         storeSnapshot.merge(actual)
         storeSnapshot.save(toRoot: manifestRoot)
         // A read is where an app first proves it has shipped, and the Manage

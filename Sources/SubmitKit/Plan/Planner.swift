@@ -418,6 +418,33 @@ public enum Planner {
     /// a build reaches a group, and a beta review takes a place in a queue.
     /// Each one compares what Apple already holds, so a second apply invites
     /// nobody twice.
+    /// Whether a group Apple already holds carries every switch the manifest
+    /// names for it.
+    ///
+    /// A key the manifest leaves out is not a `false`. It means the developer
+    /// said nothing, so whatever Apple holds stays, and only a named value that
+    /// disagrees earns a step.
+    ///
+    /// `internalGroup` is absent on purpose. Apple takes it on the create
+    /// request alone, so a step raised for it would send a value Apple drops
+    /// and the plan would repeat it on every apply.
+    private static func betaGroupSettingsDiffer(
+        _ group: Manifest.Release.TestFlight.Group,
+        _ live: AppleTestFlightClient.BetaGroup?) -> Bool {
+        func differs<Value: Equatable>(_ wanted: Value?, _ held: Value?) -> Bool {
+            guard let wanted else { return false }
+            return wanted != held
+        }
+        return differs(group.publicLink, live?.publicLink)
+            // The cap was not compared, so a raised or a cleared limit left
+            // the plan silent and the run never sent the new number.
+            || differs(group.publicLinkLimit, live?.publicLinkLimit)
+            || differs(group.automaticBuilds, live?.automaticBuilds)
+            || differs(group.feedback, live?.feedback)
+            || differs(group.iosBuildsOnMac, live?.iosBuildsOnMac)
+            || differs(group.iosBuildsOnVision, live?.iosBuildsOnVision)
+    }
+
     private static func appleTestFlightSteps(_ input: Input) -> [PlanStep] {
         guard let testFlight = input.manifest.release?.apple?.testFlight else { return [] }
         let actual = input.actual.apple
@@ -426,8 +453,7 @@ public enum Planner {
 
         for group in testFlight.groups ?? [] {
             let live = actual?.betaGroups[group.name]
-            if live == nil || group.publicLink.map({ $0 != live?.publicLink }) == true
-                || group.automaticBuilds.map({ $0 != live?.automaticBuilds }) == true {
+            if live == nil || betaGroupSettingsDiffer(group, live) {
                 steps.append(PlanStep(
                     id: "apple.betaGroup.\(group.name)", system: .apple,
                     kind: live == nil ? .add : .change,
@@ -458,11 +484,19 @@ public enum Planner {
             }
 
             // The build reaches the group, and through it every tester.
-            if let buildID = actual?.attachedBuildId,
-               live?.buildIds.contains(buildID) != true {
+            //
+            // Three ways to have one, and the step used to know only the last:
+            // this run uploads it, Apple already processed one for this
+            // version, or the App Store version holds one. A beta needs no
+            // version, so an upload that never reached a version left every
+            // group without the build it was created for.
+            let uploading = applePath(input.manifest)
+                .flatMap { resolve($0, root: input.root) } != nil
+            let buildID = actual?.buildIdForVersion ?? actual?.attachedBuildId
+            if uploading || (buildID != nil && live?.buildIds.contains(buildID!) != true) {
                 steps.append(PlanStep(
                     id: "apple.betaBuild.\(group.name)", system: .apple, kind: .add,
-                    summary: "TestFlight  \(group.name)  gets the attached build",
+                    summary: "TestFlight  \(group.name)  gets the build",
                     title: "Give the build to \(group.name)",
                     requests: [RequestSketch("POST", "/v1/betaGroups/{id}/relationships/builds")],
                     operation: .appleBetaBuild(group: group.name),

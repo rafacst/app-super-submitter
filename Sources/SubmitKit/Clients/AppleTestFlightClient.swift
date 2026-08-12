@@ -25,6 +25,14 @@ public struct AppleTestFlightClient: Sendable {
         public var publicLink: Bool?
         public var publicLinkLimit: Int?
         public var automaticBuilds: Bool?
+        public var internalGroup: Bool?
+        public var feedback: Bool?
+        public var iosBuildsOnMac: Bool?
+        public var iosBuildsOnVision: Bool?
+        /// The URL Apple minted for the public link. Apple writes it itself,
+        /// so it appears only once a group has the link open, and it is the
+        /// address the developer hands to a tester.
+        public var publicLinkURL: String?
         /// The build ids that Apple already gave this group.
         public var buildIds: Set<String> = []
 
@@ -93,25 +101,52 @@ public struct AppleTestFlightClient: Sendable {
     // MARK: - The writes
 
     /// Creates the group, or returns the one Apple already holds.
+    ///
+    /// Apple splits the attributes of a group across three lists. `name` and
+    /// the switches below take a create and a change alike; `isInternalGroup`
+    /// is on the create request alone, so the kind of a group is fixed when
+    /// Apple makes it; and the two platform switches are on the change request
+    /// alone, so a new group takes them in a second call.
     @discardableResult
     public func ensureGroup(appID: String,
                             _ group: Manifest.Release.TestFlight.Group,
                             existing: BetaGroup?) async throws -> String {
         var attributes: [String: Any] = ["name": group.name]
-        if let link = group.publicLink { attributes["publicLinkEnabled"] = link }
-        if let limit = group.publicLinkLimit {
-            attributes["publicLinkLimit"] = limit
-            attributes["publicLinkLimitEnabled"] = true
+        // Apple takes a public link on an external group only, and it faults
+        // the whole request when one reaches an internal group. The live kind
+        // counts as much as the wanted one: a group Apple already holds as
+        // internal takes no link either.
+        if group.internalGroup != true, existing?.internalGroup != true {
+            if let link = group.publicLink { attributes["publicLinkEnabled"] = link }
+            if let limit = group.publicLinkLimit {
+                attributes["publicLinkLimit"] = limit
+                attributes["publicLinkLimitEnabled"] = true
+            } else if group.publicLink == true {
+                // A cap the developer cleared has to be turned off by name.
+                // Leaving the key out left Apple capping the link at whatever
+                // number it still held.
+                attributes["publicLinkLimitEnabled"] = false
+            }
         }
         if let automatic = group.automaticBuilds {
             attributes["hasAccessToAllBuilds"] = automatic
         }
+        if let feedback = group.feedback { attributes["feedbackEnabled"] = feedback }
+
+        var changeOnly: [String: Any] = [:]
+        if let mac = group.iosBuildsOnMac {
+            changeOnly["iosBuildsAvailableForAppleSiliconMac"] = mac
+        }
+        if let vision = group.iosBuildsOnVision {
+            changeOnly["iosBuildsAvailableForAppleVision"] = vision
+        }
+
         if let existing {
-            try await api.apple("PATCH", "/v1/betaGroups/\(existing.id)", body: [
-                "data": ["type": "betaGroups", "id": existing.id, "attributes": attributes],
-            ])
+            try await patchGroup(id: existing.id,
+                                 attributes.merging(changeOnly) { current, _ in current })
             return existing.id
         }
+        if let isInternal = group.internalGroup { attributes["isInternalGroup"] = isInternal }
         let created = JSON(data: try await api.apple("POST", "/v1/betaGroups", body: [
             "data": [
                 "type": "betaGroups",
@@ -120,7 +155,14 @@ public struct AppleTestFlightClient: Sendable {
             ],
         ]).data)
         guard let id = created["data"]["id"].string else { throw ConnectionError.invalidResponse }
+        if !changeOnly.isEmpty { try await patchGroup(id: id, changeOnly) }
         return id
+    }
+
+    private func patchGroup(id: String, _ attributes: [String: Any]) async throws {
+        try await api.apple("PATCH", "/v1/betaGroups/\(id)", body: [
+            "data": ["type": "betaGroups", "id": id, "attributes": attributes],
+        ])
     }
 
     /// Invites the addresses that the group does not already hold.
@@ -360,7 +402,12 @@ public struct AppleTestFlightClient: Sendable {
         var group = BetaGroup(id: id, name: name)
         group.publicLink = attributes["publicLinkEnabled"].bool
         group.publicLinkLimit = attributes["publicLinkLimit"].int
+        group.publicLinkURL = attributes["publicLink"].string
         group.automaticBuilds = attributes["hasAccessToAllBuilds"].bool
+        group.internalGroup = attributes["isInternalGroup"].bool
+        group.feedback = attributes["feedbackEnabled"].bool
+        group.iosBuildsOnMac = attributes["iosBuildsAvailableForAppleSiliconMac"].bool
+        group.iosBuildsOnVision = attributes["iosBuildsAvailableForAppleVision"].bool
         return group
     }
 }

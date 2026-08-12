@@ -81,10 +81,16 @@ extension Runner {
         try await AppleTestFlightClient(api: api).submitForBetaReview(buildID: buildID)
     }
 
-    /// The build this run works on: the one it attached, or the one the store
-    /// already holds on the version.
+    /// The build this run works on: the one it uploaded, the newest processed
+    /// build of this version, or the one the App Store version holds.
+    ///
+    /// `buildIdForVersion` was missing, and TestFlight is where that hurt.
+    /// A build reaches Apple long before a version holds it, and a beta needs
+    /// no version at all, so a developer who uploaded and went straight to
+    /// TestFlight met "No build is attached" on a build Apple had processed
+    /// hours ago. `AppleApply` has read the three in this order all along.
     private var attachedBuildID: String? {
-        appleBuildID ?? actual.apple?.attachedBuildId
+        appleBuildID ?? actual.apple?.buildIdForVersion ?? actual.apple?.attachedBuildId
     }
 
     /// The group id, from this run or from the read. A group that neither one
