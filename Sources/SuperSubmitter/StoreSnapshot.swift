@@ -27,11 +27,47 @@ struct StoreSnapshot: Codable, Equatable {
     private(set) var screenshots: [Store: [String: [Manifest.DeviceClass: [URL]]]] = [:]
     /// The App Store previews. Google takes a YouTube URL on the listing.
     private(set) var previews: [String: [Manifest.DeviceClass: [URL]]] = [:]
+    /// locale -> the icon Google Play shows. Play keys every listing image by
+    /// language, so a developer who gave one language its own icon gets it.
+    ///
+    /// `StateReader` has always read this, and `merge(bucketed:)` has always
+    /// thrown it away: that merge keys media by device class and "icon" is not
+    /// one, so the `guard` dropped it. The bytes arrived and nothing kept them.
+    private(set) var googleIcons: [String: URL]?
+    /// The one icon the App Store shows. Apple extracts it from the binary, so
+    /// it belongs to the app and never to a language.
+    ///
+    /// It arrives later than everything else here. There is no icon to read
+    /// until a build carrying one reaches App Store Connect, which is why
+    /// `AppState.captureAppleIcon()` runs after a submission and not on a read.
+    private(set) var appleIcon: URL?
+    /// locale -> the Play feature graphic, the banner above a Play listing.
+    /// The App Store has no element like it.
+    private(set) var featureGraphics: [String: URL]?
     private(set) var readAt: Date?
 
+    /// The three above are optional, and the rest are not, for one reason:
+    /// `load` decodes the whole file with `try?`. A non-optional property added
+    /// today has no key in a file written yesterday, the decode throws on that
+    /// one missing key, and every listing the app had already read is lost.
+    /// Optional decodes as nil and the snapshot survives its own upgrade.
     var isEmpty: Bool {
         text.isEmpty && appleLive.isEmpty && screenshots.isEmpty && previews.isEmpty
+            && googleIcons == nil && appleIcon == nil && featureGraphics == nil
     }
+
+    /// The icon one store shows for this listing, if the app has seen it.
+    func icon(_ store: Store, locale: String) -> URL? {
+        switch store {
+        case .apple: appleIcon
+        case .google: googleIcons?[locale]
+        }
+    }
+
+    func featureGraphic(locale: String) -> URL? { featureGraphics?[locale] }
+
+    /// What Apple extracted from the submitted binary. See `appleIcon`.
+    mutating func setAppleIcon(_ url: URL) { appleIcon = url }
 
     /// Whether the snapshot kept the listing the customers are reading.
     ///
@@ -49,6 +85,23 @@ struct StoreSnapshot: Codable, Equatable {
     func liveOnAppStore(_ field: ListingTextField, locale: String) -> String? {
         guard let live = appleLive[locale]?[field], !live.isEmpty else { return nil }
         return live == text[.apple]?[locale]?[field] ? nil : live
+    }
+
+    /// What one store is showing customers for this field, right now.
+    ///
+    /// It is not `text(_:locale:)` narrowed to one store, and the difference is
+    /// the whole reason it exists. `text` holds the App Store *draft*, because
+    /// the draft is what a run writes and therefore what "Kept" has to mean on
+    /// an editing tab. A page a customer is looking at is the live version, so
+    /// Apple answers from `appleLive` here and from nothing else.
+    ///
+    /// Play has one listing and no draft beside it, so for Google the two
+    /// questions have one answer.
+    func live(_ field: ListingTextField, store: Store, locale: String) -> String {
+        switch store {
+        case .apple: appleLive[locale]?[field] ?? ""
+        case .google: text[.google]?[locale]?[field] ?? ""
+        }
     }
 
     /// The stores that hold something for this field, and what they hold.
@@ -144,6 +197,7 @@ struct StoreSnapshot: Codable, Equatable {
             for notes in google.tracks.values.map(\.releaseNotes) {
                 for (locale, text) in notes { set(.google, locale, [.googleWhatsNew: text]) }
             }
+            merge(art: google.imageURLs)
             merge(bucketed: google.imageURLs, store: .google)
         }
     }
@@ -216,6 +270,25 @@ struct StoreSnapshot: Codable, Equatable {
         var media = screenshots[store] ?? [:]
         merge(bucketed: bucketed, into: &media)
         if !media.isEmpty { screenshots[store] = media }
+    }
+
+    /// The two Play images that belong to no device class.
+    ///
+    /// They travel in `imageURLs` under the same "locale/bucket" key as the
+    /// screenshots, and `merge(bucketed:)` drops every bucket that is not a
+    /// device size. This runs first and takes the two it names, so that merge
+    /// can go on dropping the rest.
+    private mutating func merge(art bucketed: [String: [URL]]) {
+        for (key, urls) in bucketed {
+            let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let url = urls.first else { continue }
+            switch parts[1] {
+            case "icon": googleIcons = (googleIcons ?? [:]).merging([parts[0]: url]) { _, new in new }
+            case "featureGraphic":
+                featureGraphics = (featureGraphics ?? [:]).merging([parts[0]: url]) { _, new in new }
+            default: continue
+            }
+        }
     }
 
     /// The stores key their media "locale/bucket". The tabs group by device

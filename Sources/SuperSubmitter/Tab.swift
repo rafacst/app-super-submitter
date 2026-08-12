@@ -51,6 +51,11 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
 /// The tabs, in the order of the work. Spec section 16.3.
 enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case stores = 1
+    // Where picking an app lands. Every other tab answers "what am I sending";
+    // this one answers "what will they see", which is the question a developer
+    // opens an app to look at. It is first in the group for that reason, and
+    // the raw values below shift by one because nothing persists them.
+    case preview
     case build
     case details
     case media
@@ -87,6 +92,12 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         switch (self, mode) {
         case (.details, .managing): "Live listing"
         case (.media, .managing): "Live media"
+        // The same screen, drawn from two sources, and the source is the whole
+        // difference: the publisher sees the page their draft will make, the
+        // manager sees the page the store is serving now. One word each, or
+        // "Preview" would promise the manager a mockup of what they already
+        // shipped.
+        case (.preview, .managing): "Store page"
         default: title
         }
     }
@@ -95,6 +106,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .stores: "Stores"
+        case .preview: "Preview"
         case .build: "Build"
         case .details: "Details"
         case .media: "Media"
@@ -119,6 +131,10 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // imported app filled these tabs and the mode that imported it could
         // not open either one. Each writes on its own button here.
         case .details, .media: [.publishing, .managing]
+        // Both jobs, for the same reason Details and Media are both: a draft
+        // has a page it will make and a live app has a page it is making, and
+        // a developer wants to look at whichever one they have.
+        case .preview: [.publishing, .managing]
         // Marketing edits a live listing, so it belongs to the manager. The
         // publishing plan still writes it when the manifest holds it, so an
         // import loses nothing.
@@ -144,6 +160,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var symbol: String {
         switch self {
         case .stores: "storefront"
+        case .preview: "eye"
         case .build: "shippingbox"
         case .details: "list.bullet.rectangle"
         case .media: "photo.stack"
@@ -183,6 +200,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var summary: String {
         switch self {
         case .stores: "Connect the App Store and Google Play accounts"
+        case .preview: "See the app the way a customer sees it in the store"
         case .build: "Import or build the package, and set the release version"
         case .details: "Write the listing text, the keywords and the support links"
         case .media: "Add the screenshots, the icon and the promotional video"
@@ -219,8 +237,12 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     var zone: Zone {
         switch self {
-        case .stores, .account, .settings, .build, .details, .media, .money,
-             .marketing, .reviewInfo: .edits
+        // Preview writes nothing, and it is still an `edits` zone: the zone
+        // splits the sidebar's Publish group from its Send one, and the only
+        // wrong answer is the one that files a read-only screen under Send,
+        // beside the two buttons that talk to a live store.
+        case .stores, .account, .settings, .preview, .build, .details, .media,
+             .money, .marketing, .reviewInfo: .edits
         case .plan: .reads
         case .release, .liveApp: .releases
         }

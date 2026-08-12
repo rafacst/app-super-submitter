@@ -23,7 +23,7 @@ import Testing
 /// existed yet.
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
-        "Stores", "Build", "Details", "Media", "Monetization",
+        "Stores", "Preview", "Build", "Details", "Media", "Monetization",
         "Review info", "Summary", "Release", "Account", "Settings",
     ])
     #expect(Tab.plan.zone == .reads)
@@ -39,12 +39,14 @@ import Testing
 /// it belongs to. The switch above the column then shows one job's groups at a
 /// time: see `SidebarModeSwitchTests` for what that hides and what it may not.
 @Test func theSidebarListsEveryDestinationInItsSection() {
+    // Preview leads both groups. It is where picking an app lands, so it may
+    // not be somewhere the eye has to go looking for it.
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
-        == ["Build", "Details", "Media", "Monetization", "Review info"])
+        == ["Preview", "Build", "Details", "Media", "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
-        == ["Live listing", "Live media", "Marketing", "Live app"])
+        == ["Store page", "Live listing", "Live media", "Marketing", "Live app"])
 
     // Publish and Send are the manifest against the stores: everything that
     // only edits `store.yaml`, then the two screens that talk to a store.
@@ -103,12 +105,15 @@ import Testing
     let publishing = Set(Tab.tabs(in: .publishing))
     let managing = Set(Tab.tabs(in: .managing))
 
+    // Preview joins the shared three for the same reason Details and Media
+    // are shared: a draft has a page it will make and a live app has one it is
+    // making, and a developer wants to look at whichever one they have.
     #expect(publishing.intersection(managing)
-        == [.stores, .account, .settings, .details, .media])
+        == [.stores, .account, .settings, .preview, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
     #expect(Tab.tabs(in: .managing).map { $0.title(in: .managing) }
-        == ["Stores", "Live listing", "Live media", "Marketing", "Live app",
-            "Account", "Settings"])
+        == ["Stores", "Store page", "Live listing", "Live media", "Marketing",
+            "Live app", "Account", "Settings"])
     // Nothing that builds, plans, writes, or releases reaches a manager.
     #expect(managing.isDisjoint(with: [.build, .money, .reviewInfo, .plan, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.

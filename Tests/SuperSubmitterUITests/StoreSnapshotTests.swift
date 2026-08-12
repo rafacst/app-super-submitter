@@ -261,3 +261,131 @@ private func differentGoogleDescription() -> ImportedStoreListing {
     entry.wrappedValue = "fc9538f3-8694-455f-b34f-50a9053d4d4a0"
     #expect(value == "fc9538f3-8694-455f-b34f-50a9053d4d4a")
 }
+
+/// The page a customer is on is the live version, and never the draft beside
+/// it.
+///
+/// `text(_:locale:)` answers with the App Store *draft*, because the editing
+/// tabs grey a field against what the next run will write. A store page is the
+/// other question, and the two have different answers for most of an update's
+/// life: App Store Connect creates a draft with no words in it, and this app's
+/// own apply creates one the same way, so a live app is usually a full live
+/// version standing beside an empty shell. Reading the shell would draw an
+/// empty page for an app with customers on it.
+@Test func theLivePageIsTheLiveVersionAndNotTheDraftBesideIt() {
+    var apple = ActualState.Apple()
+    var draft = ActualState.Apple.VersionLocale()
+    draft.description = "The description the next run will write"
+    apple.versionLocales["en-US"] = draft
+    var live = ActualState.Apple.VersionLocale()
+    live.description = "The description the customers are reading"
+    live.whatsNew = "What the last release changed"
+    apple.liveVersionLocales["en-US"] = live
+
+    var google = ActualState.Google()
+    var listing = ActualState.Google.Listing()
+    listing.fullDescription = "The Play description"
+    google.listings["en-US"] = listing
+
+    var actual = ActualState()
+    actual.apple = apple
+    actual.google = google
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+
+    #expect(snapshot.live(.description, store: .apple, locale: "en-US")
+        == "The description the customers are reading")
+    #expect(snapshot.live(.whatsNew, store: .apple, locale: "en-US")
+        == "What the last release changed")
+    // The draft is still there, under the question the editing tabs ask.
+    #expect(snapshot.text(.description, locale: "en-US")
+        .first { $0.store == .apple }?.value == "The description the next run will write")
+
+    // Play has one listing and no draft beside it, so the two questions have
+    // one answer.
+    #expect(snapshot.live(.description, store: .google, locale: "en-US")
+        == "The Play description")
+
+    // A locale no store answered for is empty and never nil-crashes.
+    #expect(snapshot.live(.description, store: .apple, locale: "pt-BR").isEmpty)
+}
+
+/// The icon and the feature graphic arrived and were thrown away.
+///
+/// `StateReader` has always fetched both, and `merge(bucketed:)` keys media by
+/// device class: "icon" is not one, so the `guard` dropped it and the bytes
+/// went nowhere. Play draws both on its listing, so a page without them is not
+/// the page.
+@Test func thePlayIconAndBannerSurviveTheMerge() {
+    var google = ActualState.Google()
+    google.imageURLs = [
+        "en-US/icon": [URL(string: "https://example.com/icon.png")!],
+        "en-US/featureGraphic": [URL(string: "https://example.com/banner.png")!],
+        "pt-BR/icon": [URL(string: "https://example.com/icon-br.png")!],
+        "en-US/phoneScreenshots": [URL(string: "https://example.com/1.png")!],
+    ]
+    var actual = ActualState()
+    actual.google = google
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+
+    #expect(snapshot.icon(.google, locale: "en-US")?.lastPathComponent == "icon.png")
+    #expect(snapshot.icon(.google, locale: "pt-BR")?.lastPathComponent == "icon-br.png")
+    #expect(snapshot.featureGraphic(locale: "en-US")?.lastPathComponent == "banner.png")
+    // The screenshot still goes where screenshots go, and neither of the two
+    // above joined it: a banner in the carousel is a picture nobody uploaded.
+    #expect(snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first { $0.store == .google }?.urls.count == 1)
+
+    // Apple keeps no icon until a build carries one to App Store Connect, and
+    // it is keyed to the app rather than to a language.
+    #expect(snapshot.icon(.apple, locale: "en-US") == nil)
+    snapshot.setAppleIcon(URL(string: "https://example.com/apple.png")!)
+    #expect(snapshot.icon(.apple, locale: "en-US")?.lastPathComponent == "apple.png")
+    #expect(snapshot.icon(.apple, locale: "pt-BR")?.lastPathComponent == "apple.png")
+}
+
+/// A snapshot written before the icon fields existed still loads.
+///
+/// `load` decodes the whole file with `try?`. A non-optional property added to
+/// this struct has no key in a file written by an earlier build, the decode
+/// throws on that one missing key, and every listing the app had already read
+/// is silently thrown away: the editing tabs lose their grey, the store page
+/// goes blank, and nothing says why until the next read.
+@Test func aSnapshotFromBeforeTheIconsStillDecodes() throws {
+    var apple = ActualState.Apple()
+    var live = ActualState.Apple.VersionLocale()
+    live.description = "What the customers read"
+    apple.liveVersionLocales["en-US"] = live
+    var actual = ActualState()
+    actual.apple = apple
+    var written = StoreSnapshot()
+    written.merge(actual)
+    written.setAppleIcon(URL(string: "https://example.com/apple.png")!)
+
+    // The file an earlier build left on disk: this one, with the three keys
+    // that build had never heard of taken back out. Hand-writing the JSON
+    // would not do it, because a `[Store: …]` map encodes as an array of
+    // alternating keys and values and not as an object.
+    var fields = try #require(try JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(written)) as? [String: Any])
+    for key in ["googleIcons", "appleIcon", "featureGraphics"] {
+        fields.removeValue(forKey: key)
+    }
+    let old = try JSONSerialization.data(withJSONObject: fields)
+    let snapshot = try JSONDecoder().decode(StoreSnapshot.self, from: old)
+
+    #expect(snapshot.live(.description, store: .apple, locale: "en-US")
+        == "What the customers read")
+    #expect(snapshot.icon(.google, locale: "en-US") == nil)
+    #expect(snapshot.icon(.apple, locale: "en-US") == nil)
+    #expect(snapshot.featureGraphic(locale: "en-US") == nil)
+    #expect(!snapshot.isEmpty)
+
+    // And a file this build writes round-trips with the new fields in it.
+    var filled = snapshot
+    filled.setAppleIcon(URL(string: "https://example.com/apple.png")!)
+    let data = try JSONEncoder().encode(filled)
+    let back = try JSONDecoder().decode(StoreSnapshot.self, from: data)
+    #expect(back.icon(.apple, locale: "en-US")?.lastPathComponent == "apple.png")
+}
