@@ -35,6 +35,32 @@ public struct GradleVariant: Sendable, Equatable, Identifiable {
     public var label: String { "\(module.hasPrefix(":") ? String(module.dropFirst()) : module) · \(variant)" }
 }
 
+/// What the module's own files say the build will produce.
+///
+/// A hint and never the answer. Gradle is a program: a build script can read
+/// the version out of a properties file, a git tag, or a version catalog, and
+/// only the built `.aab` settles it. See `BundleInfo`, which is the answer.
+///
+/// It exists because the preflight had nothing at all to show. Four rows read
+/// "Not read" on every Android project, over values that sit as literals in
+/// `build.gradle` in almost every one of them, and the developer learnt the
+/// version the build would carry after the build.
+public struct AndroidProjectIdentity: Sendable, Equatable {
+    public var applicationID: String?
+    public var versionName: String?
+    public var versionCode: String?
+    /// The label the launcher shows, from `strings.xml`.
+    public var appName: String?
+
+    public init(applicationID: String? = nil, versionName: String? = nil,
+                versionCode: String? = nil, appName: String? = nil) {
+        self.applicationID = applicationID
+        self.versionName = versionName
+        self.versionCode = versionCode
+        self.appName = appName
+    }
+}
+
 /// What a built `.aab` actually holds. upload-spec 9.12.
 public struct BundleInfo: Sendable, Equatable {
     public var applicationID = ""
@@ -243,6 +269,97 @@ public struct AndroidBuildService: Sendable {
         // A project can list the same task twice across two Gradle sections.
         var seen: Set<String> = []
         return result.filter { seen.insert($0.id).inserted }
+    }
+
+    // MARK: - 9.6 What the module says it builds
+
+    /// Reads the module's build script and its strings, without running
+    /// anything.
+    ///
+    /// The alternative is a second Gradle invocation to print the evaluated
+    /// `android` extension, and that costs the developer a minute of daemon
+    /// time to fill four rows on a card. This reads two files.
+    ///
+    /// A value the script computes is simply absent. The row then says "Not
+    /// read", which is what every row said before this existed.
+    public static func identity(root: URL, module: String?) -> AndroidProjectIdentity {
+        let folder = moduleFolder(root: root, module: module)
+        var result = AndroidProjectIdentity()
+        for name in ["build.gradle.kts", "build.gradle"] {
+            guard let text = try? String(contentsOf: folder.appendingPathComponent(name),
+                                         encoding: .utf8) else { continue }
+            // `namespace` is the fallback and not the answer. Under AGP 8 a
+            // module that names no `applicationId` ships under its namespace,
+            // and a module that names one ships under that.
+            result.applicationID = value(of: "applicationId", in: text)
+                ?? value(of: "namespace", in: text)
+            result.versionName = value(of: "versionName", in: text)
+            result.versionCode = value(of: "versionCode", in: text)
+            break
+        }
+        let strings = folder.appendingPathComponent("src/main/res/values/strings.xml")
+        if let text = try? String(contentsOf: strings, encoding: .utf8) {
+            result.appName = appName(in: text)
+        }
+        return result
+    }
+
+    /// `:app` is the folder `app`, and `:feature:login` is `feature/login`.
+    /// No module named is the root itself, which is what a single-module build
+    /// with no `settings.gradle` include looks like.
+    static func moduleFolder(root: URL, module: String?) -> URL {
+        let parts = (module ?? "").split(separator: ":").map(String.init)
+        return parts.reduce(root) { $0.appendingPathComponent($1) }
+    }
+
+    /// One assignment, in either Gradle language.
+    ///
+    /// Kotlin writes `versionName = "1.0"` and Groovy writes `versionName
+    /// "1.0"`, so the `=` is optional. The key is anchored at both ends:
+    /// `versionNameSuffix = "-beta"` starts with `versionName` and is a
+    /// different setting.
+    ///
+    /// A commented line is not an assignment. A version left behind under `//`
+    /// is the one most likely to be read here, because that is where the last
+    /// one goes when a developer changes it.
+    static func value(of key: String, in text: String) -> String? {
+        for rawLine in text.split(separator: "\n") {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.hasPrefix("//"), !line.hasPrefix("*"), !line.hasPrefix("/*") else {
+                continue
+            }
+            guard line.hasPrefix(key) else { continue }
+            line = String(line.dropFirst(key.count))
+            // What follows the key decides whether it was the key. Anything
+            // that is a letter, a digit, or a dot belongs to a longer name.
+            guard let next = line.first, !next.isLetter, !next.isNumber, next != "." else {
+                continue
+            }
+            line = line.drop(while: { $0 == " " || $0 == "=" || $0 == "\t" })
+                .trimmingCharacters(in: .whitespaces)
+            if let quote = line.first, quote == "\"" || quote == "'" {
+                let rest = line.dropFirst()
+                guard let end = rest.firstIndex(of: quote) else { continue }
+                let value = String(rest[rest.startIndex..<end])
+                if !value.isEmpty { return value }
+                continue
+            }
+            // `versionCode 7`, which carries no quotes.
+            let digits = String(line.prefix(while: \.isNumber))
+            if !digits.isEmpty { return digits }
+        }
+        return nil
+    }
+
+    /// `<string name="app_name">Receitório</string>`, and nothing cleverer. A
+    /// label that points at another resource is not a name to show.
+    static func appName(in xml: String) -> String? {
+        guard let start = xml.range(of: "name=\"app_name\"") else { return nil }
+        guard let open = xml[start.upperBound...].firstIndex(of: ">") else { return nil }
+        let rest = xml[xml.index(after: open)...]
+        guard let close = rest.firstIndex(of: "<") else { return nil }
+        let name = rest[rest.startIndex..<close].trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty || name.hasPrefix("@") ? nil : name
     }
 
     // MARK: - 9.10 The bundle build

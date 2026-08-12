@@ -101,9 +101,17 @@ struct AppSummary: Identifiable {
     /// goes to one store now wears one logo.
     let apple: StoreHealth?
     let google: StoreHealth?
-    /// The App Store app id, which is the key the review-state sweep answers
-    /// under. Nil for an app that goes to Google alone.
-    var appleAppID: String?
+    /// The key every read answers this app under: its App Store id, its Play
+    /// package name, or the linked record for an app that has neither yet. See
+    /// `AppState.appKey(_:record:)`.
+    ///
+    /// It was the App Store id alone, and a Play app therefore asked every
+    /// per-app question under the empty string: one bucket, shared by every
+    /// app that goes to Google alone.
+    var key = ""
+    /// Whether a store has this app on sale, or has had it. The Manage side
+    /// lists these apps and no others. See `AppState.isAppLive(appKey:)`.
+    var isLive = false
 
     /// The row read aloud. A store the app does not go to is not named at
     /// all, the same as on the screen.

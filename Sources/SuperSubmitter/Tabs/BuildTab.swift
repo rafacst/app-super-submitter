@@ -183,14 +183,17 @@ struct BuildTab: View {
     /// is missing is a sentence with a button in it, under the row, where a
     /// call to action can say what it will do.
     private var appleIdentity: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // The store has fixed them. See `AppState.storeFixedTheIdentifiers`.
+        let fixed = state.storeFixedTheIdentifiers(.apple)
+        return VStack(alignment: .leading, spacing: 4) {
             StoreLabel(store: .apple, size: 11, weight: .medium, color: Theme.text2)
             Text("Bundle id · App id")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             HStack(spacing: 8) {
                 identityField(Binding(get: { state.appleBundleID },
                                       set: { state.appleBundleID = $0 }),
-                              placeholder: "Bundle id") { state.updateAppleAppFields() }
+                              placeholder: "Bundle id",
+                              locked: fixed) { state.updateAppleAppFields() }
                 // The picker stays. It is the right way in when it is
                 // available, because it fills both fields from apps that
                 // really exist. It is no longer the only way in.
@@ -198,7 +201,10 @@ struct BuildTab: View {
                 // One visible app never reaches here: the connect fills the
                 // field with it, because a menu of one asks the developer to
                 // confirm what the app has already read.
-                if state.remoteAppleApps.count > 1 {
+                //
+                // It goes with the boxes on a shipped app. Picking another app
+                // writes both of these, which is the change the store refuses.
+                if state.remoteAppleApps.count > 1, !fixed {
                     Menu {
                         ForEach(state.remoteAppleApps) { app in
                             Button("\(app.name) · \(app.identifier)") {
@@ -214,10 +220,13 @@ struct BuildTab: View {
                 identityField(Binding(get: { state.appleAppID },
                                       set: { state.appleAppID = $0 }),
                               placeholder: "App id",
-                              width: 120) { state.updateAppleAppFields() }
+                              width: 120,
+                              locked: fixed) { state.updateAppleAppFields() }
                 Spacer(minLength: 0)
             }
-            if state.appleBundleID.isEmpty, state.remoteAppleApps.isEmpty {
+            if fixed {
+                fixedIdentityNote("The App Store assigned these when the app shipped. Neither one changes now.")
+            } else if state.appleBundleID.isEmpty, state.remoteAppleApps.isEmpty {
                 missingIdentityNote("Connect App Store Connect to choose the app, or type it.")
             }
         }
@@ -225,7 +234,8 @@ struct BuildTab: View {
     }
 
     private var googleIdentity: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let fixed = state.storeFixedTheIdentifiers(.google)
+        return VStack(alignment: .leading, spacing: 4) {
             StoreLabel(store: .google, size: 11, weight: .medium, color: Theme.text2)
             Text("Package name")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
@@ -236,17 +246,15 @@ struct BuildTab: View {
             // developer had to remember. The Play Developer Reporting API
             // answers it for the same credential.
             HStack(spacing: 8) {
-                TextField("Package name", text: Binding(
-                    get: { state.googlePackageName },
-                    set: { state.googlePackageName = $0 }))
-                    .textFieldStyle(.roundedBorder)
-                    .font(Theme.mono(12))
-                    .frame(maxWidth: 340)
-                    .onSubmit { state.updateGoogleAppFields() }
-                    // The manifest takes it when the field is left, so a value
-                    // typed and not confirmed with Return is still kept.
-                    .onChange(of: state.googlePackageName) { state.updateGoogleAppFields() }
-                if state.remoteGoogleApps.count > 1 {
+                // The same box the App Store column draws, and no placeholder.
+                // The label above it already says "Package name", and the
+                // field repeated the word directly under it: one column of two
+                // said its one field's name twice, and the other did not.
+                identityField(Binding(get: { state.googlePackageName },
+                                      set: { state.googlePackageName = $0 }),
+                              placeholder: "",
+                              locked: fixed) { state.updateGoogleAppFields() }
+                if state.remoteGoogleApps.count > 1, !fixed {
                     Menu {
                         ForEach(state.remoteGoogleApps) { app in
                             Button("\(app.name) · \(app.identifier)") {
@@ -261,7 +269,9 @@ struct BuildTab: View {
                 }
                 Spacer(minLength: 0)
             }
-            if state.googlePackageName.isEmpty, state.remoteGoogleApps.isEmpty {
+            if fixed {
+                fixedIdentityNote("Google Play holds this package name. It cannot change once a build has landed.")
+            } else if state.googlePackageName.isEmpty, state.remoteGoogleApps.isEmpty {
                 missingIdentityNote("Connect Google Play to choose the app, or type it.")
             }
         }
@@ -282,13 +292,19 @@ struct BuildTab: View {
     /// So it is typed, and the paragraph above it still says where the value
     /// comes from. The invitation is answered by saying what is true, not by
     /// taking the keyboard away.
+    /// - Parameter locked: the store has fixed this identifier. The box keeps
+    ///   its shape and stops taking characters, because the value is still the
+    ///   answer to "which app is this?" and hiding it would lose that.
     private func identityField(_ text: Binding<String>, placeholder: String,
                                width: CGFloat? = nil,
+                               locked: Bool = false,
                                commit: @escaping () -> Void) -> some View {
         TextField(placeholder, text: text)
             .textFieldStyle(.plain)
             .font(Theme.mono(11.5))
             .lineLimit(1)
+            .disabled(locked)
+            .foregroundStyle(locked ? Theme.text2 : Theme.text)
             .padding(.horizontal, 9).padding(.vertical, 6)
             .frame(width: width, alignment: .leading)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
@@ -307,24 +323,89 @@ struct BuildTab: View {
         .padding(.top, 2)
     }
 
+    /// Why a box that holds a value takes no characters. Without it the row is
+    /// a field that ignores the keyboard and says nothing about why.
+    private func fixedIdentityNote(_ text: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "lock.fill").font(Theme.font(size: 9))
+            Text(text).font(Theme.font(size: 11))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Theme.text3)
+        .padding(.top, 2)
+    }
+
+    /// The number this submission carries, per store.
+    ///
+    /// One field for both was the whole of this row, and the two stores do not
+    /// number together: an app that shipped on the App Store first is on 1.4.1
+    /// there and on 1.0.0 in Play, and the one field refused the Android
+    /// upload against a number that belongs to Apple. A release that really is
+    /// one release across both stores is a tick away, and it is the shape
+    /// every manifest written before this already had.
+    @ViewBuilder
     private var versionRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("Release version").font(Theme.font(size: 11.5, weight: .medium))
-            TextField("1.0", text: state.releaseVersionBinding)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 96)
-                .monospacedDigit()
-            if let live = state.liveAppleVersion {
-                Text(verbatim: "\(live) is live on the App Store")
-                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    .monospacedDigit()
+        @Bindable var state = state
+        if state.showsVersionPerStore, !state.sharesOneVersion {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Store.allCases.filter(state.stores.contains)) { store in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        StoreLabel(store: store, size: 11.5, weight: .medium)
+                            .frame(width: 108, alignment: .leading)
+                        versionField(state.releaseVersionBinding(for: store))
+                        if store == .apple, let live = state.liveAppleVersion {
+                            liveVersionNote(live)
+                        }
+                        Spacer(minLength: 8)
+                        if store == .apple, let next = state.nextAppleVersion,
+                           next != state.manifest.versionName(for: .apple) {
+                            QuietButton(title: "Use \(next)") {
+                                state.releaseVersionBinding(for: .apple).wrappedValue = next
+                            }
+                        }
+                    }
+                }
+                sameVersionToggle
             }
-            Spacer(minLength: 8)
-            if let next = state.nextAppleVersion,
-               next != state.manifest.release?.versionName {
-                QuietButton(title: "Use \(next)") { state.useReleaseVersion(next) }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("Release version").font(Theme.font(size: 11.5, weight: .medium))
+                    versionField(state.releaseVersionBinding)
+                    if let live = state.liveAppleVersion, state.stores.contains(.apple) {
+                        liveVersionNote(live)
+                    }
+                    Spacer(minLength: 8)
+                    if let next = state.nextAppleVersion,
+                       next != state.manifest.release?.versionName {
+                        QuietButton(title: "Use \(next)") { state.useReleaseVersion(next) }
+                    }
+                }
+                if state.showsVersionPerStore { sameVersionToggle }
             }
         }
+    }
+
+    private var sameVersionToggle: some View {
+        @Bindable var state = state
+        return Toggle("Use the same version on both stores",
+                      isOn: $state.sharesOneVersion)
+            .toggleStyle(.checkbox)
+            .font(Theme.font(size: 11.5))
+            .foregroundStyle(Theme.text2)
+    }
+
+    private func versionField(_ text: Binding<String>) -> some View {
+        TextField("1.0", text: text)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 96)
+            .monospacedDigit()
+    }
+
+    private func liveVersionNote(_ live: String) -> some View {
+        Text(verbatim: "\(live) is live on the App Store")
+            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+            .monospacedDigit()
     }
 
     private var importSection: some View {
@@ -736,16 +817,32 @@ struct AppleStanding {
 
     /// One bare `AppVersionState`. The sidebar caches one per linked app, and
     /// the chip beside the app name is what it asks this question for.
+    ///
+    /// Nil is nobody having asked, and the empty string is a store that
+    /// answered and holds no version. They are two different things to a
+    /// developer and they were one word.
     init(state: String?) {
-        (label, tint, fill) = Self.words(for: state,
-                                         hasVersion: !(state ?? "").isEmpty)
+        (label, tint, fill) = Self.words(for: state)
         active = state == "IN_REVIEW"
     }
 
-    private static func words(for state: String?, hasVersion: Bool)
-        -> (String, Color, Color) {
+    /// The one fact both stores answer, for an app with no App Store version
+    /// state to collapse: Google Play publishes no review state at all, and
+    /// every app wears this between being linked and its first read answering.
+    ///
+    /// Nil is nobody having asked. See `AppState.appLiveStates`.
+    init(shipped: Bool?) {
+        self.init(state: shipped.map { $0 ? "READY_FOR_SALE" : "" })
+    }
+
+    private static func words(for state: String?) -> (String, Color, Color) {
         switch state {
-        case _ where !hasVersion, nil, "":
+        case nil:
+            // Grey, and the same grey as an app with nothing on the store. It
+            // is the tier this app paints "there is nothing here to act on",
+            // and an unread app is exactly that until a read says otherwise.
+            ("Unknown", Theme.text3, Theme.sunken)
+        case "":
             ("Not on the store", Theme.text3, Theme.sunken)
         case "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION":
             ("Live", Theme.green, Theme.greenBg)

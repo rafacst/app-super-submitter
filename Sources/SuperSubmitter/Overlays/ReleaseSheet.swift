@@ -105,7 +105,7 @@ struct ReleaseSheet: View {
     }
 
     private var track: String { state.manifest.googlePrimaryTrack }
-    private var version: String { state.manifest.release?.versionName ?? "no version" }
+    private var version: String { state.manifest.displayVersionName ?? "no version" }
 
     private var recovery: String {
         if isApple {

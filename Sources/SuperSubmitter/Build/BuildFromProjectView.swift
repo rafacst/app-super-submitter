@@ -52,6 +52,7 @@ struct BuildFromProjectView: View {
             flow.resumeUnfinishedRuns()
         }
         .sheet(isPresented: Bindable(flow).showBuildConfirmation) { buildConfirmation }
+        .sheet(isPresented: Bindable(flow).showBuildBothConfirmation) { buildBothConfirmation }
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
         .confirmationDialog("Delete the built artifact?", isPresented: $deleting,
                             titleVisibility: .visible) {
@@ -324,6 +325,14 @@ struct BuildFromProjectView: View {
                 // is free, so this one wears no lock however the account
                 // stands.
                 if flow.state == .readyToBuild || flow.state == .failed {
+                    // One press for an app that goes to both stores. It builds
+                    // the App Bundle and then the archive: see
+                    // `BuildFlow.buildBothStores` for why that order.
+                    if flow.canBuildBothStores {
+                        QuietButton(title: "Build Both Stores") {
+                            flow.showBuildBothConfirmation = true
+                        }
+                    }
                     ActionButton(title: flow.project?.platform == .android
                                  ? "Build App Bundle" : "Build Archive",
                                  enabled: flow.canBuild) {
@@ -389,11 +398,21 @@ struct BuildFromProjectView: View {
                     // already caught after the build, where it blocks the
                     // upload and costs the whole build to find out.
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("store.yaml names release version \(wanted) and this project builds \(flow.snapshot.marketingVersion ?? "another one"). The upload is refused while they disagree.")
+                        Text("store.yaml names \(flow.run.platform.store.storeName) version \(wanted) and this project builds \(flow.snapshot.marketingVersion ?? "another one"). The upload is refused while they disagree.")
                             .font(Theme.font(size: 12))
                             .fixedSize(horizontal: false, vertical: true)
-                        QuietButton(title: "Build version \(wanted) instead") {
-                            flow.useManifestVersion()
+                        // Only where the build takes the number from the
+                        // command line. Gradle does not, so on Android the row
+                        // says the two numbers and the developer settles it on
+                        // the tab above or in the project.
+                        if flow.canBuildTheManifestVersion {
+                            QuietButton(title: "Build version \(wanted) instead") {
+                                flow.useManifestVersion()
+                            }
+                        } else {
+                            Text("Change the Google Play version above, or the version in the project.")
+                                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     Spacer(minLength: 0)
@@ -703,6 +722,27 @@ struct BuildFromProjectView: View {
             destructive: false) {
             flow.startBuild()
         }
+    }
+
+    /// Two projects, so the question names both of them. Building runs the
+    /// scripts of each, and one press may not consent to a project the
+    /// developer never saw named.
+    private var buildBothConfirmation: some View {
+        ConfirmationSheet(
+            title: "Build both stores?",
+            body: "Build the App Bundle from \(folderName(.google)) and then the archive from \(folderName(.apple)). This can run scripts and plug-ins supplied by either project.",
+            rows: [("Order", "Google Play first, then the App Store"),
+                   ("Google Play", flow.savedProject(for: .google)?.containerPath ?? "no project"),
+                   ("App Store", flow.savedProject(for: .apple)?.containerPath ?? "no project")],
+            note: "Neither artifact is sent. The App Bundle is written into store.yaml and the archive waits on this tab, each with its own upload confirmation.",
+            confirm: "Build Both",
+            destructive: false) {
+            flow.buildBothStores()
+        }
+    }
+
+    private func folderName(_ store: Store) -> String {
+        flow.savedProject(for: store)?.rootURL.lastPathComponent ?? "its folder"
     }
 
     /// The note must state the two things that change what happens next, and

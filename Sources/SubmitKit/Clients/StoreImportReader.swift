@@ -359,16 +359,23 @@ public struct StoreImportReader: Sendable {
         }
     }
 
-    /// Where one app's newest unreleased version stands, and nothing else.
+    /// Where one app's newest unreleased version stands, and whether the App
+    /// Store has ever had the app on sale.
     ///
     /// One request. The full state read answers a question this does not ask,
     /// and the caller runs this once per linked app: six apps through the plan
     /// read would be sixty requests to learn six words.
     ///
-    /// Nil when the read fails or the app has no version Apple could be
-    /// holding. A failed read is not news about the store, so the caller keeps
-    /// whatever it already had.
-    public func appleVersionState(appID: String) async -> String? {
+    /// `state` and `shipped` are two different questions about the same list,
+    /// and one version cannot answer both. A live app whose next version is a
+    /// draft reports `PREPARE_FOR_SUBMISSION`, which is the right answer for
+    /// "is this app frozen?" and reads as "never shipped" to anything that asks
+    /// the other question. The list holds both answers and this used to throw
+    /// the second one away.
+    ///
+    /// Nil when the read fails. A failed read is not news about the store, so
+    /// the caller keeps whatever it already had.
+    public func appleVersionState(appID: String) async -> (state: String, shipped: Bool)? {
         guard let response = try? await api.apple(
             "GET", "/v1/apps/\(appID)/appStoreVersions",
             query: [URLQueryItem(name: "limit", value: "200")]) else { return nil }
@@ -377,15 +384,52 @@ public struct StoreImportReader: Sendable {
             version["attributes"]["appVersionState"].string
                 ?? version["attributes"]["appStoreState"].string ?? ""
         }
+        // Any version of any platform. A Mac app that has shipped is a shipped
+        // app while its iOS train is still a draft.
+        let shipped = versions.contains { AppleVersionState.shipped.contains(state($0)) }
         // The one Apple could be holding wins over the one on sale, because
         // this exists to answer "is this app frozen?".
         if let held = versions.first(where: { AppleVersionState.withApple.contains(state($0)) }) {
-            return state(held)
+            return (state(held), shipped)
         }
-        return versions
+        let newest = versions
             .max { Validator.isVersion($1["attributes"]["versionString"].string ?? "",
                                         above: $0["attributes"]["versionString"].string ?? "") }
-            .map(state)
+        return (newest.map(state) ?? "", shipped)
+    }
+
+    /// Whether Google Play has this app on the production track.
+    ///
+    /// Three requests, because Play publishes no cheaper way to ask. The track
+    /// state lives at `edits/{editId}/tracks` and an edit id comes from
+    /// `POST /edits`, so the answer costs an edit opened, a list read, and the
+    /// edit thrown away. Nothing is ever committed: an edit that is deleted
+    /// changes nothing about the app.
+    ///
+    /// The production track and not the primary one. A build on an internal or
+    /// a closed track is not an app the public can install.
+    ///
+    /// The status is unwrapped and not compared through the optional. A missing
+    /// status is a read that did not answer, and `nil != "draft"` is true, so
+    /// comparing it directly would call an unread track published.
+    ///
+    /// Nil when the read fails, which is the same answer as "nobody asked":
+    /// a service account without the Play permission, an expired token, or a
+    /// package this credential cannot see.
+    public func googleProductionShipped(packageName: String) async -> Bool? {
+        let base = "/androidpublisher/v3/applications/\(StateReader.escape(packageName))"
+        guard let created = try? await api.google("POST", "\(base)/edits", body: [:]),
+              let editID = JSON(data: created.data)["id"].string else { return nil }
+        let editBase = "\(base)/edits/\(editID)"
+        let tracks = try? await api.google("GET", "\(editBase)/tracks")
+        // A read never leaves an edit behind. Spec section 7.2.
+        _ = try? await api.google("DELETE", editBase)
+        guard let tracks else { return nil }
+        guard let production = JSON(data: tracks.data)["tracks"].array
+            .first(where: { $0["track"].string == "production" }),
+              let release = production["releases"].array.first,
+              let status = release["status"].string else { return false }
+        return !release["versionCodes"].array.isEmpty && status != "draft"
     }
 
     /// One named version, exactly as Apple holds it.

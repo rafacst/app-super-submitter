@@ -22,7 +22,7 @@ public struct StateReader: Sendable {
                 state.apple = try await readApple(
                     appID: apple.appId,
                     basePrice: manifest.pricing?.base,
-                    versionName: manifest.release?.versionName,
+                    versionName: manifest.versionName(for: .apple),
                     platform: apple.platforms.first?.rawValue,
                     purchaseIds: (manifest.purchases ?? []).map(\.id),
                     subscriptionIds: (manifest.subscriptions ?? [])

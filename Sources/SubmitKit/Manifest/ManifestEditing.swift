@@ -434,10 +434,19 @@ public extension Manifest {
         case .aab: build.android = path
         }
         release.build = build
-        if release.versionName?.isEmpty != false {
-            release.versionName = package.versionName
-        }
         self.release = release
+        // The store this package goes to, and not both of them. A dropped
+        // `.aab` used to name the version for the App Store as well, and an
+        // Android project that has never left 1.0.0 then renumbered the iOS
+        // release it knows nothing about.
+        //
+        // Only into the silence. A version already on screen, shared or the
+        // store's own, is a decision that a dropped file may not undo.
+        let store: Store = package.kind == .aab ? .google : .apple
+        if let version = package.versionName, !version.isEmpty,
+           versionName(for: store) == nil {
+            setReleaseVersionName(version, for: store)
+        }
 
         switch package.kind {
         case .ipa, .pkg:
@@ -471,14 +480,58 @@ public extension Manifest {
         }
     }
 
+    /// The number both stores get. It clears the two overrides with it: a
+    /// shared version that leaves a store's own number behind it is a shared
+    /// version that one store ignores.
     mutating func setReleaseVersionName(_ value: String) {
         var release = self.release ?? Release()
         release.versionName = value
+        release.apple?.versionName = nil
+        release.google?.versionName = nil
+        self.release = release
+    }
+
+    /// The number one store gets, leaving the other where it is.
+    ///
+    /// The shared key goes when a store takes its own number, because a
+    /// manifest holding all three says one thing twice and the reader has to
+    /// guess which one the developer meant. The other store keeps what it had:
+    /// its own number, or the shared one it is about to lose.
+    mutating func setReleaseVersionName(_ value: String, for store: Store) {
+        var release = self.release ?? Release()
+        let other: Store = store == .apple ? .google : .apple
+        let keep = versionName(for: other)
+        switch store {
+        case .apple:
+            var apple = release.apple ?? Release.AppleRelease()
+            apple.versionName = value
+            release.apple = apple
+            if let keep, !keep.isEmpty {
+                var google = release.google ?? Release.GoogleRelease()
+                google.versionName = keep
+                release.google = google
+            }
+        case .google:
+            var google = release.google ?? Release.GoogleRelease()
+            google.versionName = value
+            release.google = google
+            if let keep, !keep.isEmpty {
+                var apple = release.apple ?? Release.AppleRelease()
+                apple.versionName = keep
+                release.apple = apple
+            }
+        }
+        release.versionName = nil
         self.release = release
     }
 
     mutating func mergeAppleImport(_ imported: ImportedStoreListing) {
-        if let versionName = imported.versionName { setReleaseVersionName(versionName) }
+        // The App Store's own number. An import of one store may not renumber
+        // the other, which is what a shared write did: importing the iOS app
+        // at 1.4.1 moved the Android release to 1.4.1 too.
+        if let versionName = imported.versionName, !versionName.isEmpty {
+            setReleaseVersionName(versionName, for: .apple)
+        }
         mergeImportedReview(imported.review)
         mergeImportedCatalog(imported)
         if release?.apple == nil,
@@ -512,8 +565,9 @@ public extension Manifest {
     }
 
     mutating func mergeGoogleImport(_ imported: ImportedStoreListing) {
-        if release?.versionName == nil, let versionName = imported.versionName {
-            setReleaseVersionName(versionName)
+        if versionName(for: .google) == nil, let versionName = imported.versionName,
+           !versionName.isEmpty {
+            setReleaseVersionName(versionName, for: .google)
         }
         mergeImportedReview(imported.review)
         mergeImportedCatalog(imported)

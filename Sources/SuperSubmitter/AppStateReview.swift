@@ -57,14 +57,122 @@ extension AppState {
     /// the Build tab collapses, so one app cannot be "Approved" in the column
     /// and "Live" on the tab.
     ///
-    /// Nil only where no read has answered for this app. An app nobody asked is
-    /// in no state, and a chip on it would be a claim about a store nobody
-    /// read. A state that was read is always worth a word, including
-    /// `PREPARE_FOR_SUBMISSION`: "this one is yours to write" is the answer for
-    /// most of the apps in the list on most days.
-    func appReviewMark(appKey: String) -> AppleStanding? {
-        guard let state = appReviewStates[appKey], !state.isEmpty else { return nil }
+    /// Two sources, in this order. An App Store version state is the fuller
+    /// answer and wins wherever there is one. Everything else falls back on the
+    /// one fact both stores answer, which is what a Google Play app has: Play
+    /// publishes no review state at all, so a Play app used to wear nothing
+    /// whatever anybody had read about it.
+    ///
+    /// A word for every row, including "Unknown". An app nobody has asked about
+    /// is in no state this app may claim, and a blank beside a name is not that
+    /// claim being withheld: it reads as an app with nothing to say. "Unknown"
+    /// says which of the two it is, and it is the state every app wears between
+    /// being linked and its first read answering.
+    func appMark(appKey: String) -> AppleStanding {
+        guard let state = appReviewStates[appKey], !state.isEmpty else {
+            return AppleStanding(shipped: appLiveStates[appKey])
+        }
         return AppleStanding(state: state)
+    }
+
+    /// Whether a store has this app on sale, or has had it.
+    ///
+    /// The Manage side is the app that is already live, so this is what decides
+    /// which apps that side lists at all. A draft belongs to Publishing alone:
+    /// there are no customers to manage, no listing anybody is reading, and no
+    /// crash rate to watch.
+    ///
+    /// An app nobody has read is not live, because it is not known to be. The
+    /// answer arrives when the app is linked, which is the one moment that
+    /// names a single app and can therefore ask Google Play as well: see
+    /// `readAppLiveness(for:)`.
+    func isAppLive(appKey: String) -> Bool { appLiveStates[appKey] == true }
+
+    /// Remembers what a store answered about this app.
+    ///
+    /// A yes is never taken back. An app pulled from sale was still published,
+    /// its listing is still the one customers last read, and the developer who
+    /// pulled it is exactly the person who has managing left to do. A no
+    /// therefore writes only where nothing was known, which is what turns
+    /// "Unknown" into an answer without ever unpublishing an app on screen.
+    func rememberAppLiveness(_ key: String, live: Bool) {
+        guard !key.isEmpty, appLiveStates[key] != live else { return }
+        // A no writes only into the silence.
+        guard live || appLiveStates[key] == nil else { return }
+        appLiveStates[key] = live
+        defaults.set(appLiveStates, forKey: liveAppsKey)
+    }
+
+    /// The open app's own answer, kept for the sidebar to read about it later.
+    ///
+    /// `isUpdatingLiveApp` is the question and it asks the current read, which
+    /// covers both stores and is gone the moment another app opens.
+    ///
+    /// A yes only. False here is "this read found nothing", and the read may be
+    /// the empty one an app carries before anything has been fetched, which is
+    /// not a store saying no.
+    func rememberOpenAppLiveState() {
+        guard isUpdatingLiveApp else { return }
+        rememberAppLiveness(currentAppKey, live: true)
+    }
+
+    /// Asks both stores whether they have ever had this one app, once.
+    ///
+    /// It runs when the app is linked. That is the only moment in this app that
+    /// names one app rather than all of them, and it is what makes the Google
+    /// Play half affordable: Play answers this per package and only inside an
+    /// edit, so one app costs an edit opened, a track list read, and the edit
+    /// thrown away, while the same question over every linked app at launch
+    /// would open and abandon one edit per app before the window was usable.
+    ///
+    /// Nothing is asked twice. The answer is a fact that stands and it is kept
+    /// in the defaults, so this returns at once for every app already answered
+    /// for, and a store that could not be reached leaves the app unknown and
+    /// asks again next time.
+    ///
+    /// An app whose manifest names no store id needs no request to answer for:
+    /// there is no record for a store to hold.
+    func readAppLiveness(for record: LinkedAppRecord) async {
+        let url = URL(fileURLWithPath: record.manifestPath)
+        let loaded = try? ManifestFile.load(from: url)
+        let key = appKey(loaded, record: record)
+        guard appLiveStates[key] == nil else { return }
+
+        let appID = loaded?.apps.apple?.appId ?? ""
+        let package = loaded?.apps.google?.packageName ?? ""
+        guard !appID.isEmpty || !package.isEmpty else {
+            return rememberAppLiveness(key, live: false)
+        }
+
+        let reader = StoreImportReader(credentials: credentials)
+        var answered = false
+        var shipped = false
+        if !appID.isEmpty, !applePrivateKeyPEM.isEmpty,
+           let apple = await reader.appleVersionState(appID: appID) {
+            // The same read the sweep makes, so the chip gets the fuller word
+            // as well as the fact underneath it.
+            if !apple.state.isEmpty { appReviewStates[appID] = apple.state }
+            answered = true
+            shipped = apple.shipped
+        }
+        // Only when the App Store has not already said yes. One store is
+        // enough, and the Play half is the expensive one.
+        if !shipped, !package.isEmpty, hasGoogleCredential,
+           let play = await reader.googleProductionShipped(packageName: package) {
+            answered = true
+            shipped = play
+        }
+        guard answered else { return }
+        rememberAppLiveness(key, live: shipped)
+    }
+
+    /// Whether Google Play would take a signed request at all.
+    ///
+    /// The two routes are one answer here. A service account and an OAuth token
+    /// both sign the same reads, and `credentials` carries whichever the
+    /// developer picked.
+    private var hasGoogleCredential: Bool {
+        credentials.google != nil || credentials.googleOAuth != nil
     }
 
     /// The open app is read twice, by the plan read and by the sweep below,
@@ -86,9 +194,14 @@ extension AppState {
     /// full plan read is far heavier and answers a question this does not ask.
     /// An app that cannot be read keeps whatever it had, because a failed read
     /// is not news about the store.
+    ///
+    /// The same list says whether the app has ever been on sale, which is what
+    /// the Manage side lists its apps by. That answer costs no request of its
+    /// own and it is the only one that reaches an app nobody has opened.
     func refreshReviewStates() async {
         guard !applePrivateKeyPEM.isEmpty else { return }
         rememberOpenAppReviewState()
+        rememberOpenAppLiveState()
         let reader = StoreImportReader(credentials: credentials)
         for record in linkedApps {
             let url = URL(fileURLWithPath: record.manifestPath)
@@ -96,8 +209,19 @@ extension AppState {
                   let appID = loaded.apps.apple?.appId, !appID.isEmpty,
                   appID != currentAppKey || actualState.apple?.versionState == nil
             else { continue }
-            if let state = await reader.appleVersionState(appID: appID) {
-                appReviewStates[appID] = state
+            guard let answer = await reader.appleVersionState(appID: appID) else { continue }
+            // An app with no version at all answers with no word. Writing the
+            // empty string over what a fuller read left would turn a state the
+            // sidebar draws into a row with nothing beside it.
+            if !answer.state.isEmpty { appReviewStates[appID] = answer.state }
+            // A no as well as a yes, so an app the App Store answers for on its
+            // own is never left unknown. An app that also goes to Google Play
+            // is not one of those: Apple saying no leaves the question open,
+            // and writing that no down would close it against a store nobody
+            // asked. Linking is where Play is asked. See `readAppLiveness`.
+            let package = loaded.apps.google?.packageName ?? ""
+            if answer.shipped || package.isEmpty {
+                rememberAppLiveness(appID, live: answer.shipped)
             }
         }
     }

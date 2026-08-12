@@ -40,7 +40,10 @@ import Testing
     manifest.apply(package: package, path: "build/App.ipa")
 
     #expect(manifest.release?.build?.ios == "build/App.ipa")
-    #expect(manifest.release?.versionName == "3.2.0")
+    // The store this package goes to, and not both of them. A dropped .aab
+    // used to renumber the iOS release it knows nothing about.
+    #expect(manifest.versionName(for: .apple) == "3.2.0")
+    #expect(manifest.versionName(for: .google) == nil)
     #expect(manifest.apps.apple?.bundleId == "com.example.app")
     #expect(manifest.listing?.locales["en-US"]?.name == "Example")
     #expect(manifest.listing?.locales["pt-BR"] != nil)
@@ -71,7 +74,9 @@ import Testing
     #expect(locale?.keywords.value == "apple,only")
     #expect(locale?.google?.shortDescription.value == "A longer Google description")
     #expect(locale?.google?.video.value == "https://youtube.com/watch?v=test")
-    #expect(manifest.release?.versionName == "3.2.0")
+    // The App Store's own number. An import of one store may not renumber
+    // the other.
+    #expect(manifest.versionName(for: .apple) == "3.2.0")
 }
 
 @Test func importedListingCarriesPrivacyFieldsAndDownloadableMedia() {
@@ -260,4 +265,62 @@ import Testing
     #expect(offering.name == nil)
     #expect(offering.products?.isEmpty == true)
     #expect(offering.isCurrent == true)
+}
+
+// MARK: - One version per store
+
+/// The two stores do not number together. An app that shipped on the App Store
+/// first is on 1.4.1 there and on 1.0.0 in Play, and one field for both of them
+/// refused the Android upload against a number that belongs to Apple.
+@Test func eachStoreCarriesItsOwnVersionAndFallsBackToTheSharedOne() {
+    var manifest = Manifest()
+
+    // A manifest written before the stores could differ: one number, both
+    // stores, and it keeps meaning that.
+    manifest.setReleaseVersionName("1.4.1")
+    #expect(manifest.sharesOneVersion)
+    #expect(manifest.versionName(for: .apple) == "1.4.1")
+    #expect(manifest.versionName(for: .google) == "1.4.1")
+
+    manifest.setReleaseVersionName("1.0.0", for: .google)
+    #expect(!manifest.sharesOneVersion)
+    #expect(manifest.versionName(for: .google) == "1.0.0")
+    // The other store keeps the number it had, which was the shared one it is
+    // about to lose.
+    #expect(manifest.versionName(for: .apple) == "1.4.1")
+    #expect(manifest.release?.versionName == nil, "One thing is not said twice.")
+
+    // And back. A shared number takes the two overrides with it.
+    manifest.setReleaseVersionName("2.0")
+    #expect(manifest.sharesOneVersion)
+    #expect(manifest.versionName(for: .apple) == "2.0")
+    #expect(manifest.versionName(for: .google) == "2.0")
+}
+
+/// A new app shares nothing, so each store answers for itself. The one place
+/// with room for a single number takes the App Store's.
+@Test func aNewAppNumbersEachStoreOnItsOwn() {
+    var manifest = Manifest()
+    #expect(!manifest.sharesOneVersion)
+    #expect(manifest.displayVersionName == nil)
+
+    manifest.setReleaseVersionName("3.0", for: .apple)
+    #expect(!manifest.sharesOneVersion)
+    #expect(manifest.versionName(for: .apple) == "3.0")
+    #expect(manifest.versionName(for: .google) == nil)
+    #expect(manifest.displayVersionName == "3.0")
+}
+
+/// An App Bundle names the Play version and nothing else.
+@Test func anAppBundleNamesTheVersionOfItsOwnStore() {
+    var manifest = Manifest()
+    manifest.setReleaseVersionName("1.4.1", for: .apple)
+    var package = AppPackage(kind: .aab, url: URL(fileURLWithPath: "/repo/app-release.aab"))
+    package.identifier = "com.example.app"
+    package.versionName = "1.0.0"
+
+    manifest.apply(package: package, path: "app-release.aab")
+
+    #expect(manifest.versionName(for: .google) == "1.0.0")
+    #expect(manifest.versionName(for: .apple) == "1.4.1")
 }

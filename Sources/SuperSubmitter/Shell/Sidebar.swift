@@ -253,20 +253,36 @@ private struct AppsSection: View {
     @Environment(AppState.self) private var state
     @Binding var isOpen: Bool
 
+    /// The apps of the job the developer is doing, each with its own place in
+    /// the list.
+    ///
+    /// Managing runs the app that is already live, so a draft has nothing for
+    /// it: no customers, no listing anybody is reading, no crash rate. It is
+    /// listed under Publish alone until a store ships it.
+    ///
+    /// The index comes from the whole list and not from the filtered one.
+    /// `selectApp(at:)` counts the linked apps, so a filtered position would
+    /// open the wrong app the moment one row is hidden.
+    private var rows: [(index: Int, app: AppSummary)] {
+        state.appRows.enumerated()
+            .filter { state.mode == .publishing || $0.element.isLive }
+            .map { (index: $0.offset, app: $0.element) }
+    }
+
     var body: some View {
         Section(isExpanded: $isOpen) {
-            ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
+            ForEach(rows, id: \.app.id) { index, app in
                 Button {
                     state.selectApp(at: index)
                 } label: {
                     HStack(spacing: 7) {
                         AppIconBadge(icon: app.icon, initials: app.initials, size: 16)
                         Text(app.name).lineLimit(1)
-                        // Where the App Store has this app, before it is
-                        // opened. Every rule about a review used to read the
-                        // open app alone, so a developer with six linked apps
-                        // opened each one to find out which were frozen.
-                        AppStatusChip(mark: state.appReviewMark(appKey: app.appleAppID ?? ""))
+                        // Where the stores have this app, before it is opened.
+                        // Every rule about a review used to read the open app
+                        // alone, so a developer with six linked apps opened
+                        // each one to find out which were frozen.
+                        AppStatusChip(mark: state.appMark(appKey: app.key))
                         Spacer(minLength: 6)
                         if index == state.selectedAppIndex {
                             Image(systemName: "checkmark")
@@ -312,7 +328,7 @@ private struct AppsSection: View {
     }
 }
 
-/// Where the App Store has one app, beside the name it belongs to.
+/// Where the stores have one app, beside the name it belongs to.
 ///
 /// It follows the name and takes only the width of its own word. The chip
 /// answers a question about that app, so it reads as part of that row rather
@@ -320,41 +336,43 @@ private struct AppsSection: View {
 /// chip does: a row that runs out of room loses letters of a name the tooltip
 /// still carries, not the state word the list exists to show.
 ///
-/// It draws nothing while the app has no answer: see `appReviewMark`.
+/// Every row wears one, and an app nobody has read yet wears "Unknown". A blank
+/// says nothing at all, and the row it sat on could be an app with no news or
+/// an app this Mac has never asked about. See `appMark`.
 private struct AppStatusChip: View {
-    let mark: AppleStanding?
+    let mark: AppleStanding
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dim = false
 
     var body: some View {
-        if let mark {
-            HStack(spacing: 4) {
-                // The one state worth an animation. A reviewer has the app
-                // open, it is the state a developer refreshes the sidebar to
-                // see, and it is the only one of the fifteen that changes
-                // within the hour.
-                if mark.active {
-                    Circle()
-                        .fill(mark.tint)
-                        .frame(width: 5, height: 5)
-                        .opacity(dim ? 0.3 : 1)
-                        .animation(reduceMotion ? nil
-                                   : .easeInOut(duration: 0.9).repeatForever(),
-                                   value: dim)
-                        .onAppear { dim = true }
-                }
-                Text(mark.label)
-                    .font(Theme.font(size: 9.5, weight: .medium))
-                    .foregroundStyle(mark.tint)
-                    .lineLimit(1)
+        HStack(spacing: 4) {
+            // The one state worth an animation. A reviewer has the app open,
+            // it is the state a developer refreshes the sidebar to see, and it
+            // is the only one of the fifteen that changes within the hour.
+            if mark.active {
+                Circle()
+                    .fill(mark.tint)
+                    .frame(width: 5, height: 5)
+                    .opacity(dim ? 0.3 : 1)
+                    .animation(reduceMotion ? nil
+                               : .easeInOut(duration: 0.9).repeatForever(),
+                               value: dim)
+                    .onAppear { dim = true }
             }
-            .fixedSize()
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1.5)
-            .background(mark.fill, in: Capsule())
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("App Store: \(mark.label)")
+            Text(mark.label)
+                .font(Theme.font(size: 9.5, weight: .medium))
+                .foregroundStyle(mark.tint)
+                .lineLimit(1)
         }
+        .fixedSize()
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1.5)
+        .background(mark.fill, in: Capsule())
+        .accessibilityElement(children: .combine)
+        // The store is not named. The chip answers for both of them now, and
+        // an app that goes to Google alone was told what the App Store thinks
+        // of it.
+        .accessibilityLabel("On the store: \(mark.label)")
     }
 }
 
@@ -505,80 +523,6 @@ private struct BuildSidebarStatusView: View {
             .symbolEffect(.pulse, isActive: status == .running)
     }
 }
-
-/// The app being worked on, and the way to any other.
-///
-/// It replaced an "Apps" heading, a two-line card for the open app, and a
-/// separate "Add app" row: three rows of chrome, at the top of the column, to
-/// say one thing. The card also wore the same selected fill as a navigation
-/// row, so the app and the destination competed for the one thing that fill
-/// means.
-///
-/// A pull-down is what the Mac uses for "this one, of these": the current
-/// choice on the button, the rest in the menu, a tick beside the one you are
-/// on. The list, the tick, and Add App… are the same three actions the three
-/// rows carried, and they all call what they always called.
-private struct AppSwitcher: View {
-    @Environment(AppState.self) private var state
-
-    private var current: AppSummary? { state.currentApp }
-
-    var body: some View {
-        Menu {
-            // A `Picker`, so the tick beside the current app is AppKit's own
-            // and looks like every other "one of these" menu on the Mac.
-            Picker("App", selection: Binding(get: { [state] in state.selectedAppIndex },
-                                             set: { [state] in state.selectApp(at: $0) })) {
-                ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
-                    Text(app.name).tag(index)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
-            if !state.appRows.isEmpty { Divider() }
-            // The entry screen, not a folder picker. "Add App" is the question
-            // "what do I want to do", and the entry screen is where that
-            // question is already answered three ways.
-            Button("Add App…") { state.showEntryScreen = true }
-            if state.currentApp != nil {
-                Button("Update from the Stores…") { state.showExistingAppImport = true }
-                Divider()
-                Button("Remove from Super Submitter…") {
-                    state.askToRemoveApp(at: state.selectedAppIndex)
-                }
-            }
-        } label: {
-            HStack(spacing: 7) {
-                if let current {
-                    AppIconBadge(icon: current.icon, initials: current.initials, size: 18)
-                    Text(current.name).lineLimit(1)
-                } else {
-                    Image(systemName: "square.stack.3d.up")
-                        .foregroundStyle(.secondary)
-                    Text("No app").foregroundStyle(.secondary)
-                }
-            }
-            .font(Theme.font(size: 13, weight: .semibold))
-        }
-        // `.button`, and the default style drew the app icon at the size of
-        // the whole sidebar. A macOS `Menu` in its default style hands its
-        // label to AppKit, which sizes an image itself and ignores the frame
-        // SwiftUI put on it, so an 18 point badge came out 200 points wide,
-        // clipped at the column edge, with the app name pushed off the end.
-        // The button style keeps the label in SwiftUI, where a frame is a
-        // frame.
-        .menuStyle(.button)
-        .buttonStyle(.accessoryBar)
-        .menuIndicator(.visible)
-        .controlSize(.small)
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
-        .accessibilityLabel("Current app")
-        .accessibilityValue(current?.name ?? "No app")
-    }
-}
-
 
 /// Who is signed in, and the actions that belong to them.
 ///

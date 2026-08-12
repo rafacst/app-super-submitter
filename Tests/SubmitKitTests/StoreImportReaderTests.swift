@@ -217,7 +217,7 @@ struct StoreImportReaderTests {
         #expect(manifest.listingText(locale: "en-US", field: .description) == "The description")
         #expect(manifest.listingText(locale: "en-US", field: .subtitle) == "A subtitle")
         #expect(manifest.listingText(locale: "en-US", field: .supportURL) == "https://example.com/s")
-        #expect(manifest.release?.versionName == "3.1")
+        #expect(manifest.versionName(for: .apple) == "3.1")
     }
 
     // MARK: - The money, on its own

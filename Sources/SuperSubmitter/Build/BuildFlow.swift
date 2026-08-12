@@ -39,6 +39,9 @@ final class BuildFlow {
 
     var appleToolchain: AppleToolchain?
     var androidToolchain: AndroidToolchain?
+    /// What the linked Gradle module's files say it builds. A hint, kept
+    /// because the store check reads it as well as the preflight rows do.
+    var androidIdentity = AndroidProjectIdentity()
     var containerInfo: XcodeContainerInfo?
     var variants: [GradleVariant] = []
 
@@ -79,6 +82,9 @@ final class BuildFlow {
     /// Defaults on. upload-spec 8.14.
     var alwaysReviewArtifact = true
     var showBuildConfirmation = false
+    /// The one press that builds both stores has its own question, because it
+    /// names two projects and runs the scripts of each.
+    var showBuildBothConfirmation = false
     var showUploadConfirmation = false
 
     /// `app` is already weak and optional, so the initialiser says so too. It
@@ -215,6 +221,12 @@ final class BuildFlow {
     /// A workspace never wins silently when a second container exists, so this
     /// is always an explicit act.
     func select(container: DiscoveryResult.Container, root: URL) async {
+        // The scan's own notes go with the choosing. "The scan stopped at its
+        // depth or entry limit" answers "why is my project not in this list",
+        // and every project with a deep source tree trips the depth limit, so
+        // it sat on the preflight card of a linked project as a permanent
+        // yellow line about a list nobody is reading any more.
+        warnings = []
         let platform: BuildPlatform = container.kind == .gradle ? .android : .ios
         var project = LinkedSourceProject(
             platform: platform, rootPath: root.path,
@@ -507,17 +519,41 @@ final class BuildFlow {
         snapshot.variantTask = self.project?.selection.variantTask
         snapshot.outputExpectation = "\(project.containerPath)/…/build/outputs/bundle/"
 
-        // Gradle computes these. They are unknown, not wrong.
-        snapshot.productIdentifier = app?.manifest.apps.google?.packageName
-        snapshot.uncertainFields = ["productIdentifier", "marketingVersion", "buildVersion",
-                                    "signingReady"]
+        // What the module's own files say, which is a hint and not the answer:
+        // Gradle computes these and only the built bundle settles them. They
+        // stay in `uncertainFields` for that reason, and the four rows now
+        // carry the values that sit as literals in `build.gradle` instead of
+        // reading "Not read" on a project the developer has just linked.
+        let identity = AndroidBuildService.identity(root: project.containerURL,
+                                                    module: self.project?.selection.module)
+        androidIdentity = identity
+        snapshot.productName = identity.appName
+        // The project's own id first. This row says what the build will
+        // produce, and the manifest says where it is going: a package name
+        // typed on the tab above cannot make Gradle build that package.
+        snapshot.productIdentifier = identity.applicationID
+            ?? app?.manifest.apps.google?.packageName
+        // No override is read here. `buildBundle` runs the variant task and
+        // passes no property, because a plain Android project takes neither
+        // number from the command line, and a row showing a number Gradle will
+        // not build is worse than the row that said nothing.
+        snapshot.marketingVersion = identity.versionName
+        snapshot.buildVersion = identity.versionCode
+        snapshot.uncertainFields = ["productName", "productIdentifier", "marketingVersion",
+                                    "buildVersion", "signingReady"]
         await googleRemoteCheck()
     }
 
     private func googleRemoteCheck() async {
         guard let app, let packageName = app.manifest.apps.google?.packageName,
               !packageName.isEmpty else {
-            snapshot.remoteConflict = "No Google Play package is connected, so no conflict check ran."
+            // The project's own applicationId goes in the sentence. The row
+            // said the package was missing while the module beside it named
+            // one, and the developer had to go and find in Android Studio the
+            // value this card had just read.
+            snapshot.remoteConflict = androidIdentity.applicationID.map {
+                "No Google Play package is on the tab above, so no conflict check ran. This project builds \($0)."
+            } ?? "No Google Play package is connected, so no conflict check ran."
             return
         }
         do {
@@ -595,15 +631,24 @@ final class BuildFlow {
     /// learnt that the two disagreed only after a whole archive had been
     /// built and the upload was refused.
     ///
-    /// Apple only. Gradle computes the version name, so the Android preflight
-    /// marks it uncertain rather than reading a number it does not have.
+    /// The store's own number, and not the other one's. An Android project
+    /// that has always built 1.0.0 is not disagreeing with the App Store's
+    /// 1.4.1: the two stores number apart.
     var versionFromManifest: String? {
-        guard run.platform != .android,
-              let wanted = app?.manifest.release?.versionName, !wanted.isEmpty,
+        guard let wanted = app?.manifest.versionName(for: run.platform.store), !wanted.isEmpty,
               let building = snapshot.marketingVersion, !building.isEmpty,
               wanted != building else { return nil }
         return wanted
     }
+
+    /// Whether the disagreement above has a button beside it.
+    ///
+    /// Only Apple. `xcodebuild` takes `MARKETING_VERSION` on the command line,
+    /// so the app can build the number the manifest names without touching the
+    /// project. A plain Gradle build takes no such property, so on Android the
+    /// row says the two numbers and the developer settles it: either the store
+    /// field on the tab above, or the project.
+    var canBuildTheManifestVersion: Bool { run.platform != .android }
 
     /// Build the version `store.yaml` names.
     ///
@@ -642,29 +687,99 @@ final class BuildFlow {
         // rewriting the platform on the Apple link is what made an app able to
         // hold one of the two at a time.
         if project?.platform.store != platform.store {
-            // Nil is a state and not a failure: the other store has no folder
-            // linked yet, and the card offers to link one.
-            project = savedProject(for: platform.store)
-            // The link's own platform wins. An Apple link may be a macOS one,
-            // and forcing the platform the switch asked for would archive the
-            // wrong destination from the right project.
-            if let saved = project { run.platform = saved.platform }
-            run.linkedProjectID = project?.id
-            containers = []
-            containerInfo = nil
-            variants = []
-            snapshot = PreflightSnapshot()
-            candidate = nil
-            blocking = nil
-            warnings = []
-            guard project != nil else {
-                run.move(to: .unlinked)
-                return
-            }
+            guard adoptLink(for: platform.store) else { return }
         } else {
             project?.platform = platform
         }
         restartPreflight()
+    }
+
+    /// Puts the other store's linked project on the tab, and clears the card
+    /// that belongs to the one leaving.
+    ///
+    /// False when that store has no folder linked. Nil is a state and not a
+    /// failure there: the card offers to link one.
+    @discardableResult
+    private func adoptLink(for store: Store) -> Bool {
+        project = savedProject(for: store)
+        // The link's own platform wins. An Apple link may be a macOS one, and
+        // forcing the platform the switch asked for would archive the wrong
+        // destination from the right project.
+        if let saved = project { run.platform = saved.platform }
+        run.linkedProjectID = project?.id
+        containers = []
+        containerInfo = nil
+        variants = []
+        snapshot = PreflightSnapshot()
+        candidate = nil
+        blocking = nil
+        warnings = []
+        guard project != nil else {
+            run.move(to: .unlinked)
+            return false
+        }
+        return true
+    }
+
+    /// Whether this app can produce both stores' artifacts from one press.
+    ///
+    /// It goes to both stores and both have a project linked. One store, or
+    /// one link, is one build, and a second button for it would do what the
+    /// first one already does.
+    var canBuildBothStores: Bool {
+        guard let stores = app?.stores, stores.count > 1 else { return false }
+        return stores.allSatisfy { savedProject(for: $0) != nil }
+    }
+
+    /// The store whose build follows this one, when the developer asked for
+    /// both. Nil during an ordinary single build, which is every other build.
+    var queuedStore: Store?
+
+    /// Builds both stores' artifacts, one after the other.
+    ///
+    /// Google Play first and the App Store second, always, and the order is
+    /// not a preference. An App Bundle's path goes into `store.yaml`, so it
+    /// survives the tab moving on to the other store, and the apply picks it
+    /// up from there. An archive has nowhere to be written down: it is the
+    /// card's own candidate and the upload button beside it is the only way it
+    /// reaches Apple, so it has to be the artifact left on screen at the end.
+    ///
+    /// One press and two projects, so the confirmation names both. Building
+    /// runs the scripts of each.
+    func buildBothStores() {
+        guard canBuildBothStores else { return }
+        showBuildBothConfirmation = false
+        queuedStore = .apple
+        guard run.platform.store != .google else { return startBuild() }
+        task = Task { [weak self] in
+            guard let self, adoptLink(for: .google) else {
+                self?.queuedStore = nil
+                return
+            }
+            await refreshPreflight()
+            guard canBuild else { return }
+            startBuild()
+        }
+    }
+
+    /// The second half of a both-stores build.
+    ///
+    /// It runs when the first artifact has been inspected and nothing about it
+    /// blocks. A block stops the chain where it is: the card holds the artifact
+    /// and the reason, and the developer decides what the second build should
+    /// be before it runs.
+    func startQueuedBuild() async {
+        guard let next = queuedStore else { return }
+        queuedStore = nil
+        guard failure == nil, blocking == nil,
+              candidate?.blockingMismatches.isEmpty == true else { return }
+        // The App Bundle goes into `store.yaml` before the tab moves on. It is
+        // the only record of it, and the card is about to draw another store.
+        app?.adoptBuiltArtifact()
+        guard adoptLink(for: next) else { return }
+        await refreshPreflight()
+        guard canBuild else { return }
+        startBuild()
     }
 
     private func restartPreflight() {

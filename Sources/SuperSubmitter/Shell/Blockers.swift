@@ -28,7 +28,7 @@ extension AppState {
     /// The version the two release buttons send, named the way the manifest
     /// names it.
     var releaseVersionName: String {
-        let version = manifest.release?.versionName ?? ""
+        let version = manifest.displayVersionName ?? ""
         return version.isEmpty ? "this release" : version
     }
 
