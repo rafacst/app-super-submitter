@@ -17,12 +17,15 @@ private func source(_ relativePath: String) throws -> String {
 
 @Test func theGoogleActionPanelsAreOnATabAndNotOnlyInTheKit() throws {
     let build = try source("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let beta = try source("Sources/SuperSubmitter/Tabs/BetaTestingTab.swift")
     let managing = try source("Sources/SuperSubmitter/Tabs/ManagingTabs.swift")
 
-    // An unreachable client is the same as no client. Internal sharing belongs
-    // to a build, so it stays on the Build tab; the reviews, the recovery, and
-    // the signed APKs belong to a live app, so they moved to Managing.
-    #expect(build.contains("InternalSharingPanel()"))
+    // An unreachable client is the same as no client. Internal sharing hands a
+    // build to one person off the store, so it belongs to Beta testing; the
+    // reviews, the recovery, and the signed APKs belong to a live app, so they
+    // moved to Managing.
+    #expect(beta.contains("InternalSharingPanel()"))
+    #expect(beta.contains("state.stores.contains(.google)"))
     #expect(build.contains("state.stores.contains(.google)"))
     #expect(managing.contains("GoogleReviewsPanel()"))
     #expect(managing.contains("GoogleRecoveryPanel()"))

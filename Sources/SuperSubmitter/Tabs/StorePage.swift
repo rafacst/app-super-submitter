@@ -34,7 +34,13 @@ import SwiftUI
 /// place where the screenshots go, so an empty bucket draws the shape of what
 /// is missing rather than closing up. Half the value of the screen is seeing
 /// which parts of the page are still blank.
-struct PreviewTab: View {
+///
+/// **A tab with no row of its own.** It is a whole screen, like Build and like
+/// Summary, and the sidebar lists it nowhere: the app's own name at the top of
+/// the column opens it. A row would be the same destination twice in a column
+/// that can only stand on one of them, and the name is the control a developer
+/// already presses to look at one of their apps. See `Tab.isListed`.
+struct StorePage: View {
     @Environment(AppState.self) private var state
 
     /// Nil until the developer picks. See `store`.

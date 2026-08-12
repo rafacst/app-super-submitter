@@ -289,6 +289,7 @@ extension AppState {
         switch target {
         case .stores: .stores
         case .build: .build
+        case .betaTesting: .betaTesting
         case .details: .details
         case .media: .media
         case .money: .money

@@ -583,13 +583,17 @@ public enum Validator {
                 result.append(Finding(
                     id: "build.testerTrackMissing.\(track)", severity: .error,
                     message: "The manifest names tester groups for the \(track) track, and no apply writes that track. Add \(track) to the tracks list.",
+                    // The tracks list is on Build and the groups are on Beta
+                    // testing, and this row is the one that says they
+                    // disagree. It points at the shorter fix: adding the track
+                    // is one tick, and deleting the groups is a list.
                     location: "Build · Android", fix: .build))
             }
             for group in groups where !Self.looksLikeEmail(group) {
                 result.append(Finding(
                     id: "build.testerGroup.\(track).\(group)", severity: .error,
                     message: "\(group) is not a Google Group address. Google accepts a group email address here and no individual tester.",
-                    location: "Build · Android", fix: .build))
+                    location: "Beta testing · Android", fix: .betaTesting))
             }
         }
 
@@ -601,7 +605,7 @@ public enum Validator {
             result.append(Finding(
                 id: "build.closedTrackNoTesters.\(track)", severity: .warning,
                 message: "The closed track \(track) names no tester group, so nobody can install the build. Add release.google.testers.\(track).",
-                location: "Build · Android", fix: .build))
+                location: "Beta testing · Android", fix: .betaTesting))
         }
         return result
     }

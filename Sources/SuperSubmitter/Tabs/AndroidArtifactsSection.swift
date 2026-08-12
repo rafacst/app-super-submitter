@@ -159,33 +159,16 @@ struct GoogleTracksSection: View {
                 Toggle("Include the rest of the world", isOn: state.googleRestOfWorldBinding)
                     .disabled(state.googleCountriesBinding.wrappedValue.isEmpty)
                     .font(Theme.font(size: 12))
-                testers
-            }
-        }
-    }
-
-    /// Who may install a closed track.
-    ///
-    /// Production reaches everybody, so it takes no list and gets no row. Every
-    /// other track the apply writes reaches nobody until a group is named here,
-    /// and the apply has always sent this field.
-    @ViewBuilder
-    private var testers: some View {
-        let closed = state.manifest.googleTracks.filter { $0 != "production" }
-        if !closed.isEmpty {
-            Divider().overlay(Theme.sep)
-            VStack(alignment: .leading, spacing: 9) {
-                Text("Track testers").font(Theme.font(size: 12, weight: .semibold))
-                    .fieldAnchor("build.googleTesters")
-                ForEach(closed, id: \.self) { track in
-                    LabeledField(track, note: "Google Groups, comma-separated") {
-                        TextField("beta-testers@googlegroups.com",
-                                  text: state.googleTestersBinding(track: track))
-                    }
+                // Who may install a closed track is on the Beta testing tab,
+                // with TestFlight. See `GoogleTestersSection`: this block
+                // decides which tracks an edit writes, which is a release
+                // decision, and the addresses that install them are not.
+                if !state.manifest.googleTracks.filter({ $0 != "production" }).isEmpty {
+                    Divider().overlay(Theme.sep)
+                    Text("The closed tracks take their tester groups on the Beta testing tab.")
+                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("Google takes group addresses only. It keeps the single tester list in the Play Console, and it replaces the whole list on every apply.")
-                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

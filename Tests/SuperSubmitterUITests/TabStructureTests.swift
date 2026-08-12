@@ -23,8 +23,8 @@ import Testing
 /// existed yet.
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
-        "Stores", "Preview", "Build", "Details", "Media", "Monetization",
-        "Review info", "Summary", "Release", "Account", "Settings",
+        "Stores", "Store page", "Build", "Beta testing", "Details", "Media",
+        "Monetization", "Review info", "Summary", "Release", "Account", "Settings",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.release.zone == .releases)
@@ -39,24 +39,28 @@ import Testing
 /// it belongs to. The switch above the column then shows one job's groups at a
 /// time: see `SidebarModeSwitchTests` for what that hides and what it may not.
 @Test func theSidebarListsEveryDestinationInItsSection() {
-    // Preview leads both groups. It is where picking an app lands, so it may
-    // not be somewhere the eye has to go looking for it.
+    // Beta testing follows Build, because it is what happens to the package
+    // Build made before a customer ever sees it.
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
-        == ["Preview", "Build", "Details", "Media", "Monetization", "Review info"])
+        == ["Build", "Beta testing", "Details", "Media", "Monetization",
+            "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
-        == ["Store page", "Live listing", "Live media", "Marketing", "Live app"])
+        == ["Live listing", "Live media", "Marketing", "Live app"])
 
     // Publish and Send are the manifest against the stores: everything that
     // only edits `store.yaml`, then the two screens that talk to a store.
     #expect(Destination.rows(in: .publish, hasApp: true).allSatisfy { $0.tab.zone == .edits })
     #expect(Destination.rows(in: .send, hasApp: true).allSatisfy { $0.tab.zone != .edits })
 
-    // Nothing is lost, and the three off the list are the three about this Mac
-    // rather than about an app. The box at the foot of the sidebar holds them.
+    // Nothing is lost. Three of the four off the list are about this Mac
+    // rather than about an app, and the box at the foot of the sidebar holds
+    // them; the fourth is the store page, which the app's own name opens.
     let listed = Set(Destination.all(hasApp: true).map(\.tab))
-    #expect(Set(Tab.allCases).subtracting(listed) == [.stores, .settings, .account])
+    #expect(Set(Tab.allCases).subtracting(listed)
+        == [.stores, .settings, .account, .storePage])
+    #expect(Set(Tab.allCases.filter { !$0.isListed }) == [.storePage])
     #expect(Set(Tab.allCases.filter(\.standsAlone)) == [.stores, .settings, .account])
     // Stores was listed under Publish and again under Manage, which is one
     // screen in two rows of a column that can only stand on one of them.
@@ -105,17 +109,18 @@ import Testing
     let publishing = Set(Tab.tabs(in: .publishing))
     let managing = Set(Tab.tabs(in: .managing))
 
-    // Preview joins the shared three for the same reason Details and Media
-    // are shared: a draft has a page it will make and a live app has one it is
-    // making, and a developer wants to look at whichever one they have.
+    // The store page joins the shared three for the same reason Details and
+    // Media are shared: a draft has a page it will make and a live app has one
+    // it is making, and a developer wants to look at whichever one they have.
     #expect(publishing.intersection(managing)
-        == [.stores, .account, .settings, .preview, .details, .media])
+        == [.stores, .account, .settings, .storePage, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
     #expect(Tab.tabs(in: .managing).map { $0.title(in: .managing) }
         == ["Stores", "Store page", "Live listing", "Live media", "Marketing",
             "Live app", "Account", "Settings"])
-    // Nothing that builds, plans, writes, or releases reaches a manager.
-    #expect(managing.isDisjoint(with: [.build, .money, .reviewInfo, .plan, .release]))
+    // Nothing that builds, tests, plans, writes, or releases reaches a manager.
+    #expect(managing.isDisjoint(with: [.build, .betaTesting, .money, .reviewInfo,
+                                       .plan, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.
     #expect(Tab.allCases.allSatisfy { !$0.modes.isEmpty })
 }

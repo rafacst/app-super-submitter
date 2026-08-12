@@ -51,12 +51,18 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
 /// The tabs, in the order of the work. Spec section 16.3.
 enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case stores = 1
-    // Where picking an app lands. Every other tab answers "what am I sending";
-    // this one answers "what will they see", which is the question a developer
-    // opens an app to look at. It is first in the group for that reason, and
-    // the raw values below shift by one because nothing persists them.
-    case preview
+    // Where touching an app's name lands. Every other tab answers "what am I
+    // sending"; this one answers "what will they see", which is the question a
+    // developer opens an app to look at. It is a whole screen like the rest
+    // and the only one the sidebar lists nowhere: the name at the top of the
+    // column opens it, so a row of its own would be one destination twice.
+    case storePage
     case build
+    // Everything that reaches a tester before a customer reaches it. It was a
+    // fold on Build, beside the drop wells, so the screen that takes a package
+    // also held every group, address, note and licence a beta needs. Those are
+    // two jobs, and the second one is where a release actually starts.
+    case betaTesting
     case details
     case media
     case money
@@ -92,12 +98,6 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         switch (self, mode) {
         case (.details, .managing): "Live listing"
         case (.media, .managing): "Live media"
-        // The same screen, drawn from two sources, and the source is the whole
-        // difference: the publisher sees the page their draft will make, the
-        // manager sees the page the store is serving now. One word each, or
-        // "Preview" would promise the manager a mockup of what they already
-        // shipped.
-        case (.preview, .managing): "Store page"
         default: title
         }
     }
@@ -106,8 +106,13 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .stores: "Stores"
-        case .preview: "Preview"
+        // The same screen from two sources, and one name for both: the
+        // publisher sees the page their draft will make, the manager sees the
+        // page the store is serving now. "Preview" would promise the manager a
+        // mockup of what they have already shipped.
+        case .storePage: "Store page"
         case .build: "Build"
+        case .betaTesting: "Beta testing"
         case .details: "Details"
         case .media: "Media"
         case .money: "Monetization"
@@ -125,7 +130,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var modes: Set<Mode> {
         switch self {
         case .stores: [.publishing, .managing]
-        case .build, .money, .reviewInfo, .plan, .release: [.publishing]
+        case .build, .betaTesting, .money, .reviewInfo, .plan, .release: [.publishing]
         // What the listing says and what it shows are the two things a
         // manager changes most, and Managing had nowhere to show them: an
         // imported app filled these tabs and the mode that imported it could
@@ -134,7 +139,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // Both jobs, for the same reason Details and Media are both: a draft
         // has a page it will make and a live app has a page it is making, and
         // a developer wants to look at whichever one they have.
-        case .preview: [.publishing, .managing]
+        case .storePage: [.publishing, .managing]
         // Marketing edits a live listing, so it belongs to the manager. The
         // publishing plan still writes it when the manifest holds it, so an
         // import loses nothing.
@@ -160,8 +165,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var symbol: String {
         switch self {
         case .stores: "storefront"
-        case .preview: "eye"
+        case .storePage: "eye"
         case .build: "shippingbox"
+        case .betaTesting: "testtube.2"
         case .details: "list.bullet.rectangle"
         case .media: "photo.stack"
         case .money: "dollarsign.square"
@@ -200,8 +206,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var summary: String {
         switch self {
         case .stores: "Connect the App Store and Google Play accounts"
-        case .preview: "See the app the way a customer sees it in the store"
+        case .storePage: "See the app the way a customer sees it in the store"
         case .build: "Import or build the package, and set the release version"
+        case .betaTesting: "Invite the testers, and say what they get to try"
         case .details: "Write the listing text, the keywords and the support links"
         case .media: "Add the screenshots, the icon and the promotional video"
         case .money: "Define selling price, in-app purchases, subscriptions and more"
@@ -237,12 +244,15 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     var zone: Zone {
         switch self {
-        // Preview writes nothing, and it is still an `edits` zone: the zone
-        // splits the sidebar's Publish group from its Send one, and the only
-        // wrong answer is the one that files a read-only screen under Send,
-        // beside the two buttons that talk to a live store.
-        case .stores, .account, .settings, .preview, .build, .details, .media,
-             .money, .marketing, .reviewInfo: .edits
+        // Beta testing is an `edits` zone, and its two buttons do not make it
+        // a Send one: a group, an address and a note are manifest values that
+        // the run carries, and the zone is what keeps the sidebar's Send group
+        // down to the two screens that release a version to customers. The
+        // store page writes nothing at all and is filed the same way, for the
+        // same reason: the wrong answer is the one that puts a read-only
+        // screen under Send, beside the two buttons that talk to a store.
+        case .stores, .account, .settings, .storePage, .build, .betaTesting,
+             .details, .media, .money, .marketing, .reviewInfo: .edits
         case .plan: .reads
         case .release, .liveApp: .releases
         }
@@ -278,6 +288,19 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         default: false
         }
     }
+
+    /// Whether the sidebar draws a row for the tab.
+    ///
+    /// Every one but the store page, and that one is not hidden: it is opened
+    /// by the app's own name at the head of the column, which is the control a
+    /// developer already presses to look at one of their apps. A row beside it
+    /// would put one destination in the column twice, and the column's
+    /// selection can stand on only one of them.
+    ///
+    /// It is not `standsAlone`. Those three are about this Mac and live in the
+    /// box at the foot of the column; this one is about one app, and it is the
+    /// most app-specific screen there is.
+    var isListed: Bool { self != .storePage }
 }
 
 /// A group of sidebar rows.
@@ -361,6 +384,9 @@ struct Destination: Hashable, Identifiable {
     /// foot of the column holds all three. Stores was listed under Publish and
     /// again under Manage, which is the same screen twice in a column whose
     /// selection can only be standing on one of them.
+    ///
+    /// The store page is in no section either, and for that same rule: the app
+    /// list above these groups already opens it. See `Tab.isListed`.
     static func rows(in section: SidebarSection, hasApp: Bool) -> [Destination] {
         guard hasApp else { return [] }
         let mode: Mode = section == .manage ? .managing : .publishing
@@ -370,7 +396,7 @@ struct Destination: Hashable, Identifiable {
         case .manage: Tab.tabs(in: .managing)
         }
         return tabs
-            .filter { !$0.standsAlone }
+            .filter { !$0.standsAlone && $0.isListed }
             .map { Destination(tab: $0, mode: mode) }
     }
 

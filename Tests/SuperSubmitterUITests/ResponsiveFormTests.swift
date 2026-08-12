@@ -20,7 +20,6 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
 
     #expect(build.contains("private var storeTools"))
-    #expect(build.contains("ViewThatFits(in: .horizontal)"))
     #expect(!shell.contains("case .build: BuildInspector()"))
 }
 
@@ -29,14 +28,50 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
 
     for marker in ["This app in the stores", "App Store takes", "Google Play takes",
                    "StoreDiagnosticsPanel()", "XcodeCloudPanel()",
-                   "SigningIdentitiesPanel()", "InternalSharingPanel()"] {
+                   "SigningIdentitiesPanel()"] {
         #expect(build.contains(marker), "Build lost \(marker)")
     }
     #expect(build.contains("accept: state.importPackages"))
     #expect(build.contains("BuildFromProjectView()"))
-    #expect(build.contains("TestFlightSection()"))
     #expect(build.contains("AndroidArtifactsSection()"))
     #expect(build.contains("GoogleTracksSection()"))
+}
+
+/// Everything a tester meets is on one tab, and none of it is left behind on
+/// the tab that makes the package.
+///
+/// The three moved from three different places: TestFlight from a fold beside
+/// the drop wells, the track testers from the foot of the Google track block,
+/// and internal app sharing from inside the tooling fold. A copy left behind
+/// in either file is one screen writing what another screen owns.
+@Test func everyBetaSurfaceIsOnTheBetaTestingTab() throws {
+    let beta = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BetaTestingTab.swift")
+    let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let tracks = try responsiveFormSource(
+        "Sources/SuperSubmitter/Tabs/AndroidArtifactsSection.swift")
+
+    for marker in ["TestFlightSection()", "GoogleTestersSection()",
+                   "InternalSharingPanel()"] {
+        #expect(beta.contains(marker), "Beta testing lost \(marker)")
+    }
+    #expect(!build.contains("TestFlightSection()"))
+    #expect(!build.contains("InternalSharingPanel()"))
+    #expect(!tracks.contains("googleTestersBinding"))
+}
+
+/// The store page is a whole tab like every other, and the app's own name is
+/// the only way in: it has no row among the sidebar's groups.
+///
+/// The wiring runs from the app row to `selectedTab` to the content column, so
+/// a half-finished move would leave a name in the column that opens nothing.
+@Test func theSidebarNameOpensTheStorePageTab() throws {
+    let sidebar = try responsiveFormSource("Sources/SuperSubmitter/Shell/Sidebar.swift")
+    let content = try responsiveFormSource("Sources/SuperSubmitter/Tabs/TabContent.swift")
+
+    #expect(sidebar.contains("state.selectedTab = .storePage"))
+    #expect(content.contains("case .storePage: StorePage()"))
+    #expect(!Tab.storePage.isListed)
+    #expect(Destination.all(hasApp: true).allSatisfy { $0.tab != .storePage })
 }
 
 @Test func theWideBuildScreenKeepsBothStoreCardsInOneRow() throws {

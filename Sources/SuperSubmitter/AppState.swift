@@ -747,13 +747,11 @@ final class AppState {
         selectedAppIndex = index
         guard !linkedApps.isEmpty else { return }
         activateLinkedApp(at: index)
-        // Picking an app opens its store page. The row used to switch the app
-        // under whatever tab was already open, so choosing an app from the
-        // Money tab answered a question about money that nobody had asked
-        // about this app yet. The first thing anybody wants of an app they
-        // just picked is to look at it, and every other tab is one click away
-        // and still shows this app when it gets there.
-        selectedTab = .preview
+        // The tab stays where it is, and the sidebar row moves it. Touching an
+        // app's name opens that app's store page — see `AppsSection` — and the
+        // other callers of this are not that touch: an import that switches
+        // app under the developer, and the move off a draft when Manage cannot
+        // list it. Neither one is a request to go and look at the page.
         // Where App Store review has each of them. Picking an app is the
         // moment a developer needs to know whether this one is frozen, and
         // whether the others are, so the sweep runs on every change as well as
@@ -2638,6 +2636,7 @@ final class AppState {
         switch tab {
         case .stores: target = .stores
         case .build: target = .build
+        case .betaTesting: target = .betaTesting
         case .details: target = .details
         case .media: target = .media
         case .money: target = .money

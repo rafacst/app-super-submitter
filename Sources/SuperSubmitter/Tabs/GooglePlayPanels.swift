@@ -2,11 +2,14 @@ import AppKit
 import SubmitKit
 import SwiftUI
 
-/// Internal app sharing, on tab 2.
+/// Internal app sharing, on the Beta testing tab.
 ///
-/// It sits beside the artifact fields because it takes the artifact those
-/// fields name. Google keeps the upload off the store: no edit, no track, and
-/// no version code, so it collides with nothing that a plan prepared.
+/// It is the nearest thing Google has to handing one person a build: the
+/// upload stays off the store, with no edit, no track and no version code, so
+/// it collides with nothing a plan prepared and reaches whoever holds the
+/// link. It used to sit inside the Build tab's tooling fold, beside the
+/// diagnostics, where the one feature that gives a tester a build was filed
+/// under maintenance.
 struct InternalSharingPanel: View {
     @Environment(AppState.self) private var state
     @State private var busy = false
@@ -16,7 +19,8 @@ struct InternalSharingPanel: View {
     private var artifact: (path: String, isBundle: Bool)? { state.googleSharableArtifact }
 
     var body: some View {
-        Section_("Internal app sharing", icon: "link.badge.plus", tint: Theme.teal) {
+        Section_("Internal app sharing", icon: "link.badge.plus", tint: Theme.teal,
+                 anchor: "beta.internalSharing") {
             VStack(alignment: .leading, spacing: 10) {
                 NoteWithAction("Upload the Android build and get a private install link. This writes no draft and it uses no version code.") {
                     QuietButton(title: busy ? "Uploading…" : "Upload and share") { share() }
