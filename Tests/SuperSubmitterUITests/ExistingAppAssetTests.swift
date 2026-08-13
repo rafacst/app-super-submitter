@@ -184,3 +184,62 @@ struct ExistingAppAssetTests {
         #expect(manifest.media?.icon == nil)
     }
 }
+
+// MARK: - Sending back what the store already showed
+
+/// The import downloads every live screenshot, and the manifest kept them out
+/// on purpose, so there was no way to say "send these again". A developer whose
+/// set left the store, and who had no other copy, had them in the project
+/// folder with no route back.
+@Test func theDownloadedLiveScreenshotsCanGoBackToTheStore() async throws {
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("resend-\(UUID().uuidString)", isDirectory: true)
+    let size = folder.appendingPathComponent("Store Import/apple/en-US/APP_IPHONE_67",
+                                             isDirectory: true)
+    try FileManager.default.createDirectory(at: size, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    // Out of order on disk, so the numeric prefix is what settles the order.
+    for name in ["10-shot.png", "2-shot.png", "1-shot.png"] {
+        try Data([0x89]).write(to: size.appendingPathComponent(name))
+    }
+    // A preview sits beside them. Apple serves previews as an HLS stream, so
+    // what the import saved is the playlist and never the film.
+    try Data([0x89]).write(to: size.appendingPathComponent("1-trailer.mov"))
+    // Another page's pictures are in a folder of their own and belong to it.
+    let page = folder.appendingPathComponent(
+        "Store Import/apple/pages/Bakers/en-US/APP_IPHONE_67", isDirectory: true)
+    try FileManager.default.createDirectory(at: page, withIntermediateDirectories: true)
+    try Data([0x89]).write(to: page.appendingPathComponent("1-bakers.png"))
+
+    let state = await AppState()
+    await MainActor.run {
+        state.manifestURL = folder.appendingPathComponent("store.yaml")
+        state.locale = "en-US"
+    }
+
+    let found = await state.resendableLiveMedia(deviceClass: .phone)
+
+    #expect(found.map(\.lastPathComponent) == ["1-shot.png", "2-shot.png", "10-shot.png"])
+    #expect(!found.contains { $0.pathExtension == "mov" })
+    #expect(!found.contains { $0.lastPathComponent.contains("bakers") })
+}
+
+/// A size this app never downloaded says so, rather than filling the bucket
+/// with nothing and reading as done.
+@Test func aSizeWithNoDownloadedCopySaysSo() async throws {
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("resend-empty-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    let state = await AppState()
+    await MainActor.run {
+        state.manifestURL = folder.appendingPathComponent("store.yaml")
+        state.locale = "en-US"
+        state.resendLiveMedia(deviceClass: .phone)
+    }
+
+    let message = await state.mediaError
+    #expect(message?.contains("no downloaded copy") == true)
+    #expect(await state.mediaPaths(deviceClass: .phone).isEmpty)
+}
