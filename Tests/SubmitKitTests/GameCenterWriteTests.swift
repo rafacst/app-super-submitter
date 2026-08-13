@@ -16,7 +16,7 @@ import Testing
 
 private final class GameCenterLog: @unchecked Sendable {
     private let lock = NSLock()
-    private var entries: [(method: String, path: String, data: [String: Any])] = []
+    private var entries: [(method: String, path: String, body: [String: Any])] = []
 
     func record(_ request: URLRequest) {
         // `URLSession` hands a `URLProtocol` the body as a stream, so
@@ -37,8 +37,7 @@ private final class GameCenterLog: @unchecked Sendable {
         let body = payload.flatMap { try? JSONSerialization.jsonObject(with: $0) }
             as? [String: Any]
         lock.withLock {
-            entries.append((request.httpMethod ?? "", request.url?.path ?? "",
-                            body?["data"] as? [String: Any] ?? [:]))
+            entries.append((request.httpMethod ?? "", request.url?.path ?? "", body ?? [:]))
         }
     }
 
@@ -46,8 +45,12 @@ private final class GameCenterLog: @unchecked Sendable {
     var paths: [String] { lock.withLock { entries.map(\.path) } }
 
     func data(_ method: String, _ pathContains: String) -> [String: Any] {
+        body(method, pathContains)["data"] as? [String: Any] ?? [:]
+    }
+
+    func body(_ method: String, _ pathContains: String) -> [String: Any] {
         lock.withLock {
-            entries.first { $0.method == method && $0.path.contains(pathContains) }?.data ?? [:]
+            entries.first { $0.method == method && $0.path.contains(pathContains) }?.body ?? [:]
         }
     }
 
@@ -62,34 +65,41 @@ private final class GameCenterLog: @unchecked Sendable {
 
 private final class GameCenterStub: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var log = GameCenterLog()
+    nonisolated(unsafe) static var responseBody =
+        #"{"data":{"id":"made-1","attributes":{"uploadOperations":[]}}}"#
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         Self.log.record(request)
-        let body = #"{"data":{"id":"made-1","attributes":{"uploadOperations":[]}}}"#
         let response = HTTPURLResponse(url: request.url!, statusCode: 200,
                                        httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocol(self, didLoad: Data(Self.responseBody.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {}
 }
 
-private func catalogClient() -> AppleGameCenterCatalogClient {
+private func gameCenterAPI(responseBody: String =
+    #"{"data":{"id":"made-1","attributes":{"uploadOperations":[]}}}"#) -> StoreAPI {
     GameCenterStub.log = GameCenterLog()
+    GameCenterStub.responseBody = responseBody
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [GameCenterStub.self]
     let credential = AppleCredential(
         keyID: "ABCD123456", issuerID: "issuer",
         privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation,
         fileName: "AuthKey_ABCD123456.p8")
-    return AppleGameCenterCatalogClient(api: StoreAPI(
+    return StoreAPI(
         credentials: StoreCredentials(apple: credential), record: { _ in },
-        session: URLSession(configuration: configuration)))
+        session: URLSession(configuration: configuration))
+}
+
+private func catalogClient() -> AppleGameCenterCatalogClient {
+    AppleGameCenterCatalogClient(api: gameCenterAPI())
 }
 
 private func achievementRow() -> GameCenterRow {
@@ -260,6 +270,47 @@ struct GameCenterWriteTests {
         for path in GameCenterStub.log.paths {
             #expect(!deprecated.contains { path.hasPrefix($0) }, "\(path) is a v1 path")
         }
+    }
+
+    @Test func metricsKeepTheirTimeAndGroupingDimension() async throws {
+        let response = #"{"data":[{"type":"metric","dimensions":{"result":{"data":"MATCHED"}},"dataPoints":[{"start":"2026-08-13T12:15:00Z","values":{"count":4}}]},{"type":"metric","dimensions":{"result":{"data":"EXPIRED"}},"dataPoints":[{"start":"2026-08-13T12:15:00Z","values":{"count":2}}]}]}"#
+        let client = AppleGameCenterMatchmakingClient(
+            api: gameCenterAPI(responseBody: response))
+
+        let table = try await client.metric(.queueRequests, id: "queue-1")
+
+        #expect(table.columns == ["Date", "result", "count"])
+        #expect(Set(table.rows.map { $0.joined(separator: "|") }) == [
+            "2026-08-13T12:15:00Z|MATCHED|4",
+            "2026-08-13T12:15:00Z|EXPIRED|2",
+        ])
+    }
+
+    @Test func testActionsSendTheShapesAppleDocuments() async throws {
+        let api = gameCenterAPI()
+        let catalog = AppleGameCenterCatalogClient(api: api)
+        try await catalog.submitScore(bundleID: "com.studio.game",
+                                      vendorIdentifier: "high-score",
+                                      scopedPlayerID: "A:player", score: 123,
+                                      preReleased: true)
+        try await catalog.submitAchievement(bundleID: "com.studio.game",
+                                            vendorIdentifier: "first-win",
+                                            scopedPlayerID: "A:player", percentage: 30,
+                                            preReleased: true)
+        _ = try await AppleGameCenterMatchmakingClient(api: api).test(
+            ruleSetID: "rules-1",
+            requests: [.init(id: "request-1", name: "Request 1", playerCount: 2)])
+
+        let score = GameCenterStub.log.attributes("POST", "LeaderboardEntrySubmissions")
+        let achievement = GameCenterStub.log.attributes(
+            "POST", "PlayerAchievementSubmissions")
+        #expect(score["vendorIdentifier"] as? String == "high-score")
+        #expect(achievement["percentageAchieved"] as? Int == 30)
+        let body = GameCenterStub.log.body("POST", "RuleSetTests")
+        let included = body["included"] as? [[String: Any]]
+        let attributes = included?.first?["attributes"] as? [String: Any]
+        #expect(attributes?["requestName"] as? String == "Request 1")
+        #expect(attributes?["playerCount"] as? Int == 2)
     }
 }
 
