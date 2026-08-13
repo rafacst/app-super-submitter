@@ -120,9 +120,11 @@ jobs:
           # cannot read from the tree: Supporting/Analytics.local.xcconfig is
           # git-ignored, so a checkout has only the empty default beside it. A
           # setting on this command line beats every xcconfig, which is what
-          # puts the token in the shipped bundle. An unset secret builds a
-          # release that measures nothing, and that is the intended answer: no
-          # measurement never stops a release.
+          # puts the token in the shipped bundle. An unset secret expands to
+          # an empty string here, and an empty setting still beats the
+          # xcconfig, so the bundle ships with no token at all. Three releases
+          # went out that way before anybody noticed, because nothing read the
+          # key back. The step below now does.
           xcodebuild build \
             -project SuperSubmitter.xcodeproj \
             -scheme SuperSubmitter \
@@ -169,6 +171,30 @@ jobs:
             fi
           done
           echo "Licensing keys are present."
+
+      # A Release build with no project token calls PostHogClient.setup(),
+      # which returns before it starts the SDK. The app then runs perfectly
+      # and reports nothing, and it says so nowhere: a release that measures
+      # nothing looks exactly like a release nobody used. Read the key back
+      # off the bundle, the same way the three checks around this one do.
+      - name: Check the release can report
+        run: |
+          set -euo pipefail
+          PLIST="$RUNNER_TEMP/dd/Build/Products/Release/SuperSubmitter.app/Contents/Info.plist"
+          for key in SSPostHogProjectToken SSPostHogHost; do
+            value=$(plutil -extract "$key" raw -o - "$PLIST" 2>/dev/null || echo "")
+            # The unexpanded literal is the other way this fails. A setting
+            # that is empty leaves the key empty; a setting that does not
+            # exist at all leaves the plist holding $(POSTHOG_PROJECT_TOKEN),
+            # and PostHogClient reads that as missing too.
+            case "$value" in
+              ""|'<stdin>: No value at that key path'|'$('*)
+                echo "::error::$key is '$value' in the built app, so it would send no analytics. Set the POSTHOG_PROJECT_TOKEN repository secret."
+                exit 1
+                ;;
+            esac
+          done
+          echo "The app can report."
 
       # The feed the shipped app polls, and the key it verifies the download
       # with. An empty either one ships an app that never updates, and says
