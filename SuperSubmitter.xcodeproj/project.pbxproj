@@ -184,9 +184,11 @@
 		864F1C31497C25A0C582A0BD /* RunSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5DD31803E31C82E0292788 /* RunSection.swift */; };
 		86A1B3A20817BDE8E9242B79 /* SupportMailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8324CF340D082632FA9E7B1B /* SupportMailTests.swift */; };
 		8755AD9DB50C66432A8A6873 /* AppStateAppleReads.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E666062418BDAA89C5E014 /* AppStateAppleReads.swift */; };
+		87B2E22474E887967C460AB0 /* AppStateGamingActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB0228671955972A9B2EA28E /* AppStateGamingActions.swift */; };
 		88706A2206A6D167031D5C00 /* AppStateArtifacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75812E72D8517689DBB03F82 /* AppStateArtifacts.swift */; };
 		89D017C8ED9D35A8F4F741E3 /* AppleSubscriptionVersionsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F198CCA5FDE4468AF208DC16 /* AppleSubscriptionVersionsClient.swift */; };
 		8AAD15CE12FD18EEAB3B4FB3 /* GoogleSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F011ED191C0B189D756EC32 /* GoogleSupportTests.swift */; };
+		8B55C5C14ADF145B52E89CAF /* GameCenterInsightPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE4FD736D7DEDC57CE5AF58 /* GameCenterInsightPanels.swift */; };
 		8DB61E764C32F96523CD2F6E /* AgeRatingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 558841ACC76CF336FE4C7AE9 /* AgeRatingTests.swift */; };
 		8E0EA2DF18900A4042E1C1AF /* GamingSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FF85544E08DF430A925D14 /* GamingSendTests.swift */; };
 		8E1B38B255D980F39FA2C3B7 /* ManagingTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB1E1387A606C12224884C7 /* ManagingTabs.swift */; };
@@ -566,6 +568,7 @@
 		89F1D6FB9888910EC3020105 /* AppReviewStatesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppReviewStatesTests.swift; sourceTree = "<group>"; };
 		8B28CB62908001CE8F277292 /* SupabaseOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseOAuth.swift; sourceTree = "<group>"; };
 		8CC4CA23BB736A161A292AEE /* ResponsiveFormTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponsiveFormTests.swift; sourceTree = "<group>"; };
+		8CE4FD736D7DEDC57CE5AF58 /* GameCenterInsightPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterInsightPanels.swift; sourceTree = "<group>"; };
 		8D0C17A03108A0D101068749 /* ReleaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseClient.swift; sourceTree = "<group>"; };
 		8D79C5DE3F2E7E5B601B24DD /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
 		8DAB421E8F5BDC7CBD7F52C9 /* AppTagsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTagsPanel.swift; sourceTree = "<group>"; };
@@ -680,6 +683,7 @@
 		EA20D03CFA77AF800B818FB1 /* PlayMarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayMarkTests.swift; sourceTree = "<group>"; };
 		EA51A86FD30AB3FD71F84F3B /* UnsurfacedFieldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsurfacedFieldTests.swift; sourceTree = "<group>"; };
 		EA8D27AE556ADD5A95669DD1 /* MarketingScreenReviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingScreenReviewTests.swift; sourceTree = "<group>"; };
+		EB0228671955972A9B2EA28E /* AppStateGamingActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateGamingActions.swift; sourceTree = "<group>"; };
 		EB601DC6092EE60B30015B66 /* AccountFitsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountFitsTests.swift; sourceTree = "<group>"; };
 		EB820544F90D5BFFAC5FD0C2 /* AppleExtrasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleExtrasTests.swift; sourceTree = "<group>"; };
 		EC4609C1C1DC4FF0D6E8A6FA /* StateReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateReader.swift; sourceTree = "<group>"; };
@@ -1154,6 +1158,7 @@
 				A1AFAB6589CDC4EBC3895BCF /* AppStateDirectApply.swift */,
 				4EBD6FED9F592D6DC5898FB2 /* AppStateExistingImport.swift */,
 				9B114D1334E2D4FD48414837 /* AppStateGaming.swift */,
+				EB0228671955972A9B2EA28E /* AppStateGamingActions.swift */,
 				E9A1913387574636BF5B1062 /* AppStateGoogleActions.swift */,
 				DD81D4B5724302E529BD064E /* AppStateMarketing.swift */,
 				72EFC679B4E1962725F31C7F /* AppStateReview.swift */,
@@ -1265,6 +1270,7 @@
 				1B1BACCC636778CEAA23A8EA /* DetailsTab.swift */,
 				B711B900DC3B36F741DC7CD3 /* DirectApplyBar.swift */,
 				871973AC82FB6ED9F07D2330 /* GameCenterCatalogPanels.swift */,
+				8CE4FD736D7DEDC57CE5AF58 /* GameCenterInsightPanels.swift */,
 				1989BC0E33B21826B0FDCEA6 /* GameCenterMatchmakingPanels.swift */,
 				B8B9FED8859CBAEEFD2C37FF /* GameCenterStorePanels.swift */,
 				101AE44065A38E2E276E4C5B /* GamingTab.swift */,
@@ -1669,6 +1675,7 @@
 				458A09C67A97B85371C4A2F5 /* AppStateDirectApply.swift in Sources */,
 				61410815C5F8D4261E355306 /* AppStateExistingImport.swift in Sources */,
 				09F9347747C703F9A9634116 /* AppStateGaming.swift in Sources */,
+				87B2E22474E887967C460AB0 /* AppStateGamingActions.swift in Sources */,
 				4BBF9997B69994DE3558D2DD /* AppStateGoogleActions.swift in Sources */,
 				CB864ED3360981839F130C9D /* AppStateMarketing.swift in Sources */,
 				2A23F09C81A3FBF3875A5FCD /* AppStateReview.swift in Sources */,
@@ -1698,6 +1705,7 @@
 				C1172D668E95B0823DB45BDA /* FieldSearchSheet.swift in Sources */,
 				29E278940792EA7A38E67731 /* Fields.swift in Sources */,
 				B6A64052FD8B66CDEC02DDF1 /* GameCenterCatalogPanels.swift in Sources */,
+				8B55C5C14ADF145B52E89CAF /* GameCenterInsightPanels.swift in Sources */,
 				0EA04B2BB8C0833D59AFE091 /* GameCenterMatchmakingPanels.swift in Sources */,
 				B51CA9ED922EB6B96C80F1F5 /* GameCenterStorePanels.swift in Sources */,
 				490E310ADCBC6F3B087BF9D4 /* GamingTab.swift in Sources */,

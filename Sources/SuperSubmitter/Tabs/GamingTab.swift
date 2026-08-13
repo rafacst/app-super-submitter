@@ -34,6 +34,7 @@ struct GamingTab: View {
                 // modes, because Gaming is a publishing tab that a live game
                 // is edited on.
                 GameCenterSendPanel()
+                GamingActionBanner()
                 GameCenterDetailPanel()
                 GameCenterAchievementsPanel()
                 GameCenterLeaderboardsPanel()
@@ -41,6 +42,12 @@ struct GamingTab: View {
                 GameCenterActivitiesPanel()
                 GameCenterChallengesPanel()
                 GameCenterMatchmakingPanel()
+                // The two panels that answer a question instead of describing
+                // a desired state. Both are folded shut, because both cost a
+                // request and neither belongs to the edit a developer came
+                // here to make.
+                GameCenterMetricsPanel()
+                GameCenterTestDataPanel()
             }
         }
         .frame(maxWidth: 1040, alignment: .leading)
@@ -115,6 +122,7 @@ struct GameCenterDetailPanel: View {
                         TextField("Studio shared",
                                   text: state.gameCenterText(\.group))
                     }
+                    GameCenterGroupDelete()
                     LabeledField("Opening leaderboard",
                                  note: "The board Game Center shows first") {
                         ChoiceField(value: state.gameCenterText(\.defaultLeaderboard),
@@ -142,6 +150,80 @@ struct GameCenterDetailPanel: View {
             }
             .storePanel(padding: 14)
         }
+    }
+}
+
+/// What the last call that was not a plan step reported.
+///
+/// One line for the whole tab, near the top, because one of those calls runs
+/// at a time: a delete, a metric read, or a test submission. A card deep in a
+/// list has no room to report a failure, and a message that appeared down
+/// there would be off screen the moment the list scrolled.
+struct GamingActionBanner: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        if !state.gamingActionMessage.isEmpty {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: state.gamingActionFailed
+                      ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(state.gamingActionFailed ? Theme.red : Theme.green)
+                Text(state.gamingActionMessage)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button("Dismiss") { state.gamingActionMessage = "" }
+                    .controlSize(.small)
+            }
+            .padding(11)
+            .frame(maxWidth: 700, alignment: .leading)
+            .background((state.gamingActionFailed ? Theme.red : Theme.green).opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 9))
+        }
+    }
+}
+
+/// Removes the shared group from the account.
+///
+/// It is the one destructive button on this tab that reaches past this game.
+/// A group is account-wide, so deleting it takes the shared achievements and
+/// leaderboards from every game in it, and this app knows about one of them.
+/// The confirmation says exactly that.
+struct GameCenterGroupDelete: View {
+    @Environment(AppState.self) private var state
+    @State private var deleting = false
+
+    private var name: String? {
+        guard let name = state.gameCenter?.group, !name.isEmpty,
+              state.liveGameCenter?.groups[name] != nil else { return nil }
+        return name
+    }
+
+    var body: some View {
+        if let name {
+            Button("Delete the group", role: .destructive) { deleting = true }
+                .controlSize(.small)
+                .gameCenterDeleteConfirmation($deleting, .group(name: name))
+        }
+    }
+}
+
+struct GameCenterStoreDeleteButton: View {
+    let deletion: AppState.GameCenterDeletion
+    @State private var deleting = false
+
+    init(_ deletion: AppState.GameCenterDeletion) {
+        self.deletion = deletion
+    }
+
+    var body: some View {
+        Button(role: .destructive) { deleting = true } label: {
+            Image(systemName: "trash.slash")
+        }
+        .controlSize(.small)
+        .accessibilityLabel(deletion.title)
+        .help("Delete it in App Store Connect")
+        .gameCenterDeleteConfirmation($deleting, deletion)
     }
 }
 
@@ -247,6 +329,7 @@ struct GameCenterVersionRows: View {
 /// id, and a trash button that removes the row from the manifest and nothing
 /// from App Store Connect. `// ponytail: one card, five families.`
 struct GameCenterCard<Content: View>: View {
+    @Environment(AppState.self) private var state
     let title: String
     /// The family and id this card edits, so the header can say whether App
     /// Store Connect already holds it. Nil on a card that has no store twin,
@@ -254,15 +337,23 @@ struct GameCenterCard<Content: View>: View {
     /// the read has no vendor identifier to match them on.
     var family: AppleGameCenterCatalogClient.Family?
     var vendorID: String = ""
+    /// What the destructive button removes from App Store Connect, for a card
+    /// whose row Apple keys by reference name rather than by a vendor
+    /// identifier: a rule set, a queue. A card that names a family works its
+    /// own out.
+    var storeDeletion: AppState.GameCenterDeletion?
     let remove: () -> Void
     @ViewBuilder let content: Content
+    @State private var deleting = false
 
     init(_ title: String, family: AppleGameCenterCatalogClient.Family? = nil,
-         vendorID: String = "", remove: @escaping () -> Void,
+         vendorID: String = "", storeDeletion: AppState.GameCenterDeletion? = nil,
+         remove: @escaping () -> Void,
          @ViewBuilder content: () -> Content) {
         self.title = title
         self.family = family
         self.vendorID = vendorID
+        self.storeDeletion = storeDeletion
         self.remove = remove
         self.content = content()
     }
@@ -278,16 +369,72 @@ struct GameCenterCard<Content: View>: View {
                     GameCenterStoreBadge(family: family, vendorID: vendorID)
                 }
                 Spacer(minLength: 0)
+                // Two different removals, and they are not the same act. The
+                // trash stops this app managing the row and leaves everything
+                // in App Store Connect. The second one takes the object away
+                // up there, with every score behind it, so it appears only
+                // when there is something up there to take and it confirms in
+                // its own words.
+                if deletion != nil {
+                    Button(role: .destructive) { deleting = true } label: {
+                        Image(systemName: "trash.slash")
+                    }
+                    .controlSize(.small)
+                    .accessibilityLabel("Delete \(title.isEmpty ? "this row" : title) in App Store Connect")
+                    .help("Delete it in App Store Connect, with every score behind it")
+                }
                 Button(role: .destructive, action: remove) {
                     Image(systemName: "trash")
                 }
                 .controlSize(.small)
                 .accessibilityLabel("Stop managing \(title.isEmpty ? "this row" : title)")
+                .help("Stop managing it here. Nothing changes in App Store Connect")
             }
             content
         }
         .padding(9)
         .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+        .gameCenterDeleteConfirmation($deleting, deletion)
+    }
+
+    /// What the destructive button would remove, or nil when App Store Connect
+    /// holds nothing to remove and the button is not drawn.
+    private var deletion: AppState.GameCenterDeletion? {
+        if let storeDeletion { return storeDeletion }
+        guard let family, !vendorID.isEmpty,
+              state.liveObject(family, vendorID) != nil else { return nil }
+        return .object(family: family, vendorID: vendorID,
+                       name: title.isEmpty ? vendorID : title)
+    }
+}
+
+/// The one confirmation every destructive Game Center button uses.
+///
+/// One place, because every one of them says the same shape of thing: what
+/// goes, what goes with it, and that no call brings it back. Spelling that out
+/// per card would be five chances to word it more softly than it is.
+extension View {
+    func gameCenterDeleteConfirmation(_ presented: Binding<Bool>,
+                                      _ deletion: AppState.GameCenterDeletion?) -> some View {
+        modifier(GameCenterDeleteConfirmation(presented: presented, deletion: deletion))
+    }
+}
+
+private struct GameCenterDeleteConfirmation: ViewModifier {
+    @Environment(AppState.self) private var state
+    @Binding var presented: Bool
+    let deletion: AppState.GameCenterDeletion?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(deletion?.title ?? "", isPresented: $presented) {
+            Button("Delete it in App Store Connect", role: .destructive) {
+                guard let deletion else { return }
+                Task { await state.deleteInGameCenter(deletion) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(deletion?.message ?? "")
+        }
     }
 }
 

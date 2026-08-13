@@ -307,6 +307,220 @@ public struct AppleGameCenterMatchmakingClient: Sendable {
         return id
     }
 
+    // MARK: - The metrics
+
+    /// The ten metric series Apple publishes for matchmaking.
+    ///
+    /// Every one is a `GET` and nothing here is stored. The app draws the
+    /// window the store answers with and keeps none of it, which is the rule
+    /// every metric in this app follows.
+    public enum Metric: String, Sendable, CaseIterable, Identifiable {
+        case classicRequests, ruleBasedRequests
+        case queueRequests, queueSizes, sessions
+        case experimentQueueRequests, experimentQueueSizes
+        case booleanRuleResults, numberRuleResults, ruleErrors
+
+        public var id: String { rawValue }
+
+        /// What the series answers, in the words the panel shows.
+        public var label: String {
+            switch self {
+            case .classicRequests: "Requests through invite matchmaking"
+            case .ruleBasedRequests: "Requests through a rule set"
+            case .queueRequests: "Requests into the queue"
+            case .queueSizes: "Players waiting"
+            case .sessions: "Sessions the queue formed"
+            case .experimentQueueRequests: "Requests into the queue, experiment"
+            case .experimentQueueSizes: "Players waiting, experiment"
+            case .booleanRuleResults: "How often the rule passed"
+            case .numberRuleResults: "What the rule scored"
+            case .ruleErrors: "Rules that failed to run"
+            }
+        }
+
+        /// Which resource the id in the path belongs to. The panel asks for
+        /// that one and offers no metric it has no id for.
+        public enum Owner: Sendable { case detail, queue, rule }
+
+        public var owner: Owner {
+            switch self {
+            case .classicRequests, .ruleBasedRequests: .detail
+            case .queueRequests, .queueSizes, .sessions,
+                 .experimentQueueRequests, .experimentQueueSizes: .queue
+            case .booleanRuleResults, .numberRuleResults, .ruleErrors: .rule
+            }
+        }
+
+        func path(id: String) -> String {
+            switch self {
+            case .classicRequests:
+                "/v1/gameCenterDetails/\(id)/metrics/classicMatchmakingRequests"
+            case .ruleBasedRequests:
+                "/v1/gameCenterDetails/\(id)/metrics/ruleBasedMatchmakingRequests"
+            case .queueRequests:
+                "/v1/gameCenterMatchmakingQueues/\(id)/metrics/matchmakingRequests"
+            case .queueSizes:
+                "/v1/gameCenterMatchmakingQueues/\(id)/metrics/matchmakingQueueSizes"
+            case .sessions:
+                "/v1/gameCenterMatchmakingQueues/\(id)/metrics/matchmakingSessions"
+            case .experimentQueueRequests:
+                "/v1/gameCenterMatchmakingQueues/\(id)/metrics/experimentMatchmakingRequests"
+            case .experimentQueueSizes:
+                "/v1/gameCenterMatchmakingQueues/\(id)/metrics/experimentMatchmakingQueueSizes"
+            case .booleanRuleResults:
+                "/v1/gameCenterMatchmakingRules/\(id)/metrics/matchmakingBooleanRuleResults"
+            case .numberRuleResults:
+                "/v1/gameCenterMatchmakingRules/\(id)/metrics/matchmakingNumberRuleResults"
+            case .ruleErrors:
+                "/v1/gameCenterMatchmakingRules/\(id)/metrics/matchmakingRuleErrors"
+            }
+        }
+    }
+
+    /// One metric series, as the table the Reports panel already draws.
+    ///
+    /// Apple answers a data point per window with a bag of named values, and
+    /// the bag differs per metric. So the columns come from the answer rather
+    /// than from a list in this file: a metric Apple adds a value to draws that
+    /// value the day it appears, and none of the ten needs its own reader.
+    /// - Parameter granularity: the width of one data point. `PT15M` is the
+    ///   only value Apple's reference shows, so it is the default and the app
+    ///   offers no chooser: a granularity Apple does not take is a 400 with
+    ///   nothing on the screen to explain it.
+    public func metric(_ metric: Metric, id: String,
+                       granularity: String = "PT15M") async throws -> ReportTable {
+        let payload = JSON(data: try await api.apple(
+            "GET", metric.path(id: id) + "?granularity=\(granularity)&limit=200").data)
+
+        var points: [(start: String, dimensions: [String: String],
+                     values: [String: String])] = []
+        var dimensionNames: [String] = []
+        var valueNames: [String] = []
+        for series in payload["data"].array {
+            var dimensions: [String: String] = [:]
+            for key in series["dimensions"].keys {
+                let value = series["dimensions"][key]["data"]
+                let text = value.string
+                    ?? value.bool.map(String.init)
+                    ?? value.int.map(String.init)
+                    ?? value.double.map { String(format: "%g", $0) }
+                if let text {
+                    dimensions[key] = text
+                    if !dimensionNames.contains(key) { dimensionNames.append(key) }
+                }
+            }
+            for point in series["dataPoints"].array {
+                let start = point["start"].string ?? ""
+                var values: [String: String] = [:]
+                for key in point["values"].keys {
+                    let value = point["values"][key]
+                    values[key] = value.string
+                        ?? value.int.map(String.init)
+                        ?? value.double.map { String(format: "%g", $0) }
+                        ?? ""
+                    if !valueNames.contains(key) { valueNames.append(key) }
+                }
+                points.append((start, dimensions, values))
+            }
+        }
+        guard !points.isEmpty else { return ReportTable() }
+
+        dimensionNames.sort()
+        valueNames.sort()
+        // Oldest first, so the chart reads left to right. Apple answers newest
+        // first.
+        points.sort { $0.start < $1.start }
+        return ReportTable(
+            columns: ["Date"] + dimensionNames + valueNames,
+            rows: points.map { point in
+                [point.start]
+                    + dimensionNames.map { point.dimensions[$0] ?? "" }
+                    + valueNames.map { point.values[$0] ?? "" }
+            })
+    }
+
+    // MARK: - The rule set test
+
+    /// One synthetic request in a rule set test.
+    public struct TestRequest: Sendable, Equatable, Identifiable {
+        public var id: String
+        public var name: String
+        public var playerCount: Int
+        public var minPlayers: Int?
+        public var maxPlayers: Int?
+        public var secondsInQueue: Int?
+
+        public init(id: String, name: String, playerCount: Int, minPlayers: Int? = nil,
+                    maxPlayers: Int? = nil, secondsInQueue: Int? = nil) {
+            self.id = id
+            self.name = name
+            self.playerCount = playerCount
+            self.minPlayers = minPlayers
+            self.maxPlayers = maxPlayers
+            self.secondsInQueue = secondsInQueue
+        }
+    }
+
+    /// One match the test produced: the requests it put together, by name.
+    public struct TestMatch: Sendable, Equatable, Identifiable {
+        public var id: Int
+        public var requestNames: [String]
+
+        public init(id: Int, requestNames: [String]) {
+            self.id = id
+            self.requestNames = requestNames
+        }
+    }
+
+    /// Runs a rule set against synthetic players and answers the matches it
+    /// made.
+    ///
+    /// **It changes nothing in the account.** Apple evaluates the rules and
+    /// returns the result, so there is nothing to confirm and nothing to undo.
+    /// The requests are inline creates: they exist for the length of this one
+    /// call and Apple stores none of them.
+    public func test(ruleSetID: String, requests: [TestRequest]) async throws -> [TestMatch] {
+        let included = requests.map { request -> [String: Any] in
+            var attributes: [String: Any] = [
+                "requestName": request.name,
+                "playerCount": request.playerCount,
+            ]
+            if let minPlayers = request.minPlayers { attributes["minPlayers"] = minPlayers }
+            if let maxPlayers = request.maxPlayers { attributes["maxPlayers"] = maxPlayers }
+            if let seconds = request.secondsInQueue { attributes["secondsInQueue"] = seconds }
+            return [
+                "type": "gameCenterMatchmakingTestRequests",
+                "id": request.id,
+                "attributes": attributes,
+            ]
+        }
+
+        let response = try await api.apple("POST", "/v1/gameCenterMatchmakingRuleSetTests", body: [
+            "data": [
+                "type": "gameCenterMatchmakingRuleSetTests",
+                "relationships": [
+                    "matchmakingRuleSet": [
+                        "data": ["type": "gameCenterMatchmakingRuleSets", "id": ruleSetID],
+                    ],
+                    "matchmakingRequests": [
+                        "data": requests.map {
+                            ["type": "gameCenterMatchmakingTestRequests", "id": $0.id]
+                        },
+                    ],
+                ],
+            ],
+            "included": included,
+        ])
+
+        // `matchmakingResults` is an array of arrays: one inner array per
+        // match, holding the requests that were put together.
+        let results = JSON(data: response.data)["data"]["attributes"]["matchmakingResults"]
+        return results.array.enumerated().map { index, match in
+            TestMatch(id: index,
+                      requestNames: match.array.compactMap { $0["requestName"].string })
+        }
+    }
+
     // MARK: - The deletes
 
     /// Never a plan step. Each one is the destructive button on its own card,

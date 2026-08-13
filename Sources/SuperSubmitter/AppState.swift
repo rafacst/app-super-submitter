@@ -356,6 +356,14 @@ final class AppState {
     @ObservationIgnored
     var directPlanCache: (generation: Int, manifest: Manifest, plan: PlanResult)?
 
+    // The Gaming tab. Its send button uses the direct-apply state above like
+    // every other tab; these two belong to the calls beside it that are not a
+    // plan at all: a delete, a metric read, and a test submission. One message
+    // rather than one per panel, because one of them runs at a time and the
+    // panel that started it is the one the developer is looking at.
+    var gamingActionMessage = ""
+    var gamingActionFailed = false
+
     // Tab 3.
     var locale = ""
     /// Whether the listing stands in one column instead of one per store.

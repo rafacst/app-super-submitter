@@ -42,7 +42,13 @@ struct GameCenterMatchmakingPanel: View {
 
     private func ruleSetCard(_ index: Int,
                              _ set: Manifest.GameCenter.RuleSet) -> some View {
-        GameCenterCard(set.name, remove: { state.removeRuleSet(at: index) }) {
+        // A rule set the account holds can be deleted from here, and that is
+        // not the same act as dropping the row: a queue that matches with it
+        // stops matching players.
+        GameCenterCard(set.name,
+                       storeDeletion: state.liveGameCenter?.ruleSets[set.name] == nil
+                           ? nil : .ruleSet(name: set.name),
+                       remove: { state.removeRuleSet(at: index) }) {
             FieldRow {
                 LabeledField("Name", note: "A queue points at this name",
                              width: 220) {
@@ -85,6 +91,12 @@ struct GameCenterMatchmakingPanel: View {
                     LabeledField("Most", width: 90) {
                         TextField("2", text: state.teamPair(index, slot, at: 1))
                     }
+                    if state.liveGameCenter?.ruleSets[set.name]?.teams[
+                        set.teams?[safe: slot]?.name ?? ""] != nil {
+                        GameCenterStoreDeleteButton(
+                            .team(ruleSet: set.name,
+                                  name: set.teams?[safe: slot]?.name ?? ""))
+                    }
                     Button(role: .destructive) {
                         state.removeTeam(ruleSet: index, at: slot)
                     } label: {
@@ -123,6 +135,12 @@ struct GameCenterMatchmakingPanel: View {
                         LabeledField("Weight", note: "Against the others",
                                      width: 80) {
                             TextField("1", text: state.ruleWeight(index, slot))
+                        }
+                        if state.liveGameCenter?.ruleSets[set.name]?.rules[
+                            set.rules?[safe: slot]?.name ?? ""] != nil {
+                            GameCenterStoreDeleteButton(
+                                .rule(ruleSet: set.name,
+                                      name: set.rules?[safe: slot]?.name ?? ""))
                         }
                         Button(role: .destructive) {
                             state.removeRule(ruleSet: index, at: slot)
@@ -170,7 +188,10 @@ struct GameCenterMatchmakingPanel: View {
 
     private func queueCard(_ index: Int,
                            _ queue: Manifest.GameCenter.Queue) -> some View {
-        GameCenterCard(queue.name, remove: { state.removeQueue(at: index) }) {
+        GameCenterCard(queue.name,
+                       storeDeletion: state.liveGameCenter?.queues[queue.name] == nil
+                           ? nil : .queue(name: queue.name),
+                       remove: { state.removeQueue(at: index) }) {
             FieldRow {
                 LabeledField("Name", width: 220) {
                     TextField("Ranked", text: state.queueName(index))

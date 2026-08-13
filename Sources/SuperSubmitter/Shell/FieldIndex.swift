@@ -143,6 +143,10 @@ enum FieldIndex {
               keywords: ["duel", "compete", "friend", "game center"]),
         .init(id: "gaming.matchmaking", label: "Matchmaking", tab: .gaming,
               keywords: ["queue", "rule set", "team", "skill", "game center"]),
+        .init(id: "gaming.metrics", label: "Matchmaking metrics", tab: .gaming,
+              keywords: ["queue size", "sessions", "rule errors", "game center"]),
+        .init(id: "gaming.testData", label: "Test data", tab: .gaming,
+              keywords: ["submit score", "sandbox", "player", "game center"]),
         .init(id: "gaming.send", label: "Send to Game Center", tab: .gaming,
               keywords: ["apply", "write", "publish", "game center"]),
 

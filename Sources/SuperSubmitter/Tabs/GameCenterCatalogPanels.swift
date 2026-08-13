@@ -346,22 +346,46 @@ extension GameCenterLeaderboardSetsPanel {
                     .font(Theme.font(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.text2)
                 ForEach(names) { name in
-                    HStack(spacing: 8) {
-                        Text(name.locale)
-                            .font(Theme.font(size: 10, weight: .semibold))
-                            .foregroundStyle(Theme.text3)
-                            .frame(width: 54, alignment: .leading)
-                        Text(name.name.isEmpty ? "No name" : name.name)
-                            .font(Theme.font(size: 11))
-                            .foregroundStyle(name.name.isEmpty ? Theme.text3 : Theme.text)
-                        Spacer(minLength: 0)
-                    }
+                    GameCenterMemberNameRow(name: name, set: item.id)
                 }
-                Text("Read only. Apple no longer takes a per-set name from the API, so changing one of these is a job for App Store Connect.")
+                Text("Apple no longer takes a per-set name from the API, so this app can remove a stale one and cannot write one. Changing a name is a job for App Store Connect.")
                     .font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+/// One name Apple holds for a board inside a set, and the one thing this app
+/// can do about it.
+///
+/// Apple deprecated the create and the change on a member localization and
+/// left the read and the delete live. So the row shows the name and offers to
+/// remove it, which is what a developer wants for a name that no longer
+/// matches the game: the set's own localization then supplies the words.
+struct GameCenterMemberNameRow: View {
+    let name: AppleGameCenterCatalogClient.MemberName
+    let set: String
+    @State private var deleting = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(name.locale)
+                .font(Theme.font(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.text3)
+                .frame(width: 54, alignment: .leading)
+            Text(name.name.isEmpty ? "No name" : name.name)
+                .font(Theme.font(size: 11))
+                .foregroundStyle(name.name.isEmpty ? Theme.text3 : Theme.text)
+            Spacer(minLength: 0)
+            Button(role: .destructive) { deleting = true } label: {
+                Image(systemName: "trash.slash")
+            }
+            .controlSize(.small)
+            .accessibilityLabel("Remove the \(name.locale) name in this set")
+        }
+        .gameCenterDeleteConfirmation(
+            $deleting, .memberName(id: name.id, locale: name.locale, set: set))
     }
 }
 

@@ -662,6 +662,53 @@ public struct AppleGameCenterCatalogClient: Sendable {
             "DELETE", "/v1/gameCenterLeaderboardSetMemberLocalizations/\(id)")
     }
 
+    // MARK: - Test data
+
+    /// Posts one score for one player, or one achievement's progress.
+    ///
+    /// **Neither one is a manifest value and neither ever appears in a plan.**
+    /// They are the developer's own tool for checking that a board formats a
+    /// score the way the game expects, and that an achievement unlocks where
+    /// they think it does.
+    ///
+    /// `preReleased` says which side the entry lands on. It defaults to true
+    /// everywhere in this app, so a mistaken press reaches the prerelease data
+    /// and not the board that players are on.
+    public func submitScore(bundleID: String, vendorIdentifier: String,
+                            scopedPlayerID: String, score: Double,
+                            preReleased: Bool = true) async throws {
+        _ = try await api.apple("POST", "/v1/gameCenterLeaderboardEntrySubmissions", body: [
+            "data": [
+                "type": "gameCenterLeaderboardEntrySubmissions",
+                "attributes": [
+                    "bundleId": bundleID,
+                    "vendorIdentifier": vendorIdentifier,
+                    "scopedPlayerId": scopedPlayerID,
+                    "score": score,
+                    "preReleased": preReleased,
+                ],
+            ],
+        ])
+    }
+
+    /// Posts achievement progress for one player, as a percentage.
+    public func submitAchievement(bundleID: String, vendorIdentifier: String,
+                                  scopedPlayerID: String, percentage: Int,
+                                  preReleased: Bool = true) async throws {
+        _ = try await api.apple("POST", "/v1/gameCenterPlayerAchievementSubmissions", body: [
+            "data": [
+                "type": "gameCenterPlayerAchievementSubmissions",
+                "attributes": [
+                    "bundleId": bundleID,
+                    "vendorIdentifier": vendorIdentifier,
+                    "scopedPlayerId": scopedPlayerID,
+                    "percentageAchieved": percentage,
+                    "preReleased": preReleased,
+                ],
+            ],
+        ])
+    }
+
     private func link(path: String, type: String,
                       add: [String], remove: [String]) async throws {
         if !add.isEmpty {
