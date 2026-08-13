@@ -100,6 +100,10 @@ struct PlanTab: View {
     /// The one store the developer chose from the Apply menu.
     @State private var confirmingStore: Store?
     @State private var confirmingApply = false
+    /// The first of the two questions the cancel asks.
+    @State private var askingCancel = false
+    /// The second. Nothing reaches Apple until this one is answered.
+    @State private var confirmingCancel = false
     /// Shut by default. See acknowledgedSummary.
     @State private var showingAcknowledged = false
     /// The systems whose rows are open. Empty, so every column arrives shut.
@@ -847,22 +851,42 @@ struct PlanTab: View {
         let anyStoreCanApply = state.stores.contains { state.canApply(to: $0) }
         let hasProviderChanges = !plan.steps(for: .provider).isEmpty
         let blocked = !locked && !anyStoreCanApply && !(hasProviderChanges && state.canApply)
+        // Apple is holding this app in the review queue. The apply cannot run
+        // until that submission ends, and the developer standing here is the
+        // only person who can end it, so the button offers the one act that
+        // does. The Apply menu stays beside it wherever it still writes
+        // something: Google and the provider are not in Apple's queue.
+        let queued = state.appleSubmissionInQueue
         return VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .center, spacing: 16) {
-                Menu(state.dryRun ? "Dry run" : "Apply") {
-                    ForEach(state.stores.sorted { $0.rawValue < $1.rawValue }) { store in
-                        Button(store.storeName) { choose(store) }
-                            .disabled(!locked && !state.canApply(to: store))
-                    }
-                    if state.stores.count > 1 || hasProviderChanges {
-                        Divider()
-                        Button(hasProviderChanges ? "All changes" : "All stores") { choose(nil) }
-                            .disabled(!locked && !state.canApply)
-                    }
+                if queued {
+                    Button("Cancel the submission") { askingCancel = true }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.orange)
+                        .disabled(state.releasing != nil)
+                    // The call is with Apple, and the sheet is gone the moment
+                    // it is confirmed. Without this the row looks exactly as it
+                    // did before the press, which is what invites a second one.
+                    if state.releasing == .apple { Spinner() }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
-                .disabled(blocked)
+                if !queued || !blocked {
+                    Menu(state.dryRun ? "Dry run" : "Apply") {
+                        ForEach(state.stores.sorted { $0.rawValue < $1.rawValue }) { store in
+                            Button(store.storeName) { choose(store) }
+                                .disabled(!locked && !state.canApply(to: store))
+                        }
+                        if state.stores.count > 1 || hasProviderChanges {
+                            Divider()
+                            Button(hasProviderChanges ? "All changes" : "All stores") {
+                                choose(nil)
+                            }
+                            .disabled(!locked && !state.canApply)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .disabled(blocked)
+                }
 
                 Text(applyNote(plan))
                     .font(Theme.font(size: 12))
@@ -872,7 +896,31 @@ struct PlanTab: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
+            // Apple's own refusal. The Release tab prints this and this screen
+            // did not, so a cancel that Apple would not take answered with a
+            // button that came back and nothing else. Only beside the button
+            // that can produce it: the same field carries the Release tab's
+            // failures, and those belong on the tab that sent them.
+            if queued, let error = state.releaseError { ErrorLine(text: error) }
             acknowledgedSummary(plan)
+        }
+        // Two questions, and the second one names what cannot be undone. One
+        // press is what this app asks for a draft write; this one gives up a
+        // place in a queue that took days to reach.
+        .confirmationDialog("Cancel the App Store submission?", isPresented: $askingCancel) {
+            Button("Continue") { confirmingCancel = true }
+            Button("Keep it in the queue", role: .cancel) {}
+        } message: {
+            Text("The App Store loses its place in the review queue, and a new submission starts at the back of it. The version goes back to a draft that takes writes.")
+        }
+        .confirmationDialog("This cannot be undone. Cancel the submission?",
+                            isPresented: $confirmingCancel) {
+            Button("Cancel the submission", role: .destructive) {
+                Task { await state.cancelReviewQueueSubmission() }
+            }
+            Button("Keep it in the queue", role: .cancel) {}
+        } message: {
+            Text("Apple takes no cancel from the moment a reviewer opens the submission. Super Submitter reads the stores again afterwards.")
         }
         .confirmationDialog("Write to \(confirmingStore?.storeName ?? state.storeListText)?",
                             isPresented: $confirmingApply,

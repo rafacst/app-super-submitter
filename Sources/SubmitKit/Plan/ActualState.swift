@@ -366,7 +366,14 @@ public struct ActualState: Sendable, Equatable {
         public var appClipExperienceActions: Set<String> = []
         public var hasAppClipExperience: Bool?
         /// Spec 10.6. A second submission cannot open while one is open.
-        public var hasOpenReviewSubmission = false
+        ///
+        /// The state of that submission and not a bare yes, because only one of
+        /// them can still be taken back. `WAITING_FOR_REVIEW` is the queue, and
+        /// Apple refuses a cancel from the moment a reviewer opens it, so a
+        /// screen that offers the cancel has to tell the two apart.
+        public var openReviewSubmission: String?
+
+        public var hasOpenReviewSubmission: Bool { openReviewSubmission != nil }
         public var priceAmount: Decimal?
         /// Every customer price Apple sells at in the base territory, sorted.
         ///

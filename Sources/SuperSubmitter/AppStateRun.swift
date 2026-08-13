@@ -947,6 +947,36 @@ extension AppState {
         releasing = nil
     }
 
+    // MARK: - The submission waiting in the queue
+
+    /// True while Apple holds this app in the review queue and no reviewer has
+    /// opened it yet.
+    ///
+    /// The queue is the one state a cancel can still reach, so it is the one
+    /// state that may offer the button. It is read off the submission and not
+    /// off the version, because the two are not the same app: the submission
+    /// that blocks an apply is often the previous version's, and that version
+    /// state says `PREPARE_FOR_SUBMISSION` about the draft being written.
+    var appleSubmissionInQueue: Bool {
+        stores.contains(.apple)
+            && actualState.apple?.openReviewSubmission == "WAITING_FOR_REVIEW"
+    }
+
+    /// Takes the app back out of the review queue, then reads the stores again.
+    ///
+    /// The read is the point. The hold that hid the apply is a fact about the
+    /// store, so nothing on the Summary loses it until the store is asked
+    /// again, and the developer cancelled it in order to apply.
+    ///
+    /// A failed cancel reads nothing. `releaseError` carries Apple's own
+    /// refusal, the screen prints it, and a pass over both stores would say the
+    /// same thing more slowly.
+    func cancelReviewQueueSubmission() async {
+        await undoRelease(.apple)
+        guard releaseError == nil else { return }
+        await recheck()
+    }
+
     func undoRelease(_ store: Store) async {
         guard releasing == nil else { return }
         guard requirePaid(.storeRelease, .release) else { return }

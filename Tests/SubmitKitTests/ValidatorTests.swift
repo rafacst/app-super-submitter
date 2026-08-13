@@ -368,7 +368,7 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
     var actual = ActualState()
     var apple = ActualState.Apple()
     apple.versionState = "IN_REVIEW"
-    apple.hasOpenReviewSubmission = true
+    apple.openReviewSubmission = "IN_REVIEW"
     actual.apple = apple
 
     let found = findings(manifest, actual).filter {
@@ -421,7 +421,7 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
     var actual = ActualState()
     var apple = ActualState.Apple()
     apple.versionState = "PREPARE_FOR_SUBMISSION"
-    apple.hasOpenReviewSubmission = true
+    apple.openReviewSubmission = "WAITING_FOR_REVIEW"
     actual.apple = apple
 
     #expect(has(findings(manifest, actual), "state.openSubmission"))
@@ -431,7 +431,7 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
     let manifest = base()
     var actual = ActualState()
     var apple = ActualState.Apple()
-    apple.hasOpenReviewSubmission = true
+    apple.openReviewSubmission = "WAITING_FOR_REVIEW"
     actual.apple = apple
 
     let googleOnly = Validator.findings(Planner.Input(

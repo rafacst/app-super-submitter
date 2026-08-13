@@ -491,10 +491,9 @@ public struct StateReader: Sendable {
 
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
-        result.hasOpenReviewSubmission = submissions["data"].array.contains { item in
-            let state = item["attributes"]["state"].string ?? ""
-            return ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"].contains(state)
-        }
+        result.openReviewSubmission = submissions["data"].array.compactMap { item in
+            item["attributes"]["state"].string
+        }.first { ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"].contains($0) }
         return result
     }
 
