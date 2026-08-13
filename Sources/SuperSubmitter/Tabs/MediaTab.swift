@@ -565,32 +565,75 @@ private struct LiveMediaStrip: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 8) {
-                    ForEach(urls, id: \.self) { url in
-                        Group {
-                            if isVideo {
-                                Hatched()
-                                    .overlay(Image(systemName: "film")
-                                        .font(Theme.font(size: 20))
-                                        .foregroundStyle(Theme.text3))
-                            } else {
-                                AsyncImage(url: url) { image in
-                                    image.resizable().scaledToFit()
-                                } placeholder: {
-                                    Hatched()
-                                }
-                            }
-                        }
-                        .frame(width: 84, height: 120)
-                        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 5))
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    ForEach(Array(urls.enumerated()), id: \.element) { index, url in
+                        LiveMediaTile(url: url, isVideo: isVideo, position: index + 1,
+                                      store: store)
                     }
                 }
                 .padding(.bottom, 2)
             }
         }
         .opacity(0.55)
-        .allowsHitTesting(false)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(urls.count) \(isVideo ? "previews" : "screenshots") on \(store.storeName) now")
+    }
+}
+
+/// One picture the store shows today, and the press that opens it full size.
+///
+/// A button, and not a tap gesture on the picture. The strip used to carry
+/// `.allowsHitTesting(false)` so that nothing in it could be mistaken for a
+/// file to edit, and that also swallowed the one press worth having here.
+///
+/// This stays exactly as read-only as it was. A button offers no drag, no
+/// drop, no reorder and no remove: the strip is what the store shows today,
+/// and only the tiles above it can replace that set on the next run.
+private struct LiveMediaTile: View {
+    let url: URL
+    let isVideo: Bool
+    let position: Int
+    let store: Store
+
+    /// Whether this tile owns a cursor push. `NSCursor` is a stack and every
+    /// push owes a pop, so the flag is what makes `onDisappear` safe. The same
+    /// rule the editable tile above follows, and for the same reason: a store
+    /// read can replace this whole strip with the pointer still on it.
+    @State private var hovering = false
+
+    var body: some View {
+        Button { QuickLook.show(url) } label: {
+            Group {
+                if isVideo {
+                    Hatched()
+                        .overlay(Image(systemName: "film")
+                            .font(Theme.font(size: 20))
+                            .foregroundStyle(Theme.text3))
+                } else {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFit()
+                    } placeholder: {
+                        Hatched()
+                    }
+                }
+            }
+            .frame(width: 84, height: 120)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 5))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .contentShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help("Open at full size")
+        .accessibilityLabel(
+            "\(isVideo ? "Preview" : "Screenshot") \(position) on \(store.storeName) now")
+        .accessibilityHint("Opens a full size preview")
+        .onHover(perform: hover)
+        .onDisappear { if hovering { NSCursor.pop(); hovering = false } }
+    }
+
+    private func hover(_ inside: Bool) {
+        guard inside != hovering else { return }
+        hovering = inside
+        if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
     }
 }
 

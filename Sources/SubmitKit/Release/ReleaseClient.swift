@@ -21,6 +21,18 @@ public struct ReleaseClient: Sendable {
     public func releaseApple(appID: String, platform: String,
                              versionID: String) async throws -> String {
         try await access.authorize(.storeRelease)
+        let drafts = try? await api.apple(
+            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20")
+        if let submissionID = drafts.map({ JSON(data: $0.data) })?["data"].array.first(where: {
+            $0["attributes"]["state"].string == "READY_FOR_REVIEW"
+                && $0["attributes"]["platform"].string == platform
+        })?["id"].string {
+            try await api.apple("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: [
+                "data": ["type": "reviewSubmissions", "id": submissionID,
+                         "attributes": ["submitted": true]],
+            ])
+            return submissionID
+        }
         let submission = JSON(data: try await api.apple("POST", "/v1/reviewSubmissions", body: [
             "data": [
                 "type": "reviewSubmissions",

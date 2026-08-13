@@ -384,6 +384,11 @@ public struct StateReader: Sendable {
         result.catalog.merge(subscriptions.products) { _, new in new }
         result.subscriptionGroupNames = subscriptions.groups.names
         result.subscriptionGroupLocales = subscriptions.groups.locales
+        // Both list reads answered, so an id missing from the catalog is one
+        // Apple does not hold rather than one nobody has asked about. Either
+        // read above throws instead of returning empty, so reaching this line
+        // is the proof.
+        result.catalogRead = true
 
         // The grace period is one resource on the app. Apple answers 404 when
         // the app has none, which is a state and not a failure.
@@ -467,8 +472,7 @@ public struct StateReader: Sendable {
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
         result.hasOpenReviewSubmission = submissions["data"].array.contains { item in
             let state = item["attributes"]["state"].string ?? ""
-            return ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
-                    "UNRESOLVED_ISSUES"].contains(state)
+            return ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"].contains(state)
         }
         return result
     }

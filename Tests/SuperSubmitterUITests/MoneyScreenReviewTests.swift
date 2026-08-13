@@ -12,11 +12,19 @@ import Testing
 @MainActor
 @Suite struct MoneyScreenReviewTests {
 
+    /// A state both stores have answered for.
+    ///
+    /// `read` is what makes "the store holds nothing" a fact rather than a
+    /// guess. It defaults to true because every test below is about what the
+    /// stores hold, which is a question that presupposes they were asked; the
+    /// unread case has its own tests.
     private func actual(apple: [String] = [], google: [String] = [],
                         applePrice: String = "USD 4.99",
-                        googlePlan: String? = "p1m") -> ActualState {
+                        googlePlan: String? = "p1m",
+                        read: Bool = true) -> ActualState {
         var state = ActualState()
         var appleSide = ActualState.Apple()
+        appleSide.catalogRead = read
         for id in apple {
             var product = ActualState.Apple.CatalogProduct()
             product.productId = id
@@ -31,8 +39,11 @@ import Testing
             product.basePlanId = googlePlan
             googleSide.catalog[id] = product
         }
-        state.apple = apple.isEmpty ? nil : appleSide
-        state.google = google.isEmpty ? nil : googleSide
+        // A store that answered and holds nothing is still a store that
+        // answered, so the side is present with an empty catalog rather than
+        // nil. Nil is what "nobody asked" looks like.
+        state.apple = read || !apple.isEmpty ? appleSide : nil
+        state.google = read || !google.isEmpty ? googleSide : nil
         return state
     }
 

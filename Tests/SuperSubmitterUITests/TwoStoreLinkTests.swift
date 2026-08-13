@@ -18,9 +18,14 @@ import Testing
 @MainActor
 struct TwoStoreLinkTests {
 
+    /// A storage root of this test's own. These tests write the linked-project
+    /// list, and that list is one file for the whole Mac: writing the real one
+    /// unlinked every project the developer had, on every run of the suite.
     private func flow(_ root: URL) -> (BuildFlow, AppState) {
         let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
-                             storeAccount: "test-\(UUID().uuidString)")
+                             storeAccount: "test-\(UUID().uuidString)",
+                             buildStorage: BuildStorage(
+                                root: root.appendingPathComponent("Storage")))
         state.manifestURL = root.appendingPathComponent("store.yaml")
         return (state.buildFlow, state)
     }

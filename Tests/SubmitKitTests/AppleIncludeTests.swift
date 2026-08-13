@@ -36,18 +36,20 @@ private final class RecordingProtocol: URLProtocol, @unchecked Sendable {
 /// `manualPrices.appPricePoint`, which is not a relationship name.
 @Suite(.serialized)
 struct AppleIncludeTests {
-    @Test func theStateReadAsksForTheCategoriesItThenReads() async throws {
-        RecordingProtocol.start()
+    private func api() -> StoreAPI {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RecordingProtocol.self]
         let credential = AppleCredential(
             keyID: "ABCD123456", issuerID: "issuer",
             privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation,
             fileName: "AuthKey_ABCD123456.p8")
-        let api = StoreAPI(credentials: StoreCredentials(apple: credential), record: { _ in },
-                           session: URLSession(configuration: configuration))
+        return StoreAPI(credentials: StoreCredentials(apple: credential), record: { _ in },
+                        session: URLSession(configuration: configuration))
+    }
 
-        _ = try await StateReader(api: api).readApple(appID: "1")
+    @Test func theStateReadAsksForTheCategoriesItThenReads() async throws {
+        RecordingProtocol.start()
+        _ = try await StateReader(api: api()).readApple(appID: "1")
 
         let appInfos = RecordingProtocol.paths.filter { $0.contains("/appInfos?") }
         #expect(!appInfos.isEmpty, "The read never asked for the app infos.")
@@ -59,5 +61,15 @@ struct AppleIncludeTests {
         // every field of a listing the store already held was then drawn as
         // an add.
         #expect(!RecordingProtocol.paths.contains { $0.contains("manualPrices.appPricePoint") })
+    }
+
+    @Test func searchKeywordsCarryTheSelectedLocale() async throws {
+        RecordingProtocol.start()
+
+        _ = try await AppleKeywordsClient(api: api()).pool(appID: "1", locale: "pt-BR")
+
+        #expect(RecordingProtocol.paths == [
+            "/v1/apps/1/searchKeywords?filter%5Blocale%5D=pt-BR&limit=200",
+        ])
     }
 }

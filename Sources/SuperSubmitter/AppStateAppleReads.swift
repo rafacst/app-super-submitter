@@ -90,7 +90,8 @@ extension AppState {
     /// say nothing to anybody.
     func appleKeywordPool() async throws -> [String] {
         guard let appID = appleActionAppID else { return [] }
-        return try await AppleKeywordsClient(api: readOnlyAPI()).pool(appID: appID)
+        return try await AppleKeywordsClient(api: readOnlyAPI()).pool(appID: appID,
+                                                                    locale: locale)
     }
 
     /// The custom product page localizations a keyword can attach to.

@@ -89,7 +89,7 @@ struct PastPreparationTests {
     /// and they were the same word.
     @Test func theQueueAndTheReviewAreTwoWords() {
         #expect(AppleStanding(state: "WAITING_FOR_REVIEW").label == "In queue")
-        #expect(AppleStanding(state: "READY_FOR_REVIEW").label == "In queue")
+        #expect(AppleStanding(state: "READY_FOR_REVIEW").label == "Draft")
         #expect(AppleStanding(state: "IN_REVIEW").label == "In review")
     }
 

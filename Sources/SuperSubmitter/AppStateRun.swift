@@ -200,6 +200,7 @@ extension AppState {
         // A read is where an app first proves it has shipped, and the Manage
         // side asks that about apps this read says nothing about.
         rememberOpenAppLiveState()
+        rememberOpenAppReviewState()
         consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actual, stores: stores)
         refreshDockBadge()
         planReadFailures = result.readFailures

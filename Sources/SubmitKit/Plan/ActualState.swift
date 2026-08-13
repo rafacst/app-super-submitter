@@ -11,6 +11,9 @@ import Foundation
 /// and a developer who cancelled a submission could not send the rebuilt
 /// binary at all.
 ///
+/// `READY_FOR_REVIEW` is still a draft: it has been added to a draft review
+/// submission, but Apple has not received that submission yet.
+///
 /// `INVALID_BINARY` belongs here for the same reason and is the plainest case
 /// of it: Apple refused the binary and is waiting for another one.
 ///
@@ -19,7 +22,7 @@ import Foundation
 /// customers are already reading.
 public enum AppleVersionState {
     public static let editable: Set<String> = [
-        "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+        "PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED", "REJECTED",
         "METADATA_REJECTED", "INVALID_BINARY",
     ]
 
@@ -27,8 +30,7 @@ public enum AppleVersionState {
     /// may be sent: a second submission on top of an open one is the state
     /// App Store Connect refuses outright.
     public static let withApple: Set<String> = [
-        "READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
-        "WAITING_FOR_EXPORT_COMPLIANCE",
+        "WAITING_FOR_REVIEW", "IN_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE",
     ]
 
     /// The states of a version customers have had.
@@ -230,6 +232,15 @@ public struct ActualState: Sendable, Equatable {
         /// purchases and the subscription plans share the map, because a
         /// product id is unique across both. It mirrors the Google catalog.
         public var catalog: [String: CatalogProduct] = [:]
+        /// Whether the two catalog list reads answered.
+        ///
+        /// An empty `catalog` is two different facts and the screen has to tell
+        /// them apart: Apple was asked and holds nothing, or nobody has asked.
+        /// Without this the Monetization tab read every unread product as one
+        /// the apply would create, so an app whose purchases have been approved
+        /// for years opened with "Will add" against each of them. The same line
+        /// `betaAppLocalizationsRead` draws, for the same reason.
+        public var catalogRead = false
         /// The subscription groups that Apple holds, by the reference name
         /// that the manifest group id maps to, and their localizations. The
         /// subscription write covers the group as well as its plans, so the

@@ -29,6 +29,12 @@ struct SuperSubmitterApp: App {
                     // quit an app that holds a modal sheet. The updater has
                     // no way to reach the shell, so the shell hands it one.
                     Updater.closeSheets = { state.closeEverySheet() }
+                    // A screenshot the store holds is fetched before the panel
+                    // can show it, and a fetch that fails has to say so. The
+                    // panel is app-wide and the presses come from three
+                    // different views, so the shell hands it the one channel
+                    // the app already shows errors on.
+                    QuickLook.report = { state.errorMessage = $0 }
                     guard !ScreenshotMode.isActive else {
                         ScreenshotMode.apply(to: state)
                         ScreenshotMode.placeWindow()

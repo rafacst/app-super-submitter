@@ -81,7 +81,7 @@ struct StoreImportReaderTests {
             {"data":[{"id":"v-live","attributes":{"versionString":"1.0",
                       "appVersionState":"READY_FOR_SALE"}},
                      {"id":"v-edit","attributes":{"versionString":"2.4","releaseType":"MANUAL",
-                      "appVersionState":"PREPARE_FOR_SUBMISSION"}}]}
+                      "appVersionState":"READY_FOR_REVIEW"}}]}
             """,
             "/v1/appStoreVersions/v-edit/appStoreVersionLocalizations?limit=200": """
             {"data":[{"id":"vl-1","attributes":{"locale":"pt-BR","description":"A descricao completa",

@@ -208,7 +208,7 @@ struct MoneyTab: View {
                         anchor: "money.purchases") {
             VStack(alignment: .leading, spacing: 10) {
                 importCatalogNote
-                if state.stores.count > 1 { productTableHeader }
+                productTableHeader
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
                     let id = state.purchaseBinding(index: index, field: .id).wrappedValue
                     VStack(alignment: .leading, spacing: 8) {
@@ -242,21 +242,54 @@ struct MoneyTab: View {
                              actual: ActualState, territory: String) -> String? {
         switch store {
         case .apple:
-            guard let product = actual.apple?.catalog[id],
-                  let price = product.prices[territory] ?? product.prices.values.first
-            else { return nil }
-            // The ladder position, which is what a tier is. Apple stopped
-            // naming tiers in 2023 and this read stores amounts, so this
-            // counts the price up the ladder rather than printing a number
-            // the API never sent.
-            guard let point = ladderPoint(price, in: actual) else { return price }
-            return "\(price) · point \(point)"
+            guard let product = actual.apple?.catalog[id] else { return nil }
+            var parts: [String] = []
+            // What makes a subscription a subscription. It was in the editor
+            // behind the row and nowhere on the row itself, so a list of plans
+            // read as a list of identical products.
+            if let duration = product.duration {
+                parts.append(StoreValues.subscriptionDurations
+                    .first { $0.value == duration }?.label ?? duration)
+            }
+            if let price = applePrice(product, territory: territory) {
+                parts.append(price.text)
+                // The ladder position, which is what a tier is. Apple stopped
+                // naming tiers in 2023 and this read stores amounts, so this
+                // counts the price up the ladder rather than printing a number
+                // the API never sent. Only for the territory the ladder was
+                // read for: another country's money is not on this ladder.
+                if price.isBase, let point = ladderPoint(price.text, in: actual) {
+                    parts.append("point \(point)")
+                }
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
         case .google:
             guard let product = actual.google?.catalog[id] else { return nil }
             let price = product.prices[territory] ?? product.prices.values.first
             guard let plan = product.basePlanId else { return price }
             return [price, "base plan \(plan)"].compactMap { $0 }.joined(separator: " · ")
         }
+    }
+
+    /// The price to show for one product, and whether it is the territory that
+    /// was asked for.
+    ///
+    /// Apple returns a price per territory and does not always return the base
+    /// one: a product sold in a subset of countries has no row for a territory
+    /// it is not sold in. Showing nothing there hides a price the developer is
+    /// charging, so another country's is shown and named as such.
+    ///
+    /// The fallback is the lowest territory code and not `values.first`. A
+    /// dictionary hands its values back in no particular order, so the same
+    /// product used to show a different country's money from one draw to the
+    /// next.
+    static func applePrice(_ product: ActualState.Apple.CatalogProduct,
+                           territory: String) -> (text: String, isBase: Bool)? {
+        if let exact = product.prices[territory] { return (exact, true) }
+        guard let fallback = product.prices.sorted(by: { $0.key < $1.key }).first else {
+            return nil
+        }
+        return ("\(fallback.value) (\(fallback.key))", false)
     }
 
     /// Where a price stands on the ladder Apple published for the territory
@@ -276,22 +309,72 @@ struct MoneyTab: View {
         return index + 1
     }
 
-    /// Where a product stands across the two stores.
+    /// Whether a store has been asked about this app's catalog at all.
     ///
-    /// "Will add" is the honest answer before a read as well as after one: the
-    /// app has not been told the store holds it, so the apply will create it.
+    /// An empty catalog is two facts and they are not the same: the store was
+    /// asked and holds nothing, or nobody has asked. Only the first one lets
+    /// the tab say what the apply will do.
+    static func catalogRead(_ store: Store, _ actual: ActualState) -> Bool {
+        switch store {
+        case .apple: actual.apple?.catalogRead == true
+        case .google: actual.google != nil
+        }
+    }
+
+    /// Where a product stands across the selected stores.
+    ///
+    /// "Will add" used to be the answer before a read as well as after one, on
+    /// the grounds that the app had not been told the store holds it. That is
+    /// the bug: an unread catalog is not a store saying no, and the tab was
+    /// telling a developer their approved, on-sale purchases were about to be
+    /// created. A claim about what the apply will do needs a read behind it.
+    ///
+    /// So the ladder is: nobody asked, then the store's own answer.
     static func productStatus(_ id: String, stores: Set<Store>,
                               actual: ActualState) -> (text: String, colour: Color) {
+        let unread = stores.filter { !catalogRead($0, actual) }
         let holders = stores.filter { store in
             switch store {
             case .apple: actual.apple?.catalog[id] != nil
             case .google: actual.google?.catalog[id] != nil
             }
         }
+        // A store that holds it is an answer whatever the others did, and it
+        // is the answer that stops a false creation claim.
+        if holders.isEmpty, !unread.isEmpty {
+            return (unread.count == stores.count ? "Not read yet" : "Could not verify",
+                    Theme.text3)
+        }
         if holders.isEmpty { return ("Will add", Theme.accent) }
-        if holders.count == stores.count { return ("In sync", Theme.text2) }
+        if holders.count == stores.count {
+            // One store, and the store holds it. "In sync" says nothing a
+            // developer cannot already see, and Apple's own word for the
+            // product is what they came to the tab for.
+            if stores.count == 1, stores.first == .apple,
+               let product = actual.apple?.catalog[id] {
+                if product.isWithReview { return ("In review", Theme.yellow) }
+                if product.isApproved { return ("Approved", Theme.green) }
+            }
+            return ("In sync", Theme.text2)
+        }
+        // Some stores hold it and some were never asked. Naming one of them as
+        // the only holder would be a claim about a store nobody read.
+        if !unread.isEmpty { return ("Could not verify", Theme.text3) }
         let only = holders.first!
         return ("Only on \(only.storeName)", Theme.yellow)
+    }
+
+    /// Apple's own word for a product, for the row that is not expanded.
+    ///
+    /// The review state used to live behind the disclosure triangle alone, so
+    /// finding out whether a purchase was approved meant opening each one.
+    static func appleProductPill(_ id: String, stores: Set<Store>,
+                                 actual: ActualState) -> (text: String, colour: Color)? {
+        guard stores.contains(.apple), stores.count > 1,
+              let product = actual.apple?.catalog[id] else { return nil }
+        if product.isWithReview { return ("In review", Theme.yellow) }
+        if product.isApproved { return ("Approved", Theme.green) }
+        return nil
     }
 
     /// The products one store holds and the other does not.
@@ -327,12 +410,24 @@ struct MoneyTab: View {
         }
     }
 
+    /// Whether the row keeps a column for Apple's own review state.
+    ///
+    /// With one store the status column already carries that word, so a second
+    /// column would print it twice. The header and the row ask the same
+    /// question, or the two drift out of line.
+    private var showsAppleStateColumn: Bool {
+        state.stores.count > 1 && state.stores.contains(.apple)
+    }
+
     private var productTableHeader: some View {
         HStack(spacing: 10) {
             Text("Product id").frame(maxWidth: .infinity, alignment: .leading)
             Text("Type").frame(width: 120, alignment: .leading)
             ForEach(Store.allCases.filter(state.stores.contains), id: \.self) { store in
                 Text(store.storeName).frame(width: 190, alignment: .leading)
+            }
+            if showsAppleStateColumn {
+                Text("App Store review").frame(width: 96, alignment: .leading)
             }
             Text("").frame(width: 110, alignment: .leading)
         }
@@ -362,16 +457,34 @@ struct MoneyTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(kind).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .frame(width: 120, alignment: .leading)
-                if state.stores.count > 1 {
-                    ForEach(Store.allCases.filter(state.stores.contains), id: \.self) { store in
-                        Text(Self.storeSummary(id, store: store, actual: state.actualState,
-                                               territory: territory)
-                             ?? "— not read yet")
-                            .font(Theme.font(size: 11.5))
-                            .foregroundStyle(Theme.text2)
-                            .lineLimit(1).truncationMode(.tail)
-                            .frame(width: 190, alignment: .leading)
+                // Every selected store, including when there is only one. The
+                // column was drawn for two stores alone, so an Apple-only app
+                // could not see the price the App Store is charging today
+                // anywhere on this tab, which is most of what it is for.
+                ForEach(Store.allCases.filter(state.stores.contains), id: \.self) { store in
+                    Text(Self.storeSummary(id, store: store, actual: state.actualState,
+                                           territory: territory)
+                         ?? (Self.catalogRead(store, state.actualState)
+                             ? "— not on this store" : "— not read yet"))
+                        .font(Theme.font(size: 11.5))
+                        .foregroundStyle(Theme.text2)
+                        .lineLimit(1).truncationMode(.tail)
+                        .frame(width: 190, alignment: .leading)
+                }
+                // Apple's own word for the product, beside the cross-store
+                // answer rather than behind the disclosure triangle. The slot
+                // is kept whether or not there is a word for this row, so the
+                // column under the header stays a column.
+                if showsAppleStateColumn {
+                    let pill = Self.appleProductPill(id, stores: state.stores,
+                                                     actual: state.actualState)
+                    Group {
+                        if let pill {
+                            StatePill(text: pill.text, foreground: pill.colour,
+                                      background: Theme.sunken)
+                        }
                     }
+                    .frame(width: 96, alignment: .leading)
                 }
                 StatePill(text: status.text, foreground: status.colour,
                           background: Theme.sunken)
@@ -601,7 +714,7 @@ struct MoneyTab: View {
                             }
                         }
                         gracePeriodRow(groupIndex: groupIndex)
-                        if state.stores.count > 1 { productTableHeader }
+                        productTableHeader
                         ForEach(Array(group.plans.enumerated()), id: \.offset) { planIndex, _ in
                             VStack(alignment: .leading, spacing: 7) {
                                 productRow(id: group.plans[planIndex].id, kind: "Subscription",
