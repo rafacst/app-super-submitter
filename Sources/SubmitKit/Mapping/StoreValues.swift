@@ -113,6 +113,45 @@ public enum StoreValues {
         Choice("AUDIO_DESCRIPTIONS", "Audio descriptions"),
     ]
 
+    /// How a leaderboard writes a score. `GameCenterLeaderboardFormatter`, and
+    /// all eighteen of the values Apple takes.
+    ///
+    /// The label is what the number looks like, not what Apple calls it. A
+    /// developer choosing a format is asking "how will 1234 read on the
+    /// board?", and `DECIMAL_POINT_2_PLACE` does not answer that; "12.34" does.
+    /// The money rows say the currency because the symbol alone is the whole
+    /// difference between them.
+    public static let leaderboardFormats: [Choice] = [
+        Choice("INTEGER", "Whole number, 1234"),
+        Choice("DECIMAL_POINT_1_PLACE", "One decimal place, 123.4"),
+        Choice("DECIMAL_POINT_2_PLACE", "Two decimal places, 12.34"),
+        Choice("DECIMAL_POINT_3_PLACE", "Three decimal places, 1.234"),
+        Choice("ELAPSED_TIME_SECOND", "Time in seconds, 20:34"),
+        Choice("ELAPSED_TIME_CENTISECOND", "Time in hundredths, 20:34.56"),
+        Choice("ELAPSED_TIME_MINUTE", "Time in minutes, 12:34"),
+        Choice("MONEY_DOLLAR", "Dollars, $1234"),
+        Choice("MONEY_DOLLAR_DECIMAL", "Dollars and cents, $12.34"),
+        Choice("MONEY_POUND", "Pounds, £1234"),
+        Choice("MONEY_POUND_DECIMAL", "Pounds and pence, £12.34"),
+        Choice("MONEY_EURO", "Euros, €1234"),
+        Choice("MONEY_EURO_DECIMAL", "Euros and cents, €12.34"),
+        Choice("MONEY_FRANC", "Francs, 1234"),
+        Choice("MONEY_FRANC_DECIMAL", "Francs and centimes, 12.34"),
+        Choice("MONEY_KRONER", "Kroner, 1234"),
+        Choice("MONEY_KRONER_DECIMAL", "Kroner and øre, 12.34"),
+        Choice("MONEY_YEN", "Yen, ¥1234"),
+    ]
+
+    /// What a matchmaking rule does with its expression.
+    ///
+    /// `COMPATIBLE` refuses a pairing outright, so the expression has to answer
+    /// true or false. `DISTANCE` scores one instead, and Game Center then
+    /// prefers the closest match rather than rejecting anybody.
+    public static let matchmakingRuleTypes: [Choice] = [
+        Choice("COMPATIBLE", "Refuse the match when it is false"),
+        Choice("DISTANCE", "Prefer the closest match"),
+    ]
+
     /// What a colleague may do in App Store Connect. It is the App Store twin
     /// of `googleAccountPermissions` below.
     ///

@@ -21,6 +21,13 @@ public struct Manifest: Codable, Sendable, Equatable {
     /// custom product pages, the experiments, the in-app events, and the
     /// small single-value resources next to them.
     public var marketing: Marketing?
+    /// Game Center: the achievements, the leaderboards, the sets, the
+    /// activities, the challenges and the matchmaking of a game.
+    ///
+    /// Absent for every app that is not a game, which is most of them. The
+    /// Gaming tab writes it, and nothing here reaches a player until an App
+    /// Store version carries the configuration.
+    public var gameCenter: GameCenter?
 
     public init() {}
 }
@@ -1294,6 +1301,495 @@ extension Manifest {
             self.usesNonExemptEncryption = usesNonExemptEncryption
             self.kidsAgeBand = kidsAgeBand
             self.attachments = attachments
+        }
+    }
+}
+
+// MARK: - gameCenter (the Gaming tab, App Store only)
+
+extension Manifest {
+    /// The whole Game Center configuration of a game.
+    ///
+    /// Google Play has no parity row. Play Games Services lives on a separate
+    /// API on a separate host, and the Publisher API this app speaks holds no
+    /// games resource at all, so the Gaming tab is a single-store tab.
+    ///
+    /// Two rules run through every type below.
+    ///
+    /// An absent key means "do not manage". `archived: false` and no `archived`
+    /// key are different instructions: the first sends a value, the second
+    /// sends none.
+    ///
+    /// The `id` of an object is its vendor identifier, and it is never
+    /// invented and never renamed. It is what the game passes to GameKit, and
+    /// a rename in Game Center orphans every score and every earned
+    /// achievement the players already hold. `name` is the reference name,
+    /// which is a label in App Store Connect and never a key.
+    public struct GameCenter: Codable, Sendable, Equatable {
+        /// Creates the Game Center detail when Apple holds none. The Gaming
+        /// tab's one button writes this and calls nothing.
+        public var enabled: Bool?
+        /// The reference name of the group this game shares its objects with.
+        /// Games in one group share achievements and leaderboards.
+        public var group: String?
+        /// The `id` of the leaderboard Game Center shows first.
+        public var defaultLeaderboard: String?
+        /// The App Store versions of this game from which challenges appear,
+        /// as version strings.
+        ///
+        /// Apple keeps these as a relationship to `appStoreVersions`, so a
+        /// value here is a version of this game, `1.4.0`, and never an OS
+        /// version. One string covers every platform that ships it.
+        public var challengesMinimumPlatformVersions: [String]?
+        /// One row per App Store version that carries this configuration,
+        /// keyed by the version string. A configuration reaches players
+        /// through a version and through nothing else.
+        public var appVersions: [String: AppVersion]?
+
+        public var achievements: [Achievement]?
+        public var leaderboards: [Leaderboard]?
+        public var leaderboardSets: [LeaderboardSet]?
+        public var activities: [Activity]?
+        public var challenges: [Challenge]?
+        public var matchmaking: Matchmaking?
+
+        public init(enabled: Bool? = nil, group: String? = nil,
+                    defaultLeaderboard: String? = nil,
+                    challengesMinimumPlatformVersions: [String]? = nil,
+                    appVersions: [String: AppVersion]? = nil,
+                    achievements: [Achievement]? = nil,
+                    leaderboards: [Leaderboard]? = nil,
+                    leaderboardSets: [LeaderboardSet]? = nil,
+                    activities: [Activity]? = nil,
+                    challenges: [Challenge]? = nil,
+                    matchmaking: Matchmaking? = nil) {
+            self.enabled = enabled
+            self.group = group
+            self.defaultLeaderboard = defaultLeaderboard
+            self.challengesMinimumPlatformVersions = challengesMinimumPlatformVersions
+            self.appVersions = appVersions
+            self.achievements = achievements
+            self.leaderboards = leaderboards
+            self.leaderboardSets = leaderboardSets
+            self.activities = activities
+            self.challenges = challenges
+            self.matchmaking = matchmaking
+        }
+
+        /// One App Store version, and the older ones its scores carry over
+        /// from.
+        public struct AppVersion: Codable, Sendable, Equatable {
+            public var enabled: Bool?
+            /// The version strings whose Game Center data this one keeps.
+            public var compatibility: [String]?
+
+            public init(enabled: Bool? = nil, compatibility: [String]? = nil) {
+                self.enabled = enabled
+                self.compatibility = compatibility
+            }
+        }
+
+        // MARK: The five object families
+
+        public struct Achievement: Codable, Sendable, Equatable, Identifiable {
+            /// The vendor identifier, and the key. See the type note.
+            public var id: String
+            /// The reference name, a label in App Store Connect.
+            public var name: String?
+            /// 1 to 100 for one achievement, and 1000 across the whole game.
+            public var points: Int?
+            /// Whether a player can earn it more than once.
+            public var repeatable: Bool?
+            /// Whether a player sees it before they have earned it. Off hides
+            /// a spoiler until the moment it is won.
+            public var showBeforeEarned: Bool?
+            /// Archived, not deleted. Archiving keeps what the players hold.
+            public var archived: Bool?
+            public var properties: [String: String]?
+            public var locales: [String: AchievementLocale]?
+
+            public init(id: String, name: String? = nil, points: Int? = nil,
+                        repeatable: Bool? = nil, showBeforeEarned: Bool? = nil,
+                        archived: Bool? = nil, properties: [String: String]? = nil,
+                        locales: [String: AchievementLocale]? = nil) {
+                self.id = id
+                self.name = name
+                self.points = points
+                self.repeatable = repeatable
+                self.showBeforeEarned = showBeforeEarned
+                self.archived = archived
+                self.properties = properties
+                self.locales = locales
+            }
+        }
+
+        public struct AchievementLocale: Codable, Sendable, Equatable {
+            /// What the player reads as the title.
+            public var name: String?
+            /// The line shown while the achievement is still to win.
+            public var beforeEarned: String?
+            /// The line shown once it is won.
+            public var afterEarned: String?
+            /// A 512 by 512 PNG, as a path relative to the manifest, exactly
+            /// like a screenshot.
+            public var image: String?
+
+            public init(name: String? = nil, beforeEarned: String? = nil,
+                        afterEarned: String? = nil, image: String? = nil) {
+                self.name = name
+                self.beforeEarned = beforeEarned
+                self.afterEarned = afterEarned
+                self.image = image
+            }
+        }
+
+        public struct Leaderboard: Codable, Sendable, Equatable, Identifiable {
+            public var id: String
+            public var name: String?
+            /// Whether a high score or a low score wins.
+            public var sort: ScoreSort?
+            /// Which of a player's scores the board keeps.
+            public var submission: SubmissionType?
+            /// How a score is written. `formats` holds the values Apple takes.
+            public var format: String?
+            /// The lowest and highest score the board accepts, as two numbers.
+            public var scoreRange: [Int]?
+            public var visibility: Visibility?
+            public var archived: Bool?
+            /// Set to start the board over on a schedule. Absent means a board
+            /// that runs forever.
+            public var recurrence: Recurrence?
+            public var properties: [String: String]?
+            public var locales: [String: LeaderboardLocale]?
+
+            public init(id: String, name: String? = nil, sort: ScoreSort? = nil,
+                        submission: SubmissionType? = nil, format: String? = nil,
+                        scoreRange: [Int]? = nil, visibility: Visibility? = nil,
+                        archived: Bool? = nil, recurrence: Recurrence? = nil,
+                        properties: [String: String]? = nil,
+                        locales: [String: LeaderboardLocale]? = nil) {
+                self.id = id
+                self.name = name
+                self.sort = sort
+                self.submission = submission
+                self.format = format
+                self.scoreRange = scoreRange
+                self.visibility = visibility
+                self.archived = archived
+                self.recurrence = recurrence
+                self.properties = properties
+                self.locales = locales
+            }
+        }
+
+        public struct LeaderboardLocale: Codable, Sendable, Equatable {
+            public var name: String?
+            public var description: String?
+            /// The word after a score, for more than one. "points".
+            public var suffix: String?
+            /// The word after a score of exactly one. "point".
+            public var suffixSingular: String?
+            /// Overrides the board's format in this locale alone.
+            public var format: String?
+            public var image: String?
+
+            public init(name: String? = nil, description: String? = nil,
+                        suffix: String? = nil, suffixSingular: String? = nil,
+                        format: String? = nil, image: String? = nil) {
+                self.name = name
+                self.description = description
+                self.suffix = suffix
+                self.suffixSingular = suffixSingular
+                self.format = format
+                self.image = image
+            }
+        }
+
+        /// A board that starts over on a schedule: a weekly high score, a
+        /// daily run.
+        public struct Recurrence: Codable, Sendable, Equatable {
+            /// When the first period opens, as an ISO 8601 instant.
+            public var start: String?
+            /// How long one period lasts, as an ISO 8601 duration. `P1W` is a
+            /// week.
+            public var duration: String?
+            /// The repeat rule, as an iCalendar RRULE. `FREQ=WEEKLY`.
+            public var rule: String?
+
+            public init(start: String? = nil, duration: String? = nil,
+                        rule: String? = nil) {
+                self.start = start
+                self.duration = duration
+                self.rule = rule
+            }
+        }
+
+        /// A group of leaderboards the player meets as one screen.
+        public struct LeaderboardSet: Codable, Sendable, Equatable, Identifiable {
+            public var id: String
+            public var name: String?
+            /// The `id` of each leaderboard in the set, in order.
+            public var leaderboards: [String]?
+            public var locales: [String: SetLocale]?
+
+            public init(id: String, name: String? = nil,
+                        leaderboards: [String]? = nil,
+                        locales: [String: SetLocale]? = nil) {
+                self.id = id
+                self.name = name
+                self.leaderboards = leaderboards
+                self.locales = locales
+            }
+        }
+
+        public struct SetLocale: Codable, Sendable, Equatable {
+            public var name: String?
+            public var image: String?
+
+            public init(name: String? = nil, image: String? = nil) {
+                self.name = name
+                self.image = image
+            }
+        }
+
+        /// Something players do together: a co-op raid, a versus round.
+        public struct Activity: Codable, Sendable, Equatable, Identifiable {
+            public var id: String
+            public var name: String?
+            /// Whether the players are in it at the same moment.
+            public var playStyle: PlayStyle?
+            /// The fewest and the most players, as two numbers.
+            public var players: [Int]?
+            /// Where a player without the game is sent.
+            public var fallbackUrl: String?
+            public var archived: Bool?
+            public var properties: [String: String]?
+            /// The `id` of each achievement this activity can award.
+            public var achievements: [String]?
+            /// The `id` of each leaderboard this activity scores to.
+            public var leaderboards: [String]?
+            /// The image every locale falls back to.
+            public var image: String?
+            public var locales: [String: ActivityLocale]?
+
+            public init(id: String, name: String? = nil, playStyle: PlayStyle? = nil,
+                        players: [Int]? = nil, fallbackUrl: String? = nil,
+                        archived: Bool? = nil, properties: [String: String]? = nil,
+                        achievements: [String]? = nil, leaderboards: [String]? = nil,
+                        image: String? = nil,
+                        locales: [String: ActivityLocale]? = nil) {
+                self.id = id
+                self.name = name
+                self.playStyle = playStyle
+                self.players = players
+                self.fallbackUrl = fallbackUrl
+                self.archived = archived
+                self.properties = properties
+                self.achievements = achievements
+                self.leaderboards = leaderboards
+                self.image = image
+                self.locales = locales
+            }
+        }
+
+        public struct ActivityLocale: Codable, Sendable, Equatable {
+            public var name: String?
+            public var description: String?
+            public var image: String?
+
+            public init(name: String? = nil, description: String? = nil,
+                        image: String? = nil) {
+                self.name = name
+                self.description = description
+                self.image = image
+            }
+        }
+
+        /// A contest between friends, scored from one leaderboard.
+        public struct Challenge: Codable, Sendable, Equatable, Identifiable {
+            public var id: String
+            public var name: String?
+            /// Apple takes one kind today, and the field exists so a manifest
+            /// written now still reads when it takes a second.
+            public var type: String?
+            /// The `id` of the leaderboard the challenge scores from.
+            public var leaderboard: String?
+            public var repeatable: Bool?
+            public var archived: Bool?
+            public var image: String?
+            public var locales: [String: ChallengeLocale]?
+
+            public init(id: String, name: String? = nil, type: String? = nil,
+                        leaderboard: String? = nil, repeatable: Bool? = nil,
+                        archived: Bool? = nil, image: String? = nil,
+                        locales: [String: ChallengeLocale]? = nil) {
+                self.id = id
+                self.name = name
+                self.type = type
+                self.leaderboard = leaderboard
+                self.repeatable = repeatable
+                self.archived = archived
+                self.image = image
+                self.locales = locales
+            }
+        }
+
+        public struct ChallengeLocale: Codable, Sendable, Equatable {
+            public var name: String?
+            public var description: String?
+            public var image: String?
+
+            public init(name: String? = nil, description: String? = nil,
+                        image: String? = nil) {
+                self.name = name
+                self.description = description
+                self.image = image
+            }
+        }
+
+        // MARK: Matchmaking
+
+        /// How Game Center puts a match together: the rules it scores a pairing
+        /// with, and the queues that use them.
+        public struct Matchmaking: Codable, Sendable, Equatable {
+            public var ruleSets: [RuleSet]?
+            public var queues: [Queue]?
+
+            public init(ruleSets: [RuleSet]? = nil, queues: [Queue]? = nil) {
+                self.ruleSets = ruleSets
+                self.queues = queues
+            }
+        }
+
+        /// A named set of rules, and the key of one. Apple has no vendor
+        /// identifier here, so the reference name is what a queue points at.
+        public struct RuleSet: Codable, Sendable, Equatable, Identifiable {
+            public var name: String
+            /// The fewest and the most players in one match, as two numbers.
+            public var players: [Int]?
+            /// Which revision of Apple's rule language the expressions are
+            /// written in.
+            public var ruleLanguageVersion: Int?
+            public var teams: [Team]?
+            public var rules: [Rule]?
+
+            public var id: String { name }
+
+            public init(name: String, players: [Int]? = nil,
+                        ruleLanguageVersion: Int? = nil, teams: [Team]? = nil,
+                        rules: [Rule]? = nil) {
+                self.name = name
+                self.players = players
+                self.ruleLanguageVersion = ruleLanguageVersion
+                self.teams = teams
+                self.rules = rules
+            }
+        }
+
+        /// One side of a match, and how many players it holds.
+        public struct Team: Codable, Sendable, Equatable, Identifiable {
+            public var name: String
+            public var players: [Int]?
+
+            public var id: String { name }
+
+            public init(name: String, players: [Int]? = nil) {
+                self.name = name
+                self.players = players
+            }
+        }
+
+        /// One test a candidate match has to pass or score against.
+        public struct Rule: Codable, Sendable, Equatable, Identifiable {
+            public var name: String
+            public var description: String?
+            /// What the rule does with its expression. See `RuleType`.
+            public var type: String?
+            /// The expression itself, in Apple's rule language.
+            public var expression: String?
+            /// How much this rule counts against the others.
+            public var weight: Double?
+
+            public var id: String { name }
+
+            public init(name: String, description: String? = nil, type: String? = nil,
+                        expression: String? = nil, weight: Double? = nil) {
+                self.name = name
+                self.description = description
+                self.type = type
+                self.expression = expression
+                self.weight = weight
+            }
+        }
+
+        /// A queue players wait in, and the rule set that matches them.
+        public struct Queue: Codable, Sendable, Equatable, Identifiable {
+            public var name: String
+            /// The `name` of the rule set this queue matches with.
+            public var ruleSet: String?
+            /// Bundle ids of older releases that share this queue.
+            public var classicBundleIds: [String]?
+
+            public var id: String { name }
+
+            public init(name: String, ruleSet: String? = nil,
+                        classicBundleIds: [String]? = nil) {
+                self.name = name
+                self.ruleSet = ruleSet
+                self.classicBundleIds = classicBundleIds
+            }
+        }
+
+        // MARK: The closed value sets
+
+        /// Whether the biggest or the smallest score wins.
+        public enum ScoreSort: String, Codable, Sendable, CaseIterable {
+            case asc, desc
+
+            /// The words on the screen. A developer picks a meaning, not a
+            /// spelling: "asc" says nothing about what it does to a score.
+            public var label: String {
+                switch self {
+                case .desc: "A high score wins"
+                case .asc: "A low score wins"
+                }
+            }
+        }
+
+        /// Which of a player's scores the board keeps.
+        public enum SubmissionType: String, Codable, Sendable, CaseIterable {
+            case best, mostRecent
+
+            public var label: String {
+                switch self {
+                case .best: "Keep their best score"
+                case .mostRecent: "Keep their latest score"
+                }
+            }
+        }
+
+        /// Who can see the board.
+        public enum Visibility: String, Codable, Sendable, CaseIterable {
+            case all, hidden
+
+            public var label: String {
+                switch self {
+                case .all: "Everyone"
+                case .hidden: "Hidden until the game shows it"
+                }
+            }
+        }
+
+        /// Whether the players are in the activity at the same moment.
+        public enum PlayStyle: String, Codable, Sendable, CaseIterable {
+            case synchronous, asynchronous
+
+            public var label: String {
+                switch self {
+                case .synchronous: "Together, at the same time"
+                case .asynchronous: "In their own time, one after another"
+                }
+            }
         }
     }
 }

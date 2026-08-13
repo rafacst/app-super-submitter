@@ -71,6 +71,17 @@ public actor Runner {
     /// The TestFlight group id of each group name that this run created or
     /// found. The tester step and the build step both need it.
     var appleBetaGroupIDs: [String: String] = [:]
+    /// Game Center. The detail is the parent of every other call here, and the
+    /// object and version ids are what a locale, an image and a link hang
+    /// from, so each step records what it made for the ones after it.
+    ///
+    /// The objects and the versions are keyed `family/vendorIdentifier`, the
+    /// same key the plan step ids carry.
+    var appleGameCenterDetailID: String?
+    var appleGameCenterGroupIDs: [String: String] = [:]
+    var appleGameCenterObjectIDs: [String: String] = [:]
+    var appleGameCenterVersionIDs: [String: String] = [:]
+    var appleGameCenterRuleSetIDs: [String: String] = [:]
     var createdProviderObjects: [(kind: String, id: String)] = []
     let reviewerCredential: ReviewerCredential?
 
@@ -235,6 +246,26 @@ public actor Runner {
         case .appleBetaLicenseAgreement: try await appleBetaLicenseAgreement()
         case .appleBetaReviewDetail: try await appleBetaReviewDetail()
         case .appleBetaReview: try await appleBetaReview()
+
+        case .appleGameCenterDetail: try await appleGameCenterDetail()
+        case .appleGameCenterGroup(let name): try await appleGameCenterGroup(name: name)
+        case .appleGameCenterDefaultLeaderboard: try await appleGameCenterDefaultLeaderboard()
+        case .appleGameCenterObject(let family, let id):
+            try await appleGameCenterObject(family: family, id: id)
+        case .appleGameCenterLocale(let family, let id, let locale):
+            try await appleGameCenterLocale(family: family, id: id, locale: locale)
+        case .appleGameCenterImage(let family, let id, let locale, let path):
+            try await appleGameCenterImage(family: family, id: id, locale: locale,
+                                           path: path, index: index)
+        case .appleGameCenterMembers(let set): try await appleGameCenterMembers(set: set)
+        case .appleGameCenterLinks(let activity):
+            try await appleGameCenterLinks(activity: activity)
+        case .appleGameCenterChallengeLeaderboard(let challenge):
+            try await appleGameCenterChallengeLeaderboard(challenge: challenge)
+        case .appleGameCenterRuleSet(let name): try await appleGameCenterRuleSet(name: name)
+        case .appleGameCenterQueue(let name): try await appleGameCenterQueue(name: name)
+        case .appleGameCenterAppVersion(let version):
+            try await appleGameCenterAppVersion(version: version)
         case .appleEncryptionDeclaration: try await appleEncryptionDeclaration()
         case .applePurchaseOfferCodes(let productId):
             try await applePurchaseOfferCodes(productId: productId)

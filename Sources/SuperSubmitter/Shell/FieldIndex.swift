@@ -123,6 +123,29 @@ enum FieldIndex {
         .init(id: "media.googleGraphics", label: "Google graphics", tab: .media,
               keywords: ["icon", "feature graphic", "512", "1024", "play"]),
 
+        // MARK: Gaming
+        //
+        // The panels the tab draws today. The metrics, the test data and the
+        // send button are read-and-write surfaces that need a store call, and
+        // each one earns its row here when its panel lands: an index entry
+        // whose panel does not exist opens a tab and scrolls to nothing.
+        .init(id: "gaming.detail", label: "Game Center", tab: .gaming,
+              keywords: ["arcade", "group", "game", "apple", "gamekit"]),
+        .init(id: "gaming.achievements", label: "Achievements", tab: .gaming,
+              keywords: ["points", "badge", "trophy", "earned", "game center"]),
+        .init(id: "gaming.leaderboards", label: "Leaderboards", tab: .gaming,
+              keywords: ["score", "high score", "rank", "recurring", "game center"]),
+        .init(id: "gaming.leaderboardSets", label: "Leaderboard sets", tab: .gaming,
+              keywords: ["group of boards", "game center"]),
+        .init(id: "gaming.activities", label: "Activities", tab: .gaming,
+              keywords: ["multiplayer", "co-op", "play together", "game center"]),
+        .init(id: "gaming.challenges", label: "Challenges", tab: .gaming,
+              keywords: ["duel", "compete", "friend", "game center"]),
+        .init(id: "gaming.matchmaking", label: "Matchmaking", tab: .gaming,
+              keywords: ["queue", "rule set", "team", "skill", "game center"]),
+        .init(id: "gaming.send", label: "Send to Game Center", tab: .gaming,
+              keywords: ["apply", "write", "publish", "game center"]),
+
         // MARK: Monetization
         .init(id: "money.basePrice", label: "Base price", tab: .money,
               keywords: ["price", "cost", "amount", "currency", "tier"]),

@@ -101,6 +101,29 @@ public enum PlanOperation: Sendable, Equatable {
     /// Takes a place in the beta review queue. No call takes it back.
     case appleBetaReview
 
+    /// Game Center. The detail is the parent of everything below it, and the
+    /// app version at the end is the only step that reaches a player.
+    ///
+    /// `family` is the raw value of `AppleGameCenterCatalogClient.Family`, so a
+    /// step id reads `apple.gameCenter.achievement.com.studio.game.first_win`.
+    case appleGameCenterDetail
+    case appleGameCenterGroup(name: String)
+    /// The board Game Center opens on. Its own step, because it names a
+    /// leaderboard and the detail is created before any leaderboard exists.
+    case appleGameCenterDefaultLeaderboard
+    case appleGameCenterObject(family: String, id: String)
+    case appleGameCenterLocale(family: String, id: String, locale: String)
+    /// One upload. `locale` is nil for the picture on the version itself,
+    /// which activities and challenges carry and the other families do not.
+    case appleGameCenterImage(family: String, id: String, locale: String?, path: String)
+    case appleGameCenterMembers(set: String)
+    case appleGameCenterLinks(activity: String)
+    case appleGameCenterChallengeLeaderboard(challenge: String)
+    case appleGameCenterRuleSet(name: String)
+    case appleGameCenterQueue(name: String)
+    /// Last, because it is what publishes everything above it.
+    case appleGameCenterAppVersion(version: String)
+
     case googleOpenEdit
     case googleListing(String)
     case googleDetails
@@ -183,8 +206,8 @@ public struct PlanStep: Sendable, Equatable, Identifiable {
 /// Where a validation error is fixed. SubmitKit names the tab; the app maps it
 /// to its own `Tab`, so the kit never imports SwiftUI.
 public enum FixTarget: String, Sendable, Equatable {
-    case stores, build, betaTesting, details, media, money, marketing, reviewInfo,
-         plan, release
+    case stores, build, betaTesting, details, media, gaming, money, marketing,
+         reviewInfo, plan, release
 }
 
 public struct Finding: Sendable, Equatable, Identifiable {
