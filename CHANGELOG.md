@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2 (297) - 2026-08-13
+## 1.2 (303) - 2026-08-13
 
 ### Build
 
@@ -13,6 +13,8 @@
 - A submission that is with the store says so on screen.
 - A version Apple already has is no longer held back, and the app names which half of review it is in.
 - The summary and the release button answer from the store rather than from the session.
+- A refused submission names what the App Store will not review. Apple answers with one sentence about associated errors and names no resource, so the app keeps every refusal it was given and reads the submission back.
+- The Release toolbar loses the button that only scrolled to the two below it.
 
 ### Listing, details and media
 
@@ -20,6 +22,9 @@
 - The custom product pages and the product page optimization treatments are read and shown, each as its own strip with its name and its state. They are read only, and the app writes to none of them.
 - Live store pictures are drawn from the copy the import downloaded instead of being fetched again on every appearance.
 - The live picture count is the store's real count. Every read used to add the live set to the set the last read left behind, and the total grew on every read and across launches.
+- A size that names no image keeps what the App Store shows. An apply used to clear every screenshot set the manifest did not name, and a locale that named no image at all cleared all of them, which is the opposite of what the tab promises. Only a size you put images into can lose anything.
+- Each size offers the copies the app downloaded, so a set that left the store can be sent back without the original files.
+- An app preview is saved as the video the App Store serves. It used to be saved as the playlist that points at it, which plays in nothing.
 - A prose box can be dragged taller and keeps the height.
 - Screenshots are counted the way Apple counts them, and the package name can be typed.
 
@@ -54,7 +59,7 @@
 ### Publishing
 
 - The export compliance answer is asked of the build before it is written. Apple takes that answer from the binary while it processes the build and refuses to change it afterwards, so the run used to stop on a conflict it could not name.
-- Territory availability is always created and never patched. `appAvailabilities` takes no update, and the 403 Apple returns for one was reported as a permission the key was missing.
+- Territory availability is written the way App Store Connect allows it. A record that already exists changes one territory at a time, and the new-territory switch is written on the app, because the availability itself takes neither a second create nor an update. Both of those answered an error that read as a permission the key was missing.
 - A blocker that belongs to one store no longer disables an unrelated apply.
 - The stores and the disk are read for what they already hold before anything is planned.
 
