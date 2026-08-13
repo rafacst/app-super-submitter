@@ -47,17 +47,31 @@ enum FieldIndex {
               keywords: ["track", "production", "rollout"]),
         .init(id: "build.countries", label: "Countries", tab: .build,
               keywords: ["regions", "rollout", "google"]),
-        .init(id: "build.googleTesters", label: "Track testers", tab: .build,
-              keywords: ["google groups", "closed track", "alpha", "beta"]),
-        .init(id: "build.testFlight", label: "TestFlight", tab: .build,
-              keywords: ["beta", "testers", "groups", "public link", "apple"]),
-        .init(id: "build.whatToTest", label: "What to Test", tab: .build,
-              keywords: ["beta notes", "testflight", "release notes", "apple"]),
-        .init(id: "build.testFlightPage", label: "TestFlight page", tab: .build,
-              keywords: ["feedback email", "beta", "apple"]),
         .init(id: "build.encryption", label: "Export compliance", tab: .build,
               keywords: ["encryption", "non-exempt", "ccats", "ern", "regulator",
                          "itsappusesnonexemptencryption", "apple"]),
+
+        // MARK: Beta testing
+        //
+        // The ids still read `build.`, because an id is a name and not an
+        // address: each one is written on a view as `.fieldAnchor`, and one of
+        // them is the key a saved box height is stored under. Renaming them
+        // would move the tab and lose that height for everybody who had
+        // dragged the licence box taller.
+        .init(id: "build.testFlight", label: "TestFlight", tab: .betaTesting,
+              keywords: ["beta", "testers", "groups", "public link", "apple"]),
+        .init(id: "build.whatToTest", label: "What to Test", tab: .betaTesting,
+              keywords: ["beta notes", "testflight", "release notes", "apple"]),
+        .init(id: "build.testFlightPage", label: "TestFlight page", tab: .betaTesting,
+              keywords: ["feedback email", "beta", "apple"]),
+        .init(id: "build.betaLicence", label: "Beta licence agreement",
+              tab: .betaTesting,
+              keywords: ["eula", "testflight", "terms", "licence", "license", "apple"]),
+        .init(id: "build.googleTesters", label: "Track testers", tab: .betaTesting,
+              keywords: ["google groups", "closed track", "alpha", "beta"]),
+        .init(id: "beta.internalSharing", label: "Internal app sharing",
+              tab: .betaTesting,
+              keywords: ["install link", "share", "apk", "bundle", "google", "play"]),
 
         // MARK: Details
         .init(id: "details.name", label: "Name", tab: .details,

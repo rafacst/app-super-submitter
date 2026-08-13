@@ -1,7 +1,7 @@
 import SubmitKit
 import SwiftUI
 
-/// TestFlight, on the tab that makes the build it distributes.
+/// TestFlight, on the tab that invites the people who read it.
 ///
 /// It is the App Store twin of the Google tester groups, so it sits beside
 /// them rather than on Release: a group and an address are manifest values, and
@@ -13,32 +13,35 @@ import SwiftUI
 struct TestFlightSection: View {
     @Environment(AppState.self) private var state
 
-    /// It folds, and the title rides inside the card it folds.
-    ///
-    /// The block is five field groups tall beside a Google column of two, so
-    /// open is a screen of TestFlight for every developer who came to this tab
-    /// to drop a package. The header carries the chevron and the one line that
-    /// says what is inside, which is what a shut fold owes the reader.
+    /// It no longer folds. It was five field groups deep on the Build tab,
+    /// where a developer had come to drop a package, so it opened shut behind
+    /// a chevron and a line describing itself. This is the tab it names, and a
+    /// screen may not hide the thing it exists for.
     var body: some View {
         Section_("TestFlight", icon: "paperplane.circle.fill", tint: Theme.accent,
-                 anchor: "build.testFlight", folds: true,
-                 startsOpen: state.testFlight != nil,
+                 anchor: "build.testFlight",
                  note: "Groups, what to test, the page, and the licence") {
-            if state.testFlight == nil {
-                empty
-            } else {
-                VStack(alignment: .leading, spacing: 14) {
-                    groups
-                    Divider().overlay(Theme.sep)
-                    buildNotes
-                    Divider().overlay(Theme.sep)
-                    page
-                    Divider().overlay(Theme.sep)
-                    licence
-                    Divider().overlay(Theme.sep)
-                    switches
+            // The card the fold used to draw around itself. Without it the
+            // Apple column stood as bare fields beside a Google column of
+            // panels, and the two read as different kinds of thing.
+            Group {
+                if state.testFlight == nil {
+                    empty
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        groups
+                        Divider().overlay(Theme.sep)
+                        buildNotes
+                        Divider().overlay(Theme.sep)
+                        page
+                        Divider().overlay(Theme.sep)
+                        licence
+                        Divider().overlay(Theme.sep)
+                        switches
+                    }
                 }
             }
+            .storePanel(padding: 14)
         }
     }
 

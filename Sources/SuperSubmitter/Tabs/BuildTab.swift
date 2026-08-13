@@ -439,16 +439,10 @@ struct BuildTab: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .top, spacing: 14) {
-                if state.stores.contains(.apple) {
-                    TestFlightSection()
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .top)
-                }
-                if state.stores.contains(.google) {
-                    googleOptions
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .top)
-                }
-            }
+            // TestFlight stood in the column beside this one and is a tab of
+            // its own now. Nothing takes its place: the Android options fill
+            // the width they were sharing.
+            if state.stores.contains(.google) { googleOptions }
         }
     }
 
@@ -484,7 +478,7 @@ struct BuildTab: View {
                 error: state.packageErrors[.aab], note: state.missingBuildNote(.aab),
                 choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
                 accept: state.importPackages)
-            Text("Play has no TestFlight equivalent. Testers and rollout belong to the track below.")
+            Text("Play has no TestFlight equivalent. The rollout belongs to the track below, and the testers of a closed track to the Beta testing tab.")
                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -514,30 +508,16 @@ struct BuildTab: View {
     private var storeTools: some View {
         Section_("Store tooling", icon: "wrench.and.screwdriver.fill",
                  tint: Theme.purple, folds: true, startsOpen: false,
-                 note: "Diagnostics, Xcode Cloud, signing identities, and internal sharing") {
+                 note: "Diagnostics, Xcode Cloud, and signing identities") {
+            // One column. Internal app sharing was the Google half of a
+            // `ViewThatFits` pair here and now belongs to Beta testing, which
+            // is what it does: it hands a build to a tester off the store.
+            // What is left is Apple's and stacks the full width.
             VStack(alignment: .leading, spacing: 14) {
                 StoreDiagnosticsPanel()
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 14) {
-                        if state.stores.contains(.apple) {
-                            VStack(alignment: .leading, spacing: 14) {
-                                XcodeCloudPanel()
-                                SigningIdentitiesPanel()
-                            }
-                            .frame(maxWidth: .infinity, alignment: .top)
-                        }
-                        if state.stores.contains(.google) {
-                            InternalSharingPanel()
-                                .frame(maxWidth: .infinity, alignment: .top)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 14) {
-                        if state.stores.contains(.apple) {
-                            XcodeCloudPanel()
-                            SigningIdentitiesPanel()
-                        }
-                        if state.stores.contains(.google) { InternalSharingPanel() }
-                    }
+                if state.stores.contains(.apple) {
+                    XcodeCloudPanel()
+                    SigningIdentitiesPanel()
                 }
             }
         }

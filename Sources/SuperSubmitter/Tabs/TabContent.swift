@@ -9,11 +9,11 @@ struct TabContent: View {
     let tab: Tab
 
     var body: some View {
-        // Preview joins the two: a store page is a listing in a locale, and
+        // The store page joins the two: a page is a listing in a locale, and
         // with no locale there is no name, no description and no screenshot to
         // draw. A mockup of nothing at all is a screen with nothing to act on,
         // and this one names the single thing that unblocks it.
-        if (tab == .details || tab == .media || tab == .preview), state.locales.isEmpty {
+        if (tab == .details || tab == .media || tab == .storePage), state.locales.isEmpty {
             MissingLocaleView()
         } else if state.showYAML, let block = state.yamlBlock {
             YAMLEditor(block: block)
@@ -26,8 +26,9 @@ struct TabContent: View {
     private var form: some View {
         switch tab {
         case .stores: StoresTab()
-        case .preview: PreviewTab()
+        case .storePage: StorePage()
         case .build: BuildTab()
+        case .betaTesting: BetaTestingTab()
         case .details: DetailsTab()
         case .media: MediaTab()
         case .money: MoneyTab()

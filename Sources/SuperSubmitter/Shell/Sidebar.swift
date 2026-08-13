@@ -110,6 +110,10 @@ struct Sidebar: View {
             .overlay(alignment: .top) { modeSwitch }
             .task(id: selection.wrappedValue) {
                 guard let destination = selection.wrappedValue,
+                      // The store page is on no row, so there is nothing here
+                      // to scroll to and asking for it scrolls the column to
+                      // an id the list does not hold.
+                      destination.tab.isListed,
                       destination.mode == .managing else { return }
                 await Task.yield()
                 proxy.scrollTo(destination, anchor: .center)
@@ -272,8 +276,15 @@ private struct AppsSection: View {
     var body: some View {
         Section(isExpanded: $isOpen) {
             ForEach(rows, id: \.app.id) { index, app in
+                // The name opens the app, and then the page a customer would
+                // see of it. The store page has no row in the groups below,
+                // because this is its row: the name is what a developer
+                // presses to look at one of their apps, and a second row
+                // naming the same screen would be one destination twice. See
+                // `Tab.isListed`.
                 Button {
                     state.selectApp(at: index)
+                    state.selectedTab = .storePage
                 } label: {
                     HStack(spacing: 7) {
                         AppIconBadge(icon: app.icon, initials: app.initials, size: 16)

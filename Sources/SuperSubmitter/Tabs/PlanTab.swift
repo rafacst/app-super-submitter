@@ -1079,7 +1079,10 @@ private struct ValidationRow: View {
     /// "Fix on Summary" button under a message on the Summary tab goes
     /// nowhere, and the screen drew one beside every store finding.
     private var destination: Tab? {
-        let tab = state.tab(for: finding.fix)
+        // The anchor's own tab wins where there is one. The button says where
+        // it goes, and the two used to be able to disagree: an anchor that
+        // moved to another tab left "Fix on Build" opening Beta testing.
+        let tab = jump?.tab ?? state.tab(for: finding.fix)
         guard jump != nil || tab != .plan else { return nil }
         return tab
     }
