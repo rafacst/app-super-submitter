@@ -114,7 +114,7 @@ public enum ConsoleChecklist {
         } else if !namedBuild.isEmpty {
             reason = "The manifest names \(namedBuild). Run the apply to upload and attach it."
         } else {
-            reason = "Every submission needs a build. Build one on the Build tab, or attach one in App Store Connect."
+            reason = "Every submission needs a build. Build one on the Build tab, or pick one that App Store Connect already holds under Builds in App Store Connect."
         }
         result.append(ConsoleRow(
             id: "apple.updateBuild", system: "App Store", title: "A build for this version",

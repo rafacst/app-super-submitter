@@ -24,6 +24,7 @@ public struct StateReader: Sendable {
                     basePrice: manifest.pricing?.base,
                     versionName: manifest.versionName(for: .apple),
                     platform: apple.platforms.first?.rawValue,
+                    buildNumber: manifest.release?.apple?.buildNumber,
                     purchaseIds: (manifest.purchases ?? []).map(\.id),
                     subscriptionIds: (manifest.subscriptions ?? [])
                         .flatMap { $0.plans.map(\.id) },
@@ -61,10 +62,13 @@ public struct StateReader: Sendable {
     ///   - subscriptionIds: the same, for the subscription plans.
     ///   - platform: `IOS` or `MAC_OS`. An app that ships both holds two build
     ///     trains under one version string, and only one of them is this run's.
+    ///   - buildNumber: the build the manifest chose out of the ones App Store
+    ///     Connect holds. Nil takes the highest processed build of the train.
     public func readApple(appID: String,
                           basePrice: Price? = nil,
                           versionName: String? = nil,
                           platform: String? = nil,
+                          buildNumber: String? = nil,
                           purchaseIds: [String] = [],
                           subscriptionIds: [String] = [],
                           groupNames: [String] = []) async throws -> ActualState.Apple {
@@ -363,9 +367,23 @@ public struct StateReader: Sendable {
         // so it stays out and the next read picks it up.
         let processed = sameTrain
             .filter { $0["attributes"]["processingState"].string == "VALID" }
+        // The build the manifest chose, when it chose one. A number that names
+        // no processed build of this train answers nothing rather than the
+        // highest one: attaching a build the developer did not ask for is the
+        // one outcome worse than attaching none.
+        let chosen = buildNumber.map { wanted in
+            processed.first { $0["attributes"]["version"].string == wanted }
+        } ?? processed
             .max { ($0["attributes"]["version"].int ?? 0) < ($1["attributes"]["version"].int ?? 0) }
-        result.buildIdForVersion = processed?["id"].string
-        if let buildID = result.attachedBuildId,
+        result.buildIdForVersion = chosen?["id"].string
+        // The build the apply writes to, and not only the attached one. Between
+        // releases a version holds nothing, so this read answered nil, the plan
+        // queued the export compliance write against a build that already
+        // carried the answer, and Apple refused it: it takes the value from
+        // `ITSAppUsesNonExemptEncryption` while it processes the build and lets
+        // nobody change it afterwards. `AppleApply.appleTargetBuildID` picks the
+        // build in this order, so the read follows it.
+        if let buildID = result.buildIdForVersion ?? result.attachedBuildId,
            let build = builds["data"].array.first(where: { $0["id"].string == buildID }) {
             result.buildUsesNonExemptEncryption = build["attributes"]["usesNonExemptEncryption"].bool
         }
@@ -456,7 +474,6 @@ public struct StateReader: Sendable {
         if let response = try? await api.apple(
             "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities") {
             let availabilities = JSON(data: response.data)
-            result.appAvailabilityId = availabilities["data"]["id"].string
             result.availableInNewTerritories =
                 availabilities["data"]["attributes"]["availableInNewTerritories"].bool
             let territories = availabilities["data"]["relationships"]["territoryAvailabilities"]

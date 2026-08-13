@@ -59,7 +59,7 @@ struct ExistingAppAssetTests {
         manifest.setListingText("The description", locale: "en-US", field: .description)
 
         let failures = await state.materializeImportedAssets(
-            [asset("APP_IPHONE_69", "shot-1.png")], store: .apple, root: folder)
+            [asset("APP_IPHONE_69", "shot-1.png")], store: .apple, root: folder).failures
 
         #expect(failures.count == 1)
         #expect(failures[0].contains("shot-1.png"))
@@ -85,7 +85,7 @@ struct ExistingAppAssetTests {
         let failures = await state.materializeImportedAssets(
             [asset("APP_IPHONE_69", "shot-1.png"), asset("APP_IPHONE_69", "trailer.mov"),
              asset("phoneScreenshots", "play-1.png")],
-            store: .apple, root: folder)
+            store: .apple, root: folder).failures
 
         #expect(failures.isEmpty)
         let shots = manifest.mediaPaths(locale: "en-US", deviceClass: .phone)
@@ -114,7 +114,7 @@ struct ExistingAppAssetTests {
         var manifest = Manifest()
 
         let failures = await state.materializeImportedAssets(
-            [malicious], store: .apple, root: folder)
+            [malicious], store: .apple, root: folder).failures
 
         #expect(failures.isEmpty)
         #expect(!FileManager.default.fileExists(
@@ -139,7 +139,7 @@ struct ExistingAppAssetTests {
                                        fileName: "hosts")
 
         let failures = await state.materializeImportedAssets(
-            [local], store: .apple, root: folder)
+            [local], store: .apple, root: folder).failures
 
         #expect(failures.count == 1)
         #expect(!FileManager.default.fileExists(
@@ -163,7 +163,7 @@ struct ExistingAppAssetTests {
             at: parent.appendingPathComponent("icon"), withDestinationURL: outside)
         let state = AppState()
         let failures = await state.materializeImportedAssets(
-            [asset("icon", "agent.plist")], store: .apple, root: folder)
+            [asset("icon", "agent.plist")], store: .apple, root: folder).failures
 
         #expect(failures.count == 1)
         #expect(!FileManager.default.fileExists(

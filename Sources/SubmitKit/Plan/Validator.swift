@@ -632,6 +632,21 @@ public enum Validator {
                     location: "Build · \(build.place)", fix: .build))
             }
         }
+        // The build the manifest chose out of the ones App Store Connect
+        // already holds. The reader resolves the number inside this version's
+        // train and answers nothing when no processed build carries it, so
+        // without this line a number nobody can find reads as "no build at
+        // all" three tabs away from the field that names it.
+        if input.stores.contains(.apple),
+           let chosen = manifest.release?.apple?.buildNumber, !chosen.isEmpty,
+           let apple = input.actual.apple, apple.buildIdForVersion == nil {
+            let train = manifest.versionName(for: .apple) ?? ""
+            result.append(Finding(
+                id: "build.chosenMissing", severity: .error,
+                message: "The manifest ships build \(chosen) and App Store Connect holds no processed build \(chosen)\(train.isEmpty ? "" : " for version \(train)"). Choose another build, or wait for Apple to finish processing this one.",
+                location: "Build · App Store", fix: .build))
+        }
+
         result += googleArtifacts(input)
         result += googleTracks(input)
 

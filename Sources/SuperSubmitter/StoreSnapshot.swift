@@ -44,6 +44,17 @@ struct StoreSnapshot: Codable, Equatable {
     /// locale -> the Play feature graphic, the banner above a Play listing.
     /// The App Store has no element like it.
     private(set) var featureGraphics: [String: URL]?
+    /// A store's own URL for a picture -> the copy of it under `Store Import/`.
+    ///
+    /// The import downloads every live picture and then had no way to say so.
+    /// The Media tab drew the strip from the store's URLs, so each tile fetched
+    /// an image that was already on disk, the strip filled in slowly, and a
+    /// press downloaded the whole thing again before Quick Look opened it.
+    ///
+    /// It is a map and not a swap at import time because a store read refreshes
+    /// the same buckets with the store's URLs again. Both routes resolve
+    /// through here, so a read costs the pictures nothing.
+    private(set) var localCopies: [String: URL]?
     private(set) var readAt: Date?
 
     /// The three above are optional, and the rest are not, for one reason:
@@ -65,6 +76,23 @@ struct StoreSnapshot: Codable, Equatable {
     }
 
     func featureGraphic(locale: String) -> URL? { featureGraphics?[locale] }
+
+    /// The copy on disk, when the import got one. See `localCopies`.
+    func resolve(_ url: URL) -> URL {
+        guard let local = localCopies?[url.absoluteString],
+              FileManager.default.fileExists(atPath: local.path) else { return url }
+        return local
+    }
+
+    /// Files what the import downloaded, so every later read still draws from
+    /// disk. A pair whose two sides match is a file that never landed.
+    mutating func rememberLocalCopies(_ pairs: [(remote: URL, local: URL)]) {
+        var known = localCopies ?? [:]
+        for pair in pairs where pair.remote != pair.local {
+            known[pair.remote.absoluteString] = pair.local
+        }
+        if !known.isEmpty { localCopies = known }
+    }
 
     /// What Apple extracted from the submitted binary. See `appleIcon`.
     mutating func setAppleIcon(_ url: URL) { appleIcon = url }
@@ -225,15 +253,30 @@ struct StoreSnapshot: Codable, Equatable {
                                       .googleVideo: source.video])
             }
         }
+        // The same replace-what-this-call-fills rule as `merge(bucketed:into:)`,
+        // and for the same reason: a second import of one app used to append a
+        // second copy of every picture to the first import's.
+        var freshShots: [String: [Manifest.DeviceClass: [URL]]] = [:]
+        var freshPreviews: [String: [Manifest.DeviceClass: [URL]]] = [:]
         for asset in imported.assets {
             guard let device = asset.deviceClass else { continue }
             // Apple names a video bucket by the same display type as a
             // screenshot, so the file extension tells the two apart.
+            let url = resolve(asset.url)
             if store == .apple, Self.isVideo(asset.url) {
-                previews[asset.locale, default: [:]][device, default: []].append(asset.url)
+                freshPreviews[asset.locale, default: [:]][device, default: []].append(url)
             } else {
-                screenshots[store, default: [:]][asset.locale, default: [:]][device, default: []]
-                    .append(asset.url)
+                freshShots[asset.locale, default: [:]][device, default: []].append(url)
+            }
+        }
+        for (locale, devices) in freshShots {
+            for (device, urls) in devices {
+                screenshots[store, default: [:]][locale, default: [:]][device] = urls
+            }
+        }
+        for (locale, devices) in freshPreviews {
+            for (device, urls) in devices {
+                previews[locale, default: [:]][device] = urls
             }
         }
     }
@@ -293,13 +336,31 @@ struct StoreSnapshot: Codable, Equatable {
 
     /// The stores key their media "locale/bucket". The tabs group by device
     /// class, so the key splits once here.
+    ///
+    /// Every bucket this call fills replaces what it held, and only the buckets
+    /// this call names are touched. The `+=` below used to run straight against
+    /// the stored map, so a store read added the live set to the copy the last
+    /// read left behind. The snapshot is saved to disk, so the count grew on
+    /// every read and across launches: an app showing 14 pictures reported 182
+    /// after thirteen reads. Inside one call the append stays, because several
+    /// Apple display sizes answer to one device class and all of them belong.
     private func merge(bucketed: [String: [URL]],
                        into target: inout [String: [Manifest.DeviceClass: [URL]]]) {
-        for (key, urls) in bucketed {
+        var fresh: [String: [Manifest.DeviceClass: [URL]]] = [:]
+        // Sorted, so the order of a device class that several display sizes
+        // fill is the same on every read. A dictionary hands its keys over in
+        // no particular order, which shuffled the strip under the developer.
+        for key in bucketed.keys.sorted() {
             let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
             guard parts.count == 2, let device = Manifest.DeviceClass(storeBucket: parts[1])
             else { continue }
-            target[parts[0], default: [:]][device, default: []] += urls
+            fresh[parts[0], default: [:]][device, default: []]
+                += (bucketed[key] ?? []).map(resolve)
+        }
+        for (locale, devices) in fresh {
+            for (device, urls) in devices {
+                target[locale, default: [:]][device] = urls
+            }
         }
     }
 }

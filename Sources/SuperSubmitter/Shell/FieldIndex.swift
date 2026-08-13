@@ -50,6 +50,9 @@ enum FieldIndex {
         .init(id: "build.encryption", label: "Export compliance", tab: .build,
               keywords: ["encryption", "non-exempt", "ccats", "ern", "regulator",
                          "itsappusesnonexemptencryption", "apple"]),
+        .init(id: "build.storeBuilds", label: "Builds in App Store Connect", tab: .build,
+              keywords: ["add build", "attach", "existing build", "processed",
+                         "build number", "apple", "testflight build"]),
 
         // MARK: Beta testing
         //

@@ -112,18 +112,73 @@ public struct UploadService: Sendable {
         return base + Double.random(in: 0...(base * 0.2))
     }
 
+    /// One build of this app, as the picker on the Build tab draws it.
+    public struct RemoteBuild: Sendable, Equatable, Identifiable {
+        public var id: String
+        /// The build number, which Apple counts inside `version` below.
+        public var number: String
+        /// The marketing version this build belongs to: its train.
+        public var version: String
+        public var processed: Bool
+        public var state: String
+        public var expired: Bool
+        public var uploaded: Date?
+    }
+
+    /// Every build App Store Connect holds for one app and one platform.
+    ///
+    /// The store keeps them and a version takes one, which is what Apple's own
+    /// console offers as Add Build. Nothing here writes: the choice lands in
+    /// the manifest, and the plan attaches it.
+    public func appleBuildChoices(appID: String,
+                                  platform: BuildPlatform) async throws -> [RemoteBuild] {
+        let wanted = platform == .macos ? "MAC_OS" : "IOS"
+        let uploaded = ISO8601DateFormatter()
+        uploaded.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var result: [RemoteBuild] = []
+        for page in try await appleBuildPages(appID: appID) {
+            // The trains of this page name the marketing version of every
+            // build on it, and they drop the other platform's builds.
+            let trains = StateReader.appleTrains(page, platform: wanted)
+            for build in page["data"].array {
+                guard let id = build["id"].string,
+                      let train = build["relationships"]["preReleaseVersion"]["data"]["id"]
+                        .string.flatMap({ trains[$0] }) else { continue }
+                let attributes = build["attributes"]
+                let date = attributes["uploadedDate"].string
+                result.append(RemoteBuild(
+                    id: id,
+                    number: attributes["version"].string ?? "",
+                    version: train,
+                    processed: attributes["processingState"].string == "VALID",
+                    state: attributes["processingState"].string ?? "PROCESSING",
+                    expired: attributes["expired"].bool == true,
+                    uploaded: date.flatMap { uploaded.date(from: $0) }
+                        ?? date.flatMap { ISO8601DateFormatter().date(from: $0) }))
+            }
+        }
+        return result
+    }
+
     private func appleBuilds(appID: String) async throws -> [JSON] {
-        var path: String? = "/v1/builds?filter%5Bapp%5D=\(appID)&limit=200"
+        try await appleBuildPages(appID: appID).flatMap { $0["data"].array }
+    }
+
+    /// The pages themselves, because the train of a build lives in the
+    /// `included` of the page that carried it.
+    private func appleBuildPages(appID: String) async throws -> [JSON] {
+        var path: String? = "/v1/builds?filter%5Bapp%5D=\(appID)"
+            + "&include=preReleaseVersion&limit=200"
         var pages = 0
         var seen: Set<String> = []
-        var builds: [JSON] = []
+        var result: [JSON] = []
         while let pagePath = path, pages < 100, seen.insert(pagePath).inserted {
             pages += 1
             let page = JSON(data: try await api.apple("GET", pagePath).data)
-            builds += page["data"].array
+            result.append(page)
             path = page["links"]["next"].string.flatMap(Self.appleNextPagePath)
         }
-        return builds
+        return result
     }
 
     static func appleNextPagePath(_ value: String) -> String? {

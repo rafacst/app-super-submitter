@@ -367,6 +367,9 @@ public enum RunError: Error, LocalizedError {
     case missingLocalization(String)
     case uploadFailed(String)
     case processingFailed(String)
+    /// Apple already holds the export compliance answer of this build, and it
+    /// is the other one. See `AppleApply.appleBuildCompliance`.
+    case encryptionAnswerFixed(held: Bool, wanted: Bool)
 
     public var errorDescription: String? {
         switch self {
@@ -382,6 +385,8 @@ public enum RunError: Error, LocalizedError {
             "The upload failed. \(detail)"
         case .processingFailed(let detail):
             "The store rejected the upload. \(detail)"
+        case .encryptionAnswerFixed(let held, let wanted):
+            "App Store Connect holds \(held ? "\"it does use encryption\"" : "\"uses no non-exempt encryption\"") for this build and you asked for \(wanted ? "\"it does use encryption\"" : "\"uses no non-exempt encryption\""). Apple takes this answer from ITSAppUsesNonExemptEncryption inside the binary and changes it for nobody, so the other answer needs that key in the project and a new build."
         }
     }
 }

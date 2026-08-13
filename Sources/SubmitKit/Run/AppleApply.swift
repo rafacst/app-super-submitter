@@ -461,9 +461,24 @@ extension Runner {
                             body: ["data": ["type": "builds", "id": buildID]])
     }
 
+    /// Apple's yes or no question, written on the build that ships.
+    ///
+    /// Apple fills this from `ITSAppUsesNonExemptEncryption` inside the binary
+    /// while it processes the build, and it answers 409 to a PATCH once the
+    /// value is there. So the build is asked first: one that already carries
+    /// the answer needs no write, and one that carries the other answer is a
+    /// fact of the binary that no call changes. The run stopped here with "the
+    /// store already holds something that conflicts with this", which named
+    /// neither of those two states.
     func appleBuildCompliance() async throws {
         guard let buildID = appleTargetBuildID,
               let value = manifest.review?.usesNonExemptEncryption else { return }
+        let build = JSON(data: try await api.apple("GET", "/v1/builds/\(buildID)").data)
+        let held = build["data"]["attributes"]["usesNonExemptEncryption"].bool
+        guard held != value else { return }
+        if let held {
+            throw RunError.encryptionAnswerFixed(held: held, wanted: value)
+        }
         try await api.apple("PATCH", "/v1/builds/\(buildID)", body: [
             "data": ["type": "builds", "id": buildID,
                      "attributes": ["usesNonExemptEncryption": value]],
@@ -863,7 +878,12 @@ extension Runner {
             purchaseVersionID = created["data"]["id"].string
         }
         var localizationIDs: [String: String] = [:]
-        if let purchaseVersionID {
+        // A purchase that names no locale manages none, so the drop below never
+        // runs against an empty wanted set. It deletes every localization Apple
+        // does not find in the manifest, and an absent `locales` key meant "all
+        // of them": the apply stripped the names off products the developer
+        // never asked it to touch, and Apple takes no purchase with no name.
+        if let purchaseVersionID, purchase.locales?.isEmpty == false {
             let existing = JSON(data: try await api.apple(
                 "GET", "/v1/inAppPurchaseVersions/\(purchaseVersionID)"
                     + "/localizations?limit=200").data)
@@ -1052,7 +1072,7 @@ extension Runner {
                     "data": ["type": "territories", "id": item.territory]]],
             ]
         }
-        var data: [String: Any] = [
+        let data: [String: Any] = [
                 "type": "appAvailabilities",
                 "attributes": ["availableInNewTerritories":
                                 manifest.pricing?.autoConvertOtherTerritories ?? true],
@@ -1063,17 +1083,13 @@ extension Runner {
                     }],
                 ],
             ]
-        let method: String
-        let path: String
-        if let id = actual.apple?.appAvailabilityId {
-            method = "PATCH"
-            path = "/v2/appAvailabilities/\(id)"
-            data["id"] = id
-        } else {
-            method = "POST"
-            path = "/v2/appAvailabilities"
-        }
-        try await api.apple(method, path, body: ["data": data, "included": included])
+        // Always a create, even when the app already holds an availability.
+        // `appAvailabilities` has no UPDATE: Apple answers a PATCH with 403 and
+        // "Allowed operations are: CREATE, GET_INSTANCE", which this app read as
+        // a role the key was denied and reported as one. The create carries the
+        // whole territory set, so it replaces what the store holds.
+        try await api.apple("POST", "/v2/appAvailabilities",
+                            body: ["data": data, "included": included])
     }
 
     func appleAppPrice() async throws {

@@ -57,10 +57,16 @@ extension AppState {
                         bundleID: listing.bundleID ?? candidate.identifier,
                         platforms: platforms)
                     importedManifest.mergeAppleImport(listing)
-                    snapshot.merge(listing, store: .apple)
                     skipped += listing.failures
-                    skipped += await materializeImportedAssets(
+                    // The files first, then the snapshot that names them. See
+                    // `adopt`: a snapshot pointing at the store's own URLs made
+                    // the Media tab download every picture a second time.
+                    let landed = await materializeImportedAssets(
                         listing.assets, store: .apple, root: folder)
+                    skipped += landed.failures
+                    snapshot.rememberLocalCopies(
+                        zip(listing.assets, landed.local).map { ($0.url, $1.url) })
+                    snapshot.merge(listing, store: .apple)
                     reached.insert(.apple)
                 case .google:
                     guard let googleCredential else { continue }
@@ -70,10 +76,13 @@ extension AppState {
                     let listing = try await client.importGoogle(
                         credential: googleCredential, packageName: candidate.identifier)
                     importedManifest.mergeGoogleImport(listing)
-                    snapshot.merge(listing, store: .google)
                     skipped += listing.failures
-                    skipped += await materializeImportedAssets(
+                    let landed = await materializeImportedAssets(
                         listing.assets, store: .google, root: folder)
+                    skipped += landed.failures
+                    snapshot.rememberLocalCopies(
+                        zip(listing.assets, landed.local).map { ($0.url, $1.url) })
+                    snapshot.merge(listing, store: .google)
                     reached.insert(.google)
                 }
             }
@@ -193,12 +202,19 @@ extension AppState {
     }
 
     /// Keeps downloaded store media as a local view of what is live.
+    ///
+    /// The download runs first and the snapshot takes the files it wrote, so the
+    /// Media tab shows what the store holds from disk. The merge used to run
+    /// first, against the store's own URLs, and the pictures this folder already
+    /// held were never looked at again.
     func adopt(_ imported: ImportedStoreListing, store: Store) async {
         guard let root = manifestURL?.deletingLastPathComponent() else { return }
-        storeSnapshot.merge(imported, store: store)
         manifest.removeImportedMedia()
-        let failures = await materializeImportedAssets(
+        let (failures, local) = await materializeImportedAssets(
             imported.assets, store: store, root: root)
+        storeSnapshot.rememberLocalCopies(
+            zip(imported.assets, local).map { ($0.url, $1.url) })
+        storeSnapshot.merge(imported, store: store)
         let skipped = imported.failures + failures
         guard !skipped.isEmpty else { return }
         errorMessage = "The listing was read. These parts stayed empty:\n"
@@ -213,31 +229,51 @@ extension AppState {
     /// with it and the folder was left without a `store.yaml`. The names of
     /// the files that stayed behind are returned instead, and they reach the
     /// developer in the same list as the reads the store refused.
+    /// It answers the same assets pointing at the copies on disk, because a
+    /// file that landed here and is then shown from the store's own URL is a
+    /// download nobody used. The Media tab drew every live picture straight off
+    /// Apple's servers while the bytes sat in this folder, so the strip filled
+    /// in slowly, one blank tile at a time, and a press on a tile downloaded the
+    /// whole image again before Quick Look could open it.
+    ///
+    /// A file that will not download keeps the store's URL, so it is still on
+    /// the screen and still slow, rather than gone.
     func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,
-                                   root: URL) async -> [String] {
+                                   root: URL) async -> (failures: [String],
+                                                        local: [ImportedStoreAsset]) {
         var failures: [String] = []
+        var local: [ImportedStoreAsset] = []
         for asset in assets {
-            let components = [Self.importFolder, store.rawValue,
-                              Self.safeComponent(asset.locale),
-                              Self.safeComponent(asset.kind),
-                              Self.safeComponent(asset.fileName)]
-            let folder = root.appendingPathComponent(Self.importFolder).standardizedFileURL
-            let destination = components.dropFirst().reduce(folder) {
-                $0.appendingPathComponent($1)
-            }.standardizedFileURL
-            guard Self.isSafeImportDestination(destination, root: root) else {
+            guard let destination = Self.importDestination(asset, store: store, root: root)
+            else {
                 failures.append("\(store.storeName) \(asset.kind): the store named a path outside the import folder.")
+                local.append(asset)
                 continue
             }
             do {
                 try await download(asset, to: destination, root: root)
+                local.append(ImportedStoreAsset(
+                    locale: asset.locale, kind: asset.kind, url: destination,
+                    fileName: asset.fileName))
             } catch {
                 failures.append("\(store.storeName) \(asset.kind) \(asset.fileName): "
                     + error.localizedDescription)
+                local.append(asset)
                 continue
             }
         }
-        return failures
+        return (failures, local)
+    }
+
+    /// Where one store asset belongs under `Store Import/`, or nil when the
+    /// name the store sent would put it somewhere else entirely.
+    static func importDestination(_ asset: ImportedStoreAsset, store: Store,
+                                  root: URL) -> URL? {
+        let folder = root.appendingPathComponent(importFolder).standardizedFileURL
+        let destination = [store.rawValue, safeComponent(asset.locale),
+                           safeComponent(asset.kind), safeComponent(asset.fileName)]
+            .reduce(folder) { $0.appendingPathComponent($1) }.standardizedFileURL
+        return isSafeImportDestination(destination, root: root) ? destination : nil
     }
 
     private func download(_ asset: ImportedStoreAsset, to destination: URL,
