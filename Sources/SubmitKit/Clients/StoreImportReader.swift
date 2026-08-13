@@ -769,22 +769,50 @@ public struct StoreImportReader: Sendable {
                                  reviewNote: item["attributes"]["reviewNote"].string)
     }
 
+    /// The groups Apple holds and the plans inside each one.
+    ///
+    /// Which group holds which subscription is read off the **group**, from
+    /// `relationships.subscriptions.data`. This used to ask the other end, for
+    /// a `relationships.group` on each included subscription, and a real
+    /// payload does not carry one: `include=subscriptions` returns the
+    /// subscriptions flat, with no way back to their group. Every plan
+    /// therefore landed under the empty-string key and every group came back
+    /// with no plans at all, which is the app showing a subscription group and
+    /// nothing in it for an app whose subscriptions have been on sale for
+    /// years. `AppleCatalogClient.subscriptions` already reads it from the
+    /// group; this is the same fact read the same way.
+    ///
+    /// The reverse link is still honoured where a payload happens to carry
+    /// one, so nothing that worked before stops working.
     static func appleSubscriptionGroups(_ payload: JSON) -> [Manifest.SubscriptionGroup] {
-        var plansByGroup: [String: [Manifest.SubscriptionGroup.Plan]] = [:]
+        // By Apple's resource id, which is what a group's relationship names.
+        // The product id is what the manifest holds, and the two differ.
+        var planByResourceID: [String: Manifest.SubscriptionGroup.Plan] = [:]
+        var groupByResourceID: [String: String] = [:]
         for item in payload["included"].array where item["type"].string == "subscriptions" {
             let attributes = item["attributes"]
-            guard let id = attributes["productId"].string else { continue }
-            let group = item["relationships"]["group"]["data"]["id"].string ?? ""
-            plansByGroup[group, default: []].append(Manifest.SubscriptionGroup.Plan(
-                id: id,
-                duration: Self.appleDuration(attributes["subscriptionPeriod"].string)))
+            guard let resourceID = item["id"].string,
+                  let productID = attributes["productId"].string else { continue }
+            planByResourceID[resourceID] = Manifest.SubscriptionGroup.Plan(
+                id: productID,
+                duration: Self.appleDuration(attributes["subscriptionPeriod"].string))
+            if let group = item["relationships"]["group"]["data"]["id"].string, !group.isEmpty {
+                groupByResourceID[resourceID] = group
+            }
         }
         return payload["data"].array.compactMap { item in
             guard let id = item["id"].string else { return nil }
+            var linked = item["relationships"]["subscriptions"]["data"].array
+                .compactMap { $0["id"].string }
+            // Only where the group listed none. Sorted, so a payload that
+            // carries the reverse link alone still returns a stable order.
+            if linked.isEmpty {
+                linked = groupByResourceID.filter { $0.value == id }.keys.sorted()
+            }
             return Manifest.SubscriptionGroup(
                 groupId: id,
                 groupName: item["attributes"]["referenceName"].string,
-                plans: plansByGroup[id] ?? [])
+                plans: linked.compactMap { planByResourceID[$0] })
         }
     }
 

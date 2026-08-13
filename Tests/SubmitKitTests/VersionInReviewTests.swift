@@ -15,11 +15,12 @@ import Testing
     /// Apple's own words, sorted once, because six files had their own list and
     /// one of them disagreed.
     @Test func aVersionWithApplePermitsNoWrite() {
-        for state in ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
-                      "WAITING_FOR_EXPORT_COMPLIANCE"] {
+        for state in ["WAITING_FOR_REVIEW", "IN_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE"] {
             #expect(AppleVersionState.withApple.contains(state))
             #expect(!AppleVersionState.editable.contains(state))
         }
+        #expect(AppleVersionState.editable.contains("READY_FOR_REVIEW"))
+        #expect(!AppleVersionState.withApple.contains("READY_FOR_REVIEW"))
     }
 
     /// Apple answered. The two answers are not the same event and the app may
@@ -31,6 +32,7 @@ import Testing
         #expect(AppleVersionState.outcome(of: "METADATA_REJECTED") == .refused)
         #expect(AppleVersionState.outcome(of: "INVALID_BINARY") == .refused)
         #expect(AppleVersionState.outcome(of: "IN_REVIEW") == .waiting)
+        #expect(AppleVersionState.outcome(of: "READY_FOR_REVIEW") == nil)
         #expect(AppleVersionState.outcome(of: "PREPARE_FOR_SUBMISSION") == nil)
     }
 

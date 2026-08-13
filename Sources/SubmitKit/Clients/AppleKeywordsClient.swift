@@ -109,10 +109,11 @@ public struct AppleKeywordsClient: Sendable {
 
     /// Every keyword Apple holds for the app. This is the pool a localization
     /// links from, and the app can add nothing to it.
-    public func pool(appID: String) async throws -> [String] {
+    public func pool(appID: String, locale: String) async throws -> [String] {
         let payload = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/searchKeywords",
-            query: [URLQueryItem(name: "limit", value: "200")]).data)
+            query: [URLQueryItem(name: "filter[locale]", value: locale),
+                    URLQueryItem(name: "limit", value: "200")]).data)
         return payload["data"].array.compactMap { $0["id"].string }
     }
 

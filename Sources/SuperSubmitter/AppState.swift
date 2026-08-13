@@ -166,6 +166,16 @@ final class AppState {
     var selectedTab: Tab = .stores {
         didSet {
             guard selectedTab != oldValue else { return }
+            // Leaving a tab is a write boundary, the same as switching app,
+            // resigning active, quitting and Command-S. The autosave coalesces
+            // for 250 ms, so the last thing typed before a tab was clicked was
+            // still waiting, and `pendingListingEdit` holds a draft the
+            // manifest has not seen at all: a field typed and then left by
+            // clicking another tab lost its last characters.
+            //
+            // `flushSave` drains both and costs nothing when nothing waits, so
+            // this adds no write to a plain tab switch and no timer anywhere.
+            flushSave()
             // A tab is this app's screen. `captureScreenViews` swizzles a
             // UIKit class that a Mac does not have, so the SDK sees no screen
             // on its own and every event would carry the same one.
@@ -333,7 +343,12 @@ final class AppState {
 
     // Tab 2.
     /// Build from Project. upload-spec section 10.
-    @ObservationIgnored lazy var buildFlow = BuildFlow(app: self)
+    /// Where the linked projects are kept. Injectable for the same reason
+    /// `defaults` and `storeAccount` are: the links are one list for the whole
+    /// Mac, so a test that writes the real one unlinks the developer's own
+    /// projects. Nothing but a test passes another.
+    @ObservationIgnored let buildStorage: BuildStorage
+    @ObservationIgnored lazy var buildFlow = BuildFlow(app: self, storage: buildStorage)
     var showBuildFromProject = false
     var buildRead = false
     var packages: [AppPackage.Kind: AppPackage] = [:]
@@ -519,9 +534,11 @@ final class AppState {
     /// never writes over the real key.
     @ObservationIgnored let storeAccount: String
 
-    init(defaults: UserDefaults = .standard, storeAccount: String = "store-credentials") {
+    init(defaults: UserDefaults = .standard, storeAccount: String = "store-credentials",
+         buildStorage: BuildStorage = BuildStorage()) {
         self.defaults = defaults
         self.storeAccount = storeAccount
+        self.buildStorage = buildStorage
         // Each level holds a whole manifest. Fifty covers a work session and
         // caps what a long day of edits can retain.
         undoManager.levelsOfUndo = 50
@@ -1243,7 +1260,8 @@ final class AppState {
                 let client = StoreConnectionClient()
                 if stores.contains(.apple) {
                     let imported = try await client.importApple(
-                        appID: appleAppID, credential: appleCredential)
+                        appID: appleAppID, credential: appleCredential,
+                        platform: manifest.apps.apple?.platforms.first?.rawValue)
                     manifest.mergeAppleImport(imported)
                     await adopt(imported, store: .apple)
                 }
@@ -1257,10 +1275,20 @@ final class AppState {
                 // a developer most often wants back.
                 registerManifestUndo()
                 try save()
+                invalidatePlan()
                 storeSnapshot.save(toRoot: manifestURL?.deletingLastPathComponent())
                 locale = manifest.listing?.defaultLocale ?? locale
                 updateLinkedAppNameFromManifest()
-                listingImportStatus = .connected("Imported \(manifest.listing?.locales.count ?? 0) locales into store.yaml")
+                await readStores()
+                let count = manifest.listing?.locales.count ?? 0
+                if let version = actualState.apple?.versionString,
+                   actualState.apple?.attachedBuildId != nil {
+                    listingImportStatus = .connected(
+                        "Imported App Store draft \(version) with its attached build and \(count) \(count == 1 ? "locale" : "locales") into store.yaml")
+                } else {
+                    listingImportStatus = .connected(
+                        "Imported \(count) \(count == 1 ? "locale" : "locales") into store.yaml")
+                }
             } catch {
                 listingImportStatus = .failed(error.localizedDescription)
             }
@@ -2279,14 +2307,70 @@ final class AppState {
         let money = try? await StoreImportReader(credentials: credentials)
             .appleMoney(appID: appID, territory: territory)
         guard let money else { moneyReadApps.remove(key); return }
-        guard !money.isEmpty else { return }
         // The developer can move to another app while Apple answers. What came
         // back is that app's money, not this one's.
         guard appID == appleActionAppID else { return }
-        guard manifest.mergeAppleMoney(money) else { return }
-        registerManifestUndo()
-        syncEditingStateFromManifest()
-        saveManifestReportingErrors()
+        if !money.isEmpty, manifest.mergeAppleMoney(money) {
+            registerManifestUndo()
+            syncEditingStateFromManifest()
+            saveManifestReportingErrors()
+        }
+        // The manifest merge above fills what `store.yaml` is missing. It does
+        // not say what the store holds, and that is the question the tab draws:
+        // the price columns, "Approved", "In review" and "Will add" all read
+        // `actualState.apple.catalog`, which nothing but the Summary read ever
+        // filled. Opening Monetization on a published app therefore showed
+        // every approved purchase as one the apply was about to create.
+        //
+        // After the merge, so a product imported a moment ago is in the id list
+        // and gets its detail read in the same pass.
+        await readAppleCatalogForMoney(appID: appID, key: key)
+    }
+
+    /// The read-only catalog work the Monetization tab needs to draw itself.
+    ///
+    /// `AppleCatalogClient` and not a second parser: it is the same client the
+    /// Summary read uses, it already reads product state, prices, availability,
+    /// subscription groups and group membership, and a parallel reader would be
+    /// a second answer to drift from this one.
+    ///
+    /// It writes nothing to any store. Every call inside is a `GET`.
+    private func readAppleCatalogForMoney(appID: String, key: String) async {
+        // A Summary read fills the same map from the same client, so an app
+        // whose state is already fresh owes nothing here. `actualState` is
+        // cleared when the open app changes, so this is per app by
+        // construction.
+        guard actualState.apple?.catalogRead != true else { return }
+        let client = AppleCatalogClient(api: readOnlyAPI())
+        let purchaseIds = (manifest.purchases ?? []).map(\.id).filter { !$0.isEmpty }
+        let groups = manifest.subscriptions ?? []
+        let planIds = groups.flatMap { $0.plans.map(\.id) }.filter { !$0.isEmpty }
+
+        // A failure leaves the flag false, so the tab says the read did not
+        // answer rather than claiming Apple holds nothing. It also drops the
+        // key, so opening the tab again asks again.
+        guard let purchases = try? await client.purchases(appID: appID,
+                                                          productIds: purchaseIds),
+              let subscriptions = try? await client.subscriptions(
+                appID: appID, productIds: planIds,
+                groupNames: groups.compactMap(\.groupName)) else {
+            moneyReadApps.remove(key)
+            return
+        }
+        guard appID == appleActionAppID else { return }
+
+        var apple = actualState.apple ?? ActualState.Apple()
+        apple.purchaseIds = Set(purchases.keys)
+        apple.subscriptionIds = Set(subscriptions.products.keys)
+        // Merged and not assigned. A Summary read may already have filled this
+        // with more than the two list reads carry, and the newer detail wins
+        // per product rather than replacing the whole map.
+        apple.catalog.merge(purchases) { _, new in new }
+        apple.catalog.merge(subscriptions.products) { _, new in new }
+        apple.subscriptionGroupNames = subscriptions.groups.names
+        apple.subscriptionGroupLocales.merge(subscriptions.groups.locales) { _, new in new }
+        apple.catalogRead = true
+        actualState.apple = apple
     }
 
     /// The prices Apple sells at, as the picker's rows.
@@ -2820,26 +2904,45 @@ final class AppState {
             loadCredentials()
             resetRunState()
             loadConsoleMarks()
-            applyDryRunDefault()
             // After `resetRunState`, which clears the read the app before this
             // one left behind. The snapshot on disk holds the listing customers
             // are reading, so an app read in an earlier session proves itself
             // live here without waiting for the sweep.
             rememberOpenAppLiveState()
+            // And after that line, because the dry run default asks the very
+            // fact it writes. Before it, an app proving itself live off its own
+            // snapshot still opened with the dry run on, once.
+            applyDryRunDefault()
         } catch {
             errorMessage = "Could not open \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 
-    /// Spec 16.5 and 17: the dry run is on by default **for a new app**. An
-    /// app with a run log is not new, so its own toggle stays where it was.
+    /// Spec 16.5 and 17: the dry run is on by default **for a new app**.
+    ///
+    /// A published app is not a new app, and what makes it published is a store
+    /// having taken it to customers. This used to ask the disk instead, for a
+    /// `.super-submitter/runs` folder beside the manifest, and that answered a
+    /// different question: a run log says this Mac has run this app through
+    /// Super Submitter, which a fresh clone, a second Mac, and a colleague all
+    /// lack for an app that has been on sale for a year. Every one of them
+    /// opened a live app with the dry run on and the first apply did nothing.
+    ///
+    /// `isAppLive` is the fact itself, kept per app in the defaults and written
+    /// by the reads that ask the stores. It is a `shipped` state and not an
+    /// approved one: an app approved and never released has no customers, so it
+    /// is still a new app here and keeps the safe default. See
+    /// `AppleVersionState.shipped` and `rememberAppLiveness`.
+    ///
+    /// Only the default. The toggle is the developer's for the rest of the
+    /// session, and turning the dry run back on for a published app is exactly
+    /// what somebody about to change a live listing does first.
     private func applyDryRunDefault() {
-        guard let root = manifestRoot else { return }
-        let runs = root.appendingPathComponent(".super-submitter/runs")
-        let hasRun = (try? FileManager.default.contentsOfDirectory(atPath: runs.path))?
-            .isEmpty == false
-        dryRun = hasRun ? false : (defaults.object(forKey: "dryRunByDefault")
-            as? Bool ?? true)
+        guard isAppLive(appKey: currentAppKey) else {
+            dryRun = defaults.object(forKey: "dryRunByDefault") as? Bool ?? true
+            return
+        }
+        dryRun = false
     }
 
     /// Settings ▸ Nuclear. Everything the app holds, gone, back to first run.

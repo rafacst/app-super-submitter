@@ -3,6 +3,13 @@ import SubmitKit
 import Testing
 @testable import SuperSubmitter
 
+private func scratchStorageRoot() throws -> URL {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("app-folder-reuse-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+}
+
 /// The import asks for the app folder and writes `store.yaml` inside it. The
 /// Build tab then asked for the same folder again, which is the app
 /// forgetting what it was told one screen ago.
@@ -19,9 +26,14 @@ import Testing
 /// answers, and it also hid the folder the app already knew about.
 @MainActor
 @Test func theBuildTabOpensTheProjectOfTheAppThatIsOpen() throws {
-    let storage = BuildStorage()
-    let previous = storage.loadProjects()
-    defer { try? storage.saveProjects(previous) }
+    // A root of this test's own. Saving and restoring the real list looked
+    // safe and was not: suites run in parallel, so two tests doing
+    // load-write-restore on the one file for the whole Mac interleave and
+    // leave whichever finished last, which is how a run of the suite unlinked
+    // the developer's own projects.
+    let root = try scratchStorageRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let storage = BuildStorage(root: root)
 
     let mine = "/Users/me/apps/mine/store.yaml"
     let theirs = "/Users/me/apps/theirs/store.yaml"
@@ -37,9 +49,10 @@ import Testing
     try storage.saveProjects(projects)
 
     let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
-                         storeAccount: "test-\(UUID().uuidString)")
+                         storeAccount: "test-\(UUID().uuidString)",
+                         buildStorage: storage)
     state.manifestURL = URL(fileURLWithPath: mine)
-    let flow = BuildFlow(app: state)
+    let flow = BuildFlow(app: state, storage: storage)
 
     flow.loadSavedProject()
 
@@ -51,9 +64,14 @@ import Testing
 /// store, and building each one meant switching the tab over by hand.
 @MainActor
 @Test func bothStoresBuildFromOnePressWhenEachHasAProject() throws {
-    let storage = BuildStorage()
-    let previous = storage.loadProjects()
-    defer { try? storage.saveProjects(previous) }
+    // A root of this test's own. Saving and restoring the real list looked
+    // safe and was not: suites run in parallel, so two tests doing
+    // load-write-restore on the one file for the whole Mac interleave and
+    // leave whichever finished last, which is how a run of the suite unlinked
+    // the developer's own projects.
+    let root = try scratchStorageRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let storage = BuildStorage(root: root)
 
     let mine = "/Users/me/apps/mine/store.yaml"
     try storage.saveProjects([
@@ -70,7 +88,7 @@ import Testing
     state.manifestURL = URL(fileURLWithPath: mine)
     state.setStore(.apple, enabled: true)
     state.setStore(.google, enabled: true)
-    let flow = BuildFlow(app: state)
+    let flow = BuildFlow(app: state, storage: storage)
 
     #expect(flow.canBuildBothStores)
     #expect(flow.savedProject(for: .apple)?.containerKind == .project)

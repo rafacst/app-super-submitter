@@ -40,7 +40,7 @@ private final class CorrectionCallLog: @unchecked Sendable {
 
 private final class CorrectionStubProtocol: URLProtocol, @unchecked Sendable {
     enum Scenario {
-        case reviews, purchase, release, encryption
+        case reviews, purchase, release, releaseExistingDraft, encryption
         case subscriptionLocales, groupLocales
         case availabilityExisting, availabilityMissing, subscriptionCatalog
         case subscriptionDraftExisting, subscriptionDraftMissing, subscriptionDraftInReview
@@ -96,6 +96,11 @@ private final class CorrectionStubProtocol: URLProtocol, @unchecked Sendable {
             default:
                 body = #"{"data":[]}"#
             }
+
+        case .releaseExistingDraft:
+            body = method == "GET" && path == "/v1/reviewSubmissions"
+                ? #"{"data":[{"type":"reviewSubmissions","id":"submission-draft","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}]}"#
+                : #"{"data":{}}"#
 
         case .encryption:
             body = method == "POST" && path == "/v1/appEncryptionDeclarations"
@@ -298,6 +303,21 @@ struct AppleAPICorrectionTests {
         #expect(!CorrectionStubProtocol.log.all.contains {
             $0.path == "/v1/subscriptionSubmissions"
                 || $0.path == "/v1/subscriptionGroupSubmissions"
+        })
+    }
+
+    @Test func releaseResumesTheDraftSubmissionThatAlreadyHoldsTheBuild() async throws {
+        let client = ReleaseClient(api: correctionAPI(.releaseExistingDraft), access: GrantAll())
+
+        let id = try await client.releaseApple(appID: "app-1", platform: "IOS",
+                                               versionID: "app-version-1")
+
+        #expect(id == "submission-draft")
+        #expect(CorrectionStubProtocol.log.all.contains {
+            $0.method == "PATCH" && $0.path == "/v1/reviewSubmissions/submission-draft"
+        })
+        #expect(!CorrectionStubProtocol.log.all.contains {
+            $0.method == "POST" && $0.path == "/v1/reviewSubmissions"
         })
     }
 

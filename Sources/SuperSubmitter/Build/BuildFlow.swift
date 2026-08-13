@@ -27,7 +27,10 @@ enum BuildSidebarStatus: Equatable {
 final class BuildFlow {
     @ObservationIgnored weak var app: AppState?
     @ObservationIgnored var task: Task<Void, Never>?
-    @ObservationIgnored let storage = BuildStorage()
+    /// Injectable so a test can link and restore projects against a folder of
+    /// its own. The default is the one the app ships with; nothing but a test
+    /// ever passes another.
+    @ObservationIgnored let storage: BuildStorage
     /// Kept so the export can name a distribution bundle when the archive
     /// holds more than one eligible application.
     @ObservationIgnored var appleArchiveInfo: ArchiveInfo?
@@ -91,8 +94,9 @@ final class BuildFlow {
     /// `app` is already weak and optional, so the initialiser says so too. It
     /// lets the log tests build a flow without an `AppState`, which reads the
     /// Keychain and the defaults and answers nothing this flow needs.
-    init(app: AppState?) {
+    init(app: AppState?, storage: BuildStorage = BuildStorage()) {
         self.app = app
+        self.storage = storage
         self.run = UploadRun(platform: .ios)
     }
 
@@ -246,11 +250,17 @@ final class BuildFlow {
         await refreshPreflight()
     }
 
+    /// Forgets the link. It removes the record and touches no file the
+    /// developer owns: the project folder and everything in it stay exactly
+    /// where they are.
     func unlink() {
         guard let project else { return }
         var list = storage.loadProjects()
         list.removeAll { $0.id == project.id }
-        try? storage.saveProjects(list)
+        do { try storage.saveProjects(list) }
+        catch {
+            app?.errorMessage = "That link could not be removed. \(error.localizedDescription)"
+        }
         reset()
     }
 
@@ -258,6 +268,16 @@ final class BuildFlow {
         guard var project else { return }
         project.lastValidatedAt = Date()
         self.project = project
+        write(project)
+    }
+
+    /// Puts one link in the list and writes the list back.
+    ///
+    /// A failure here is reported. It used to be `try?`, and a write that
+    /// cannot land is exactly the bug this file was carrying: the developer
+    /// links a folder, the app draws it as linked, and the next launch has
+    /// never heard of it. Silence made that indistinguishable from working.
+    private func write(_ project: LinkedSourceProject) {
         var list = storage.loadProjects()
         // One link per app per store, and it used to dedup on the folder. A
         // monorepo holding an Xcode project beside a Gradle one is one folder
@@ -274,7 +294,11 @@ final class BuildFlow {
                 || ($0.manifestPath == nil && $0.rootPath == project.rootPath)
         }
         list.append(project)
-        try? storage.saveProjects(list)
+        do { try storage.saveProjects(list) }
+        catch {
+            app?.errorMessage = "The link to \(project.rootPath) could not be saved, "
+                + "so it will not be here on the next launch. \(error.localizedDescription)"
+        }
     }
 
     /// The project of the app that is open, and no other.
@@ -292,13 +316,18 @@ final class BuildFlow {
             reset()
         }
         guard project == nil else { return }
-        guard let saved = savedProjectForOpenApp() else {
+        guard var saved = savedProjectForOpenApp() else {
             // Nothing linked for this app. The folder the developer already
             // chose for it is the answer often enough that asking first is
             // the wrong order.
             adoptTheAppFolder()
             return
         }
+        // The bookmark is what finds the folder after it has been renamed or
+        // moved. It was written on every link and read by nothing, so the
+        // saved path was the only route back and a moved folder unlinked
+        // itself. Writing the record back keeps the next launch cheap.
+        if Self.followBookmark(&saved) { write(saved) }
         project = saved
         run.platform = saved.platform
         run.linkedProjectID = saved.id
@@ -348,6 +377,66 @@ final class BuildFlow {
         savedProject(for: run.platform.store)
             ?? savedProjectsForOpenApp().last { $0.platform.store == .apple }
             ?? savedProjectsForOpenApp().last
+    }
+
+    /// Follows the linked folder to wherever it is now, and refreshes the
+    /// bookmark that found it. It answers true when the record changed and has
+    /// to be written back.
+    ///
+    /// `folderBookmark` was stored on every link and resolved nowhere, so it
+    /// was a field that cost bytes and did nothing. A bookmark tracks the
+    /// folder itself rather than its name, which is the whole reason to keep
+    /// one: a developer who renames `~/apps/deck` to `~/apps/deck-ios` has the
+    /// same project, and the saved path alone says the link is gone.
+    ///
+    /// The saved path stays the fallback. A bookmark that resolves to nothing,
+    /// on a volume that is not mounted or a folder that was really deleted,
+    /// leaves the record exactly as it was: the path may still be right, and
+    /// the preflight is what reports a folder that is not there.
+    ///
+    /// No security scope. This app is not sandboxed, so a plain bookmark
+    /// resolves without one and `startAccessingSecurityScopedResource` would
+    /// be machinery for a permission the process already has.
+    ///
+    /// `withoutUI` and `withoutMounting` because this runs while the Build tab
+    /// draws. Without them, resolving a bookmark to a network volume can put
+    /// up a mount dialog, or block, on the main actor.
+    nonisolated static func followBookmark(_ project: inout LinkedSourceProject) -> Bool {
+        guard let data = project.folderBookmark else { return false }
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: data,
+                                 options: [.withoutUI, .withoutMounting],
+                                 relativeTo: nil, bookmarkDataIsStale: &stale),
+              // A bookmark can resolve to a path that is no longer there.
+              FileManager.default.fileExists(atPath: url.path) else { return false }
+
+        var changed = false
+        let moved = url.standardizedFileURL.path
+        if moved != project.rootPath {
+            // The container sits inside the root, so it moves with it. Rebased
+            // and not rebuilt: the workspace or the `gradlew` keeps its own
+            // name and its own depth under the folder.
+            project.containerPath = rebase(project.containerPath,
+                                           from: project.rootPath, to: moved)
+            project.rootPath = moved
+            changed = true
+        }
+        // A stale bookmark still resolved, and it will not keep doing so. The
+        // fresh one is what makes the next move findable too.
+        if stale, let fresh = try? url.bookmarkData(includingResourceValuesForKeys: nil,
+                                                    relativeTo: nil) {
+            project.folderBookmark = fresh
+            changed = true
+        }
+        return changed
+    }
+
+    /// One path under a folder that moved, under where the folder is now. A
+    /// path that was never under it is left alone.
+    nonisolated static func rebase(_ path: String, from old: String, to new: String) -> String {
+        guard path != old else { return new }
+        guard path.hasPrefix(old + "/") else { return path }
+        return new + String(path.dropFirst(old.count))
     }
 
     /// True when the project sits in the app's own folder or under it. Pure

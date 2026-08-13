@@ -844,7 +844,7 @@ struct AppleStanding {
         // not tell a developer whether anything had started. `applePhase`
         // already draws this line for the status card; this is the same line,
         // in the same vocabulary.
-        case "WAITING_FOR_REVIEW", "READY_FOR_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE":
+        case "WAITING_FOR_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE":
             ("In queue", Theme.yellow, Theme.yellowBg)
         case "IN_REVIEW":
             ("In review", Theme.yellow, Theme.yellowBg)

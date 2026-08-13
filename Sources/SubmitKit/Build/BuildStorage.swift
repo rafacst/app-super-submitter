@@ -92,12 +92,33 @@ public struct BuildStorage: Sendable {
 
     // MARK: - The linked projects
 
+    /// One record that decodes, or nothing in its place.
+    ///
+    /// `[LinkedSourceProject]` decodes all or nothing: one entry this build
+    /// cannot read threw, the decode returned nil, and `loadProjects` answered
+    /// the empty list. Every app then looked unlinked, and the next link wrote
+    /// that empty list back over the file, so the loss became permanent. A
+    /// record written by a newer build, or by an older one before a field
+    /// existed, is enough to do it.
+    private struct Tolerant: Decodable {
+        let project: LinkedSourceProject?
+
+        init(from decoder: any Decoder) throws {
+            project = try? LinkedSourceProject(from: decoder)
+        }
+    }
+
+    /// Every linked project this build can read.
+    ///
+    /// A record it cannot read is skipped and the rest still load. The file
+    /// itself being unreadable or not an array is still the empty list: there
+    /// is nothing to salvage from that and no link to lose.
     public func loadProjects() -> [LinkedSourceProject] {
         let file = projects.appendingPathComponent("projects.json")
         guard let data = try? Data(contentsOf: file),
-              let list = try? JSONDecoder().decode([LinkedSourceProject].self, from: data)
+              let list = try? JSONDecoder().decode([Tolerant].self, from: data)
         else { return [] }
-        return list
+        return list.compactMap(\.project)
     }
 
     public func saveProjects(_ list: [LinkedSourceProject]) throws {

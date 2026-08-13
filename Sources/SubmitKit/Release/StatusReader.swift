@@ -79,8 +79,8 @@ public struct ReleaseStatusReader: Sendable {
 
     public static func applePhase(_ state: String) -> StoreStatus.Phase {
         switch state {
-        case "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED": .draft
-        case "WAITING_FOR_REVIEW", "READY_FOR_REVIEW": .inQueue
+        case "PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED": .draft
+        case "WAITING_FOR_REVIEW": .inQueue
         case "IN_REVIEW", "PENDING_APPLE_RELEASE": .inReview
         case "PENDING_DEVELOPER_RELEASE": .approved
         case "READY_FOR_DISTRIBUTION", "READY_FOR_SALE": .live

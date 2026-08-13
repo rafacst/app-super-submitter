@@ -1507,12 +1507,12 @@ public enum Validator {
         switch state {
         // The version is the developer's and takes every write. This is the
         // state the whole tab is designed around, so it says nothing.
-        case nil, "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED":
+        case nil, "PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED":
             return nil
 
         // MARK: Apple has it
 
-        case "READY_FOR_REVIEW", "WAITING_FOR_REVIEW":
+        case "WAITING_FOR_REVIEW":
             return finding(.held, "\(version) is in the App Store review queue. It takes no changes until Apple answers.")
         case "IN_REVIEW":
             return finding(.held, "App Store review is reading \(version) now. It takes no changes until Apple answers.")

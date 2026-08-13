@@ -320,8 +320,7 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
 /// through: Apple adds states, and a write aimed at a version that refuses it
 /// fails halfway through the apply.
 @Test func everyAppleVersionStateSaysSomethingInPlainWords() {
-    let held = ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
-                "WAITING_FOR_EXPORT_COMPLIANCE", "ACCEPTED",
+    let held = ["WAITING_FOR_REVIEW", "IN_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE", "ACCEPTED",
                 "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE",
                 "PROCESSING_FOR_DISTRIBUTION", "PROCESSING_FOR_APP_STORE",
                 "READY_FOR_DISTRIBUTION", "READY_FOR_SALE",
@@ -349,6 +348,7 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
 
     // The version is the developer's and takes every write.
     #expect(Validator.appleVersion("PREPARE_FOR_SUBMISSION", version: "1.5") == nil)
+    #expect(Validator.appleVersion("READY_FOR_REVIEW", version: "1.5") == nil)
     #expect(Validator.appleVersion("DEVELOPER_REJECTED", version: "1.5") == nil)
     #expect(Validator.appleVersion(nil, version: "1.5") == nil)
 
@@ -411,6 +411,7 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
 @Test func oneListSaysWhichAppleVersionStatesTakeWrites() {
     #expect(AppleVersionState.editable.contains("DEVELOPER_REJECTED"))
     #expect(AppleVersionState.editable.contains("PREPARE_FOR_SUBMISSION"))
+    #expect(AppleVersionState.editable.contains("READY_FOR_REVIEW"))
     #expect(!AppleVersionState.editable.contains("IN_REVIEW"))
     #expect(!AppleVersionState.editable.contains("READY_FOR_SALE"))
 }
