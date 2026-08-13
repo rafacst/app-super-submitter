@@ -265,6 +265,34 @@ extension AppState {
         return (failures, local)
     }
 
+    /// Downloads what a store read says is live, so the Media tab draws it from
+    /// disk rather than from the store on every appearance.
+    ///
+    /// It covers the version's own page and every custom product page and test
+    /// treatment beside it. An app the developer never imported reached the
+    /// Media tab with nothing on disk at all, and the product pages are read
+    /// after any import, so neither had a copy without this.
+    func cacheLiveMedia(_ actual: ActualState) async {
+        guard let root = manifestURL?.deletingLastPathComponent(),
+              let apple = actual.apple else { return }
+        // The page name goes in the file name, because the folder is keyed by
+        // locale and screen size and every page answers for the same two. Two
+        // pages whose first 6.5 inch picture is called `shot.png` would land on
+        // one path, and the download skips a file that is already there, so one
+        // page would have shown the other page's pictures.
+        let pageAssets = apple.productPages.flatMap { page in
+            page.assets.map {
+                ImportedStoreAsset(locale: $0.locale, kind: $0.kind, url: $0.url,
+                                   fileName: "\(Self.safeComponent(page.name))-\($0.fileName)")
+            }
+        }
+        let assets = apple.liveAssets + pageAssets
+        guard !assets.isEmpty else { return }
+        let landed = await materializeImportedAssets(assets, store: .apple, root: root)
+        storeSnapshot.rememberLocalCopies(
+            zip(assets, landed.local).map { ($0.url, $1.url) })
+    }
+
     /// Where one store asset belongs under `Store Import/`, or nil when the
     /// name the store sent would put it somewhere else entirely.
     static func importDestination(_ asset: ImportedStoreAsset, store: Store,

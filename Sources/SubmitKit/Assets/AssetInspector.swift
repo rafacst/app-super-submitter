@@ -200,6 +200,57 @@ public enum AssetInspector {
             .map { "\($0[0]) × \($0[1])" }
     }
 
+    /// Every App Store display type, largest screen first, with the name App
+    /// Store Connect prints beside it in Media Manager.
+    ///
+    /// A table and not a rule read off the name. `APP_IPHONE_69` is 6.9 inch
+    /// and `APP_IPAD_PRO_3GEN_11` is 11 inch, so the digits alone answer
+    /// nothing: the same two characters mean tenths in one and units in the
+    /// other. The watch names a series and no size at all.
+    public static let appleDisplayTypeNames: [(type: String, name: String)] = [
+        ("APP_IPHONE_69", "iPhone 6.9 inch"),
+        ("APP_IPHONE_67", "iPhone 6.7 inch"),
+        ("APP_IPHONE_65", "iPhone 6.5 inch"),
+        ("APP_IPHONE_61", "iPhone 6.1 inch"),
+        ("APP_IPHONE_58", "iPhone 5.8 inch"),
+        ("APP_IPHONE_55", "iPhone 5.5 inch"),
+        ("APP_IPHONE_47", "iPhone 4.7 inch"),
+        ("APP_IPHONE_40", "iPhone 4 inch"),
+        ("APP_IPHONE_35", "iPhone 3.5 inch"),
+        ("APP_IPAD_PRO_3GEN_129", "iPad Pro 12.9 inch"),
+        ("APP_IPAD_PRO_129", "iPad Pro 12.9 inch (2nd generation)"),
+        ("APP_IPAD_PRO_3GEN_11", "iPad Pro 11 inch"),
+        ("APP_IPAD_105", "iPad 10.5 inch"),
+        ("APP_IPAD_97", "iPad 9.7 inch"),
+        ("APP_DESKTOP", "Mac"),
+        ("APP_APPLE_VISION_PRO", "Apple Vision Pro"),
+        ("APP_APPLE_TV", "Apple TV"),
+        ("APP_WATCH_ULTRA", "Apple Watch Ultra"),
+        ("APP_WATCH_SERIES_10", "Apple Watch Series 10"),
+        ("APP_WATCH_SERIES_7", "Apple Watch Series 7"),
+        ("APP_WATCH_SERIES_4", "Apple Watch Series 4"),
+        ("APP_WATCH_SERIES_3", "Apple Watch Series 3"),
+    ]
+
+    private static let appleDisplayNames: [String: String] =
+        Dictionary(appleDisplayTypeNames.map { ($0.type, $0.name) }) { first, _ in first }
+
+    private static let appleDisplayRanks: [String: Int] =
+        Dictionary(appleDisplayTypeNames.enumerated().map { ($1.type, $0) }) { first, _ in first }
+
+    /// What to call one screenshot set on the screen. A type this build has
+    /// never heard of answers with the store's own name, which is still more
+    /// use than nothing.
+    public static func appleDisplayName(_ type: String) -> String {
+        appleDisplayNames[type] ?? type
+    }
+
+    /// Media Manager's order: the largest screen of a family first. A type
+    /// with no row sorts last and keeps its name for a tie break.
+    public static func appleDisplayRank(_ type: String) -> Int {
+        appleDisplayRanks[type] ?? appleDisplayTypeNames.count
+    }
+
     /// The Google `imageType`. Google sorts by device class, so this needs no
     /// dimensions. Spec section 6.3.
     public static func googleImageType(for deviceClass: Manifest.DeviceClass) -> String? {

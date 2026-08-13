@@ -484,6 +484,10 @@ public struct StateReader: Sendable {
         await readAppleMarketing(appID: appID, into: &result)
         await readAppleTestFlight(appID: appID, into: &result)
         await readAppleGameCenter(appID: appID, into: &result)
+        // The pages that are not this version's own. An app with none of them
+        // pays one request for the answer, and every request under it is
+        // optional, so nothing here can cost the read.
+        result.productPages = await AppleProductPages(api: api).read(appID: appID)
 
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
@@ -757,9 +761,11 @@ public struct StateReader: Sendable {
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)"
                 + "/appScreenshotSets?include=appScreenshots&limit=50") {
             let sets = JSON(data: payload.data)
-            fill(&result.screenshotURLs, locale: locale, with: StoreImportReader.appleAssets(
+            let assets = StoreImportReader.appleAssets(
                 sets, locale: locale,
-                itemType: "appScreenshots", kindKey: "screenshotDisplayType"))
+                itemType: "appScreenshots", kindKey: "screenshotDisplayType")
+            result.liveAssets += assets
+            fill(&result.screenshotURLs, locale: locale, with: assets)
             for (type, checksums) in StoreImportReader.appleChecksums(sets) {
                 result.liveScreenshotChecksumOrder["\(locale)/\(type)"] = checksums
             }

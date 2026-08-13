@@ -195,6 +195,10 @@ extension AppState {
         // changes neither, so every direct apply after a read was still
         // planning against the state the read replaced.
         directPlanCache = nil
+        // The pictures before the snapshot that names them, the same order the
+        // import uses. A file already on disk costs nothing here, so only the
+        // first read after a change downloads anything.
+        await cacheLiveMedia(actual)
         storeSnapshot.merge(actual)
         storeSnapshot.save(toRoot: manifestRoot)
         // A read is where an app first proves it has shipped, and the Manage

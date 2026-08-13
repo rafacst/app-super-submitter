@@ -222,13 +222,18 @@ struct MediaTab: View {
         // the faded strip stays out of the way when the bucket holds them.
         let live = paths.contains(where: AppState.isImported)
             ? []
-            : state.storeSnapshot.screenshots(locale: state.locale, deviceClass: device)
+            : state.storeSnapshot.screenshotSizes(locale: state.locale, deviceClass: device)
         // A group opens on what it holds. Nil is the default, so a bucket the
         // next import fills opens by itself, and a developer who closed one by
         // hand keeps it closed. Every store shows seven device classes and an
         // app answers two of them, so six empty dashed cards used to push the
         // one group with screenshots in it most of a screen down.
-        let isOpen = open[device] ?? !(paths.isEmpty && live.isEmpty)
+        // A size the App Store shows only through a custom product page holds
+        // nothing in the two lists above, and a closed group hides the one
+        // thing it has to say.
+        let isOpen = open[device] ?? !(paths.isEmpty && live.isEmpty
+            && state.storeSnapshot.productPageStrips(locale: state.locale,
+                                                     deviceClass: device).isEmpty)
         let tile = Self.tile(device)
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
@@ -285,6 +290,7 @@ struct MediaTab: View {
                 }
                 mergeControl(device)
                 liveScreenshots(live)
+                productPages(device)
             }
         }
         .motion(.snappy(duration: 0.18), value: isOpen)
@@ -439,14 +445,70 @@ struct MediaTab: View {
 
     /// What each store shows today. It is faded and it takes no input, because
     /// nothing here is a file the developer owns yet.
+    ///
+    /// One strip per set the store keeps, and not one per store. The App Store
+    /// shows each screen size its own page, so a phone group covers up to nine
+    /// of them and a merged strip named none: a developer with a 6.9 inch set
+    /// and a 6.5 inch set read one row of pictures and could not tell which
+    /// size any of them belonged to.
     @ViewBuilder
-    private func liveScreenshots(_ live: [(store: Store, urls: [URL])]) -> some View {
+    private func liveScreenshots(_ live: [(store: Store, name: String, urls: [URL])])
+        -> some View {
         if !live.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(live, id: \.store) { entry in
-                    LiveMediaStrip(store: entry.store, urls: entry.urls, isVideo: false)
+                ForEach(Array(live.enumerated()), id: \.offset) { _, entry in
+                    LiveMediaStrip(store: entry.store, name: entry.name,
+                                   urls: entry.urls, isVideo: false)
                 }
                 LiveMediaWarning()
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
+        }
+    }
+
+    /// The custom product pages and the test treatments, one strip each.
+    ///
+    /// The App Store serves more than one page for an app, and this app knew
+    /// only the version's own. A developer running four custom pages had to
+    /// open App Store Connect to answer what any of them shows.
+    ///
+    /// Read only, and the fade says so. Nothing in Super Submitter writes to a
+    /// custom product page or to a test, so a picture here is the store's
+    /// account of itself and never a file this app is about to send.
+    @ViewBuilder
+    private func productPages(_ device: Manifest.DeviceClass) -> some View {
+        let strips = state.storeSnapshot.productPageStrips(locale: state.locale,
+                                                           deviceClass: device)
+        if !strips.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Other pages on the App Store")
+                    .font(Theme.font(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.text3)
+                    .textCase(.uppercase)
+                    .kerning(0.3)
+                ForEach(Array(strips.enumerated()), id: \.offset) { _, strip in
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 6) {
+                            Text(strip.name)
+                                .font(Theme.font(size: 11.5, weight: .semibold))
+                            StatePill(text: strip.status, foreground: Theme.text2,
+                                      background: Theme.sunken)
+                            Text(strip.detail)
+                                .font(Theme.font(size: 10.5))
+                                .foregroundStyle(Theme.text3)
+                            Spacer(minLength: 6)
+                        }
+                        LiveMediaStrip(store: .apple,
+                                       name: AssetInspector.appleDisplayName(strip.bucket),
+                                       urls: strip.urls, isVideo: false)
+                    }
+                }
+                Text("Super Submitter does not write to these. Change them in App Store Connect.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }
             .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -548,6 +610,9 @@ struct MediaTab: View {
 /// One store's live media, faded so it never reads as a file to edit.
 private struct LiveMediaStrip: View {
     let store: Store
+    /// The store's own name for this set, such as "iPhone 6.9 inch". Empty for
+    /// Google, which keeps one set per device class and has nothing to name.
+    var name: String = ""
     let urls: [URL]
     let isVideo: Bool
 
@@ -562,6 +627,13 @@ private struct LiveMediaStrip: View {
                     .kerning(0.3)
                 Text("\(urls.count)")
                     .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                if !name.isEmpty {
+                    Text(name)
+                        .font(Theme.font(size: 10.5, weight: .medium))
+                        .foregroundStyle(Theme.text2)
+                        .padding(.horizontal, 5).padding(.vertical, 1.5)
+                        .background(Theme.sunken, in: Capsule())
+                }
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 8) {
@@ -575,7 +647,7 @@ private struct LiveMediaStrip: View {
         }
         .opacity(0.55)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(urls.count) \(isVideo ? "previews" : "screenshots") on \(store.storeName) now")
+        .accessibilityLabel("\(urls.count) \(isVideo ? "previews" : "screenshots")\(name.isEmpty ? "" : " for \(name)") on \(store.storeName) now")
     }
 }
 
