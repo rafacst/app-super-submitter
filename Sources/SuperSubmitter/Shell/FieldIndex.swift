@@ -59,7 +59,9 @@ enum FieldIndex {
         // would move the tab and lose that height for everybody who had
         // dragged the licence box taller.
         .init(id: "build.testFlight", label: "TestFlight", tab: .betaTesting,
-              keywords: ["beta", "testers", "groups", "public link", "apple"]),
+              keywords: ["beta", "testers", "groups", "public link", "apple",
+                         "internal group", "external group", "tester feedback",
+                         "beta review", "send to testflight"]),
         .init(id: "build.whatToTest", label: "What to Test", tab: .betaTesting,
               keywords: ["beta notes", "testflight", "release notes", "apple"]),
         .init(id: "build.testFlightPage", label: "TestFlight page", tab: .betaTesting,

@@ -75,7 +75,10 @@ extension AppState {
         })
     }
 
-    enum BetaGroupFlag { case publicLink, automaticBuilds }
+    enum BetaGroupFlag {
+        case publicLink, automaticBuilds, internalGroup, feedback
+        case iosBuildsOnMac, iosBuildsOnVision
+    }
 
     func betaGroupFlagBinding(index: Int, flag: BetaGroupFlag) -> Binding<Bool> {
         Binding(get: {
@@ -83,6 +86,16 @@ extension AppState {
             return switch flag {
             case .publicLink: group.publicLink ?? false
             case .automaticBuilds: group.automaticBuilds ?? false
+            case .internalGroup:
+                group.internalGroup ?? self.liveBetaGroup(index)?.internalGroup ?? false
+            // A key the manifest leaves out sends nothing, so the switch shows
+            // what Apple holds instead of a guess. Apple opens all three on a
+            // new group, and that is the answer before any read.
+            case .feedback: group.feedback ?? self.liveBetaGroup(index)?.feedback ?? true
+            case .iosBuildsOnMac:
+                group.iosBuildsOnMac ?? self.liveBetaGroup(index)?.iosBuildsOnMac ?? true
+            case .iosBuildsOnVision:
+                group.iosBuildsOnVision ?? self.liveBetaGroup(index)?.iosBuildsOnVision ?? true
             }
         }, set: { value in
             self.editTestFlight { block in
@@ -94,9 +107,39 @@ extension AppState {
                     if !value { block.groups?[index].publicLinkLimit = nil }
                 case .automaticBuilds:
                     block.groups?[index].automaticBuilds = value
+                case .internalGroup:
+                    block.groups?[index].internalGroup = value
+                    // Apple takes a public link on an external group only, so
+                    // an internal group carries neither the link nor its cap.
+                    if value {
+                        block.groups?[index].publicLink = nil
+                        block.groups?[index].publicLinkLimit = nil
+                    }
+                case .feedback:
+                    block.groups?[index].feedback = value
+                case .iosBuildsOnMac:
+                    block.groups?[index].iosBuildsOnMac = value
+                case .iosBuildsOnVision:
+                    block.groups?[index].iosBuildsOnVision = value
                 }
             }
         })
+    }
+
+    /// The group Apple holds under this name, from the last read of the store.
+    func liveBetaGroup(_ index: Int) -> AppleTestFlightClient.BetaGroup? {
+        guard let name = betaGroups[safe: index]?.name else { return nil }
+        return actualState.apple?.betaGroups[name]
+    }
+
+    /// The public link Apple minted for a group, from the last read.
+    ///
+    /// Apple writes the URL itself when the link opens, so the manifest cannot
+    /// hold it and no apply produces it. It is the address a developer hands
+    /// to a tester, and the read used to drop it on the floor.
+    func betaGroupPublicLink(index: Int) -> String? {
+        guard let link = liveBetaGroup(index)?.publicLinkURL, !link.isEmpty else { return nil }
+        return link
     }
 
     // MARK: - What the tester reads

@@ -248,15 +248,39 @@ extension Manifest {
                 public var publicLinkLimit: Int?
                 /// Adds every new build to this group without a second call.
                 public var automaticBuilds: Bool?
+                /// An internal group. It takes the App Store Connect users of
+                /// the team and nobody else, it needs no beta review, and it
+                /// carries no public link.
+                ///
+                /// Apple takes this on the create request only, so the kind of
+                /// a group is fixed the moment Apple makes it and no later
+                /// apply changes it.
+                public var internalGroup: Bool?
+                /// Whether a tester may send a screenshot and a note back from
+                /// TestFlight itself.
+                public var feedback: Bool?
+                /// Whether the iOS build reaches the testers of this group on
+                /// an Apple silicon Mac, and on Apple Vision Pro.
+                ///
+                /// Apple publishes both on the update request and on neither
+                /// create, so a new group takes them in a second call.
+                public var iosBuildsOnMac: Bool?
+                public var iosBuildsOnVision: Bool?
 
                 public init(name: String, testers: [String]? = nil,
                             publicLink: Bool? = nil, publicLinkLimit: Int? = nil,
-                            automaticBuilds: Bool? = nil) {
+                            automaticBuilds: Bool? = nil, internalGroup: Bool? = nil,
+                            feedback: Bool? = nil, iosBuildsOnMac: Bool? = nil,
+                            iosBuildsOnVision: Bool? = nil) {
                     self.name = name
                     self.testers = testers
                     self.publicLink = publicLink
                     self.publicLinkLimit = publicLinkLimit
                     self.automaticBuilds = automaticBuilds
+                    self.internalGroup = internalGroup
+                    self.feedback = feedback
+                    self.iosBuildsOnMac = iosBuildsOnMac
+                    self.iosBuildsOnVision = iosBuildsOnVision
                 }
             }
         }

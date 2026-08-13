@@ -9,11 +9,27 @@ import SubmitKit
 /// on and runs them on one button.
 ///
 /// The confirmation lives in the view, because the view is where the user is.
-/// The safety that stays is the safety that matters here: every row below
-/// lands in a draft or an unstarted state, and none of them reaches a
-/// customer until somebody publishes it in the store console.
+/// The safety that stays is the safety that matters here: every listing, media
+/// and marketing row lands in a draft or an unstarted state, and none of them
+/// reaches a customer until somebody publishes it in the store console.
+///
+/// `.testFlight` is the one target that claim does not cover. Its rows email
+/// real testers and its last row takes a place in a review queue, so that
+/// button reads the store first and says in its own words what it is about to
+/// do. `sendToTestFlight()` below is the whole difference.
 @MainActor
 extension AppState {
+
+    /// The read this button owes, and then the write.
+    ///
+    /// Every other direct apply compares against whatever the app last read,
+    /// because a stale comparison there costs one wasted request into a draft.
+    /// Here it costs an invitation sent twice, and a group Apple already holds
+    /// answers 409 to a second create, so the read is not optional.
+    func sendToTestFlight() async {
+        await readStores()
+        applyDirectly(.testFlight)
+    }
 
     /// What the apply would write, named for the confirmation.
     ///
@@ -136,7 +152,7 @@ extension AppState {
 
 /// The Managing tabs that write on one button.
 enum DirectApplyTarget: Equatable {
-    case listing, media, marketing
+    case listing, media, marketing, testFlight
 
     /// The plan rows the tab owns, named by id prefix. They are the same ids
     /// the Summary tab draws, so a row can never mean one thing here and
@@ -151,6 +167,17 @@ enum DirectApplyTarget: Equatable {
             ["apple.customProductPages", "apple.experiments", "apple.events",
              "apple.eula", "apple.routingCoverage", "apple.nomination",
              "apple.accessibility", "apple.appClip"]
+        // The whole beta, in plan order: the upload and its compliance answer,
+        // then the groups, the testers, the build each group receives, the
+        // notes, the page, the licence, the review contact, and the queue.
+        //
+        // "apple.build" catches `apple.buildCompliance` beside `apple.build`
+        // and that is deliberate: Apple gives no build to a tester until the
+        // encryption question on it is answered. It does not catch
+        // `apple.attachBuild`, which belongs to the App Store version and to
+        // no part of TestFlight.
+        case .testFlight:
+            ["apple.build", "apple.beta", "apple.whatToTest"]
         }
     }
 
@@ -159,6 +186,7 @@ enum DirectApplyTarget: Equatable {
         case .listing: "listing fields"
         case .media: "media sets"
         case .marketing: "marketing resources"
+        case .testFlight: "TestFlight rows"
         }
     }
 
@@ -166,7 +194,7 @@ enum DirectApplyTarget: Equatable {
     /// the same paywall line as the plan does.
     var trigger: PaywallTrigger {
         switch self {
-        case .listing, .media: .apply
+        case .listing, .media, .testFlight: .apply
         case .marketing: .marketing
         }
     }
@@ -174,7 +202,8 @@ enum DirectApplyTarget: Equatable {
     /// Where the write lands, for the button and the confirmation. The
     /// marketing resources are the App Store alone.
     func destination(_ stores: Set<Store>) -> String {
-        guard self != .marketing else { return "the App Store" }
+        if self == .marketing { return "the App Store" }
+        if self == .testFlight { return "TestFlight" }
         let named = [Store.apple, .google].filter(stores.contains).map(\.storeName)
         return named.isEmpty ? "the stores" : named.joined(separator: " and ")
     }
