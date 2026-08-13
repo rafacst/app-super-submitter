@@ -370,6 +370,9 @@ public enum RunError: Error, LocalizedError {
     /// Apple already holds the export compliance answer of this build, and it
     /// is the other one. See `AppleApply.appleBuildCompliance`.
     case encryptionAnswerFixed(held: Bool, wanted: Bool)
+    /// Territories the manifest asks for that the App Store does not list for
+    /// this app. See `AppleApply.appleUpdateTerritories`.
+    case unknownTerritories([String])
 
     public var errorDescription: String? {
         switch self {
@@ -385,6 +388,8 @@ public enum RunError: Error, LocalizedError {
             "The upload failed. \(detail)"
         case .processingFailed(let detail):
             "The store rejected the upload. \(detail)"
+        case .unknownTerritories(let territories):
+            "App Store Connect lists no availability for \(territories.joined(separator: ", ")) on this app, so \(territories.count == 1 ? "that territory was" : "those territories were") not written. Every other territory in store.yaml was. Check the territory codes, which Apple writes as three letters such as BRA and USA."
         case .encryptionAnswerFixed(let held, let wanted):
             "App Store Connect holds \(held ? "\"it does use encryption\"" : "\"uses no non-exempt encryption\"") for this build and you asked for \(wanted ? "\"it does use encryption\"" : "\"uses no non-exempt encryption\""). Apple takes this answer from ITSAppUsesNonExemptEncryption inside the binary and changes it for nobody, so the other answer needs that key in the project and a new build."
         }

@@ -759,18 +759,6 @@ private struct ContentHeader: View {
                         Task { await state.recheck() }
                     }
                 }
-                // The tab asks "shall I send it?" in its own subtitle, and the
-                // buttons that answer it sit below the fold. This says they
-                // exist and takes you to them; it sends nothing itself, because
-                // one button cannot stand for two stores and a send is the one
-                // action in this app that may never happen by surprise.
-                if state.hasPendingRelease {
-                    HeaderCluster(morphOn: shape) {
-                        QuietButton(title: "Send to review", glass: true, prominent: true) {
-                            state.jumpTarget = ReleaseTab.sendAnchor
-                        }
-                    }
-                }
             default:
                 EmptyView()
             } }
