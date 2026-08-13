@@ -19,6 +19,7 @@ public enum Validator {
         result += money(input)
         result += offers(input)
         result += marketing(input)
+        result += gameCenter(input)
         result += monetization(input)
         result += state(input)
         result += update(input)
@@ -342,6 +343,265 @@ public enum Validator {
         return [Finding(id: "media.\(name).size", severity: .error,
                         message: "The Google \(name): \(problems.joined(separator: ", ")).",
                         location: "Media · \(name)", fix: .media)]
+    }
+
+    // MARK: - Game Center
+
+    /// What Apple refuses, and what a developer meant to fill in.
+    ///
+    /// Every rule here is one the apply would otherwise meet halfway through,
+    /// with the earlier writes already in App Store Connect. The vendor
+    /// identifier rules come first because they are the key: a duplicate one
+    /// makes two rows fight over one object, and a missing one has nothing for
+    /// the game to pass to GameKit.
+    ///
+    /// A version in review raises nothing here. The App Store standing rules
+    /// already hold the whole apply for that, and the same event reported twice
+    /// reads as two faults.
+    static func gameCenter(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple),
+              let block = input.manifest.gameCenter else { return [] }
+        var result: [Finding] = []
+
+        let boards = Set((block.leaderboards ?? []).map(\.id))
+        for family in AppleGameCenterCatalogClient.Family.allCases {
+            let rows = block.rows(family)
+            let noun = family.noun
+            var seen: Set<String> = []
+            for row in rows {
+                if row.id.isEmpty {
+                    result.append(Finding(
+                        id: "gameCenter.\(family.rawValue).noID", severity: .error,
+                        message: "Every Game Center object needs an id. Apple calls it the vendor identifier, and your game passes it to GameKit.",
+                        location: "Gaming · \(family.label.capitalized)", fix: .gaming,
+                        fixAnchor: family.anchor))
+                    continue
+                }
+                if seen.contains(row.id) {
+                    result.append(Finding(
+                        id: "gameCenter.\(family.rawValue).duplicate.\(row.id)",
+                        severity: .error,
+                        message: "Two \(family.label) share the id \(row.id). One id is one object, so the second row would overwrite the first.",
+                        location: "Gaming · \(family.label.capitalized) · \(row.name)",
+                        fix: .gaming, fixAnchor: family.anchor))
+                }
+                seen.insert(row.id)
+
+                result += gameCenterCreateFields(
+                    row, family: family,
+                    exists: input.actual.apple?.gameCenter?.objects(family)[row.id] != nil)
+
+                if row.locales.isEmpty {
+                    result.append(Finding(
+                        id: "gameCenter.\(family.rawValue).noLocale.\(row.id)",
+                        severity: .warning,
+                        message: "The \(noun) \(row.name) has no locale row. Apple shows the reference name to a player when a locale is missing.",
+                        location: "Gaming · \(family.label.capitalized) · \(row.name)",
+                        fix: .gaming, fixAnchor: family.anchor))
+                }
+                result += gameCenterImages(row, family: family, root: input.root)
+            }
+        }
+
+        // 1 to 100 for one achievement, and 1000 across the whole game.
+        var total = 0
+        for achievement in block.achievements ?? [] {
+            guard let points = achievement.points else { continue }
+            total += points
+            guard points < 1 || points > 100 else { continue }
+            result.append(Finding(
+                id: "gameCenter.points.\(achievement.id)", severity: .error,
+                message: "Apple takes 1 to 100 points for one achievement, and \(achievement.name ?? achievement.id) asks for \(points).",
+                location: "Gaming · Achievements · \(achievement.name ?? achievement.id)",
+                fix: .gaming, fixAnchor: "gaming.achievements"))
+        }
+        if total > 1_000 {
+            result.append(Finding(
+                id: "gameCenter.pointsTotal", severity: .error,
+                message: "Apple allows 1000 points across a game, and this manifest asks for \(total).",
+                location: "Gaming · Achievements", fix: .gaming,
+                fixAnchor: "gaming.achievements"))
+        }
+
+        // A link that names nothing is a 409 or a silent no-op at apply time.
+        for set in block.leaderboardSets ?? [] {
+            for member in set.leaderboards ?? [] where !boards.contains(member) {
+                result.append(Finding(
+                    id: "gameCenter.set.\(set.id).\(member)", severity: .error,
+                    message: "The set \(set.name ?? set.id) holds the leaderboard \(member), which this manifest does not.",
+                    location: "Gaming · Leaderboard sets · \(set.name ?? set.id)",
+                    fix: .gaming, fixAnchor: "gaming.leaderboardSets"))
+            }
+        }
+        for challenge in block.challenges ?? [] {
+            guard let board = challenge.leaderboard, !board.isEmpty,
+                  !boards.contains(board) else { continue }
+            result.append(Finding(
+                id: "gameCenter.challenge.\(challenge.id).board", severity: .error,
+                message: "The challenge \(challenge.name ?? challenge.id) scores from the leaderboard \(board), which this manifest does not hold.",
+                location: "Gaming · Challenges · \(challenge.name ?? challenge.id)",
+                fix: .gaming, fixAnchor: "gaming.challenges"))
+        }
+        // The opening board can come from the store as well as the manifest: a
+        // game that already ships has its boards up there. Only a name neither
+        // one holds is a step that would send nothing.
+        if let opening = block.defaultLeaderboard, !opening.isEmpty, !boards.contains(opening),
+           input.actual.apple?.gameCenter?.leaderboards[opening] == nil {
+            result.append(Finding(
+                id: "gameCenter.defaultLeaderboard", severity: .error,
+                message: "Game Center is set to open on the leaderboard \(opening), which is in neither this manifest nor App Store Connect.",
+                location: "Gaming · Game Center · Opening leaderboard", fix: .gaming,
+                fixAnchor: "gaming.detail"))
+        }
+        for activity in block.activities ?? [] {
+            guard let players = activity.players, players.count == 2,
+                  players[0] > players[1] else { continue }
+            result.append(Finding(
+                id: "gameCenter.activity.\(activity.id).players", severity: .error,
+                message: "The activity \(activity.name ?? activity.id) asks for at least \(players[0]) players and at most \(players[1]).",
+                location: "Gaming · Activities · \(activity.name ?? activity.id)",
+                fix: .gaming, fixAnchor: "gaming.activities"))
+        }
+
+        result += gameCenterMatchmaking(block)
+
+        // Apple publishes no call that moves an object between a detail and a
+        // group, so the plan raises no step for it and this says where the
+        // move happens instead.
+        if let group = block.group, !group.isEmpty,
+           let live = input.actual.apple?.gameCenter, live.read,
+           live.detail != nil, live.detail?.groupName != group {
+            let moving = AppleGameCenterCatalogClient.Family.allCases
+                .flatMap { family in block.rows(family).filter { live.objects(family)[$0.id] != nil } }
+            if !moving.isEmpty {
+                result.append(Finding(
+                    id: "gameCenter.groupMove", severity: .warning,
+                    message: "\(moving.count) Game Center \(moving.count == 1 ? "object" : "objects") already exist outside the \(group) group. Apple publishes no call that moves one into a group, so this apply leaves them where they are and the move happens in App Store Connect.",
+                    location: "Gaming · Game Center · Shared group", fix: .gaming,
+                    fixAnchor: "gaming.detail"))
+            }
+        }
+
+        if block.enabled == true, (block.appVersions ?? [:]).isEmpty {
+            result.append(Finding(
+                id: "gameCenter.noAppVersion", severity: .warning,
+                message: "No App Store version carries this configuration yet, so no player sees it. A Game Center version has no release call of its own.",
+                location: "Gaming · Game Center", fix: .gaming, fixAnchor: "gaming.detail"))
+        }
+        return result
+    }
+
+    /// The rule sets and the queues. Apple marks the player counts required on
+    /// a rule set create, so a missing one is a 400 rather than a default.
+    private static func gameCenterMatchmaking(_ block: Manifest.GameCenter) -> [Finding] {
+        guard let matchmaking = block.matchmaking else { return [] }
+        var result: [Finding] = []
+        let names = Set((matchmaking.ruleSets ?? []).map(\.name))
+
+        for set in matchmaking.ruleSets ?? [] {
+            guard set.players?.count != 2 else { continue }
+            result.append(Finding(
+                id: "gameCenter.ruleSet.\(set.name).players", severity: .error,
+                message: "The rule set \(set.name) needs the fewest and the most players in a match. Apple takes both on a new rule set and refuses one without them.",
+                location: "Gaming · Matchmaking · \(set.name)", fix: .gaming,
+                fixAnchor: "gaming.matchmaking"))
+        }
+        for queue in matchmaking.queues ?? [] {
+            guard let ruleSet = queue.ruleSet, !ruleSet.isEmpty else {
+                result.append(Finding(
+                    id: "gameCenter.queue.\(queue.name).noRuleSet", severity: .error,
+                    message: "The queue \(queue.name) names no rule set. Apple takes one on a new queue, and without it the queue matches nobody.",
+                    location: "Gaming · Matchmaking · \(queue.name)", fix: .gaming,
+                    fixAnchor: "gaming.matchmaking"))
+                continue
+            }
+            guard !names.contains(ruleSet) else { continue }
+            result.append(Finding(
+                id: "gameCenter.queue.\(queue.name).ruleSet", severity: .error,
+                message: "The queue \(queue.name) matches with the rule set \(ruleSet), which this manifest does not hold.",
+                location: "Gaming · Matchmaking · \(queue.name)", fix: .gaming,
+                fixAnchor: "gaming.matchmaking"))
+        }
+        return result
+    }
+
+    /// The attributes Apple marks required on a create.
+    ///
+    /// They are checked for a new object alone. On a change every attribute is
+    /// optional, so an object App Store Connect already holds keeps whatever
+    /// the manifest says nothing about, which is the rule the whole tab runs
+    /// on. Without this the apply meets a 400 partway through, with the
+    /// objects created before it already in App Store Connect.
+    private static func gameCenterCreateFields(
+        _ row: GameCenterRow, family: AppleGameCenterCatalogClient.Family,
+        exists: Bool) -> [Finding] {
+        guard !exists else { return [] }
+        var missing: [String] = []
+        if row.write.referenceName?.isEmpty != false { missing.append("a name") }
+        switch family {
+        case .achievement:
+            if row.write.numbers["points"] == nil { missing.append("its points") }
+            if row.write.flags["repeatable"] == nil { missing.append("whether it repeats") }
+            if row.write.flags["showBeforeEarned"] == nil {
+                missing.append("whether a player sees it before it is earned")
+            }
+        case .leaderboard:
+            if row.write.attributes["scoreSortType"] == nil {
+                missing.append("whether a high or a low score wins")
+            }
+            if row.write.attributes["submissionType"] == nil {
+                missing.append("which score it keeps")
+            }
+            if row.write.attributes["defaultFormatter"] == nil {
+                missing.append("how a score is written")
+            }
+        case .challenge:
+            if row.write.attributes["challengeType"] == nil { missing.append("its kind") }
+        case .leaderboardSet, .activity:
+            break
+        }
+        guard !missing.isEmpty else { return [] }
+        return [Finding(
+            id: "gameCenter.\(family.rawValue).incomplete.\(row.id)", severity: .error,
+            message: "The new \(family.noun) \(row.name) needs \(missing.joined(separator: ", ")). Apple takes all of these on a new \(family.noun) and refuses the create without them.",
+            location: "Gaming · \(family.label.capitalized) · \(row.name)", fix: .gaming,
+            fixAnchor: family.anchor)]
+    }
+
+    /// Every picture one object names: it exists, it is a PNG, and it is the
+    /// 512 by 512 that Apple takes.
+    private static func gameCenterImages(_ row: GameCenterRow,
+                                         family: AppleGameCenterCatalogClient.Family,
+                                         root: URL?) -> [Finding] {
+        var result: [Finding] = []
+        let named = row.images.map { (label: $0.key, path: $0.value) }
+            .sorted { $0.label < $1.label }
+            + (row.defaultImage.map { [(label: "fallback", path: $0)] } ?? [])
+
+        for image in named where !image.path.isEmpty {
+            let place = "Gaming · \(family.label.capitalized) · \(row.name) · \(image.label)"
+            guard let url = Planner.resolve(image.path, root: root) else {
+                result.append(Finding(
+                    id: "gameCenter.image.\(row.id).\(image.label).missing", severity: .error,
+                    message: "The image \(image.path) does not exist.",
+                    location: place, fix: .gaming,
+                    fixAnchor: family.anchor))
+                continue
+            }
+            var problems: [String] = []
+            if url.pathExtension.lowercased() != "png" { problems.append("it is not a PNG") }
+            if let info = try? AssetInspector.image(at: url),
+               info.width != 512 || info.height != 512 {
+                problems.append("\(info.width) × \(info.height) is not 512 by 512")
+            }
+            guard !problems.isEmpty else { continue }
+            result.append(Finding(
+                id: "gameCenter.image.\(row.id).\(image.label).size", severity: .error,
+                message: "The image \(url.lastPathComponent): \(problems.joined(separator: ", ")). Apple takes a 512 by 512 PNG.",
+                location: place, fix: .gaming,
+                fixAnchor: family.anchor))
+        }
+        return result
     }
 
     // MARK: - 10.3 Build

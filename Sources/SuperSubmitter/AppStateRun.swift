@@ -296,6 +296,7 @@ extension AppState {
         case .betaTesting: .betaTesting
         case .details: .details
         case .media: .media
+        case .gaming: .gaming
         case .money: .money
         case .marketing: .marketing
         case .reviewInfo: .reviewInfo

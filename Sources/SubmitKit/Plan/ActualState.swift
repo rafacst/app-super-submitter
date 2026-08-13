@@ -252,11 +252,72 @@ public struct ActualState: Sendable, Equatable {
         /// The licence text that every external tester accepts. Nil means the
         /// read failed; an empty string means Apple holds an empty agreement.
         public var betaLicenseAgreement: String?
+        /// What App Store Connect holds for Game Center, or nil for an app the
+        /// read never reached.
+        public var gameCenter: GameCenter?
         /// The subscription grace period, in days, and its switch.
         public var gracePeriodDays: Int?
         public var gracePeriodOptIn: Bool?
         /// The marketing resources, by the key that the manifest gives them.
         public var customProductPageNames: [String: String] = [:]
+        /// Everything App Store Connect holds for one game.
+        ///
+        /// Every map is keyed the way the manifest names the thing: by vendor
+        /// identifier for the five families, and by reference name for the
+        /// groups, which carry no vendor identifier at all.
+        ///
+        /// `read` is what tells "this app has no Game Center" apart from "the
+        /// read failed". The first is the ordinary state of every app that is
+        /// not a game and costs one request; the second must never produce a
+        /// create step, because a create against an existing detail answers
+        /// 409.
+        public struct GameCenter: Sendable, Equatable {
+            public var detail: AppleGameCenterClient.Detail?
+            public var groups: [String: String] = [:]
+            public var appVersions: [String: AppleGameCenterClient.AppVersion] = [:]
+            public var achievements: [String: AppleGameCenterCatalogClient.Object] = [:]
+            public var leaderboards: [String: AppleGameCenterCatalogClient.Object] = [:]
+            public var leaderboardSets: [String: AppleGameCenterCatalogClient.Object] = [:]
+            public var activities: [String: AppleGameCenterCatalogClient.Object] = [:]
+            public var challenges: [String: AppleGameCenterCatalogClient.Object] = [:]
+            /// The names Apple already holds for the boards inside a set, by
+            /// set vendor identifier. Read only: Apple deprecated the write and
+            /// left the read and the delete live.
+            public var memberLocalizations:
+                [String: [AppleGameCenterCatalogClient.MemberName]] = [:]
+            /// Matchmaking, keyed by reference name. Apple gives these no
+            /// vendor identifier, and they belong to the account rather than
+            /// to one app, exactly like the groups above.
+            public var ruleSets: [String: AppleGameCenterMatchmakingClient.RuleSet] = [:]
+            public var queues: [String: AppleGameCenterMatchmakingClient.Queue] = [:]
+            /// False when the detail read failed rather than answering nothing.
+            public var read = false
+            /// The families whose own read failed, so the tab can say the
+            /// count it shows is short rather than showing a wrong zero.
+            /// `matchmaking` joins the five family names here when the rule
+            /// set read fails, for the same reason: a wrong zero would read as
+            /// "create every rule set" on the next plan.
+            public var unreadFamilies: Set<String> = []
+
+            public init() {}
+
+            /// The objects of one family, so a panel names the family once.
+            public func objects(_ family: AppleGameCenterCatalogClient.Family)
+                -> [String: AppleGameCenterCatalogClient.Object] {
+                switch family {
+                case .achievement: achievements
+                case .leaderboard: leaderboards
+                case .leaderboardSet: leaderboardSets
+                case .activity: activities
+                case .challenge: challenges
+                }
+            }
+
+            /// Whether the app has a configuration at all. A read that failed
+            /// answers false here and `read` false beside it.
+            public var exists: Bool { detail != nil }
+        }
+
         /// One product page experiment, as Apple describes it.
         ///
         /// This was the state string alone. The same response carries the

@@ -350,6 +350,7 @@ public enum Planner {
         }
 
         steps += appleTestFlightSteps(input)
+        steps += appleGameCenterSteps(input)
         steps += appleMarketingSteps(input)
 
         // 12 and 13.
@@ -586,6 +587,389 @@ public enum Planner {
         }
         return steps
     }
+
+    // MARK: - Game Center
+
+    /// Whether one Game Center object carries every value the manifest names.
+    ///
+    /// It follows `betaGroupSettingsDiffer` exactly: a key the manifest leaves
+    /// out is not a `false`. It means the developer said nothing, whatever
+    /// Apple holds stays, and only a named value that disagrees earns a step.
+    ///
+    /// The comparison is between two flattenings of the same values as text,
+    /// so `10` and `10.0` are one value and a duration is compared as the ISO
+    /// 8601 string Apple was sent.
+    static func gameCenterObjectDiffers(
+        _ wanted: GameCenterRow, _ live: AppleGameCenterCatalogClient.Object?) -> Bool {
+        guard let live else { return true }
+        var held = live.attributes
+        if let name = live.referenceName { held["referenceName"] = name }
+        if let archived = live.archived { held["archived"] = archived ? "true" : "false" }
+        // The vendor identifier is the key and never differs: this row was
+        // found by it.
+        return wanted.write.comparable.contains { key, value in held[key] != value }
+    }
+
+    /// One locale row of one object, against the locale Apple holds.
+    private static func gameCenterLocaleDiffers(
+        _ wanted: [String: String],
+        _ live: AppleGameCenterCatalogClient.Localization?) -> Bool {
+        guard let live else { return true }
+        return wanted.contains { key, value in live.values[key] != value }
+    }
+
+    /// Whether the file on disk is the one Apple holds.
+    ///
+    /// Apple returns no checksum on a Game Center image and its update request
+    /// takes `uploaded` alone, so the name and the byte count are the whole
+    /// comparison. A store that reported neither counts as different, and the
+    /// apply compares again before it spends an upload.
+    private static func gameCenterImageDiffers(_ url: URL, name: String?,
+                                               size: Int?) -> Bool {
+        guard let name, let size else { return true }
+        return name != url.lastPathComponent || Int64(size) != fileSize(url)
+    }
+
+    /// Everything the Gaming tab writes, in dependency order.
+    ///
+    /// **A failed detail read produces nothing.** `read == false` means the
+    /// detail read threw rather than answering "this app is not a game", and a
+    /// create against a detail that already exists answers 409. No read at all
+    /// is a different state: the steps appear and say the comparison is a
+    /// guess, exactly as the TestFlight rows do.
+    ///
+    /// **Leaderboards come first** among the five families, because a set, an
+    /// activity and a challenge all point at one.
+    ///
+    /// **The App Store version is last**, because it is the only step here that
+    /// reaches a player.
+    private static func appleGameCenterSteps(_ input: Input) -> [PlanStep] {
+        guard let wanted = input.manifest.gameCenter else { return [] }
+        let live = input.actual.apple?.gameCenter
+        if let live, !live.read { return [] }
+        let read = live?.read == true
+        var steps: [PlanStep] = []
+
+        func mark(_ family: AppleGameCenterCatalogClient.Family) -> ComparisonConfidence {
+            guard read, live?.unreadFamilies.contains(family.rawValue) != true else {
+                return .unverified
+            }
+            return .verified
+        }
+
+        // 1. The configuration itself.
+        if let detail = gameCenterDetailStep(wanted, live: live, read: read) {
+            steps.append(detail)
+        }
+
+        // 2. The group. A group is account-wide, so a name the account already
+        // holds is used rather than made a second time. The step also appears
+        // when the account holds the group and this app is not in it, because
+        // pointing the detail at it is the same call either way.
+        if let group = wanted.group, !group.isEmpty,
+           live?.groups[group] == nil || live?.detail?.groupName != group {
+            let exists = live?.groups[group] != nil
+            steps.append(PlanStep(
+                id: "apple.gameCenter.group.\(group)", system: .apple,
+                kind: exists ? .change : .add,
+                summary: "Game Center  group  \(group)"
+                    + (exists ? "  this game joins it" : "  create"),
+                title: "\(exists ? "Join" : "Create") the \(group) group",
+                requests: [RequestSketch(exists ? "PATCH" : "POST", "/v1/gameCenterGroups")],
+                operation: .appleGameCenterGroup(name: group),
+                comparison: read ? .verified : .unverified))
+        }
+
+        // 3 to 11. The five families, leaderboards first.
+        let order: [AppleGameCenterCatalogClient.Family] =
+            [.leaderboard, .achievement, .leaderboardSet, .activity, .challenge]
+        var images: [PlanStep] = []
+        for family in order {
+            for row in wanted.rows(family) where !row.id.isEmpty {
+                let object = live?.objects(family)[row.id]
+                steps += gameCenterObjectSteps(row, live: object, mark: mark(family))
+                images += gameCenterImageSteps(row, live: object, root: input.root,
+                                               mark: mark(family))
+            }
+            // The board Game Center opens on, once the boards exist. It is a
+            // step of its own and not part of the detail, because the detail
+            // is created before any leaderboard is and a relationship cannot
+            // name an object that has not been made yet.
+            guard family == .leaderboard, let board = wanted.defaultLeaderboard,
+                  !board.isEmpty, board != live?.detail?.defaultLeaderboardVendorID
+            else { continue }
+            steps.append(PlanStep(
+                id: "apple.gameCenter.defaultLeaderboard", system: .apple, kind: .change,
+                summary: "Game Center  opens on \(board)",
+                title: "Open Game Center on \(board)",
+                requests: [RequestSketch("PATCH", "/v1/gameCenterDetails/{id}")],
+                operation: .appleGameCenterDefaultLeaderboard,
+                comparison: read ? .verified : .unverified))
+        }
+
+        // 12. The uploads, together, because each one carries a progress bar.
+        steps += images
+
+        // 13 and 14. Matchmaking. None of it needs a build either.
+        steps += gameCenterMatchmakingSteps(wanted, live: live, read: read)
+
+        // 15. What publishes all of it.
+        for version in (wanted.appVersions ?? [:]).keys.sorted() {
+            let row = wanted.appVersions?[version]
+            let liveVersion = live?.appVersions[version]
+            let differs = liveVersion == nil
+                || (row?.enabled != nil && row?.enabled != liveVersion?.enabled)
+                || gameCenterCompatibilityDiffers(row?.compatibility, liveVersion, in: live)
+            guard differs else { continue }
+            steps.append(PlanStep(
+                id: "apple.gameCenter.appVersion.\(version)", system: .apple,
+                kind: liveVersion == nil ? .add : .change,
+                summary: "Game Center  \(version) carries the configuration",
+                title: "Give \(version) the Game Center configuration",
+                requests: [RequestSketch(liveVersion == nil ? "POST" : "PATCH",
+                                         "/v1/gameCenterAppVersions")],
+                operation: .appleGameCenterAppVersion(version: version),
+                comparison: read ? .verified : .unverified))
+        }
+        return steps
+    }
+
+    /// The detail step: the configuration itself, and the one attribute it
+    /// carries that this app manages.
+    ///
+    /// The group and the opening leaderboard are steps of their own, because
+    /// each names an object that has to exist first. `arcadeEnabled` is read
+    /// only and Apple marks `challengeEnabled` deprecated, so neither is ever
+    /// compared or sent.
+    private static func gameCenterDetailStep(_ wanted: Manifest.GameCenter,
+                                             live: ActualState.Apple.GameCenter?,
+                                             read: Bool) -> PlanStep? {
+        let detail = live?.detail
+        let missing = wanted.enabled == true && detail == nil
+        let minimumsDiffer = wanted.challengesMinimumPlatformVersions.map {
+            Set($0) != Set(detail?.challengesMinimumPlatformVersions ?? [])
+        } ?? false
+        guard missing || minimumsDiffer else { return nil }
+
+        var says: [String] = []
+        if missing { says.append("create") }
+        if minimumsDiffer { says.append("challenge minimums") }
+        return PlanStep(
+            id: "apple.gameCenter.detail", system: .apple,
+            kind: missing ? .add : .change,
+            summary: "Game Center  \(says.joined(separator: ", "))",
+            title: missing ? "Create the Game Center configuration"
+                : "Write the Game Center configuration",
+            requests: [RequestSketch(missing ? "POST" : "PATCH", "/v1/gameCenterDetails")],
+            operation: .appleGameCenterDetail,
+            comparison: read ? .verified : .unverified)
+    }
+
+    /// One object, its locales, and the links it owns.
+    private static func gameCenterObjectSteps(
+        _ row: GameCenterRow, live: AppleGameCenterCatalogClient.Object?,
+        mark: ComparisonConfidence) -> [PlanStep] {
+        let family = row.family
+        var steps: [PlanStep] = []
+        let prefix = "apple.gameCenter.\(family.rawValue).\(row.id)"
+
+        if gameCenterObjectDiffers(row, live) {
+            steps.append(PlanStep(
+                id: prefix, system: .apple, kind: live == nil ? .add : .change,
+                summary: "Game Center  \(family.noun)  \(row.name)"
+                    + (row.write.archived == true ? "  archived" : ""),
+                title: "\(live == nil ? "Create" : "Update") the \(row.name) \(family.noun)",
+                requests: [RequestSketch(live == nil ? "POST" : "PATCH", family.objectPath)],
+                operation: .appleGameCenterObject(family: family.rawValue, id: row.id),
+                comparison: mark))
+        }
+
+        for code in row.locales.keys.sorted() {
+            let values = row.locales[code] ?? [:]
+            guard !values.isEmpty,
+                  gameCenterLocaleDiffers(values, live?.localizations[code]) else { continue }
+            steps.append(PlanStep(
+                id: "\(prefix).\(code)", system: .apple,
+                kind: live?.localizations[code] == nil ? .add : .change,
+                summary: "Game Center  \(family.noun)  \(row.name)  \(code)",
+                title: "Write the \(code) text of \(row.name)",
+                requests: [RequestSketch("POST",
+                                         AppleGameCenterCatalogClient.localizationPath(family))],
+                operation: .appleGameCenterLocale(family: family.rawValue, id: row.id,
+                                                  locale: code),
+                comparison: mark))
+        }
+
+        // The set members, the activity links and the challenge board. Each
+        // one sends the difference, so a link somebody added in the console
+        // this morning is not dropped by a replace.
+        if let members = row.members, Set(members) != (live?.linkedIDs ?? []) {
+            steps.append(PlanStep(
+                id: "\(prefix).members", system: .apple, kind: .change,
+                summary: "Game Center  set  \(row.name)  \(members.count) leaderboards",
+                title: "Write the boards inside \(row.name)",
+                requests: [RequestSketch(
+                    "POST",
+                    "/v2/gameCenterLeaderboardSets/{id}/relationships/gameCenterLeaderboards")],
+                operation: .appleGameCenterMembers(set: row.id),
+                comparison: mark))
+        }
+        if family == .activity {
+            let achievementsDiffer = row.linkedAchievements
+                .map { Set($0) != (live?.linkedAchievementIDs ?? []) } ?? false
+            let boardsDiffer = row.linkedLeaderboards
+                .map { Set($0) != (live?.linkedIDs ?? []) } ?? false
+            if achievementsDiffer || boardsDiffer {
+                steps.append(PlanStep(
+                    id: "\(prefix).links", system: .apple, kind: .change,
+                    summary: "Game Center  activity  \(row.name)  what it awards",
+                    title: "Write what \(row.name) awards",
+                    requests: [RequestSketch(
+                        "POST", "/v1/gameCenterActivities/{id}/relationships/achievementsV2")],
+                    operation: .appleGameCenterLinks(activity: row.id),
+                    comparison: mark))
+            }
+        }
+        if family == .challenge, let board = row.leaderboard, !board.isEmpty,
+           live?.linkedIDs != [board] {
+            steps.append(PlanStep(
+                id: "\(prefix).leaderboard", system: .apple, kind: .change,
+                summary: "Game Center  challenge  \(row.name)  scores from \(board)",
+                title: "Point \(row.name) at \(board)",
+                requests: [RequestSketch(
+                    "PATCH", "/v1/gameCenterChallenges/{id}/relationships/leaderboardV2")],
+                operation: .appleGameCenterChallengeLeaderboard(challenge: row.id),
+                comparison: mark))
+        }
+        return steps
+    }
+
+    /// One step per image, because each one is an upload.
+    private static func gameCenterImageSteps(
+        _ row: GameCenterRow, live: AppleGameCenterCatalogClient.Object?, root: URL?,
+        mark: ComparisonConfidence) -> [PlanStep] {
+        let family = row.family
+        let prefix = "apple.gameCenter.image.\(family.rawValue).\(row.id)"
+        var steps: [PlanStep] = []
+
+        func step(id: String, locale: String?, path: String, url: URL, label: String) {
+            steps.append(PlanStep(
+                id: id, system: .apple, kind: .change,
+                summary: "Game Center  \(family.noun)  \(row.name)  \(label)",
+                title: "Upload the \(label) of \(row.name)",
+                requests: [RequestSketch("POST", family.imagePath)],
+                operation: .appleGameCenterImage(family: family.rawValue, id: row.id,
+                                                 locale: locale, path: path),
+                uploadCount: 1, uploadBytes: fileSize(url), comparison: mark))
+        }
+
+        if let path = row.defaultImage, !path.isEmpty, let url = resolve(path, root: root),
+           gameCenterImageDiffers(url, name: live?.defaultImageFileName,
+                                  size: live?.defaultImageFileSize) {
+            step(id: "\(prefix).default", locale: nil, path: path, url: url,
+                 label: "fallback image")
+        }
+        for code in row.images.keys.sorted() {
+            guard let path = row.images[code], !path.isEmpty,
+                  let url = resolve(path, root: root) else { continue }
+            let localization = live?.localizations[code]
+            guard gameCenterImageDiffers(url, name: localization?.imageFileName,
+                                         size: localization?.imageFileSize) else { continue }
+            step(id: "\(prefix).\(code)", locale: code, path: path, url: url,
+                 label: "\(code) image")
+        }
+        return steps
+    }
+
+    /// The rule sets and the queues. Apple keys both by reference name, so a
+    /// renamed one is a new one and the old stays until somebody deletes it.
+    private static func gameCenterMatchmakingSteps(
+        _ wanted: Manifest.GameCenter, live: ActualState.Apple.GameCenter?,
+        read: Bool) -> [PlanStep] {
+        guard let matchmaking = wanted.matchmaking else { return [] }
+        let verified: ComparisonConfidence =
+            read && live?.unreadFamilies.contains("matchmaking") != true
+                ? .verified : .unverified
+        var steps: [PlanStep] = []
+
+        for set in matchmaking.ruleSets ?? [] where !set.name.isEmpty {
+            let liveSet = live?.ruleSets[set.name]
+            guard liveSet == nil || gameCenterRuleSetDiffers(set, liveSet) else { continue }
+            let inside = (set.rules?.count ?? 0) + (set.teams?.count ?? 0)
+            steps.append(PlanStep(
+                id: "apple.gameCenter.ruleSet.\(set.name)", system: .apple,
+                kind: liveSet == nil ? .add : .change,
+                summary: "Game Center  rule set  \(set.name)"
+                    + (inside > 0 ? "  \(inside) rules and teams" : ""),
+                title: "\(liveSet == nil ? "Create" : "Update") the \(set.name) rule set",
+                requests: [RequestSketch(liveSet == nil ? "POST" : "PATCH",
+                                         "/v1/gameCenterMatchmakingRuleSets")],
+                operation: .appleGameCenterRuleSet(name: set.name),
+                comparison: verified))
+        }
+
+        for queue in matchmaking.queues ?? [] where !queue.name.isEmpty {
+            let liveQueue = live?.queues[queue.name]
+            let differs = liveQueue == nil
+                || (queue.classicBundleIds.map { Set($0) != Set(liveQueue?.classicBundleIds ?? []) }
+                    ?? false)
+            guard differs else { continue }
+            steps.append(PlanStep(
+                id: "apple.gameCenter.queue.\(queue.name)", system: .apple,
+                kind: liveQueue == nil ? .add : .change,
+                summary: "Game Center  queue  \(queue.name)"
+                    + (queue.ruleSet.map { "  matches with \($0)" } ?? ""),
+                title: "\(liveQueue == nil ? "Create" : "Update") the \(queue.name) queue",
+                requests: [RequestSketch(liveQueue == nil ? "POST" : "PATCH",
+                                         "/v1/gameCenterMatchmakingQueues")],
+                operation: .appleGameCenterQueue(name: queue.name),
+                comparison: verified))
+        }
+        return steps
+    }
+
+    /// A rule set, its rules and its teams, against what the account holds.
+    /// They are one step, so one disagreement anywhere raises it.
+    private static func gameCenterRuleSetDiffers(
+        _ wanted: Manifest.GameCenter.RuleSet,
+        _ live: AppleGameCenterMatchmakingClient.RuleSet?) -> Bool {
+        func differs<Value: Equatable>(_ wanted: Value?, _ held: Value?) -> Bool {
+            guard let wanted else { return false }
+            return wanted != held
+        }
+        if differs(wanted.ruleLanguageVersion, live?.ruleLanguageVersion) { return true }
+        if let players = wanted.players, players.count == 2,
+           players[0] != live?.minPlayers || players[1] != live?.maxPlayers {
+            return true
+        }
+        for rule in wanted.rules ?? [] {
+            guard let held = live?.rules[rule.name] else { return true }
+            if differs(rule.description, held.description) { return true }
+            if differs(rule.type, held.type) { return true }
+            if differs(rule.expression, held.expression) { return true }
+            if differs(rule.weight, held.weight) { return true }
+        }
+        for team in wanted.teams ?? [] {
+            guard let held = live?.teams[team.name] else { return true }
+            if let players = team.players, players.count == 2,
+               players[0] != held.minPlayers || players[1] != held.maxPlayers {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// The older versions whose scores one version keeps. The manifest names
+    /// version strings and Apple answers with its own resource ids, so the
+    /// comparison goes through the version map that was already read.
+    private static func gameCenterCompatibilityDiffers(
+        _ wanted: [String]?, _ row: AppleGameCenterClient.AppVersion?,
+        in state: ActualState.Apple.GameCenter?) -> Bool {
+        guard let wanted else { return false }
+        let ids = Set(wanted.compactMap { state?.appVersions[$0]?.id })
+        return ids != (row?.compatibilityVersionIDs ?? [])
+    }
+
 
     // MARK: - The App Store marketing resources
 

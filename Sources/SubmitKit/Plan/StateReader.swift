@@ -461,6 +461,7 @@ public struct StateReader: Sendable {
 
         await readAppleMarketing(appID: appID, into: &result)
         await readAppleTestFlight(appID: appID, into: &result)
+        await readAppleGameCenter(appID: appID, into: &result)
 
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
@@ -583,6 +584,136 @@ public struct StateReader: Sendable {
             result.betaReviewSubmitted = state.submitted
             result.betaAutoNotify = state.autoNotify
         }
+    }
+
+    /// Game Center, and one request for every app that is not a game.
+    ///
+    /// The detail read is the gate. Apple answers 404 for an app with no
+    /// configuration, so a `nil` detail is the ordinary state of most apps: the
+    /// read stops, `read` is true, and every map stays empty. That costs one
+    /// request and it is the common case.
+    ///
+    /// A detail read that **throws** is different. It leaves `read` false, and
+    /// the planner then writes no Game Center step at all, because a create
+    /// against a detail that already exists answers 409. One line goes into
+    /// `state.failures` so the Summary tab says why.
+    ///
+    /// Below the detail, each family is optional on its own. A family that
+    /// fails leaves its map empty and names itself in `unreadFamilies`, so a
+    /// panel can say the count is short rather than drawing a wrong zero.
+    private func readAppleGameCenter(appID: String,
+                                     into result: inout ActualState.Apple) async {
+        let client = AppleGameCenterClient(api: api)
+        var state = ActualState.Apple.GameCenter()
+
+        let detail: AppleGameCenterClient.Detail?
+        do {
+            detail = try await client.detail(appID: appID)
+        } catch {
+            // A 404 is "not a game", not a fault. Anything else is a read this
+            // app must not write against.
+            if Self.isNotFound(error) {
+                state.read = true
+                result.gameCenter = state
+                return
+            }
+            result.gameCenter = state
+            return
+        }
+
+        state.read = true
+        guard let detail else {
+            result.gameCenter = state
+            return
+        }
+        state.detail = detail
+        state.groups = (try? await client.groups()) ?? [:]
+        state.appVersions = (try? await client.appVersions(detailID: detail.id)) ?? [:]
+
+        let catalog = AppleGameCenterCatalogClient(api: api)
+        for family in AppleGameCenterCatalogClient.Family.allCases {
+            guard let objects = try? await catalog.objects(family: family,
+                                                           detailID: detail.id) else {
+                state.unreadFamilies.insert(family.rawValue)
+                continue
+            }
+            switch family {
+            case .achievement: state.achievements = objects
+            case .leaderboard: state.leaderboards = objects
+            case .leaderboardSet: state.leaderboardSets = objects
+            case .activity: state.activities = objects
+            case .challenge: state.challenges = objects
+            }
+        }
+
+        // A link holds resource ids, and the manifest holds vendor
+        // identifiers. Both maps are already read, so the translation costs no
+        // request of its own.
+        let boardsByResourceID = Dictionary(
+            state.leaderboards.values.map { ($0.id, $0.vendorIdentifier) },
+            uniquingKeysWith: { first, _ in first })
+        let achievementsByResourceID = Dictionary(
+            state.achievements.values.map { ($0.id, $0.vendorIdentifier) },
+            uniquingKeysWith: { first, _ in first })
+
+        for (vendorID, set) in state.leaderboardSets {
+            state.leaderboardSets[vendorID]?.linkedIDs = await catalog.members(
+                setID: set.id, leaderboardsByResourceID: boardsByResourceID)
+            let names = await catalog.memberLocalizations(setID: set.id)
+            if !names.isEmpty { state.memberLocalizations[vendorID] = names }
+        }
+        // The links of an activity and the board of a challenge. Without these
+        // the plan would offer to write the same links on every apply, having
+        // nothing to compare them against.
+        for (vendorID, activity) in state.activities {
+            let links = await catalog.activityLinks(
+                activityID: activity.id,
+                achievementsByResourceID: achievementsByResourceID,
+                leaderboardsByResourceID: boardsByResourceID)
+            state.activities[vendorID]?.linkedAchievementIDs = links.achievements
+            state.activities[vendorID]?.linkedIDs = links.leaderboards
+        }
+        for (vendorID, challenge) in state.challenges {
+            guard let board = await catalog.challengeLeaderboard(
+                challengeID: challenge.id,
+                leaderboardsByResourceID: boardsByResourceID) else { continue }
+            state.challenges[vendorID]?.linkedIDs = [board]
+        }
+
+        // The default leaderboard comes back as a resource id, and the tab
+        // names boards by the identifier the game passes to GameKit.
+        if let boardID = detail.defaultLeaderboardID {
+            state.detail?.defaultLeaderboardVendorID = boardsByResourceID[boardID]
+        }
+
+        // Matchmaking belongs to the account rather than to the app, like the
+        // groups above. It fails on its own: an empty map that the plan read
+        // as truth would create every rule set a second time, so a failure
+        // names itself and the planner marks those steps unverified.
+        let matchmaking = AppleGameCenterMatchmakingClient(api: api)
+        if let sets = try? await matchmaking.ruleSets() {
+            state.ruleSets = sets
+            state.queues = (try? await matchmaking.queues()) ?? [:]
+        } else {
+            state.unreadFamilies.insert("matchmaking")
+        }
+
+        result.gameCenter = state
+    }
+
+    /// Whether an error is Apple answering "there is nothing here".
+    ///
+    /// The detail read is the one place the difference decides behaviour: a 404
+    /// is every app that is not a game, and anything else has to stop the plan
+    /// from creating a second configuration against a detail that exists.
+    ///
+    /// It matches the status code and not the message. The message is
+    /// localized and comes partly from Apple's own `detail` string, so a reader
+    /// that grepped it for "404" would answer differently on a French Mac and
+    /// would take any error whose text merely mentioned the number.
+    private static func isNotFound(_ error: any Error) -> Bool {
+        guard case ConnectionError.http(let status, _) = error else { return false }
+        return status == 404
     }
 
     /// The images and the videos one live localization shows: the URLs for the

@@ -31,6 +31,16 @@ extension AppState {
         applyDirectly(.testFlight)
     }
 
+    /// The Game Center errors that would stop the apply partway.
+    ///
+    /// The send button reads these before it offers to write. Every one of
+    /// them is a value Apple refuses, and a refusal halfway through leaves the
+    /// objects written before it in App Store Connect: the id rules, the point
+    /// limits, and a link that names an object the manifest does not hold.
+    func gameCenterErrors() -> [Finding] {
+        directPlan().findings.filter { $0.fix == .gaming && $0.severity == .error }
+    }
+
     /// What the apply would write, named for the confirmation.
     ///
     /// It plans against the state the app already read. Nothing here calls a
@@ -152,7 +162,7 @@ extension AppState {
 
 /// The Managing tabs that write on one button.
 enum DirectApplyTarget: Equatable {
-    case listing, media, marketing, testFlight
+    case listing, media, marketing, testFlight, gameCenter
 
     /// The plan rows the tab owns, named by id prefix. They are the same ids
     /// the Summary tab draws, so a row can never mean one thing here and
@@ -178,6 +188,15 @@ enum DirectApplyTarget: Equatable {
         // no part of TestFlight.
         case .testFlight:
             ["apple.build", "apple.beta", "apple.whatToTest"]
+        // The whole Game Center configuration, in plan order: the detail, the
+        // group, the five families with their locales and their pictures, the
+        // matchmaking, and last the App Store version that carries it.
+        //
+        // One prefix catches all of it, because every step id here starts with
+        // it and no other step does. It catches no build row: none of this
+        // needs one, which is why the tab has a button at all.
+        case .gameCenter:
+            ["apple.gameCenter."]
         }
     }
 
@@ -187,6 +206,7 @@ enum DirectApplyTarget: Equatable {
         case .media: "media sets"
         case .marketing: "marketing resources"
         case .testFlight: "TestFlight rows"
+        case .gameCenter: "Game Center rows"
         }
     }
 
@@ -194,7 +214,7 @@ enum DirectApplyTarget: Equatable {
     /// the same paywall line as the plan does.
     var trigger: PaywallTrigger {
         switch self {
-        case .listing, .media, .testFlight: .apply
+        case .listing, .media, .testFlight, .gameCenter: .apply
         case .marketing: .marketing
         }
     }
@@ -204,6 +224,7 @@ enum DirectApplyTarget: Equatable {
     func destination(_ stores: Set<Store>) -> String {
         if self == .marketing { return "the App Store" }
         if self == .testFlight { return "TestFlight" }
+        if self == .gameCenter { return "Game Center" }
         let named = [Store.apple, .google].filter(stores.contains).map(\.storeName)
         return named.isEmpty ? "the stores" : named.joined(separator: " and ")
     }

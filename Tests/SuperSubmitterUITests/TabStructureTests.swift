@@ -24,7 +24,8 @@ import Testing
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
         "Stores", "Store page", "Build", "Beta testing", "Details", "Media",
-        "Monetization", "Review info", "Summary", "Release", "Account", "Settings",
+        "Gaming", "Monetization", "Review info", "Summary", "Release", "Account",
+        "Settings",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.release.zone == .releases)
@@ -40,10 +41,12 @@ import Testing
 /// time: see `SidebarModeSwitchTests` for what that hides and what it may not.
 @Test func theSidebarListsEveryDestinationInItsSection() {
     // Beta testing follows Build, because it is what happens to the package
-    // Build made before a customer ever sees it.
+    // Build made before a customer ever sees it. Gaming follows Media, because
+    // an achievement image is the last thing a game describes before it is
+    // priced.
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
-        == ["Build", "Beta testing", "Details", "Media", "Monetization",
-            "Review info"])
+        == ["Build", "Beta testing", "Details", "Media", "Gaming",
+            "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)

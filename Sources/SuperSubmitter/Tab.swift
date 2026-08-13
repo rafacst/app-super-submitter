@@ -65,6 +65,16 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case betaTesting
     case details
     case media
+    // Everything a game holds that an app does not: the achievements, the
+    // leaderboards, the challenges and the matchmaking. It is one tab and not
+    // a fold on Details, because it is the largest untouched surface of the
+    // App Store Connect API and none of it is a listing field.
+    //
+    // Inserting the case here renumbers every raw value below it, and that is
+    // safe: nothing reads `Tab(rawValue:)`, nothing writes `selectedTab` to
+    // disk, and no snapshot or draft encodes a `Tab`. The numbers fix the
+    // sidebar order and do nothing else.
+    case gaming
     case money
     case marketing
     case reviewInfo
@@ -115,6 +125,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .betaTesting: "Beta testing"
         case .details: "Details"
         case .media: "Media"
+        case .gaming: "Gaming"
         case .money: "Monetization"
         case .marketing: "Marketing"
         case .reviewInfo: "Review info"
@@ -130,7 +141,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var modes: Set<Mode> {
         switch self {
         case .stores: [.publishing, .managing]
-        case .build, .betaTesting, .money, .reviewInfo, .plan, .release: [.publishing]
+        case .build, .betaTesting, .gaming, .money, .reviewInfo, .plan,
+             .release: [.publishing]
         // What the listing says and what it shows are the two things a
         // manager changes most, and Managing had nowhere to show them: an
         // imported app filled these tabs and the mode that imported it could
@@ -170,6 +182,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .betaTesting: "testtube.2"
         case .details: "list.bullet.rectangle"
         case .media: "photo.stack"
+        case .gaming: "gamecontroller"
         case .money: "dollarsign.square"
         case .marketing: "megaphone"
         case .reviewInfo: "checkmark.square"
@@ -211,6 +224,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .betaTesting: "Invite the testers, and say what they get to try"
         case .details: "Write the listing text, the keywords and the support links"
         case .media: "Add the screenshots, the icon and the promotional video"
+        case .gaming: "Set up the achievements, the leaderboards and the matchmaking of a game"
         case .money: "Define selling price, in-app purchases, subscriptions and more"
         case .marketing: "Set up custom product pages, tests and in-app events"
         case .reviewInfo: "Give the reviewer the contact, the demo account and the notes"
@@ -252,7 +266,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // same reason: the wrong answer is the one that puts a read-only
         // screen under Send, beside the two buttons that talk to a store.
         case .stores, .account, .settings, .storePage, .build, .betaTesting,
-             .details, .media, .money, .marketing, .reviewInfo: .edits
+             .details, .media, .gaming, .money, .marketing, .reviewInfo: .edits
         case .plan: .reads
         case .release, .liveApp: .releases
         }
