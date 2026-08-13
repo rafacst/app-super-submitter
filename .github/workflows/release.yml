@@ -115,12 +115,21 @@ jobs:
           # beside the Supabase pair. They are not secrets: the address is
           # what the app calls, the key is the public half, and every
           # privileged Stripe call happens on the service.
+          #
+          # The PostHog token is a secret, and it is the one setting a runner
+          # cannot read from the tree: Supporting/Analytics.local.xcconfig is
+          # git-ignored, so a checkout has only the empty default beside it. A
+          # setting on this command line beats every xcconfig, which is what
+          # puts the token in the shipped bundle. An unset secret builds a
+          # release that measures nothing, and that is the intended answer: no
+          # measurement never stops a release.
           xcodebuild build \
             -project SuperSubmitter.xcodeproj \
             -scheme SuperSubmitter \
             -configuration Release \
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/dd" \
+            POSTHOG_PROJECT_TOKEN="${{ secrets.POSTHOG_PROJECT_TOKEN }}" \
             CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build }} \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \

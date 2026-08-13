@@ -13,6 +13,13 @@
 .env
 .env.example
 
+# The same token again, in the form the Xcode build reads: `.env` reaches
+# `swift run` and nothing else, so a bundle needs its own copy. Only the local
+# file is ignored. Analytics.xcconfig itself is tracked and holds no token,
+# because XcodeGen refuses to generate the project when a file named under
+# `configFiles` is missing, and a clone has to be able to build.
+Supporting/Analytics.local.xcconfig
+
 # Working folders that describe the product rather than build it. They stay on
 # the machine that writes them; the public tree shows the app and nothing else.
 .claude/

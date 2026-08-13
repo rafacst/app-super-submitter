@@ -41,14 +41,18 @@
 	<string>NSApplication</string>
 	<key>SSEntitlementPublicKeys</key>
 	<string>$(ENTITLEMENT_PUBLIC_KEYS)</string>
+	<key>SSGoogleOAuthClientID</key>
+	<string>$(GOOGLE_OAUTH_CLIENT_ID)</string>
 	<key>SSLicensingBaseURL</key>
 	<string>$(LICENSING_BASE_URL)</string>
+	<key>SSPostHogHost</key>
+	<string>$(POSTHOG_HOST)</string>
+	<key>SSPostHogProjectToken</key>
+	<string>$(POSTHOG_PROJECT_TOKEN)</string>
 	<key>SSSupabasePublishableKey</key>
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>SSSupabaseURL</key>
 	<string>$(SUPABASE_URL)</string>
-	<key>SSGoogleOAuthClientID</key>
-	<string>$(GOOGLE_OAUTH_CLIENT_ID)</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/rafacst/app-super-submitter/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
