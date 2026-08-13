@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import PostHog
 import SubmitKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -165,6 +166,10 @@ final class AppState {
     var selectedTab: Tab = .stores {
         didSet {
             guard selectedTab != oldValue else { return }
+            // A tab is this app's screen. `captureScreenViews` swizzles a
+            // UIKit class that a Mac does not have, so the SDK sees no screen
+            // on its own and every event would carry the same one.
+            PostHogSDK.shared.screen(selectedTab.title, properties: ["mode": mode.rawValue])
             // Picking a tab answers the entry screen: you asked for the two
             // doors and then chose a third thing instead. Without this,
             // pressing "Add app" and changing your mind left the flag set, and
@@ -268,7 +273,16 @@ final class AppState {
     /// who typed it was not looking. The Apply button read as a dead button.
     var promotionMessage: String?
     /// The address the Supabase account is signed in with.
-    var accountEmail: String?
+    ///
+    /// Every door that signs a developer in writes it, and signing out clears
+    /// it, so it is the one value that says who is using the app. See
+    /// `PostHogClient.identify(_:)`.
+    var accountEmail: String? {
+        didSet {
+            guard accountEmail != oldValue else { return }
+            PostHogClient.identify(accountEmail)
+        }
+    }
     /// Whether the sign-in form is open beside the Account tab.
     ///
     /// A panel on the right, not a sheet. It was a sheet over a sheet: the

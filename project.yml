@@ -66,6 +66,16 @@ targets:
         product: Sparkle
     entitlements:
       path: SuperSubmitter.entitlements
+    # Where the PostHog project token enters an Xcode build. The file named
+    # here is tracked and holds no token, because XcodeGen validates these
+    # paths and refuses to generate the project when one is missing; it
+    # optionally includes Analytics.local.xcconfig, which is ignored and holds
+    # the real one. A clone without that local file builds and measures
+    # nothing. The release workflow has no local file either and passes the
+    # token to `xcodebuild` from a repository secret instead.
+    configFiles:
+      Debug: Supporting/Analytics.xcconfig
+      Release: Supporting/Analytics.xcconfig
     # The build number is the commit count, the same formula the release
     # workflow uses. Without this a local build stays at CURRENT_PROJECT_VERSION
     # and Sparkle reads it as older than every published release, so "Check for
@@ -140,6 +150,12 @@ targets:
         SSSupabaseURL: $(SUPABASE_URL)
         SSSupabasePublishableKey: $(SUPABASE_PUBLISHABLE_KEY)
         SSGoogleOAuthClientID: $(GOOGLE_OAUTH_CLIENT_ID)
+        # Analytics. An app opened from Finder inherits no shell, so the
+        # POSTHOG_ variables in .env reach `swift run` and nothing else: these
+        # two are how a shipped bundle knows where to report. The token comes
+        # from Supporting/Analytics.xcconfig, which is not in the repository.
+        SSPostHogProjectToken: $(POSTHOG_PROJECT_TOKEN)
+        SSPostHogHost: $(POSTHOG_HOST)
     settings:
       base:
         # The live licensing service. Not a secret: it is the address the app
@@ -151,6 +167,13 @@ targets:
         SUPABASE_URL: https://cvrvyxcjddtpsyfxieuf.supabase.co
         SUPABASE_PUBLISHABLE_KEY: sb_publishable_sI-T324LV-ymezJ0j9uecA_XZ2Dyep3
         GOOGLE_OAUTH_CLIENT_ID: ""
+        # The address the analytics go to. Public, like the two above it.
+        #
+        # POSTHOG_PROJECT_TOKEN is deliberately absent: a value here is written
+        # into the target's own build settings, and those beat an xcconfig, so
+        # naming it here would take the token away from Analytics.xcconfig and
+        # put it in the repository.
+        POSTHOG_HOST: https://us.i.posthog.com
         PRODUCT_BUNDLE_IDENTIFIER: com.rafacst.supersubmitter
         PRODUCT_NAME: SuperSubmitter
         MARKETING_VERSION: 1.1

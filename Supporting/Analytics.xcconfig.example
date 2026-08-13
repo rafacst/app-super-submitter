@@ -1,0 +1,10 @@
+// Copy to Analytics.local.xcconfig and put the real token in it. That copy is
+// git-ignored; this one is tracked, and it is how a clone learns the file is
+// wanted. Without it the app builds, runs, and measures nothing.
+//
+// The token is the same value as POSTHOG_PROJECT_TOKEN in .env. Both exist
+// because an app opened from Finder inherits no shell: .env reaches
+// `swift run`, and this reaches the bundle Xcode builds.
+//
+// Read it from the PostHog project, under Settings, Project, Project API key.
+POSTHOG_PROJECT_TOKEN = phc_your_project_token_here
