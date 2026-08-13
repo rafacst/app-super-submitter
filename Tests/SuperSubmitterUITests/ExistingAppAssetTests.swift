@@ -191,37 +191,79 @@ struct ExistingAppAssetTests {
 /// on purpose, so there was no way to say "send these again". A developer whose
 /// set left the store, and who had no other copy, had them in the project
 /// folder with no route back.
-@Test func theDownloadedLiveScreenshotsCanGoBackToTheStore() async throws {
+@Test func theLiveListingScreenshotsCanGoBackToTheStore() async throws {
     let folder = FileManager.default.temporaryDirectory
         .appendingPathComponent("resend-\(UUID().uuidString)", isDirectory: true)
-    let size = folder.appendingPathComponent("Store Import/apple/en-US/APP_IPHONE_67",
-                                             isDirectory: true)
-    try FileManager.default.createDirectory(at: size, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
-    // Out of order on disk, so the numeric prefix is what settles the order.
-    for name in ["10-shot.png", "2-shot.png", "1-shot.png"] {
-        try Data([0x89]).write(to: size.appendingPathComponent(name))
+    var files: [URL] = []
+    for name in ["1-shot.png", "2-shot.png"] {
+        let file = folder.appendingPathComponent(name)
+        try Data([0x89]).write(to: file)
+        files.append(file)
     }
-    // A preview sits beside them. Apple serves previews as an HLS stream, so
-    // what the import saved is the playlist and never the film.
-    try Data([0x89]).write(to: size.appendingPathComponent("1-trailer.mov"))
-    // Another page's pictures are in a folder of their own and belong to it.
-    let page = folder.appendingPathComponent(
-        "Store Import/apple/pages/Bakers/en-US/APP_IPHONE_67", isDirectory: true)
-    try FileManager.default.createDirectory(at: page, withIntermediateDirectories: true)
-    try Data([0x89]).write(to: page.appendingPathComponent("1-bakers.png"))
+    // A preview beside them. Apple serves previews as one of its own low
+    // renditions, so a video never goes back this way.
+    let video = folder.appendingPathComponent("1-trailer.mov")
+    try Data([0x89]).write(to: video)
+
+    var snapshot = StoreSnapshot()
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = ["en-US/APP_IPHONE_67": files + [video]]
+    actual.apple = apple
+    snapshot.merge(actual)
 
     let state = await AppState()
     await MainActor.run {
         state.manifestURL = folder.appendingPathComponent("store.yaml")
         state.locale = "en-US"
+        state.storeSnapshot = snapshot
     }
 
     let found = await state.resendableLiveMedia(deviceClass: .phone)
 
-    #expect(found.map(\.lastPathComponent) == ["1-shot.png", "2-shot.png", "10-shot.png"])
+    #expect(found.map(\.lastPathComponent) == ["1-shot.png", "2-shot.png"])
     #expect(!found.contains { $0.pathExtension == "mov" })
-    #expect(!found.contains { $0.lastPathComponent.contains("bakers") })
+}
+
+/// A custom product page belongs to Marketing and is managed there. Offering
+/// its pictures here read as 56 screenshots for one size, and sending them
+/// would have published the wrong set on the listing.
+@Test func aCustomProductPagesPicturesNeverGoToTheListing() async throws {
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("resend-pages-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let listing = folder.appendingPathComponent("1-listing.png")
+    try Data([0x89]).write(to: listing)
+    let page = folder.appendingPathComponent("1-bakers.png")
+    try Data([0x89]).write(to: page)
+
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = ["en-US/APP_IPHONE_67": [listing]]
+    apple.productPages = [StoreProductPage(
+        kind: .custom, name: "Bakers", status: "Visible",
+        assets: [ImportedStoreAsset(locale: "en-US", kind: "APP_IPHONE_67",
+                                    url: page, fileName: "1-bakers.png")])]
+    actual.apple = apple
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+
+    let state = await AppState()
+    await MainActor.run {
+        state.manifestURL = folder.appendingPathComponent("store.yaml")
+        state.locale = "en-US"
+        state.storeSnapshot = snapshot
+    }
+
+    let found = await state.resendableLiveMedia(deviceClass: .phone)
+
+    #expect(found.map(\.lastPathComponent) == ["1-listing.png"])
+    // And the page is still on the screen, under Marketing's own heading.
+    #expect(await state.storeSnapshot.productPageStrips(
+        locale: "en-US", deviceClass: .phone).count == 1)
 }
 
 /// A size this app never downloaded says so, rather than filling the bucket

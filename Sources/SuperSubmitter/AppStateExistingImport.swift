@@ -352,7 +352,53 @@ extension AppState {
         guard Self.isSafeImportDestination(destination, root: root) else {
             throw ConnectionError.invalidResponse
         }
-        try data.write(to: destination, options: .atomic)
+        try await resolveStream(data, from: response.url ?? asset.url)
+            .write(to: destination, options: .atomic)
+    }
+
+    /// The film behind a playlist, when the store answered with one.
+    ///
+    /// Apple serves an app preview as HLS, so the `videoUrl` of an `appPreview`
+    /// answers a playlist and not a video. The import wrote that text straight
+    /// out under a `.mov` name, so a developer who opened the folder looking for
+    /// their preview found a two kilobyte file that plays in nothing.
+    ///
+    /// What comes back is Apple's own streaming rendition and never the master.
+    /// The API offers no route to the master, so the highest rendition on the
+    /// playlist is the ceiling, and it is well below what the developer
+    /// uploaded. This is a record of the preview, not a file to send back, and
+    /// `resendableLiveMedia` leaves every video out for that reason.
+    private func resolveStream(_ data: Data, from url: URL, depth: Int = 0) async throws
+        -> Data {
+        guard depth < 3, let text = String(data: data, encoding: .utf8),
+              text.hasPrefix("#EXTM3U") else { return data }
+        var best: (pixels: Int, line: String)?
+        var pending = 0
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#EXT-X-STREAM-INF") {
+                // "RESOLUTION=332x720" picks the largest of Apple's renditions.
+                let size = line.components(separatedBy: "RESOLUTION=").dropFirst().first?
+                    .components(separatedBy: CharacterSet(charactersIn: ", ")).first ?? ""
+                let parts = size.split(separator: "x").compactMap { Int($0) }
+                pending = parts.count == 2 ? parts[0] * parts[1] : 1
+                continue
+            }
+            // A variant playlist names one media file and indexes it by byte
+            // range, so the first URI in it is the whole video.
+            guard !line.hasPrefix("#"), !line.isEmpty else { continue }
+            if best == nil || pending > (best?.pixels ?? 0) {
+                best = (max(pending, 1), line)
+            }
+            pending = 0
+        }
+        guard let next = best.flatMap({
+            URL(string: $0.line, relativeTo: url)?.absoluteURL
+        }), next.scheme?.lowercased() == "https" else { return data }
+        let (body, response) = try await URLSession.shared.data(from: next)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
+        else { return data }
+        return try await resolveStream(body, from: response.url ?? next, depth: depth + 1)
     }
 
     private static func isSafeImportDestination(_ destination: URL, root: URL) -> Bool {
@@ -389,28 +435,25 @@ extension AppState {
     /// developer whose set was removed from the store, and who no longer had the
     /// files anywhere else, had this folder full of them and no route back.
     ///
-    /// It reads the disk and not the snapshot, because the case that needs it
-    /// most is the one where the store no longer holds the set at all.
+    /// It answers the version's own page and nothing else.
     ///
-    /// Screenshots only. An App Store preview is served as an HLS stream, so
-    /// what the import saved under a `.mov` name is the playlist that points at
-    /// Apple's own low resolution renditions, and not the film the developer
-    /// uploaded. Offering it back would send a text file to the store.
+    /// The snapshot is the source and not the folder on disk, because the
+    /// folder holds every page the app has ever read. Reading it whole offered
+    /// 56 pictures for one size: the five the listing shows plus every custom
+    /// product page and every test treatment beside them. Those belong to
+    /// Marketing, they are managed there, and sending them to the listing would
+    /// publish the wrong set.
+    ///
+    /// Screenshots only. An App Store preview is one of Apple's own streaming
+    /// renditions, far below what the developer uploaded, so it is a record of
+    /// the preview and never a file to send back.
     func resendableLiveMedia(deviceClass: Manifest.DeviceClass) -> [URL] {
-        guard let root = manifestURL?.deletingLastPathComponent() else { return [] }
-        var result: [URL] = []
-        for displayType in AssetInspector.appleDisplayTypeNames.map(\.type)
-        where AssetInspector.deviceClass(forAppleDisplayType: displayType) == deviceClass {
-            let folder = Self.importedMediaFolder(root: root, store: .apple,
-                                                  locale: locale, displayType: displayType)
-            let files = (try? FileManager.default.contentsOfDirectory(
-                at: folder, includingPropertiesForKeys: nil)) ?? []
-            result += files.filter { !StoreSnapshot.isVideo($0) }
+        let live = storeSnapshot.screenshots(locale: locale, deviceClass: deviceClass)
+            .first { $0.store == .apple }?.urls ?? []
+        return live.filter {
+            $0.isFileURL && !StoreSnapshot.isVideo($0)
+                && FileManager.default.fileExists(atPath: $0.path)
         }
-        // The import numbers each file by the place the store showed it in, so
-        // the order the developer published is the order that goes back.
-        return result.sorted { $0.lastPathComponent.localizedStandardCompare(
-            $1.lastPathComponent) == .orderedAscending }
     }
 
     /// Puts them in `store.yaml`, so the next apply uploads them.
