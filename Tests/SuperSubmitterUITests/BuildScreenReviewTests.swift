@@ -369,6 +369,65 @@ private func buildReviewState() -> AppState {
     #expect(view.contains("Text(\"macOS\").tag(BuildPlatform.macos)"))
 }
 
+/// A custom menu label owns its box and chevron. The menu supplies only the
+/// interaction, so its button style must not replace that label or shrink the
+/// clickable area back to the text.
+@Test func buildMenusKeepTheirCustomLabels() throws {
+    let project = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let flow = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFlow.swift")
+
+    #expect(project.contains(
+        ".menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)"))
+    #expect(project.contains("chooser(\"Scheme\", options: info.schemes"))
+    #expect(project.contains("Button(option) { choose(option) }"))
+    #expect(flow.contains("project?.selection.scheme = scheme\n        restartPreflight()"))
+    #expect(build.components(separatedBy: ".menuIndicator(.hidden)").count == 3)
+    #expect(!project.contains(".menuStyle(.borderlessButton)"))
+    #expect(!build.contains(".menuStyle(.borderlessButton)"))
+}
+
+/// Multiple discovered containers are a choice before there is a linked
+/// project. Scheme selection is a later choice on the project and must not
+/// bring this list back.
+@MainActor
+@Test func containerAmbiguityKeepsTheChosenFolder() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("build-containers-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(
+        at: root.appendingPathComponent("One.xcodeproj"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+        at: root.appendingPathComponent("Two.xcodeproj"), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let flow = BuildFlow(app: nil)
+    flow.discover(root: root)
+    await flow.task?.value
+
+    #expect(flow.state == .needsSelection)
+    #expect(flow.project == nil)
+    #expect(flow.containers.count == 2)
+    #expect(flow.discoveryRoot == root)
+
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    #expect(view.contains("guard let root = flow.discoveryRoot"))
+    #expect(!view.contains("flow.project?.rootURL"))
+}
+
+/// Clearing the snapshot for Recheck is honest only when empty rows are
+/// presented as work in progress, not as newly failed reads.
+@Test func activePreflightRowsStayNeutral() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let explanation = try #require(view.range(of: "case .preflight:"))
+    let remainder = view[explanation.lowerBound...]
+    let building = try #require(remainder.range(of: "case .building:"))
+    let preflightText = String(remainder[..<building.lowerBound])
+
+    #expect(view.contains("flow.state == .preflight ? \"Checking…\" : \"Not read\""))
+    #expect(view.contains("if isEmpty, flow.state == .preflight"))
+    #expect(!preflightText.contains("Nothing is running"))
+}
+
 /// The choice has to outlive the launch. `loadSavedProject` restores the
 /// platform from the saved link, so an answer that stopped at the run came
 /// back as iOS the next morning.

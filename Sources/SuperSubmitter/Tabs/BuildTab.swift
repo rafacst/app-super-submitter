@@ -214,7 +214,9 @@ struct BuildTab: View {
                     } label: {
                         PickerLabel(value: "Choose")
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
                     .fixedSize()
                 }
                 identityField(Binding(get: { state.appleAppID },
@@ -264,7 +266,9 @@ struct BuildTab: View {
                     } label: {
                         PickerLabel(value: "Choose")
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
                     .fixedSize()
                 }
                 Spacer(minLength: 0)

@@ -35,6 +35,7 @@ final class BuildFlow {
     var run: UploadRun
     var project: LinkedSourceProject?
     var discovery: DiscoveryResult?
+    @ObservationIgnored var discoveryRoot: URL?
     var containers: [DiscoveryResult.Container] = []
 
     var appleToolchain: AppleToolchain?
@@ -196,6 +197,7 @@ final class BuildFlow {
     /// about a choice the developer never made is not.
     func discover(root: URL, quietWhenEmpty: Bool = false) {
         reset()
+        discoveryRoot = root
         run.move(to: .discovering)
         task = Task { [weak self] in
             let result = await Task.detached { ProjectDiscovery.scan(root: root) }.value
@@ -236,6 +238,8 @@ final class BuildFlow {
                                                         relativeTo: nil)
         project.selection.allowProvisioningUpdates = allowProvisioningUpdates
         self.project = project
+        discoveryRoot = nil
+        containers = []
         run.platform = platform
         run.linkedProjectID = project.id
         persistProject()
