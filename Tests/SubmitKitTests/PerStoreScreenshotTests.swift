@@ -100,4 +100,16 @@ import Testing
         #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone,
                                     previews: true, store: .google) == ["p.mov"])
     }
+
+    @Test func googleScreenshotErrorsDoNotBlockAnAppleOnlyPlan() {
+        let google = (1...9).map { "play-\($0).png" }
+        let input = Planner.Input(
+            manifest: manifest(shared: [], apple: [], google: google),
+            actual: ActualState(), stores: [.apple])
+
+        #expect(!Validator.findings(input).contains { $0.id.hasPrefix("media.count.google") })
+        var googleInput = input
+        googleInput.stores = [.google]
+        #expect(Validator.findings(googleInput).contains { $0.id.hasPrefix("media.count.google") })
+    }
 }

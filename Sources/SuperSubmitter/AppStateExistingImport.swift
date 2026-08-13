@@ -30,6 +30,7 @@ extension AppState {
                                                     withIntermediateDirectories: true)
             let manifestURL = folder.appendingPathComponent(ManifestFile.defaultName)
             var importedManifest = (try? ManifestFile.load(from: manifestURL)) ?? Manifest()
+            importedManifest.removeImportedMedia()
             // What each store holds today. The editing tabs show it beside the
             // value the developer is about to write, before any store read.
             var snapshot = StoreSnapshot()
@@ -59,8 +60,7 @@ extension AppState {
                     snapshot.merge(listing, store: .apple)
                     skipped += listing.failures
                     skipped += await materializeImportedAssets(
-                        listing.assets, store: .apple, root: folder,
-                        manifest: &importedManifest)
+                        listing.assets, store: .apple, root: folder)
                     reached.insert(.apple)
                 case .google:
                     guard let googleCredential else { continue }
@@ -73,8 +73,7 @@ extension AppState {
                     snapshot.merge(listing, store: .google)
                     skipped += listing.failures
                     skipped += await materializeImportedAssets(
-                        listing.assets, store: .google, root: folder,
-                        manifest: &importedManifest)
+                        listing.assets, store: .google, root: folder)
                     reached.insert(.google)
                 }
             }
@@ -193,33 +192,20 @@ extension AppState {
         }
     }
 
-    /// Takes everything one import read, not only its words.
-    ///
-    /// "Fetch the current listings" used to call `mergeAppleImport` and stop, so
-    /// every screenshot the store had just handed over was thrown away: no
-    /// file on disk, no path in `store.yaml`, and nothing behind the Media
-    /// tab. The wizard already did this; the button beside it did not.
-    ///
-    /// A file that will not download costs that one file and reaches the
-    /// developer by name.
+    /// Keeps downloaded store media as a local view of what is live.
     func adopt(_ imported: ImportedStoreListing, store: Store) async {
         guard let root = manifestURL?.deletingLastPathComponent() else { return }
         storeSnapshot.merge(imported, store: store)
-        // `// ponytail: a copy across the downloads, because an observed
-        // // property cannot go inout over an await. An edit made while the
-        // // files come down is lost. The button reads "Fetching…" for that
-        // // whole window, so nothing is aimed at the form.`
-        var working = manifest
+        manifest.removeImportedMedia()
         let failures = await materializeImportedAssets(
-            imported.assets, store: store, root: root, manifest: &working)
-        manifest = working
+            imported.assets, store: store, root: root)
         let skipped = imported.failures + failures
         guard !skipped.isEmpty else { return }
         errorMessage = "The listing was read. These parts stayed empty:\n"
             + skipped.map { "· \($0)" }.joined(separator: "\n")
     }
 
-    /// Downloads what the store shows and writes the paths into the manifest.
+    /// Downloads what the store shows without making it desired upload input.
     ///
     /// One file that will not download costs that one file. It used to cost
     /// the whole app: a single failed image threw out of the loop before the
@@ -228,14 +214,13 @@ extension AppState {
     /// the files that stayed behind are returned instead, and they reach the
     /// developer in the same list as the reads the store refused.
     func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,
-                                   root: URL, manifest: inout Manifest) async -> [String] {
+                                   root: URL) async -> [String] {
         var failures: [String] = []
         for asset in assets {
             let components = [Self.importFolder, store.rawValue,
                               Self.safeComponent(asset.locale),
                               Self.safeComponent(asset.kind),
                               Self.safeComponent(asset.fileName)]
-            let relative = components.joined(separator: "/")
             let folder = root.appendingPathComponent(Self.importFolder).standardizedFileURL
             let destination = components.dropFirst().reduce(folder) {
                 $0.appendingPathComponent($1)
@@ -250,23 +235,6 @@ extension AppState {
                 failures.append("\(store.storeName) \(asset.kind) \(asset.fileName): "
                     + error.localizedDescription)
                 continue
-            }
-            if let deviceClass = asset.deviceClass {
-                // Apple names a preview bucket after the same display type as
-                // a screenshot, so only the file says which one this is. A
-                // video in the screenshot list fails validation later, on a
-                // tab that never mentions the import.
-                manifest.addMediaPaths([relative], locale: asset.locale,
-                                       deviceClass: deviceClass,
-                                       previews: StoreSnapshot.isVideo(asset.url))
-            } else if asset.kind == "icon" {
-                var media = manifest.media ?? Manifest.Media()
-                media.icon = relative
-                manifest.media = media
-            } else if asset.kind == "featureGraphic" {
-                var media = manifest.media ?? Manifest.Media()
-                media.featureGraphic = relative
-                manifest.media = media
             }
         }
         return failures
@@ -333,5 +301,26 @@ extension AppState {
 
     static func isImported(_ path: String) -> Bool {
         path.hasPrefix("\(importFolder)/")
+    }
+}
+
+extension Manifest {
+    /// Old imports put observed store assets in the desired manifest. Drop
+    /// those paths while keeping user-selected media untouched.
+    @MainActor mutating func removeImportedMedia() {
+        guard var media else { return }
+        func cleaned(_ locales: [String: [String: [String]]]?)
+            -> [String: [String: [String]]]? {
+            locales?.mapValues { groups in
+                groups.mapValues { $0.filter { !AppState.isImported($0) } }
+            }
+        }
+        media.screenshots = cleaned(media.screenshots)
+        media.appleScreenshots = cleaned(media.appleScreenshots)
+        media.googleScreenshots = cleaned(media.googleScreenshots)
+        media.previews = cleaned(media.previews)
+        if media.icon.map(AppState.isImported) == true { media.icon = nil }
+        if media.featureGraphic.map(AppState.isImported) == true { media.featureGraphic = nil }
+        self.media = media
     }
 }

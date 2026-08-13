@@ -211,10 +211,12 @@ public enum Validator {
 
         for code in locales {
             for deviceClass in Manifest.DeviceClass.allCases {
-                let applePaths = manifest.mediaPaths(locale: code, deviceClass: deviceClass,
-                                                     store: .apple)
-                let googlePaths = manifest.mediaPaths(locale: code, deviceClass: deviceClass,
-                                                      store: .google)
+                let applePaths = input.stores.contains(.apple)
+                    ? manifest.mediaPaths(locale: code, deviceClass: deviceClass, store: .apple)
+                    : []
+                let googlePaths = input.stores.contains(.google)
+                    ? manifest.mediaPaths(locale: code, deviceClass: deviceClass, store: .google)
+                    : []
                 // Every file either store would send, checked once. The two
                 // lists are the same when no override holds this size.
                 let paths = applePaths + googlePaths.filter { !applePaths.contains($0) }
@@ -902,7 +904,9 @@ public enum Validator {
         result += offLadderPrices(input)
 
         for group in manifest.subscriptions ?? [] {
-            for plan in group.plans where AppleDurations.name(for: plan.duration) == nil {
+            for plan in group.plans
+            where input.stores.contains(.apple)
+                && AppleDurations.name(for: plan.duration) == nil {
                 result.append(Finding(
                     id: "money.duration.\(plan.id)", severity: .error,
                     message: "The App Store offers no \(plan.duration) subscription duration.",
@@ -1422,21 +1426,20 @@ public enum Validator {
 
     static func state(_ input: Planner.Input) -> [Finding] {
         var result: [Finding] = []
-        guard let apple = input.actual.apple else { return result }
-
         let writesMetadata = input.stores.contains(.apple)
         // A nil state means the app found no version to write to. That is the
         // normal shape of a live app between releases, and the plan creates
         // the version, so it is not a block.
-        let standing = writesMetadata
-            ? appleVersion(apple.versionState,
-                           version: apple.versionString ?? "this version")
+        let apple = input.actual.apple
+        let standing = writesMetadata && apple != nil
+            ? appleVersion(apple?.versionState,
+                           version: apple?.versionString ?? "this version")
             : nil
         if let standing { result.append(standing) }
         // Apple refuses a version that does not climb. Catching it here names
         // the live number and the fix; Apple's own error names neither.
         let wanted = input.manifest.versionName(for: .apple) ?? ""
-        if writesMetadata, !wanted.isEmpty, let live = apple.liveVersionString,
+        if writesMetadata, !wanted.isEmpty, let live = apple?.liveVersionString,
            !isVersion(wanted, above: live) {
             result.append(Finding(
                 id: "state.appleVersionBump", severity: .error,
@@ -1446,7 +1449,8 @@ public enum Validator {
         // Only when the version above has not already said it. A version in
         // review and an open submission are one event, and the screen printed
         // both, so the ordinary act of shipping produced two red rows.
-        if apple.hasOpenReviewSubmission, standing?.severity != .held {
+        if writesMetadata, apple?.hasOpenReviewSubmission == true,
+           standing?.severity != .held {
             result.append(Finding(
                 id: "state.openSubmission", severity: .held,
                 message: "A review submission for this app is already open. The App Store takes one at a time, so this one finishes or is cancelled before another can be sent.",
@@ -1454,7 +1458,7 @@ public enum Validator {
         }
 
         let track = input.manifest.googlePrimaryTrack
-        if let google = input.actual.google,
+        if input.stores.contains(.google), let google = input.actual.google,
            let draft = google.tracks[track], draft.status == "draft",
            let existing = draft.versionCodes.first,
            let package = input.packages[.aab]?.buildNumber.flatMap(Int.init),

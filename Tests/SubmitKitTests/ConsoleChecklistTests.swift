@@ -203,17 +203,19 @@ private func manifest(provider: Manifest.Provider = .none) -> Manifest {
                                  pendingState: "PENDING_DEVELOPER_RELEASE"))
     #expect(approved.state == .done)
 
-    // A rejection hands the version back, and the checklist matters again.
+    // A rejection hands the version back. The manifest still names the
+    // version the next apply can prepare, so it is not a console blocker.
     let rejected = try row(.init(platform: "IOS", pending: "1.6", pendingState: "REJECTED"))
-    #expect(rejected.state == .needed)
+    #expect(rejected.state == .done)
 
-    // A plain draft is not "with the store" either, so nothing changes there.
+    // A plain draft is apply work as well.
     let draft = try row(.init(platform: "IOS", pending: "1.6",
                               pendingState: "PREPARE_FOR_SUBMISSION"))
-    #expect(draft.state == .needed)
+    #expect(draft.state == .done)
 
-    // Another platform's review says nothing about the one being published.
+    // Another platform's review says nothing about this apply, whose manifest
+    // version remains ready to create.
     let otherPlatform = try row(.init(platform: "MAC_OS", pending: "1.6",
                                       pendingState: "IN_REVIEW"))
-    #expect(otherPlatform.state == .needed)
+    #expect(otherPlatform.state == .done)
 }

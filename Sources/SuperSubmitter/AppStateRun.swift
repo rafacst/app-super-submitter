@@ -157,6 +157,16 @@ extension AppState {
                                                       provider: provider)
         let result = Planner.plan(Planner.Input(manifest: manifest, actual: actual,
                                                 stores: stores, root: root, packages: packages))
+        let storePlans = Dictionary(uniqueKeysWithValues: stores.map { store in
+            var storeManifest = manifest
+            storeManifest.monetization?.provider = .none
+            let input = Planner.Input(manifest: storeManifest, actual: actual, stores: [store],
+                                      root: root, packages: packages)
+            var scoped = result
+            scoped.steps = result.steps(for: store == .apple ? .apple : .google)
+            scoped.findings = Validator.findings(input)
+            return (store, scoped)
+        })
         guard generation == stateGeneration else { return }
         // A new plan invalidates the runner that held the old one.
         runTask?.cancel()
@@ -179,6 +189,7 @@ extension AppState {
         runFailure = nil
         providerFailure = nil
         plan = result
+        self.storePlans = storePlans
         actualState = actual
         // The cache is keyed by the manifest and the generation, and a read
         // changes neither, so every direct apply after a read was still
@@ -311,11 +322,22 @@ extension AppState {
     }
 
     var canApply: Bool {
-        guard let plan, !plan.isEmpty else { return false }
+        guard let plan else { return false }
+        return canApply(plan)
+    }
+
+    func canApply(to store: Store) -> Bool {
+        guard let plan = storePlans[store] else { return false }
+        return canApply(plan)
+    }
+
+    private func canApply(_ plan: PlanResult) -> Bool {
+        guard !plan.isEmpty else { return false }
         // A dry run writes nothing, so it stays free. Anything else needs the
         // capability, and `Runner` asks again before the first request.
         guard dryRun || can(.storeWrite) else { return false }
-        return !plan.isBlocked && unacknowledgedWarnings == 0 && !isRunning
+        let warnings = plan.warnings.filter { !acknowledged.contains($0.id) }.count
+        return !plan.isBlocked && warnings == 0 && !isRunning
     }
 
     // MARK: - The run, under the plan
@@ -404,6 +426,15 @@ extension AppState {
             guard !Task.isCancelled else { return }
             await runner.run(from: start)
         }
+    }
+
+    /// Runs only the selected store's rows and validations.
+    func startRun(to store: Store) {
+        guard let scoped = storePlans[store], canApply(scoped) else { return }
+        plan = scoped
+        stepStates = Array(repeating: .pending, count: scoped.steps.count)
+        stepMeta = Array(repeating: "", count: scoped.steps.count)
+        startRun()
     }
 
     private func makeRunner(for plan: PlanResult) -> Runner {

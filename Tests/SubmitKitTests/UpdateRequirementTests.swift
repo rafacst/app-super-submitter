@@ -128,23 +128,20 @@ private func row(_ id: String, _ manifest: Manifest, _ actual: ActualState) -> C
     #expect(row("apple.updateBuild", updatable(), live())?.state == .needed)
 }
 
-/// The gap: a named file and an uploaded build both read as done, and this row
-/// holds the release button. So the button opened on a version that held no
-/// build, and Apple refused the submission. Only the attach closes the row.
-@Test func aBuildNamedInTheManifestStillNeedsTheApply() {
+@Test func aBuildNamedInTheManifestIsApplyWorkNotAReleaseBlocker() {
     var manifest = updatable()
     manifest.apply(package: AppPackage(kind: .ipa, url: URL(fileURLWithPath: "/tmp/App.ipa")),
                    path: "build/App.ipa")
 
     let named = try! #require(row("apple.updateBuild", manifest, live()))
-    #expect(named.state == .needed)
+    #expect(named.state == .done)
     #expect(named.reason.contains("Run the apply"))
 }
 
-@Test func anUploadedBuildThatNoVersionHoldsStillNeedsTheApply() {
+@Test func anUploadedProcessedBuildIsApplyWorkNotAReleaseBlocker() {
     let actual = live { $0.buildIdForVersion = "build-91" }
     let uploaded = try! #require(row("apple.updateBuild", updatable(), actual))
-    #expect(uploaded.state == .needed)
+    #expect(uploaded.state == .done)
     #expect(uploaded.reason.contains("uploaded"))
 }
 
