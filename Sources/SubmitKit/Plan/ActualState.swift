@@ -383,7 +383,6 @@ public struct ActualState: Sendable, Equatable {
         public var currentPriceAmount: Decimal?
         public var priceCurrency: String?
         public var territoryCount: Int?
-        public var appAvailabilityId: String?
         public var territoryAvailability: [String: Bool] = [:]
         public var availableInNewTerritories: Bool?
         public var phasedReleaseId: String?

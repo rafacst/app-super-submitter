@@ -185,6 +185,49 @@ extension AppState {
         return vendor
     }
 
+    // MARK: - The builds App Store Connect already holds
+
+    /// Every build of this app on this platform, newest upload first.
+    ///
+    /// Apple keeps them all and a version takes one of them, which is what its
+    /// console offers as Add Build. This app took the highest processed build
+    /// of the version's train and offered no other choice, so a build that is
+    /// in the store and is not the newest could not be shipped at all.
+    func appleStoreBuilds() async throws -> [UploadService.RemoteBuild] {
+        guard let appID = appleActionAppID else { return [] }
+        let builds = try await UploadService(api: readOnlyAPI()).appleBuildChoices(
+            appID: appID, platform: applePlatform == .macOS ? .macos : .ios)
+        return builds.sorted { left, right in
+            guard let first = left.uploaded, let second = right.uploaded else {
+                return (Int(left.number) ?? 0) > (Int(right.number) ?? 0)
+            }
+            return first > second
+        }
+    }
+
+    /// The build the manifest ships, or nil while the app takes the newest
+    /// processed one of the train.
+    var chosenAppleBuildNumber: String? { manifest.release?.apple?.buildNumber }
+
+    /// Records which build the next apply attaches. It writes `store.yaml` and
+    /// nothing else: the attach is a plan row, and the Summary tab shows it
+    /// before anything reaches the store.
+    ///
+    /// Nil hands the choice back to the app.
+    func chooseAppleBuild(_ build: UploadService.RemoteBuild?) {
+        var release = manifest.release ?? Manifest.Release()
+        var apple = release.apple ?? Manifest.Release.AppleRelease()
+        apple.buildNumber = build?.number
+        release.apple = apple
+        manifest.release = release
+        // The plan compares against the last store read, and that read resolved
+        // the build before this choice existed. The id came out of a read of
+        // the same store a moment ago, so the plan follows the choice without
+        // asking Apple for everything a second time.
+        if let build { actualState.apple?.buildIdForVersion = build.id }
+        saveManifestReportingErrors()
+    }
+
     // MARK: - What went wrong in the app
 
     func appleDiagnostics() -> AppleDiagnosticsClient {

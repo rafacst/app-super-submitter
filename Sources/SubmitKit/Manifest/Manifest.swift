@@ -179,15 +179,29 @@ extension Manifest {
             /// Google tester groups, and it reaches real testers, so nothing
             /// here runs before the plan shows it.
             public var testFlight: TestFlight?
+            /// The build App Store Connect already holds that this version
+            /// ships, by its number inside this version's train.
+            ///
+            /// Apple's own console calls this Add Build: the store keeps every
+            /// processed build and the version takes one of them. Without a
+            /// number here the app takes the highest processed build of the
+            /// train, which is right until it is not: a developer who wants an
+            /// earlier build had no way to say so, and the next apply put the
+            /// highest one back. A file path is the other route and the two do
+            /// not meet, because a path uploads a binary and this names one the
+            /// store already processed.
+            public var buildNumber: String?
             public init(versionName: String? = nil, releaseType: ReleaseType? = nil,
                         phasedRelease: Bool? = nil,
                         phasedReleaseState: PhasedReleaseState? = nil,
-                        testFlight: TestFlight? = nil) {
+                        testFlight: TestFlight? = nil,
+                        buildNumber: String? = nil) {
                 self.versionName = versionName
                 self.releaseType = releaseType
                 self.phasedRelease = phasedRelease
                 self.phasedReleaseState = phasedReleaseState
                 self.testFlight = testFlight
+                self.buildNumber = buildNumber
             }
         }
 

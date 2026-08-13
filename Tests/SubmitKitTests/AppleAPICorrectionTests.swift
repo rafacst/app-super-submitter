@@ -547,4 +547,86 @@ struct AppleAPICorrectionTests {
         #expect(subscriptions.contains("/planAvailabilities"))
         #expect(subscriptions.contains("/v1/subscriptionPlanAvailabilities"))
     }
+
+    /// `appAvailabilities` takes CREATE and GET_INSTANCE and nothing else, so
+    /// the apply that patched an app which already held an availability got a
+    /// 403 back. The app read that 403 as a role its key was denied and told
+    /// the developer to check the key, which sent them after a permission that
+    /// was never missing.
+    @Test func availabilityAlwaysCreatesBecauseTheResourceTakesNoUpdate() async throws {
+        var manifest = appleManifest()
+        manifest.pricing = Manifest.Pricing(
+            base: Price(amount: 0, currency: "USD"),
+            territories: [Manifest.TerritoryAvailability(territory: "USA")])
+        var actual = ActualState()
+        actual.apple = ActualState.Apple()
+        let runner = correctionRunner(.availabilityExisting, manifest: manifest,
+                                      actual: actual)
+
+        try await runner.appleAvailability()
+
+        let calls = CorrectionStubProtocol.log.all.filter {
+            $0.path.hasPrefix("/v2/appAvailabilities")
+        }
+        #expect(calls.allSatisfy { $0.method == "POST" })
+        #expect(calls.contains { $0.path == "/v2/appAvailabilities" })
+    }
+
+    /// The drop deletes every localization the manifest does not name, and an
+    /// absent `locales` key named none of them. So an apply that touched a
+    /// purchase for any other reason stripped the names off products the
+    /// developer never asked it to manage.
+    @Test func aPurchaseThatNamesNoLocaleKeepsTheOnesAppleHolds() async throws {
+        var manifest = appleManifest()
+        manifest.purchases = [Manifest.Purchase(id: "pro", kind: .nonConsumable)]
+        let runner = correctionRunner(.purchase, manifest: manifest)
+
+        try await runner.applePurchases()
+
+        let calls = CorrectionStubProtocol.log.all
+        #expect(!calls.contains { $0.method == "DELETE" })
+        #expect(!calls.contains {
+            $0.path == "/v1/inAppPurchaseVersions/purchase-version-1/localizations"
+        })
+    }
+
+    /// And the drop still runs for a purchase that does name its locales,
+    /// because the guard above is about an absent key and not about the drop.
+    @Test func aPurchaseThatNamesItsLocalesStillLosesTheOnesItDropped() async throws {
+        var manifest = appleManifest()
+        manifest.purchases = [Manifest.Purchase(
+            id: "pro", kind: .nonConsumable,
+            locales: ["de-DE": Manifest.ProductLocale(name: "Pro")])]
+        let runner = correctionRunner(.purchase, manifest: manifest)
+
+        try await runner.applePurchases()
+
+        // The store holds en-US and the manifest names de-DE only.
+        #expect(CorrectionStubProtocol.log.all.contains {
+            $0.method == "DELETE"
+                && $0.path == "/v2/inAppPurchaseLocalizations/purchase-locale-1"
+        })
+    }
+
+    /// The plan and the apply have to agree about which purchases changed. The
+    /// plan claimed a purchase managed its localizations whatever the manifest
+    /// said, so an empty wanted set met the names Apple holds, every purchase
+    /// read as changed, and the row never went away.
+    @Test func aPurchaseThatNamesNoLocaleIsNotAChange() {
+        var manifest = appleManifest()
+        manifest.purchases = [Manifest.Purchase(id: "pro", kind: .nonConsumable)]
+        var apple = ActualState.Apple()
+        apple.purchaseIds = ["pro"]
+        var held = ActualState.Apple.CatalogProduct()
+        held.productId = "pro"
+        held.localesRead = true
+        var name = ActualState.Apple.CatalogProduct.ProductLocale()
+        name.name = "Pro"
+        name.description = "Full access"
+        held.locales = ["en-US": name]
+        apple.catalog = ["pro": held]
+
+        let diff = Planner.appleCatalogDiff(manifest, apple, kind: .purchases)
+        #expect(diff.changes.isEmpty)
+    }
 }

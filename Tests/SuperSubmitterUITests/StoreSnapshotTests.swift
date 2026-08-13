@@ -389,3 +389,138 @@ private func differentGoogleDescription() -> ImportedStoreListing {
     let back = try JSONDecoder().decode(StoreSnapshot.self, from: data)
     #expect(back.icon(.apple, locale: "en-US")?.lastPathComponent == "apple.png")
 }
+
+// MARK: - What the store shows now, counted once and drawn from disk
+
+private func shot(_ name: String, kind: String = "APP_IPHONE_67") -> ImportedStoreAsset {
+    ImportedStoreAsset(locale: "en-US", kind: kind,
+                       url: URL(string: "https://example.com/\(name)")!, fileName: name)
+}
+
+/// Every read used to append the live set to the set the last read left, and
+/// the snapshot is saved to disk, so the count grew on every read and across
+/// launches. An app showing 14 pictures reported 182 after thirteen reads.
+@Test func aSecondReadReplacesTheLiveSetInsteadOfAddingToIt() {
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = ["en-US/APP_IPHONE_67": [
+        URL(string: "https://example.com/a.png")!,
+        URL(string: "https://example.com/b.png")!,
+    ]]
+    actual.apple = apple
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+    snapshot.merge(actual)
+    snapshot.merge(actual)
+
+    let urls = snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first { $0.store == .apple }?.urls
+    #expect(urls?.count == 2)
+}
+
+/// The same rule for the import, because a developer can import one app twice.
+@Test func aSecondImportReplacesTheLiveSetInsteadOfAddingToIt() {
+    var listing = ImportedStoreListing()
+    listing.assets = [shot("a.png"), shot("b.png")]
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(listing, store: .apple)
+    snapshot.merge(listing, store: .apple)
+
+    #expect(snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first { $0.store == .apple }?.urls.count == 2)
+}
+
+/// A bucket the read does not name keeps what it holds, so a read of one
+/// locale cannot empty another.
+@Test func aReadOnlyReplacesTheBucketsItNames() {
+    var first = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = ["pt-BR/APP_IPHONE_67": [URL(string: "https://example.com/p.png")!]]
+    first.apple = apple
+
+    var second = ActualState()
+    var other = ActualState.Apple()
+    other.screenshotURLs = ["en-US/APP_IPHONE_67": [URL(string: "https://example.com/e.png")!]]
+    second.apple = other
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(first)
+    snapshot.merge(second)
+
+    #expect(snapshot.screenshots(locale: "pt-BR", deviceClass: .phone).count == 1)
+    #expect(snapshot.screenshots(locale: "en-US", deviceClass: .phone).count == 1)
+}
+
+/// The import downloads every live picture, and the tabs drew them from the
+/// store's own URLs anyway. Each tile fetched an image that was already on
+/// disk, so the strip filled in slowly and a press downloaded it again.
+@Test func theLiveStripDrawsTheCopyTheImportDownloaded() throws {
+    let folder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("snapshot-local-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let file = folder.appendingPathComponent("a.png")
+    try Data([0x89]).write(to: file)
+
+    var listing = ImportedStoreListing()
+    listing.assets = [shot("a.png")]
+
+    var snapshot = StoreSnapshot()
+    snapshot.rememberLocalCopies([(shot("a.png").url, file)])
+    snapshot.merge(listing, store: .apple)
+
+    let urls = try #require(snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first { $0.store == .apple }?.urls)
+    #expect(urls == [file])
+
+    // And a store read later refreshes the same bucket. It has the store's URL
+    // and nothing else, so without the map it would undo the whole download.
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = ["en-US/APP_IPHONE_67": [shot("a.png").url]]
+    actual.apple = apple
+    snapshot.merge(actual)
+
+    #expect(snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first { $0.store == .apple }?.urls == [file])
+}
+
+/// A file that never landed keeps the store's URL, so the picture is still on
+/// the screen rather than gone.
+@Test func aPictureThatDidNotDownloadKeepsTheStoreURL() {
+    var listing = ImportedStoreListing()
+    listing.assets = [shot("a.png")]
+
+    var snapshot = StoreSnapshot()
+    snapshot.rememberLocalCopies([(shot("a.png").url, shot("a.png").url)])
+    snapshot.merge(listing, store: .apple)
+
+    #expect(snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first { $0.store == .apple }?.urls == [shot("a.png").url])
+}
+
+/// Several Apple display sizes answer to one device class, so the strip is
+/// built from more than one bucket and a dictionary hands its keys over in no
+/// order at all. Sorted, so the pictures hold still between reads.
+@Test func theLiveStripKeepsOneOrderBetweenReads() {
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = [
+        "en-US/APP_IPHONE_67": [URL(string: "https://example.com/67.png")!],
+        "en-US/APP_IPHONE_65": [URL(string: "https://example.com/65.png")!],
+        "en-US/APP_IPHONE_61": [URL(string: "https://example.com/61.png")!],
+    ]
+    actual.apple = apple
+
+    var first = StoreSnapshot()
+    first.merge(actual)
+    var second = StoreSnapshot()
+    second.merge(actual)
+
+    let one = first.screenshots(locale: "en-US", deviceClass: .phone).first?.urls
+    let two = second.screenshots(locale: "en-US", deviceClass: .phone).first?.urls
+    #expect(one?.count == 3)
+    #expect(one == two)
+}

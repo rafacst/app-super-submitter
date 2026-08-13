@@ -95,6 +95,9 @@
                 "ACTIVE",
                 "PAUSED"
               ]
+            },
+            "buildNumber": {
+              "type": "string"
             }
           }
         },

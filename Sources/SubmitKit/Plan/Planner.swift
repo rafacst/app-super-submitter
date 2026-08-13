@@ -1591,7 +1591,12 @@ public enum Planner {
                 var wanted = ActualState.Apple.CatalogProduct()
                 wanted.productId = purchase.id
                 wanted.locales = appleWantedLocales(purchase.locales, fallbackName: purchase.id)
-                wanted.managesLocales = true
+                // A purchase that names no locale manages none, the same rule
+                // the plans below follow. Claiming otherwise compared an empty
+                // wanted set against the names Apple holds, so every purchase
+                // read as changed forever and the apply rewrote products that
+                // matched the manifest already.
+                wanted.managesLocales = purchase.locales?.isEmpty == false
                 if let price = purchase.price {
                     wanted.prices[applePriceTerritory(price)] = applePriceText(price)
                 }

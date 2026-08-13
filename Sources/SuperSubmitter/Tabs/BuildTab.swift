@@ -15,6 +15,11 @@ struct BuildTab: View {
             } else {
                 importSection
             }
+            // Neither source above: the binary is in the store already. It
+            // stands under both of them because it answers the same question
+            // and it is the answer for an app whose build reached Apple by
+            // Xcode, Transporter, or Xcode Cloud.
+            if state.stores.contains(.apple) { AppleBuildsPanel() }
             storeTools
         }
         .frame(maxWidth: 1040, alignment: .leading)
