@@ -490,7 +490,8 @@ struct ReportChartBlock: View {
                         Button(table.columns[column]) { measure = column }
                     }
                 }
-                .menuStyle(.borderlessButton)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
                 .fixedSize()
             }
             if !overTime, groups.count > 1, let index = chosenGroup {
@@ -500,7 +501,8 @@ struct ReportChartBlock: View {
                         Button(table.columns[column]) { group = column }
                     }
                 }
-                .menuStyle(.borderlessButton)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
                 .fixedSize()
             }
             Spacer(minLength: 0)

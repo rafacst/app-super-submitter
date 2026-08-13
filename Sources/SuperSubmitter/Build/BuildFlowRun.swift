@@ -807,6 +807,7 @@ extension BuildFlow {
         run = UploadRun(platform: run.platform)
         project = nil
         discovery = nil
+        discoveryRoot = nil
         containers = []
         containerInfo = nil
         variants = []

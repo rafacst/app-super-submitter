@@ -119,7 +119,8 @@ private struct VisibleAppsMenu: View {
                     Button("\(app.name) · \(app.identifier)") { choose(app) }
                 }
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
             .fixedSize()
         }
     }

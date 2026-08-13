@@ -20,13 +20,14 @@ struct BuildFromProjectView: View {
         VStack(alignment: .leading, spacing: 16) {
             storeRow
             if flow.project == nil, flow.candidate == nil, flow.failure == nil {
-                linkCard
+                if !flow.containers.isEmpty, flow.state == .needsSelection {
+                    containerChooser
+                } else {
+                    linkCard
+                }
             } else {
                 if flow.project != nil {
                     projectCard
-                    if !flow.containers.isEmpty, flow.state == .needsSelection {
-                        containerChooser
-                    }
                     // What the build is for. One app id ships iOS and macOS
                     // and the two are not in step, so the platform is a
                     // choice on every apple project and not a fact of the
@@ -180,9 +181,7 @@ struct BuildFromProjectView: View {
             Text("Choose the container").font(Theme.font(size: 12.5, weight: .semibold))
             ForEach(flow.containers) { container in
                 Button {
-                    guard let root = flow.project?.rootURL
-                        ?? flow.discovery.map({ _ in container.url.deletingLastPathComponent() })
-                    else { return }
+                    guard let root = flow.discoveryRoot else { return }
                     Task { await flow.select(container: container, root: root) }
                 } label: {
                     HStack(spacing: 9) {
@@ -302,7 +301,7 @@ struct BuildFromProjectView: View {
                 .overlay(RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             Spacer(minLength: 0)
         }
     }
@@ -451,11 +450,14 @@ struct BuildFromProjectView: View {
         var rows: [(String, String, PreflightRow.Status)] = []
         func add(_ label: String, _ value: String?, key: String = "",
                  blockingWhenEmpty: Bool = false) {
-            let text = (value?.isEmpty == false) ? value! : "Not read"
+            let isEmpty = value?.isEmpty != false
+            let text = isEmpty ? (flow.state == .preflight ? "Checking…" : "Not read") : value!
             let status: PreflightRow.Status
-            if snapshot.isUncertain(key) {
+            if isEmpty, flow.state == .preflight {
                 status = .unknown
-            } else if value?.isEmpty != false {
+            } else if snapshot.isUncertain(key) {
+                status = .unknown
+            } else if isEmpty {
                 status = blockingWhenEmpty ? .blocked : .unknown
             } else {
                 status = .ready
@@ -577,6 +579,8 @@ struct BuildFromProjectView: View {
 
     private var explanation: String {
         switch flow.state {
+        case .preflight:
+            "Checking the toolchain, build settings, signing, and store conflicts. Nothing is being built or uploaded."
         case .building:
             "Your own build tool is running. Super Submitter reads its output and changes nothing in the project."
         case .inspectingArtifact:
