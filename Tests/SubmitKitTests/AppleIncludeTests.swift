@@ -63,13 +63,19 @@ struct AppleIncludeTests {
         #expect(!RecordingProtocol.paths.contains { $0.contains("manualPrices.appPricePoint") })
     }
 
-    @Test func searchKeywordsCarryTheSelectedLocale() async throws {
+    /// The platform as well as the language. One app id carries a train per
+    /// platform and each has its own approved Keywords field, so Apple keeps a
+    /// pool per platform and refuses a read that names none: "Filter 'platform'
+    /// is required for this operation", which read as a fault in this app.
+    @Test func searchKeywordsCarryTheSelectedPlatformAndLocale() async throws {
         RecordingProtocol.start()
 
-        _ = try await AppleKeywordsClient(api: api()).pool(appID: "1", locale: "pt-BR")
+        _ = try await AppleKeywordsClient(api: api())
+            .pool(appID: "1", locale: "pt-BR", platform: "MAC_OS")
 
         #expect(RecordingProtocol.paths == [
-            "/v1/apps/1/searchKeywords?filter%5Blocale%5D=pt-BR&limit=200",
+            "/v1/apps/1/searchKeywords?filter%5Bplatform%5D=MAC_OS"
+                + "&filter%5Blocale%5D=pt-BR&limit=200",
         ])
     }
 }

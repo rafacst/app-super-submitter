@@ -11,10 +11,6 @@ import SwiftUI
 /// front of the developer while the writes go out.
 struct RunSection: View {
     @Environment(AppState.self) private var state
-    /// The first of the two questions the delete asks.
-    @State private var askingDelete = false
-    /// The second. Nothing is sent until this one is answered.
-    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -24,61 +20,12 @@ struct RunSection: View {
             if uploading { uploadPanel }
             logPanel
             if state.runDone { finished }
-            deleteDraftPanel
+            // The delete moved to the Summary itself. It waited on a run
+            // here, and a draft in App Store Connect is a fact about the
+            // store: the read finds it, and nothing has to be written first
+            // for the developer to be allowed to take it back.
         }
         .frame(maxWidth: 860, alignment: .leading)
-    }
-
-    // MARK: - Deleting the draft version
-
-    /// The way out of a draft that cannot be repaired.
-    ///
-    /// It stands here and not beside the send buttons, because it belongs with
-    /// the account of what the app just wrote and not with the two actions that
-    /// reach customers. It offers itself only for a version the developer can
-    /// still edit, so a version in review and a version that shipped never
-    /// show it at all.
-    @ViewBuilder
-    private var deleteDraftPanel: some View {
-        if let version = state.deletableAppleVersion {
-            HStack(alignment: .firstTextBaseline, spacing: 11) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Delete the draft version \(version.number)")
-                        .font(Theme.font(size: 12.5, weight: .semibold))
-                    Text("Removes the version from App Store Connect with its listing, its screenshots and its build. Nothing brings it back, and the version the customers have is untouched.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                QuietButton(title: "Delete the draft") { askingDelete = true }
-                    .disabled(state.releasing != nil)
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
-            // Two questions, and the second one names the version again. One
-            // press is what this app asks for a draft write; a call that takes
-            // a version off App Store Connect has no undo behind it at all.
-            .confirmationDialog("Delete the draft version \(version.number)?",
-                                isPresented: $askingDelete) {
-                Button("Continue") { confirmingDelete = true }
-                Button("Keep it", role: .cancel) {}
-            } message: {
-                Text("The listing, the screenshots, the previews and the attached build go with it. An open review submission is cancelled first.")
-            }
-            .confirmationDialog("This cannot be undone. Delete \(version.number)?",
-                                isPresented: $confirmingDelete) {
-                Button("Delete \(version.number)", role: .destructive) {
-                    Task { await state.deleteAppleDraftVersion() }
-                }
-                Button("Keep it", role: .cancel) {}
-            } message: {
-                Text("Super Submitter reads the store again afterwards, and the version will be gone from every tab.")
-            }
-        }
     }
 
     private var uploading: Bool {

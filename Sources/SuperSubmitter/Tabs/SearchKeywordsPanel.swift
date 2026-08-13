@@ -50,6 +50,7 @@ struct SearchKeywordsPanel: View {
                     Text("The list below is read only. Apple builds it from the Keywords field of your latest approved version and publishes no call that adds a word, so the way to get a new one here is to ship it in that field and have the version approved.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
+                    platformRow
                 }
 
                 if let error { ErrorLine(text: error) }
@@ -67,6 +68,13 @@ struct SearchKeywordsPanel: View {
             }
             .storePanel(padding: 14)
         }
+        // The list on screen belongs to the platform it was read for. Keeping
+        // it after a switch would show the iOS words under the word macOS.
+        .onChange(of: state.applePlatform) { _, _ in
+            pool = []
+            linked = [:]
+            loaded = false
+        }
         .confirmationDialog("Change what the search reaches?",
                             isPresented: $confirming.isPresent, presenting: confirming) { change in
             Button(change.link ? "Link the keyword" : "Unlink the keyword",
@@ -76,6 +84,38 @@ struct SearchKeywordsPanel: View {
             Text(change.link
                  ? "A \(change.target.locale) search for this word reaches \(change.target.pageName) instead of your default product page. Apple Search Ads on the same word still wins."
                  : "A \(change.target.locale) search for this word returns to your default product page. The keyword stays in your account, so nothing is destroyed.")
+        }
+    }
+
+    /// Which platform's pool this is, and the way to the other one.
+    ///
+    /// Apple keeps a pool per platform and refuses the read without being told
+    /// which, so this panel had to name it somewhere. The picker beside the app
+    /// id is the same control and it is a rail away, on a panel about
+    /// identifiers, which is not where somebody stands when they want the Mac
+    /// keywords. It writes the same value, so the two never disagree.
+    ///
+    /// Nothing at all for an app on one platform: a choice of one is a control
+    /// that asks a question with no second answer.
+    @ViewBuilder
+    private var platformRow: some View {
+        if state.appleplatformChoices.count > 1 {
+            HStack(spacing: 9) {
+                Text("Apple keeps a pool for each platform. This reads")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                Picker("Platform", selection: Binding(
+                    get: { state.applePlatform },
+                    set: { state.applePlatform = $0 })) {
+                    ForEach(state.appleplatformChoices, id: \.self) {
+                        Text($0.shortName).tag($0)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 200)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
         }
     }
 

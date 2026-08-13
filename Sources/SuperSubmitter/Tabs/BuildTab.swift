@@ -385,8 +385,11 @@ struct BuildTab: View {
                         liveVersionNote(live)
                     }
                     Spacer(minLength: 8)
+                    // Against what the box shows, and not against the shared
+                    // key alone. The two differ on a one-store app, which is
+                    // how "Use 1.6" came to stand beside a box saying 1.6.
                     if let next = state.nextAppleVersion,
-                       next != state.manifest.release?.versionName {
+                       next != state.releaseVersionBinding.wrappedValue {
                         QuietButton(title: "Use \(next)") { state.useReleaseVersion(next) }
                     }
                 }

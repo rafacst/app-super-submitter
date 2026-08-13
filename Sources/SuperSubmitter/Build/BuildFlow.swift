@@ -784,7 +784,36 @@ final class BuildFlow {
         } else {
             project?.platform = platform
         }
+        adoptAppleTrain()
         restartPreflight()
+    }
+
+    /// The store side follows the build side.
+    ///
+    /// Two platforms decided two different things and nothing kept them
+    /// together. `run.platform` chose what to archive and where the binary was
+    /// uploaded; `manifest.apps.apple.platforms.first` chose which App Store
+    /// version every read and every write of the plan meant. One app id carries
+    /// a train per platform, so a developer who switched this picker to macOS
+    /// built a Mac binary, sent it to the Mac train, and then watched the apply
+    /// renumber the **iOS** version and write the listing into it. Both halves
+    /// were certain they were on the right one.
+    ///
+    /// The picker on this tab is the one a developer actually uses, so it is
+    /// the one that decides. The platform is inserted at the front of the
+    /// manifest's list, which adds it when the app had never named it: a Mac
+    /// binary uploaded under this app id is that app shipping on macOS,
+    /// whatever the manifest said before the build.
+    ///
+    /// The setter throws away the store snapshot and the plan, which is right:
+    /// both describe the other train.
+    private func adoptAppleTrain() {
+        guard let app, run.platform.store == .apple, app.manifest.apps.apple != nil else {
+            return
+        }
+        let wanted: Manifest.Platform = run.platform == .macos ? .macOS : .ios
+        guard app.applePlatform != wanted else { return }
+        app.applePlatform = wanted
     }
 
     /// Puts the other store's linked project on the tab, and clears the card

@@ -1321,6 +1321,16 @@ final class AppState {
                 manifest.apply(package: package, path: manifestPath(for: url))
                 syncStoreFieldsFromManifest()
                 saveManifestReportingErrors()
+                // The file says which train this release is for. A .pkg under
+                // an app id whose manifest still named iOS sent every listing
+                // write to the iOS version while the binary went to the Mac
+                // one. See `BuildFlow.adoptAppleTrain` for the other door into
+                // the same room.
+                switch kind {
+                case .pkg where applePlatform != .macOS: applePlatform = .macOS
+                case .ipa where applePlatform != .ios: applePlatform = .ios
+                default: break
+                }
             } catch {
                 readingPackages.remove(kind)
                 packageErrors[kind] = error.localizedDescription
@@ -1400,9 +1410,26 @@ final class AppState {
     /// no tab took one. An update with no build attached yet therefore kept
     /// whatever the import had read, the Summary said "Version 1.2 is not
     /// above 1.4", and its Fix button opened a tab with no version on it.
+    /// The shared key first, then the only store's own, because an app with one
+    /// store cannot disagree with itself about its own number.
+    ///
+    /// The fallback is what this field was missing. Every writer that names a
+    /// store, and the listing import is the one a developer meets first, writes
+    /// `release.apple.versionName` and clears the shared key: that is right for
+    /// two stores that number apart. This field is the one an app with a single
+    /// store gets, it read the shared key alone, and so the fetch that had just
+    /// read 1.6 off App Store Connect left the box empty and showing its own
+    /// "1.0" placeholder. The number was in `store.yaml` the whole time, which
+    /// is why the build below it went on saying 1.6.
     var releaseVersionBinding: Binding<String> {
         Binding(
-            get: { self.manifest.release?.versionName ?? "" },
+            get: {
+                if let shared = self.manifest.release?.versionName, !shared.isEmpty {
+                    return shared
+                }
+                guard self.stores.count == 1, let only = self.stores.first else { return "" }
+                return self.manifest.versionName(for: only) ?? ""
+            },
             set: {
                 self.manifest.setReleaseVersionName($0)
                 self.saveManifestReportingErrors()

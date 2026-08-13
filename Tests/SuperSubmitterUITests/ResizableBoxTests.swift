@@ -63,6 +63,32 @@ import Testing
         #expect(box.contains(".accessibilityLabel"))
     }
 
+    /// The grip stands under the box and never over it.
+    ///
+    /// A `TextEditor` is an `NSTextView`, which takes every mouse event inside
+    /// its own bounds before SwiftUI sees it, so the handle drawn on the bottom
+    /// edge of one was a mark that could not be dragged, could not be hovered,
+    /// and was half covered by the border painted after it.
+    @Test func theGripIsNotDrawnOverTheTextView() throws {
+        let box = try source("Sources/SuperSubmitter/Design/ResizableBox.swift")
+
+        #expect(!box.contains(".overlay(alignment: .bottom) { grip }"),
+                "The grip is back over the text view, where no drag reaches it.")
+        #expect(box.contains("VStack(spacing: 2) {"))
+    }
+
+    /// And the modifier runs after the box is painted, so the handle is not
+    /// inside the field's own border.
+    @Test func theGripComesAfterTheBorder() throws {
+        for path in Self.boxes {
+            let file = try source(path)
+            let border = try #require(file.range(of: ".background(Theme."))
+            let grip = try #require(file.range(of: ".resizableHeight("))
+            #expect(border.lowerBound < grip.lowerBound,
+                    "\(path) sizes the box before it paints it")
+        }
+    }
+
     /// `NSCursor` is a stack and every push owes one pop. A grip that pushes
     /// the resize cursor and never pops it leaves that cursor over the whole
     /// app, which is what `MediaTab` had to be taught once already.

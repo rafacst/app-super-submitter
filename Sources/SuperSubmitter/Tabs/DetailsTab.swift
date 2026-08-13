@@ -68,9 +68,10 @@ struct DetailsTab: View {
             VStack(alignment: .leading, spacing: 7) {
                 TextEditor(text: state.eulaTextBinding)
                     .font(Theme.font(size: 12))
-                    .resizableHeight("details.eula", base: 110)
+                    .spellChecked()
                     .scrollContentBackground(.hidden)
                     .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 7))
+                    .resizableHeight("details.eula", base: 110)
                 FieldRow {
                     LabeledField("Territories") {
                         MultiChoiceField(text: state.eulaTerritoriesBinding,
@@ -676,16 +677,19 @@ private struct ListingEditor: View {
                 // Keyed by the field and not by the box: a description is long
                 // on every app and in every language, so the height a
                 // developer chose for it follows the field everywhere.
+                // The grip goes last, after the border. It stands under the
+                // box, so a modifier that paints the box has to have run.
                 TextEditor(text: $draft.text.limited(to: limit))
                     .scrollContentBackground(.hidden)
                     .font(Theme.font(size: 13))
                     .foregroundStyle(unchanged ? Theme.text2 : Theme.text)
+                    .spellChecked()
                     .padding(3)
-                    .resizableHeight("listing.\(field.rawValue)", base: 90)
                     .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(overLimit ? Theme.red : Theme.sep,
                                       lineWidth: overLimit ? 1 : Theme.hairline))
+                    .resizableHeight("listing.\(field.rawValue)", base: 90)
             } else {
                 TextField(title, text: $draft.text.limited(to: limit))
                     .textFieldStyle(.roundedBorder)

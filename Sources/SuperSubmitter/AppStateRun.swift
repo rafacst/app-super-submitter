@@ -146,6 +146,11 @@ extension AppState {
         let generation = stateGeneration
         planReading = true
         planReadFailures = []
+        // A read is the developer asking what the store holds now. An error
+        // about a call that is already over does not survive that question, and
+        // the Summary prints this field, so a stale one would sit under a fresh
+        // plan describing a store it no longer describes.
+        releaseError = nil
         let manifest = self.manifest
         let stores = self.stores
         let provider = self.provider
@@ -924,8 +929,18 @@ extension AppState {
     /// would read that refusal as the delete being impossible.
     ///
     /// Nothing here is recoverable, which is why the screen asks twice.
+    ///
+    /// Never during a run. The run is writing to this very version, and taking
+    /// it out from under a request in flight leaves half a listing behind.
+    ///
+    /// The read afterwards is checked and not assumed. Every failure on this
+    /// path lands in `releaseError`, and until the panel printed that field a
+    /// refused delete looked exactly like one that worked: the button came
+    /// back, the version stayed in App Store Connect, and nothing on the screen
+    /// said why. The check below covers the other half, where Apple answers
+    /// without an error and keeps the version anyway.
     func deleteAppleDraftVersion() async {
-        guard releasing == nil, let version = deletableAppleVersion else { return }
+        guard releasing == nil, !isRunning, let version = deletableAppleVersion else { return }
         guard requirePaid(.storeRelease, .release) else { return }
         releasing = .apple
         releaseError = nil
@@ -941,6 +956,11 @@ extension AppState {
             // The state this app holds describes a version that is gone, and
             // every tab reads it. The read is the only honest next step.
             await recheck()
+            if actualState.apple?.versionId == version.id {
+                releaseError = "App Store Connect answered the delete of version "
+                    + "\(version.number) without an error and still holds it. Open the version "
+                    + "in App Store Connect to see what is keeping it."
+            }
         } catch {
             releaseError = "App Store: \(error.localizedDescription)"
         }
