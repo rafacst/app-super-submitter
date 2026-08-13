@@ -116,12 +116,16 @@ struct AnalyticsSegmentTests {
 
     /// The API reference documents the transport and never the columns, so the
     /// only way to know what a report carries is to read its header row.
+    ///
+    /// `ReportTable.parse` is that reader now. It answers the rows as well, and
+    /// two readers of one file drift: the charts need the values and the header
+    /// came from a second function that split the same text its own way.
     @Test func theColumnsAreTheHeaderRowWhicheverSeparatorIsUsed() {
-        #expect(AppleReportsClient.columns("Date,Product Page ID,Impressions\n2026,x,1")
+        #expect(ReportTable.parse("Date,Product Page ID,Impressions\n2026,x,1").columns
                 == ["Date", "Product Page ID", "Impressions"])
-        #expect(AppleReportsClient.columns("Date\tImpressions\n2026\t1")
+        #expect(ReportTable.parse("Date\tImpressions\n2026\t1").columns
                 == ["Date", "Impressions"])
-        #expect(AppleReportsClient.columns("").isEmpty)
+        #expect(ReportTable.parse("").columns.isEmpty)
     }
 
     /// Nothing in the App Store Connect API reference names an experiment or a

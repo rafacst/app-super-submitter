@@ -61,15 +61,16 @@ extension AppState {
     /// Nil when Apple has produced no daily instance yet, which is the normal
     /// state for a day or two after a feed starts.
     func appleAnalyticsSample(reportID: String)
-        async throws -> (date: String, columns: [String], rows: [[String]])? {
+        async throws -> (date: String, table: ReportTable)? {
         let client = appleReports()
         let instances = try await client.instances(reportID: reportID)
         guard let newest = AppleReportsClient.newest(instances, granularity: "DAILY")
         else { return nil }
         let text = try await client.instanceText(instanceID: newest.id)
-        return (newest.processingDate ?? "",
-                AppleReportsClient.columns(text),
-                AppleReportsClient.preview(text))
+        // The whole table and not the first twelve rows. The preview is what
+        // the panel prints; a chart of twelve rows of a thousand is a chart of
+        // whichever rows Apple happened to write first.
+        return (newest.processingDate ?? "", ReportTable.parse(text))
     }
 
     // MARK: - The search keywords
@@ -139,6 +140,27 @@ extension AppState {
         try await appleReports().salesReport(vendorNumber: try appleVendor(),
                                              frequency: frequency,
                                              reportDate: reportDate)
+    }
+
+    /// The last `days` daily sales reports, read as one table.
+    ///
+    /// One request answers one period, so a trend is a request per day. See
+    /// `AppleReportsClient.salesHistory` for why they run a few at a time and
+    /// why a missing day is a state rather than a failure.
+    ///
+    /// `progress` is called as each day lands, so a thirty-day read can say how
+    /// far it has got instead of sitting still for half a minute.
+    func appleSalesHistory(days: Int = 30,
+                           progress: @MainActor (Int) -> Void = { _ in })
+        async throws -> (table: ReportTable, days: Int) {
+        let vendor = try appleVendor()
+        var texts: [String] = []
+        for try await (text, _) in appleReports().salesHistory(vendorNumber: vendor,
+                                                              days: days) {
+            texts.append(text)
+            progress(texts.count)
+        }
+        return (AppleReportsClient.join(texts), texts.count)
     }
 
     /// One finance report, unpacked. It answers what Apple paid, which the

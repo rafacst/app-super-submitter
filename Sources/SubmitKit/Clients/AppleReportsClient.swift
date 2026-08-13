@@ -174,20 +174,6 @@ public struct AppleReportsClient: Sendable {
 
     // MARK: - What the account actually returns
 
-    /// The columns of a report, read from the file rather than assumed.
-    ///
-    /// The App Store Connect API reference documents the transport of these
-    /// reports and never their contents: it names five categories and no report
-    /// name, no column, and no dimension. So the app reads the header row and
-    /// reports what it found, and it names no column it has not seen.
-    public static func columns(_ text: String) -> [String] {
-        guard let header = text.split(separator: "\n", maxSplits: 1,
-                                      omittingEmptySubsequences: true).first else { return [] }
-        let separator: Character = header.contains("\t") ? "\t" : ","
-        return header.split(separator: separator, omittingEmptySubsequences: false)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    }
-
     /// The columns that could identify one product page experiment treatment.
     ///
     /// Nothing in the API reference names such a dimension in any analytics
@@ -281,6 +267,92 @@ public struct AppleReportsClient: Sendable {
         return try Gzip.unpackText(result.data)
     }
 
+    /// The last `days` daily sales reports, joined into one table.
+    ///
+    /// One request answers one period. A daily report is a single day, so the
+    /// panel could show that day's rows and no trend at all, and the question a
+    /// developer opens a sales report to ask is which way the line is going.
+    /// Apple publishes no range filter, so a range is a request per day.
+    ///
+    /// The days run in parallel, a few at a time. Apple rate-limits per hour
+    /// and a burst of thirty is the kind of thing that spends the budget the
+    /// rest of the app needs.
+    ///
+    /// A day Apple holds no report for answers 404, which is a state and not a
+    /// failure: the newest day or two are usually missing, and a day with no
+    /// sales is missing for the whole of a small app's history. Those days are
+    /// skipped, and `missing` counts them so the panel can say so rather than
+    /// drawing a gap nobody can explain.
+    public func salesHistory(vendorNumber: String, days: Int = 30,
+                             endingAt now: Date = Date())
+        -> AsyncThrowingStream<(text: String, date: String), Error> {
+        let dates = Self.reportDates(days: days, endingAt: now)
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                await withTaskGroup(of: (String, String?).self) { group in
+                    var next = 0
+                    // Four at a time. Enough to make thirty days quick and few
+                    // enough to leave the account's rate budget alone.
+                    let width = min(4, dates.count)
+                    func submit() {
+                        guard next < dates.count else { return }
+                        let date = dates[next]
+                        next += 1
+                        group.addTask {
+                            (date, try? await self.salesReport(vendorNumber: vendorNumber,
+                                                               frequency: "DAILY",
+                                                               reportDate: date))
+                        }
+                    }
+                    for _ in 0..<width { submit() }
+                    while let (date, text) = await group.next() {
+                        if let text { continuation.yield((text, date)) }
+                        submit()
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// The days a daily report can exist for, newest last.
+    ///
+    /// Yesterday and back. Today's report does not exist: Apple closes a day
+    /// and publishes it the day after.
+    public static func reportDates(days: Int, endingAt now: Date = Date()) -> [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return (1...max(days, 1)).reversed().compactMap { back in
+            calendar.date(byAdding: .day, value: -back, to: now).map(formatter.string(from:))
+        }
+    }
+
+    /// Every fetched day, read as one table.
+    ///
+    /// The header of the first day wins and the rest are dropped, the same rule
+    /// `instanceText` follows for segments. Apple ships the same columns for
+    /// every day of one report type, and a day whose header disagrees is a day
+    /// this app cannot line up, so it is left out rather than shifted into the
+    /// wrong columns.
+    public static func join(_ reports: [String]) -> ReportTable {
+        var joined = ReportTable()
+        for text in reports {
+            let table = ReportTable.parse(text)
+            guard !table.isEmpty else { continue }
+            if joined.columns.isEmpty {
+                joined = table
+            } else if table.columns == joined.columns {
+                joined.rows += table.rows
+            }
+        }
+        return joined
+    }
+
     /// The month a finance report can actually exist for.
     ///
     /// Apple closes a month several weeks after it ends, so "this month" and
@@ -292,16 +364,6 @@ public struct AppleReportsClient: Sendable {
         let month = calendar.date(byAdding: .month, value: -2, to: now) ?? now
         let parts = calendar.dateComponents([.year, .month], from: month)
         return String(format: "%04d-%02d", parts.year ?? 1970, parts.month ?? 1)
-    }
-
-    /// The first rows of a report, which is what a panel shows. The whole
-    /// report belongs in a spreadsheet and not in a window.
-    public static func preview(_ text: String, rows: Int = 12) -> [[String]] {
-        let separator: Character = text.contains("\t") ? "\t" : ","
-        return text.split(separator: "\n", omittingEmptySubsequences: true)
-            .prefix(rows)
-            .map { $0.split(separator: separator, omittingEmptySubsequences: false)
-                .map(String.init) }
     }
 
     // MARK: - The parsers

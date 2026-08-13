@@ -24,18 +24,20 @@ struct ReportsPanel: View {
 
     struct ReportSample {
         var note: String
-        var columns: [String] = []
-        var rows: [[String]] = []
+        var table = ReportTable()
     }
 
     @State private var frequency = "DAILY"
-    @State private var salesRows: [[String]] = []
+    @State private var salesTable = ReportTable()
     @State private var salesNote: String?
+    /// The last thirty days, which is a request per day. See `loadSalesHistory`.
+    @State private var salesHistory = ReportTable()
+    @State private var salesHistoryNote: String?
 
     @State private var financeMonth = AppleReportsClient.defaultFinanceMonth()
     @State private var financeRegion = "ZZ"
     @State private var financeType = "FINANCIAL"
-    @State private var financeRows: [[String]] = []
+    @State private var financeTable = ReportTable()
     @State private var financeNote: String?
 
     var body: some View {
@@ -139,13 +141,16 @@ struct ReportsPanel: View {
                     Text(sample.note)
                         .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
-                    if !sample.columns.isEmpty {
-                        Text(sample.columns.joined(separator: " · "))
+                    if !sample.table.columns.isEmpty {
+                        Text(sample.table.columns.joined(separator: " · "))
                             .font(Theme.mono(10)).foregroundStyle(Theme.text2)
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
                     }
-                    if !sample.rows.isEmpty { table(sample.rows) }
+                    if !sample.table.isEmpty {
+                        ReportChartBlock(table: sample.table)
+                        table(preview(sample.table))
+                    }
                 }
                 .padding(.leading, 10)
             }
@@ -183,7 +188,35 @@ struct ReportsPanel: View {
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !salesRows.isEmpty { table(salesRows) }
+            if !salesTable.isEmpty {
+                ReportChartBlock(table: salesTable)
+                table(preview(salesTable))
+            }
+
+            // The trend, which one request cannot answer.
+            //
+            // A daily report is one day. The panel could show that day and no
+            // direction at all, and which way the line is going is the question
+            // a sales report gets opened for. Apple publishes no range filter,
+            // so a range is a request per day and it says so before it starts.
+            Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+                .padding(.vertical, 2)
+            HStack(spacing: 8) {
+                QuietButton(title: busy ? "Reading…" : "Read the last 30 days") {
+                    loadSalesHistory()
+                }
+                .disabled(busy)
+                Text("One request per day, four at a time. Apple publishes no way to ask for a range.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            if let salesHistoryNote {
+                Text(salesHistoryNote)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !salesHistory.isEmpty { ReportChartBlock(table: salesHistory) }
         }
     }
 
@@ -225,8 +258,17 @@ struct ReportsPanel: View {
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !financeRows.isEmpty { table(financeRows) }
+            if !financeTable.isEmpty {
+                ReportChartBlock(table: financeTable)
+                table(preview(financeTable))
+            }
         }
+    }
+
+    /// The header and the first rows, which is what the table below a chart
+    /// prints. A whole report belongs in a spreadsheet and not in a window.
+    private func preview(_ table: ReportTable, rows: Int = 11) -> [[String]] {
+        [table.columns] + table.rows.prefix(rows)
     }
 
     /// The first rows only. A whole report belongs in a spreadsheet and not in
@@ -280,13 +322,13 @@ struct ReportsPanel: View {
                     busy = false
                     return
                 }
-                let treatment = AppleReportsClient.treatmentColumns(sample.columns)
+                let treatment = AppleReportsClient.treatmentColumns(sample.table.columns)
                 let verdict = treatment.isEmpty
                     ? "No column here identifies a product page experiment treatment."
                     : "Treatment column: \(treatment.joined(separator: ", "))."
                 samples[report.id] = ReportSample(
-                    note: "\(sample.columns.count) columns, processed \(sample.date). \(verdict)",
-                    columns: sample.columns, rows: sample.rows)
+                    note: "\(sample.table.columns.count) columns, \(sample.table.rows.count) rows, processed \(sample.date). \(verdict)",
+                    table: sample.table)
             } catch ConnectionError.http(404, _) {
                 samples[report.id] = ReportSample(
                     note: "Apple holds no instance of this report yet.")
@@ -316,17 +358,43 @@ struct ReportsPanel: View {
     private func loadSales() {
         busy = true
         salesNote = nil
-        salesRows = []
+        salesTable = ReportTable()
         Task {
             do {
                 let text = try await state.appleSalesReport(frequency: frequency,
                                                             reportDate: nil)
-                salesRows = AppleReportsClient.preview(text)
-                if salesRows.isEmpty { salesNote = "The report came back empty." }
+                salesTable = ReportTable.parse(text)
+                if salesTable.isEmpty { salesNote = "The report came back empty." }
             } catch ConnectionError.http(404, _) {
                 salesNote = "Apple holds no \(frequency.lowercased()) report for that period yet. The newest one appears a day after the period closes."
             } catch {
                 salesNote = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+
+    /// Thirty daily reports, for the one chart a single report cannot draw.
+    ///
+    /// A day Apple holds nothing for is skipped rather than failing the read: a
+    /// small app has days with no sales at all, and the newest day or two are
+    /// normally not published yet. The note says how many days actually came
+    /// back, so a short line is explained rather than just short.
+    private func loadSalesHistory() {
+        busy = true
+        salesHistoryNote = "Reading…"
+        salesHistory = ReportTable()
+        Task {
+            do {
+                let result = try await state.appleSalesHistory(days: 30) { done in
+                    salesHistoryNote = "Reading… \(done) days"
+                }
+                salesHistory = result.table
+                salesHistoryNote = result.days == 0
+                    ? "Apple holds no daily report for any of the last 30 days."
+                    : "\(result.days) of the last 30 days came back. A day Apple holds no report for is a day with no sales, or one it has not published yet."
+            } catch {
+                salesHistoryNote = error.localizedDescription
             }
             busy = false
         }
@@ -337,21 +405,105 @@ struct ReportsPanel: View {
     private func loadFinance() {
         busy = true
         financeNote = nil
-        financeRows = []
+        financeTable = ReportTable()
         Task {
             do {
                 let text = try await state.appleFinanceReport(
                     month: financeMonth.trimmingCharacters(in: .whitespacesAndNewlines),
                     regionCode: financeRegion.trimmingCharacters(in: .whitespacesAndNewlines),
                     reportType: financeType)
-                financeRows = AppleReportsClient.preview(text)
-                if financeRows.isEmpty { financeNote = "The report came back empty." }
+                financeTable = ReportTable.parse(text)
+                if financeTable.isEmpty { financeNote = "The report came back empty." }
             } catch ConnectionError.http(404, _) {
                 financeNote = "Apple has not closed \(financeMonth) for that region yet, or it paid nothing there. A closed month appears a few weeks after it ends."
             } catch {
                 financeNote = error.localizedDescription
             }
             busy = false
+        }
+    }
+}
+
+/// The chart of a report, drawn from what the file turned out to hold.
+///
+/// It names no column, because Apple names none either: the API reference
+/// documents the transport of these reports and never their contents, so the
+/// only honest chart is one built from the header the account actually sent.
+/// `ReportTable` works out which columns hold dates and which hold numbers by
+/// reading the values, this offers what it found, and the developer picks.
+///
+/// Which chart depends on what the report is. Several days is a line of days.
+/// One day is not a trend, and the question a single day answers is where its
+/// numbers came from, so that draws a breakdown instead.
+struct ReportChartBlock: View {
+    let table: ReportTable
+
+    @State private var measure: Int?
+    @State private var group: Int?
+
+    private var measures: [Int] { table.numericColumns }
+    private var groups: [Int] { table.labelColumns }
+    private var chosenMeasure: Int? { measure ?? measures.first }
+    private var chosenGroup: Int? { group ?? groups.first }
+
+    var body: some View {
+        if measures.isEmpty {
+            Text("No column here holds a number to draw. The rows are below.")
+                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+        } else if let index = chosenMeasure {
+            // Once, at the top, and handed to everything below it. Both the
+            // menus and the chart need to know whether this report has more
+            // than one day in it, and a report is thousands of rows: working
+            // that out again in every branch of every render pass walks the
+            // whole file each time.
+            let points = table.series(column: index)
+            VStack(alignment: .leading, spacing: 8) {
+                pickers(overTime: points.count > 1)
+                // Two days are a line and one is a dot. A daily report is one
+                // day, and the breakdown is what it can answer.
+                if points.count > 1 {
+                    ReportSeriesChart(column: table.columns[index], points: points)
+                    Text("Summed per day across every row. That is right for a count and wrong for a rate, and this app does not know which one you picked.")
+                        .font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let label = chosenGroup {
+                    ReportShareChart(column: table.columns[index],
+                                     by: table.columns[label],
+                                     shares: table.breakdown(column: index, by: label))
+                    Text("This report covers one period, so there is no line to draw. The rows are the biggest ten, summed.")
+                        .font(Theme.font(size: 10)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// One menu per choice, and each is drawn only when there is a choice to
+    /// make. A report with a single number column offers no pick, and one that
+    /// covers several days is not grouped by anything but the day.
+    @ViewBuilder private func pickers(overTime: Bool) -> some View {
+        HStack(spacing: 8) {
+            if measures.count > 1, let index = chosenMeasure {
+                Menu(table.columns[index]) {
+                    ForEach(measures, id: \.self) { column in
+                        Button(table.columns[column]) { measure = column }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+            if !overTime, groups.count > 1, let index = chosenGroup {
+                Text("by").font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                Menu(table.columns[index]) {
+                    ForEach(groups, id: \.self) { column in
+                        Button(table.columns[column]) { group = column }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+            Spacer(minLength: 0)
         }
     }
 }
