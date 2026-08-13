@@ -100,13 +100,12 @@ public enum ConsoleChecklist {
 
         // Every version needs its own binary. Nothing inherits a build.
         //
-        // Only an attached build closes this row. A named file and an uploaded
-        // build are both one apply short of the thing Apple checks, and this
-        // row holds the release button. It read them as done, so the button
-        // opened on a version that held no build and Apple refused the
-        // submission.
+        // An uploaded or named build is apply work, not a manual prerequisite.
+        // The release button separately requires a prepared draft, so these
+        // states can stop calling work the apply is about to do a blocker.
         let namedBuild = manifest.release?.build?.ios ?? manifest.release?.build?.macos ?? ""
         let attached = apple?.attachedBuildId != nil
+        let ready = attached || apple?.buildIdForVersion != nil || !namedBuild.isEmpty
         let reason: String
         if attached {
             reason = "Confirmed: a build is attached."
@@ -121,7 +120,7 @@ public enum ConsoleChecklist {
             id: "apple.updateBuild", system: "App Store", title: "A build for this version",
             reason: reason,
             link: "\(base)/ios/version/inflight",
-            state: attached ? .done : .needed))
+            state: ready ? .done : .needed))
 
         // Apple asks the export compliance question once per build, and it
         // refuses the submission until the build carries an answer.
@@ -279,12 +278,14 @@ public enum ConsoleChecklist {
                             return standing.version.map { "\($0) is with the App Store. \(phase)." }
                                 ?? "A version is with the App Store. \(phase)."
                         }
-                        ?? apple?.liveVersionString.map {
-                            "\($0) is live. The apply creates the next version."
+                        ?? manifest.versionName(for: .apple).flatMap { desired in
+                            desired.isEmpty ? nil : "\(desired) is ready. The apply creates it."
                         }
+                        ?? apple?.liveVersionString.map { "\($0) is live." }
                         ?? "No version is prepared.",
                     link: "\(base)/ios/version/inflight",
-                    state: apple?.versionString == nil && submitted == nil ? .needed : .done),
+                    state: apple?.versionString == nil && submitted == nil
+                        && (manifest.versionName(for: .apple) ?? "").isEmpty ? .needed : .done),
                 // Once per account, not even once per app. A developer with an
                 // app on sale has signed the agreements and given Apple the
                 // bank details, or no version of this app would have shipped.

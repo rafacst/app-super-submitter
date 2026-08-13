@@ -414,6 +414,9 @@ final class AppState {
 
     // Tab 7. The plan.
     var plan: PlanResult?
+    /// The same diff validated one store at a time, so one store's errors do
+    /// not disable a run that never calls it.
+    var storePlans: [Store: PlanResult] = [:]
     var planReading = false
     /// The stores that refused the read, one entry each.
     ///
@@ -639,12 +642,12 @@ final class AppState {
         let configured = store == .apple ? loaded?.apps.apple != nil : loaded?.apps.google != nil
         guard configured else { return nil }
         guard selected, let plan else { return .changed }
-        // An error blocks the whole apply, so it marks every store. A hold
-        // blocks it too and marks nothing: the dot says "something is wrong
-        // here", and a version in review is the store working normally.
-        guard plan.errors.isEmpty else { return .blocked }
+        let scoped = storePlans[store] ?? plan
+        // The dot describes this store. A failure in the other store does not
+        // block this one's apply and therefore cannot paint this one red.
+        guard scoped.errors.isEmpty else { return .blocked }
         let system: PlanSystem = store == .apple ? .apple : .google
-        return plan.steps(for: system).isEmpty ? .matched : .changed
+        return scoped.steps(for: system).isEmpty ? .matched : .changed
     }
 
     // MARK: - The YAML toggle
@@ -2697,6 +2700,7 @@ final class AppState {
         // this app's last keystroke would land against the next app's file.
         flushSave()
         manifest = try ManifestFile.load(from: url)
+        manifest.removeImportedMedia()
         manifestURL = url
         // The stack holds whole manifests, so it cannot cross an app. See
         // resetUndo.
@@ -2942,6 +2946,7 @@ final class AppState {
         pollTask?.cancel()
         pollTask = nil
         plan = nil
+        storePlans = [:]
         actualState = ActualState()
         consoleRows = []
         consoleMarks = []
@@ -3198,6 +3203,7 @@ final class AppState {
         stateGeneration &+= 1
         planReading = false
         plan = nil
+        storePlans = [:]
         acknowledged = []
         clearStoppedRun()
     }

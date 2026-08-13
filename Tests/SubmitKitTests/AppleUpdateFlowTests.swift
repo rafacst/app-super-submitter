@@ -590,9 +590,8 @@ private let oncePerApp = ["apple.privacy", "apple.info", "apple.ageRating",
     #expect(!first.contains { oncePerApp.contains($0.id) && $0.reason.contains(ConsoleChecklist.assumed) })
 }
 
-@Test func theVersionRowStillHoldsTheButtonOnAnUpdate() {
-    // Not a declaration. An update genuinely has no version to release until
-    // the apply creates one, and assuming that away would open the button on
-    // nothing.
-    #expect(row("apple.version", updateManifest(), liveState())?.state == .needed)
+@Test func aManifestVersionTheApplyCanCreateIsNotAReleaseBlocker() {
+    let version = row("apple.version", updateManifest(), liveState())
+    #expect(version?.state == .done)
+    #expect(version?.reason.contains("apply creates") == true)
 }

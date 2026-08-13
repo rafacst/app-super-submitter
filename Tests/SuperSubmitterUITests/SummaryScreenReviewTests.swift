@@ -82,6 +82,28 @@ private func summaryState(findings: [Finding]) -> AppState {
     return state
 }
 
+/// A run that contains only App Store rows never calls Google, so Google-only
+/// validation cannot disable it.
+@MainActor
+@Test func eachStoreApplyUsesOnlyThatStoresBlockers() {
+    let state = summaryState(findings: [])
+    var apple = PlanResult()
+    apple.steps = [PlanStep(id: "apple.version", system: .apple, kind: .add,
+                            summary: "version", title: "Version", requests: [],
+                            operation: .appleEnsureVersion("1.4.1"))]
+    var google = PlanResult()
+    google.steps = [PlanStep(id: "google.listing", system: .google, kind: .change,
+                             summary: "listing", title: "Listing", requests: [],
+                             operation: .googleListing("pt-BR"))]
+    google.findings = [Finding(id: "media.count.google.pt-BR.phone", severity: .error,
+                               message: "Too many screenshots", location: "Media",
+                               fix: .media)]
+    state.storePlans = [.apple: apple, .google: google]
+
+    #expect(state.canApply(to: .apple))
+    #expect(!state.canApply(to: .google))
+}
+
 /// A version in review stops the apply and is not a fault.
 ///
 /// The screen used to answer the ordinary act of shipping with two red errors,

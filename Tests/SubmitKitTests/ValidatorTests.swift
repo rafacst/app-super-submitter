@@ -426,6 +426,18 @@ private func priced(_ amount: String, territory: String? = nil) -> Price {
     #expect(has(findings(manifest, actual), "state.openSubmission"))
 }
 
+@Test func anOpenAppleSubmissionDoesNotBlockAGoogleOnlyApply() {
+    let manifest = base()
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.hasOpenReviewSubmission = true
+    actual.apple = apple
+
+    let googleOnly = Validator.findings(Planner.Input(
+        manifest: manifest, actual: actual, stores: [.google]))
+    #expect(!has(googleOnly, "state.openSubmission"))
+}
+
 // MARK: - The plan verdict
 
 @Test func onlyAnErrorBlocksTheApply() {

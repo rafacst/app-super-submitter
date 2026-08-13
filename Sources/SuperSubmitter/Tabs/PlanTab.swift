@@ -97,7 +97,8 @@ enum RunwayStep {
 /// product, and it is the one screen that can refuse to continue.
 struct PlanTab: View {
     @Environment(AppState.self) private var state
-    /// Holds the question open while the developer answers it. See applyRow.
+    /// The one store the developer chose from the Apply menu.
+    @State private var confirmingStore: Store?
     @State private var confirmingApply = false
     /// Shut by default. See acknowledgedSummary.
     @State private var showingAcknowledged = false
@@ -843,19 +844,24 @@ struct PlanTab: View {
         // A locked apply stays pressable and opens the pricing sheet. A dry
         // run is free and never locks.
         let locked = !state.dryRun && !state.can(.storeWrite)
-        let blocked = !locked && !state.canApply
+        let anyStoreCanApply = state.stores.contains { state.canApply(to: $0) }
+        let hasProviderChanges = !plan.steps(for: .provider).isEmpty
+        let blocked = !locked && !anyStoreCanApply && !(hasProviderChanges && state.canApply)
         return VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .center, spacing: 16) {
-                ProminentButton(title: state.dryRun ? "Dry run" : "Apply",
-                                enabled: !blocked) {
-                    guard state.dryRun || state.requirePaid(.storeWrite, .apply) else { return }
-                    guard state.canApply else { return }
-                    // A dry run sends nothing, so it asks nothing. A real apply
-                    // is the moment the app first touches a live store, and it
-                    // is the only place in Publishing where that happens.
-                    guard !state.dryRun else { return runNow() }
-                    confirmingApply = true
+                Menu(state.dryRun ? "Dry run" : "Apply") {
+                    ForEach(state.stores.sorted { $0.rawValue < $1.rawValue }) { store in
+                        Button(store.storeName) { choose(store) }
+                            .disabled(!locked && !state.canApply(to: store))
+                    }
+                    if state.stores.count > 1 || hasProviderChanges {
+                        Divider()
+                        Button(hasProviderChanges ? "All changes" : "All stores") { choose(nil) }
+                            .disabled(!locked && !state.canApply)
+                    }
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
                 .disabled(blocked)
 
                 Text(applyNote(plan))
@@ -868,12 +874,21 @@ struct PlanTab: View {
             }
             acknowledgedSummary(plan)
         }
-        .confirmationDialog("Write to \(state.storeListText)?",
-                            isPresented: $confirmingApply, titleVisibility: .visible) {
-            Button("Write the drafts") { runNow() }
+        .confirmationDialog("Write to \(confirmingStore?.storeName ?? state.storeListText)?",
+                            isPresented: $confirmingApply,
+                            titleVisibility: .visible) {
+            Button(confirmingStore == nil ? "Write the drafts" : "Write the draft") {
+                if let store = confirmingStore { state.startRun(to: store) }
+                else { state.startRun() }
+                confirmingStore = nil
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(confirmLine(plan))
+            if let store = confirmingStore, let scoped = state.storePlans[store] {
+                Text(confirmLine(scoped, destination: store.storeName))
+            } else {
+                Text(confirmLine(plan, destination: state.storeListText))
+            }
         }
     }
 
@@ -914,10 +929,21 @@ struct PlanTab: View {
         }
     }
 
-    private func runNow() { state.startRun() }
+    private func choose(_ store: Store?) {
+        guard state.dryRun || state.requirePaid(.storeWrite, .apply) else { return }
+        if state.dryRun {
+            if let store { state.startRun(to: store) } else { state.startRun() }
+        } else if let store {
+            confirmingStore = store
+            confirmingApply = true
+        } else {
+            confirmingStore = nil
+            confirmingApply = true
+        }
+    }
 
-    private func confirmLine(_ plan: PlanResult) -> String {
-        "\(plan.writeCount) writes and \(plan.uploadCount) uploads reach \(state.storeListText) now."
+    private func confirmLine(_ plan: PlanResult, destination: String) -> String {
+        "\(plan.writeCount) writes and \(plan.uploadCount) uploads reach \(destination) now."
             + "\n\nEach one lands in a draft. Nothing goes to review, and nothing reaches a"
             + " customer, until you send it yourself on the Release tab."
     }
@@ -930,6 +956,9 @@ struct PlanTab: View {
         }
         if !state.can(.storeWrite) {
             return "Store writes need paid access. Reading and dry runs stay free."
+        }
+        if state.stores.count > 1 && plan.isBlocked {
+            return "Choose a store. Only that store's errors block its apply."
         }
         if !plan.errors.isEmpty {
             let count = plan.errors.count

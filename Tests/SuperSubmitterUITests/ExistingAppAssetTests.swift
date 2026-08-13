@@ -59,8 +59,7 @@ struct ExistingAppAssetTests {
         manifest.setListingText("The description", locale: "en-US", field: .description)
 
         let failures = await state.materializeImportedAssets(
-            [asset("APP_IPHONE_69", "shot-1.png")], store: .apple, root: folder,
-            manifest: &manifest)
+            [asset("APP_IPHONE_69", "shot-1.png")], store: .apple, root: folder)
 
         #expect(failures.count == 1)
         #expect(failures[0].contains("shot-1.png"))
@@ -73,7 +72,7 @@ struct ExistingAppAssetTests {
     /// display types never named it, so the phone bucket arrived empty on an
     /// app whose store is full.
     @MainActor
-    @Test func aDownloadedScreenshotReachesTheBucketOfItsDisplayType() async throws {
+    @Test func downloadedStoreMediaIsObservedAndNeverQueuedForUpload() async throws {
         URLProtocol.registerClass(AssetStubProtocol.self)
         defer { URLProtocol.unregisterClass(AssetStubProtocol.self) }
         AssetStubProtocol.status = 200
@@ -86,19 +85,16 @@ struct ExistingAppAssetTests {
         let failures = await state.materializeImportedAssets(
             [asset("APP_IPHONE_69", "shot-1.png"), asset("APP_IPHONE_69", "trailer.mov"),
              asset("phoneScreenshots", "play-1.png")],
-            store: .apple, root: folder, manifest: &manifest)
+            store: .apple, root: folder)
 
         #expect(failures.isEmpty)
         let shots = manifest.mediaPaths(locale: "en-US", deviceClass: .phone)
-        #expect(shots.count == 2)
-        #expect(shots.allSatisfy(AppState.isImported))
+        #expect(shots.isEmpty)
         #expect(FileManager.default.fileExists(
-            atPath: folder.appendingPathComponent(shots[0]).path))
-        // Apple names a preview bucket after the same display type as a
-        // screenshot, so only the file tells the two apart. A video in the
-        // screenshot list fails validation on a tab that never mentions it.
-        #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone, previews: true)
-            == ["Store Import/apple/en-US/APP_IPHONE_69/trailer.mov"])
+            atPath: folder.appendingPathComponent(
+                "Store Import/apple/en-US/APP_IPHONE_69/shot-1.png").path))
+        #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone,
+                                    previews: true).isEmpty)
     }
 
     @MainActor
@@ -118,7 +114,7 @@ struct ExistingAppAssetTests {
         var manifest = Manifest()
 
         let failures = await state.materializeImportedAssets(
-            [malicious], store: .apple, root: folder, manifest: &manifest)
+            [malicious], store: .apple, root: folder)
 
         #expect(failures.isEmpty)
         #expect(!FileManager.default.fileExists(
@@ -138,13 +134,12 @@ struct ExistingAppAssetTests {
         let folder = try scratchFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let state = AppState()
-        var manifest = Manifest()
         let local = ImportedStoreAsset(locale: "en-US", kind: "icon",
                                        url: URL(fileURLWithPath: "/etc/hosts"),
                                        fileName: "hosts")
 
         let failures = await state.materializeImportedAssets(
-            [local], store: .apple, root: folder, manifest: &manifest)
+            [local], store: .apple, root: folder)
 
         #expect(failures.count == 1)
         #expect(!FileManager.default.fileExists(
@@ -167,13 +162,25 @@ struct ExistingAppAssetTests {
         try FileManager.default.createSymbolicLink(
             at: parent.appendingPathComponent("icon"), withDestinationURL: outside)
         let state = AppState()
-        var manifest = Manifest()
-
         let failures = await state.materializeImportedAssets(
-            [asset("icon", "agent.plist")], store: .apple, root: folder, manifest: &manifest)
+            [asset("icon", "agent.plist")], store: .apple, root: folder)
 
         #expect(failures.count == 1)
         #expect(!FileManager.default.fileExists(
             atPath: outside.appendingPathComponent("agent.plist").path))
+    }
+
+    @MainActor
+    @Test func legacyImportedMediaIsRemovedButChosenMediaStays() {
+        var manifest = Manifest()
+        manifest.addMediaPaths(
+            ["Store Import/apple/en-US/APP_IPHONE_69/live.png", "shots/new.png"],
+            locale: "en-US", deviceClass: .phone)
+        manifest.media?.icon = "Store Import/google/en-US/icon/icon.png"
+
+        manifest.removeImportedMedia()
+
+        #expect(manifest.mediaPaths(locale: "en-US", deviceClass: .phone) == ["shots/new.png"])
+        #expect(manifest.media?.icon == nil)
     }
 }
