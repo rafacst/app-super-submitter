@@ -524,3 +524,137 @@ private func shot(_ name: String, kind: String = "APP_IPHONE_67") -> ImportedSto
     #expect(one?.count == 3)
     #expect(one == two)
 }
+
+// MARK: - The screen size behind each strip
+
+/// The App Store shows each screen size its own page, and the tabs group by
+/// device class, so one phone group covers up to nine Apple sizes. A merged
+/// strip named none of them.
+@Test func eachLiveStripNamesTheAppleScreenSizeItCameFrom() {
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.screenshotURLs = [
+        "en-US/APP_IPHONE_65": [URL(string: "https://example.com/65.png")!],
+        "en-US/APP_IPHONE_69": [URL(string: "https://example.com/69.png")!],
+    ]
+    actual.apple = apple
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+    let strips = snapshot.screenshotSizes(locale: "en-US", deviceClass: .phone)
+
+    // Media Manager's order: the largest screen first.
+    #expect(strips.map(\.name) == ["iPhone 6.9 inch", "iPhone 6.5 inch"])
+    #expect(strips.map { $0.urls.count } == [1, 1])
+    // And the merged view still answers, because the manifest keys media by
+    // device class and the upload still needs one list per class.
+    #expect(snapshot.screenshots(locale: "en-US", deviceClass: .phone)
+        .first?.urls.count == 2)
+}
+
+/// Google keeps one set per device class, so there is nothing to name.
+@Test func aGoogleStripNamesNoSize() {
+    var listing = ImportedStoreListing()
+    listing.assets = [ImportedStoreAsset(
+        locale: "en-US", kind: "phoneScreenshots",
+        url: URL(string: "https://example.com/g.png")!, fileName: "g.png")]
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(listing, store: .google)
+
+    #expect(snapshot.screenshotSizes(locale: "en-US", deviceClass: .phone)
+        .map(\.name) == [""])
+}
+
+// MARK: - The pages that are not the version's own
+
+private func pageAsset(_ name: String, kind: String = "APP_IPHONE_65",
+                       locale: String = "pt-BR") -> ImportedStoreAsset {
+    ImportedStoreAsset(locale: locale, kind: kind,
+                       url: URL(string: "https://example.com/\(name)")!, fileName: name)
+}
+
+/// Four custom pages and a test were invisible here, because every screenshot
+/// read went to the version's own localization and to nothing else.
+@Test func theSnapshotKeepsEachCustomPageAndTreatmentApart() {
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.productPages = [
+        StoreProductPage(kind: .custom, name: "Bakers", status: "Visible",
+                         assets: [pageAsset("b1.png"), pageAsset("b2.png")]),
+        StoreProductPage(kind: .treatment(experiment: "PPO 2026-06"),
+                         name: "Treatment B", status: "Completed",
+                         assets: [pageAsset("t1.png")]),
+    ]
+    actual.apple = apple
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+    let strips = snapshot.productPageStrips(locale: "pt-BR", deviceClass: .phone)
+
+    #expect(strips.map(\.name) == ["Bakers", "Treatment B"])
+    #expect(strips[0].urls.count == 2)
+    #expect(strips[0].detail == "Custom product page")
+    #expect(strips[1].detail == "Test · PPO 2026-06")
+    #expect(strips[1].status == "Completed")
+    // A page for another locale or another screen belongs to another strip.
+    #expect(snapshot.productPageStrips(locale: "en-US", deviceClass: .phone).isEmpty)
+    #expect(snapshot.productPageStrips(locale: "pt-BR", deviceClass: .tablet10).isEmpty)
+}
+
+/// One page splits into one strip per screen size, the same as the version's
+/// own page, so a 6.9 inch set is never drawn beside a 6.5 inch one.
+@Test func aCustomPageSplitsByScreenSize() {
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.productPages = [StoreProductPage(
+        kind: .custom, name: "Bakers", status: "Visible",
+        assets: [pageAsset("a.png", kind: "APP_IPHONE_65"),
+                 pageAsset("b.png", kind: "APP_IPHONE_69")])]
+    actual.apple = apple
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(actual)
+    let strips = snapshot.productPageStrips(locale: "pt-BR", deviceClass: .phone)
+
+    #expect(strips.count == 2)
+    #expect(strips.map(\.bucket) == ["APP_IPHONE_69", "APP_IPHONE_65"])
+}
+
+/// A read that found no page leaves the pages it knew, and a read that found
+/// pages replaces them, so a page deleted in App Store Connect leaves the tab.
+@Test func aReadReplacesThePagesItFound() {
+    var first = ActualState()
+    var apple = ActualState.Apple()
+    apple.productPages = [
+        StoreProductPage(kind: .custom, name: "Bakers", status: "Visible",
+                         assets: [pageAsset("a.png")]),
+        StoreProductPage(kind: .custom, name: "Gone", status: "Visible",
+                         assets: [pageAsset("b.png")]),
+    ]
+    first.apple = apple
+
+    var snapshot = StoreSnapshot()
+    snapshot.merge(first)
+    #expect(snapshot.productPageStrips(locale: "pt-BR", deviceClass: .phone).count == 2)
+
+    var second = ActualState()
+    var fewer = ActualState.Apple()
+    fewer.productPages = [StoreProductPage(kind: .custom, name: "Bakers", status: "Hidden",
+                                           assets: [pageAsset("a.png")])]
+    second.apple = fewer
+    snapshot.merge(second)
+
+    let strips = snapshot.productPageStrips(locale: "pt-BR", deviceClass: .phone)
+    #expect(strips.map(\.name) == ["Bakers"])
+    #expect(strips[0].status == "Hidden")
+}
+
+/// The store's own word for the state, and no interpretation of it. Apple has
+/// nine of them and which ones serve a customer is Apple's business.
+@Test func anExperimentStateReadsAsWords() {
+    #expect(StoreProductPage.statusText("PREPARE_FOR_SUBMISSION") == "Prepare for submission")
+    #expect(StoreProductPage.statusText("IN_REVIEW") == "In review")
+    #expect(StoreProductPage.statusText("A_STATE_THIS_BUILD_NEVER_SAW")
+        == "A state this build never saw")
+}

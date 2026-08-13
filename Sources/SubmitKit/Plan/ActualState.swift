@@ -185,6 +185,13 @@ public struct ActualState: Sendable, Equatable {
         /// checksums, so the editing tabs can show the live media for free.
         public var screenshotURLs: [String: [URL]] = [:]
         public var previewURLs: [String: [URL]] = [:]
+        /// The same live screenshots with the store's own file names on them.
+        /// The app downloads them into `Store Import/` so the Media tab draws
+        /// from disk, and a bare URL carries no name to save one under.
+        public var liveAssets: [ImportedStoreAsset] = []
+        /// The custom product pages and the experiment treatments, and what
+        /// each of them shows. Read only: nothing plans or writes these.
+        public var productPages: [StoreProductPage] = []
         /// The highest build number inside **this version's train**, never
         /// across the whole app. Apple counts a build number against the
         /// marketing version it belongs to, and a new train may start at one.

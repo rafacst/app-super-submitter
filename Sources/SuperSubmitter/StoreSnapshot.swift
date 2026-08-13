@@ -25,6 +25,15 @@ struct StoreSnapshot: Codable, Equatable {
     private(set) var appleLive: [String: [ListingTextField: String]] = [:]
     /// store -> locale -> device class -> the images the store shows, in order.
     private(set) var screenshots: [Store: [String: [Manifest.DeviceClass: [URL]]]] = [:]
+    /// store -> locale -> the store's own bucket name -> the images in it.
+    ///
+    /// `screenshots` above collapses nine iPhone display types into one phone
+    /// bucket, because that is what the manifest keys media by and what Google
+    /// needs. The App Store keeps one set per screen size, so a developer who
+    /// ships 6.9 inch and 6.5 inch read one strip with both in it and no way to
+    /// tell which picture belonged to which size. This keeps the store's answer
+    /// as the store gave it.
+    private(set) var screenshotBuckets: [Store: [String: [String: [URL]]]]?
     /// The App Store previews. Google takes a YouTube URL on the listing.
     private(set) var previews: [String: [Manifest.DeviceClass: [URL]]] = [:]
     /// locale -> the icon Google Play shows. Play keys every listing image by
@@ -55,7 +64,24 @@ struct StoreSnapshot: Codable, Equatable {
     /// the same buckets with the store's URLs again. Both routes resolve
     /// through here, so a read costs the pictures nothing.
     private(set) var localCopies: [String: URL]?
+    /// One row per product page that is not the version's own, per locale and
+    /// per screen size. See `StoreProductPage`.
+    private(set) var productPages: [ProductPageStrip]?
     private(set) var readAt: Date?
+
+    /// What one custom product page or one test treatment shows, for one
+    /// locale and one screen size. Flat, because the tab filters it by both.
+    struct ProductPageStrip: Codable, Equatable {
+        var name: String
+        /// "Custom product page", or the test this treatment belongs to.
+        var detail: String
+        /// The store's own word for where the page stands.
+        var status: String
+        var locale: String
+        /// The App Store display type, such as `APP_IPHONE_69`.
+        var bucket: String
+        var urls: [URL]
+    }
 
     /// The three above are optional, and the rest are not, for one reason:
     /// `load` decodes the whole file with `try?`. A non-optional property added
@@ -76,6 +102,41 @@ struct StoreSnapshot: Codable, Equatable {
     }
 
     func featureGraphic(locale: String) -> URL? { featureGraphics?[locale] }
+
+    /// The custom product pages and test treatments that show something for
+    /// this locale and this device class, in the order the read found them.
+    func productPageStrips(locale: String, deviceClass: Manifest.DeviceClass)
+        -> [ProductPageStrip] {
+        (productPages ?? []).filter {
+            $0.locale == locale && Manifest.DeviceClass(storeBucket: $0.bucket) == deviceClass
+        }
+    }
+
+    /// Replaces every page this read saw. A page the developer deleted in App
+    /// Store Connect has to leave the tab, and a nil read leaves what it had
+    /// rather than claiming the pages are gone.
+    mutating func setProductPages(_ pages: [StoreProductPage]) {
+        guard !pages.isEmpty else { return }
+        var strips: [ProductPageStrip] = []
+        for page in pages {
+            var byLocaleAndSize: [String: [String: [URL]]] = [:]
+            for asset in page.assets where !Self.isVideo(asset.url) {
+                byLocaleAndSize[asset.locale, default: [:]][asset.kind, default: []]
+                    .append(resolve(asset.url))
+            }
+            for locale in byLocaleAndSize.keys.sorted() {
+                let sizes = byLocaleAndSize[locale] ?? [:]
+                for bucket in sizes.keys.sorted(by: {
+                    AssetInspector.appleDisplayRank($0) < AssetInspector.appleDisplayRank($1)
+                }) {
+                    strips.append(ProductPageStrip(
+                        name: page.name, detail: page.detail, status: page.status,
+                        locale: locale, bucket: bucket, urls: sizes[bucket] ?? []))
+                }
+            }
+        }
+        productPages = strips
+    }
 
     /// The copy on disk, when the import got one. See `localCopies`.
     func resolve(_ url: URL) -> URL {
@@ -138,6 +199,35 @@ struct StoreSnapshot: Codable, Equatable {
         [Store.apple, .google].compactMap { store in
             guard let value = text[store]?[locale]?[field], !value.isEmpty else { return nil }
             return (store, value)
+        }
+    }
+
+    /// One strip per set the store actually keeps, under the device class the
+    /// tabs group by.
+    ///
+    /// The App Store names a set by screen size and shows each size its own
+    /// page, so a phone group can hold nine of them. Google keeps one set for
+    /// a device class and its `name` is empty, because there is nothing to tell
+    /// apart. A snapshot written before this build knows no bucket names and
+    /// answers with the one merged strip it has, which is what it showed then.
+    func screenshotSizes(locale: String, deviceClass: Manifest.DeviceClass)
+        -> [(store: Store, name: String, urls: [URL])] {
+        [Store.apple, .google].flatMap { store -> [(Store, String, [URL])] in
+            guard let buckets = screenshotBuckets?[store]?[locale] else {
+                return screenshots(locale: locale, deviceClass: deviceClass)
+                    .filter { $0.store == store }
+                    .map { (store, "", $0.urls) }
+            }
+            return buckets
+                .filter { Manifest.DeviceClass(storeBucket: $0.key) == deviceClass
+                    && !$0.value.isEmpty }
+                .sorted { left, right in
+                    let ranks = (AssetInspector.appleDisplayRank(left.key),
+                                 AssetInspector.appleDisplayRank(right.key))
+                    return ranks.0 == ranks.1 ? left.key < right.key : ranks.0 < ranks.1
+                }
+                .map { (store, store == .apple
+                    ? AssetInspector.appleDisplayName($0.key) : "", $0.value) }
         }
     }
 
@@ -214,6 +304,7 @@ struct StoreSnapshot: Codable, Equatable {
             }
             merge(bucketed: apple.screenshotURLs, store: .apple)
             merge(bucketed: apple.previewURLs, into: &previews)
+            setProductPages(apple.productPages)
         }
         if let google = actual.google {
             for (locale, listing) in google.listings {
@@ -258,6 +349,7 @@ struct StoreSnapshot: Codable, Equatable {
         // second copy of every picture to the first import's.
         var freshShots: [String: [Manifest.DeviceClass: [URL]]] = [:]
         var freshPreviews: [String: [Manifest.DeviceClass: [URL]]] = [:]
+        var freshBuckets: [String: [String: [URL]]] = [:]
         for asset in imported.assets {
             guard let device = asset.deviceClass else { continue }
             // Apple names a video bucket by the same display type as a
@@ -267,8 +359,16 @@ struct StoreSnapshot: Codable, Equatable {
                 freshPreviews[asset.locale, default: [:]][device, default: []].append(url)
             } else {
                 freshShots[asset.locale, default: [:]][device, default: []].append(url)
+                freshBuckets[asset.locale, default: [:]][asset.kind, default: []].append(url)
             }
         }
+        var knownBuckets = screenshotBuckets ?? [:]
+        for (locale, buckets) in freshBuckets {
+            for (bucket, urls) in buckets {
+                knownBuckets[store, default: [:]][locale, default: [:]][bucket] = urls
+            }
+        }
+        if !knownBuckets.isEmpty { screenshotBuckets = knownBuckets }
         for (locale, devices) in freshShots {
             for (device, urls) in devices {
                 screenshots[store, default: [:]][locale, default: [:]][device] = urls
@@ -313,6 +413,17 @@ struct StoreSnapshot: Codable, Equatable {
         var media = screenshots[store] ?? [:]
         merge(bucketed: bucketed, into: &media)
         if !media.isEmpty { screenshots[store] = media }
+        // And the same sets under the store's own bucket name. See
+        // `screenshotBuckets`: the map above answers "what does the phone group
+        // hold", and this one answers "which screen size is each of these".
+        var known = screenshotBuckets ?? [:]
+        for (key, urls) in bucketed {
+            let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+            guard parts.count == 2, Manifest.DeviceClass(storeBucket: parts[1]) != nil
+            else { continue }
+            known[store, default: [:]][parts[0], default: [:]][parts[1]] = urls.map(resolve)
+        }
+        if !known.isEmpty { screenshotBuckets = known }
     }
 
     /// The two Play images that belong to no device class.
