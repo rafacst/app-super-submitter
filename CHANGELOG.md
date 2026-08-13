@@ -1,5 +1,67 @@
 # Changelog
 
+## 1.2 (297) - 2026-08-13
+
+### Build
+
+- A version can ship a build App Store Connect already processed. The Build tab lists what the store holds and one press names the build the next apply attaches, so a build that is ready and is not the newest can be shipped without opening the console.
+- An artifact whose number is above the run still reaches the store.
+- The build selection and the preflight states were repaired.
+
+### App Store review
+
+- A submission that is with the store says so on screen.
+- A version Apple already has is no longer held back, and the app names which half of review it is in.
+- The summary and the release button answer from the store rather than from the session.
+
+### Listing, details and media
+
+- Every screenshot the App Store shows is named by the screen size it belongs to, largest first, the same order Media Manager uses. One phone group used to merge up to nine Apple sizes into a single unlabelled row.
+- The custom product pages and the product page optimization treatments are read and shown, each as its own strip with its name and its state. They are read only, and the app writes to none of them.
+- Live store pictures are drawn from the copy the import downloaded instead of being fetched again on every appearance.
+- The live picture count is the store's real count. Every read used to add the live set to the set the last read left behind, and the total grew on every read and across launches.
+- A prose box can be dragged taller and keeps the height.
+- Screenshots are counted the way Apple counts them, and the package name can be typed.
+
+### Products and money
+
+- The products the App Store already holds are brought in, and the app says what changing one of them costs.
+- A purchase that names no locale in `store.yaml` is left alone. The plan used to report every purchase as changed forever, and the apply deleted the names Apple held for it.
+
+### Stores, apps and identifiers
+
+- Every required identifier can be typed, and each store gets its own project folder.
+- The identifiers a store already holds are fetched, and a shipped app is told apart from a draft.
+- Each store carries its own release version, and only the apps a store has shipped are managed.
+- Every app is shown the way a customer meets it in the store, and the icons the stores answer with are kept.
+- An app's store page opens from its own name.
+
+### Beta testing
+
+- Beta testing has a tab of its own.
+- A beta group carries every switch TestFlight offers, and it is handed the build a tester is waiting for.
+
+### Game Center
+
+- A game carries everything Game Center holds, and it is sent from the tab that edits it.
+- The App Store Connect side of Game Center management is complete.
+
+### Reports and analytics
+
+- The numbers both stores report are drawn, and a report is read by its own header.
+- The app measures which screen a developer is on and who is using it, and the token stays out of the tree.
+
+### Publishing
+
+- The export compliance answer is asked of the build before it is written. Apple takes that answer from the binary while it processes the build and refuses to change it afterwards, so the run used to stop on a conflict it could not name.
+- Territory availability is always created and never patched. `appAvailabilities` takes no update, and the 403 Apple returns for one was reported as a permission the key was missing.
+- A blocker that belongs to one store no longer disables an unrelated apply.
+- The stores and the disk are read for what they already hold before anything is planned.
+
+### Release pipeline
+
+- A release that cannot report is refused.
+
 ## 1.1 (273) - 2026-08-11
 
 This entry covers the 24 hours to 2026-08-11, so it repeats the work that
