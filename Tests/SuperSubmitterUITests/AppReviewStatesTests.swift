@@ -69,12 +69,12 @@ import Testing
         #expect(state.appMark(appKey: "3333").label == "Refused")
         // A draft is the ordinary state, and it is the answer for most of the
         // apps in the list on most days. It said nothing at all before.
-        #expect(state.appMark(appKey: "4444").label == "Draft")
+        #expect(state.appMark(appKey: "4444").label == "Store draft")
         // The one the column exists for: on sale, and not merely approved.
         #expect(state.appMark(appKey: "5555").label == "Live")
         // The developer withdrew it. Apple never refused it, so it is a draft
         // and not a refusal. See `AppleVersionState.outcome`.
-        #expect(state.appMark(appKey: "6666").label == "Draft")
+        #expect(state.appMark(appKey: "6666").label == "Store draft")
     }
 
     /// A read that never happened claims nothing, and says so in a word.
@@ -100,7 +100,7 @@ import Testing
         state.appLiveStates = ["com.example.live": true, "com.example.draft": false]
 
         #expect(state.appMark(appKey: "com.example.live").label == "Live")
-        #expect(state.appMark(appKey: "com.example.draft").label == "Not on the store")
+        #expect(state.appMark(appKey: "com.example.draft").label == "Local only")
         #expect(state.appMark(appKey: "com.example.unread").label == "Unknown")
     }
 

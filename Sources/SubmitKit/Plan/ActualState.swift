@@ -399,6 +399,22 @@ public struct ActualState: Sendable, Equatable {
         public var territoryCount: Int?
         public var territoryAvailability: [String: Bool] = [:]
         public var availableInNewTerritories: Bool?
+
+        /// Whether the App Store already holds an availability record for this
+        /// app.
+        ///
+        /// It decides which of two different sets of rules apply.
+        /// `POST /v2/appAvailabilities` writes the whole thing at once and is
+        /// the only call that ever accepts `availableInNewTerritories`; once a
+        /// record exists, territories change one PATCH at a time and that one
+        /// attribute cannot be changed at all. See
+        /// `AppleApply.appleAvailability`.
+        ///
+        /// Nil from the read means the app has none, because `StateReader`
+        /// fills both of these from the same answer.
+        public var hasAvailabilityRecord: Bool {
+            availableInNewTerritories != nil || territoryCount != nil
+        }
         public var phasedReleaseId: String?
         public var phasedReleaseState: String?
 

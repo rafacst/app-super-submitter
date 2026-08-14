@@ -801,6 +801,16 @@ struct AppleStanding {
     let label: String
     let tint: Color
     let fill: Color
+    /// The state as a sentence, for the tooltip and for VoiceOver.
+    ///
+    /// The word alone could not say where a draft is. "Draft" meant a version
+    /// that App Store Connect already holds, and on a tab beside an app name it
+    /// read exactly like the `store.yaml` the developer had been editing all
+    /// morning. They are two different things and the difference is the whole
+    /// mental model of this app: one is on this Mac and nothing has been sent,
+    /// the other is a record on Apple's servers that an apply has already
+    /// created. The label says which, and this says it in full.
+    let explained: String
     /// A reviewer has it open right now, rather than Apple holding it in a
     /// queue. The chip animates on this and on nothing else: a pulse that
     /// meant "somewhere between submitted and answered" would pulse for the
@@ -815,6 +825,7 @@ struct AppleStanding {
     /// developer and they were one word.
     init(state: String?) {
         (label, tint, fill) = Self.words(for: state)
+        explained = Self.sentence(for: state)
         active = state == "IN_REVIEW"
     }
 
@@ -835,7 +846,10 @@ struct AppleStanding {
             // and an unread app is exactly that until a read says otherwise.
             ("Unknown", Theme.text3, Theme.sunken)
         case "":
-            ("Not on the store", Theme.text3, Theme.sunken)
+            // The store answered and holds no version, so everything for this
+            // app is on this Mac. "Local only" says that; "Not on the store"
+            // said where it is not.
+            ("Local only", Theme.text3, Theme.sunken)
         case "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION":
             ("Live", Theme.green, Theme.greenBg)
         case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
@@ -862,7 +876,37 @@ struct AppleStanding {
             // PREPARE_FOR_SUBMISSION, DEVELOPER_REJECTED, and anything Apple
             // adds after this ships. A state this app has never heard of is
             // still a draft: a version that exists and is not on sale.
-            ("Draft", Theme.orange, Theme.orangeBg)
+            //
+            // "Store draft", because it is App Store Connect that holds it. The
+            // word on its own was the same word a developer uses for the
+            // `store.yaml` in front of them, and the chip was the only thing on
+            // the screen claiming to answer which.
+            ("Store draft", Theme.orange, Theme.orangeBg)
+        }
+    }
+
+    /// The same states, said in full. See `explained`.
+    private static func sentence(for state: String?) -> String {
+        switch state {
+        case nil:
+            "Nobody has read the store about this app yet."
+        case "":
+            "The App Store holds no version of this app. Everything you have is a draft on this Mac."
+        case "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION":
+            "This app is on the App Store and customers can buy it."
+        case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
+            "This app was on the App Store and is off sale."
+        case "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "ACCEPTED",
+             "PROCESSING_FOR_DISTRIBUTION":
+            "App Store review approved this version. Nobody can buy it until it is released."
+        case "WAITING_FOR_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE":
+            "This version is with the App Store, waiting for a reviewer."
+        case "IN_REVIEW":
+            "A reviewer has this version open right now."
+        case "REJECTED", "METADATA_REJECTED", "INVALID_BINARY":
+            "App Store review refused this version and handed it back."
+        default:
+            "App Store Connect already holds a draft of this version. It is not a draft on this Mac: an apply created it, and the store keeps it until you send it or delete it."
         }
     }
 }

@@ -89,7 +89,7 @@ struct PastPreparationTests {
     /// and they were the same word.
     @Test func theQueueAndTheReviewAreTwoWords() {
         #expect(AppleStanding(state: "WAITING_FOR_REVIEW").label == "In queue")
-        #expect(AppleStanding(state: "READY_FOR_REVIEW").label == "Draft")
+        #expect(AppleStanding(state: "READY_FOR_REVIEW").label == "Store draft")
         #expect(AppleStanding(state: "IN_REVIEW").label == "In review")
     }
 
@@ -112,11 +112,11 @@ struct PastPreparationTests {
     /// Unchanged, and each still one word apart from the rest.
     @Test func theOtherStandingsAreWhatTheyWere() {
         #expect(AppleStanding(state: "READY_FOR_SALE").label == "Live")
-        #expect(AppleStanding(state: "PREPARE_FOR_SUBMISSION").label == "Draft")
+        #expect(AppleStanding(state: "PREPARE_FOR_SUBMISSION").label == "Store draft")
         #expect(AppleStanding(state: "REJECTED").label == "Refused")
         // A store that answered and holds no version. Nobody having asked is
         // the other thing, and the two were one word.
-        #expect(AppleStanding(state: "").label == "Not on the store")
+        #expect(AppleStanding(state: "").label == "Local only")
         #expect(AppleStanding(state: nil).label == "Unknown")
     }
 }

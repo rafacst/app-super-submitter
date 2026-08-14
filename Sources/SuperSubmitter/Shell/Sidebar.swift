@@ -288,11 +288,15 @@ struct AppStatusChip: View {
         .padding(.horizontal, 5)
         .padding(.vertical, 1.5)
         .background(mark.fill, in: Capsule())
+        // The word in full, because the word alone cannot carry the one
+        // distinction this app is built on: a draft on this Mac and a draft
+        // App Store Connect already holds are not the same thing.
+        .help(mark.explained)
         .accessibilityElement(children: .combine)
         // The store is not named. The chip answers for both of them now, and
         // an app that goes to Google alone was told what the App Store thinks
         // of it.
-        .accessibilityLabel("On the store: \(mark.label)")
+        .accessibilityLabel(mark.explained)
     }
 }
 

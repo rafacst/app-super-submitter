@@ -130,7 +130,7 @@ import Testing
         await state.readAppLiveness(for: record)
 
         #expect(state.appLiveStates[record.id.uuidString] == false)
-        #expect(state.appMark(appKey: record.id.uuidString).label == "Not on the store")
+        #expect(state.appMark(appKey: record.id.uuidString).label == "Local only")
         #expect(state.appRows.first?.isLive == false)
     }
 

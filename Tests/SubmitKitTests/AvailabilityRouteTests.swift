@@ -180,14 +180,18 @@ struct AvailabilityRouteTests {
     /// answers 409.
     ///
     /// So the run says so instead of stopping on a request that cannot work.
-    @Test func changingNewTerritoriesOnAnExistingRecordIsRefusedInWords() async throws {
+    @Test func changingNewTerritoriesOnAnExistingRecordSendsNothing() async throws {
         AvailabilityStub.start()
         let runner = availabilityRunner([], autoConvert: false, heldAutoConvert: true)
 
-        await #expect(throws: RunError.self) { try await runner.appleAvailability() }
-        // And nothing was sent. A request Apple refuses is not worth the round
-        // trip, and a 409 in the log reads as a conflict the developer caused.
+        try await runner.appleAvailability()
+
+        // Nothing was sent, and nothing failed. A request Apple refuses is not
+        // worth the round trip, and stopping the whole apply over a setting the
+        // store will never take is worse than not offering it.
+        // `Validator.availability` is what tells the developer.
         #expect(AvailabilityStub.patched("/v1/apps/app-1") == nil)
+        #expect(!AvailabilityStub.seen.contains { $0.method == "PATCH" })
     }
 
     @Test func anAnswerTheStoreAlreadyHoldsIsNotWritten() async throws {

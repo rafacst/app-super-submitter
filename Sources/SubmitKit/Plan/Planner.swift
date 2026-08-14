@@ -382,21 +382,25 @@ public enum Planner {
         }
         let wantedAvailability = Dictionary(uniqueKeysWithValues:
             (manifest.pricing?.territories ?? []).map { ($0.territory, $0.available) })
-        // An answer the store has not given is not a different answer.
+        // A step is never planned for a write the App Store will not take.
         //
-        // This compared a `Bool` against a `Bool?`, so a store value of nil read
-        // as "differs" and the step was planned on every run of every app, for
-        // ever. Nil is what the read leaves when App Store Connect does not
-        // return the attribute, and the write it queued cannot succeed: Apple
-        // refuses `availableInNewTerritories` on `apps` and takes it only on the
-        // create. So an update whose countries nobody had touched ended with
-        // "The run stopped at Write the territory availability".
-        let autoAvailabilityDiffers = if let wanted = manifest.pricing?.autoConvertOtherTerritories,
-                                         let held = actual?.availableInNewTerritories {
-            wanted != held
-        } else {
-            false
-        }
+        // `availableInNewTerritories` is an attribute of the create and of
+        // nothing else: once an app holds an availability record, Apple refuses
+        // it on `apps`, refuses a PATCH of the record, and refuses a second
+        // create. So on a live app this can differ and still not be work.
+        //
+        // It differed on every live app, because the value in the manifest was
+        // never the developer's: saving a price wrote `true` as a default. The
+        // plan offered "Write the territory availability" on an app whose
+        // countries nobody had touched, and the run stopped there every time.
+        // `Validator.availability` says the difference out loud instead, which
+        // is the honest half of this: the app cannot do it and no longer
+        // pretends it can.
+        //
+        // An app with no record yet is the create, and the create carries this
+        // attribute, so there it is real work.
+        let autoAvailabilityDiffers = manifest.pricing?.autoConvertOtherTerritories != nil
+            && actual?.hasAvailabilityRecord != true
         // The same rule, one territory at a time. A territory the read does not
         // list is one this app knows nothing about, and `appleUpdateTerritories`
         // reports those rather than writing them.

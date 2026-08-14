@@ -23,6 +23,7 @@ public enum Validator {
         result += monetization(input)
         result += state(input)
         result += update(input)
+        result += availability(input)
         // The errors first: tab 7 shows them at the top.
         return result.sorted { lhs, rhs in
             lhs.severity == rhs.severity
@@ -1579,6 +1580,29 @@ public enum Validator {
         default:
             return finding(.held, "The App Store is not taking changes to \(version) right now. Read the stores again, or open the version in App Store Connect.")
         }
+    }
+
+    // MARK: - Availability
+
+    /// The one availability setting the App Store will not take from this app.
+    ///
+    /// `availableInNewTerritories` is an attribute of the create and of no other
+    /// call, so once an app has an availability record the answer in the store
+    /// is the answer, whatever `store.yaml` says. The apply used to try anyway
+    /// and stop the run on Apple's refusal.
+    ///
+    /// A warning and not silence. The developer wrote a value and the app is
+    /// not going to send it, and the one thing worse than a step that fails is
+    /// a setting that is quietly ignored.
+    static func availability(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple),
+              let apple = input.actual.apple, apple.hasAvailabilityRecord,
+              let wanted = input.manifest.pricing?.autoConvertOtherTerritories,
+              let held = apple.availableInNewTerritories, wanted != held else { return [] }
+        return [Finding(
+            id: "availability.newTerritories", severity: .warning,
+            message: "store.yaml offers this app in new territories \(wanted ? "automatically" : "only where you say so"), and the App Store holds the opposite. Apple takes that setting when an app's availability is first created and by no call after it, so this one is changed in App Store Connect under Pricing and Availability.",
+            location: "Monetization · Availability", fix: .money)]
     }
 
     // MARK: - The update

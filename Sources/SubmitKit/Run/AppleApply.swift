@@ -1100,9 +1100,13 @@ extension Runner {
         let held = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appleAppID)/appAvailabilityV2").data)
         if let availabilityID = held["data"]["id"].string {
+            // The territories, and nothing else. `availableInNewTerritories` is
+            // an attribute of the create alone, so on a record that exists there
+            // is no call to make: see `appleAvailableInNewTerritories` for the
+            // three routes Apple refuses. The plan does not offer it either, and
+            // `Validator.availability` reports the difference.
             try await appleUpdateTerritories(availabilityID: availabilityID,
                                              requested: requested)
-            try await appleAvailableInNewTerritories()
             return
         }
 
@@ -1195,25 +1199,23 @@ extension Runner {
     /// It is an attribute of the app, not of the availability, once the
     /// availability exists. Skipped when the store already agrees, so a run
     /// that changes only a territory does not also write this.
-    /// Apple takes this on the create and nowhere else.
+    /// Why `availableInNewTerritories` is written by the create and by nothing
+    /// else.
     ///
-    /// Every route is closed once the app holds an availability record.
+    /// Every other route is closed once the app holds an availability record.
     /// `PATCH /v2/appAvailabilities/{id}` answers 403 and "Allowed operations
     /// are: CREATE, GET_INSTANCE"; a second `POST` answers 409; and
     /// `PATCH /v1/apps/{id}` answers 409 and "'availableInNewTerritories' is
     /// not an attribute on the resource 'apps'". Apple's own reference still
     /// documents that last one, and the store refuses it.
     ///
-    /// So this reports rather than sending a request that cannot succeed. It is
-    /// reached only when the developer changed the toggle and the store's
-    /// answer is known to differ: an unread answer plans no step at all, and a
-    /// value nobody set is no longer written into the manifest.
-    private func appleAvailableInNewTerritories() async throws {
-        guard let wanted = manifest.pricing?.autoConvertOtherTerritories,
-              let held = actual.apple?.availableInNewTerritories,
-              wanted != held else { return }
-        throw RunError.availabilityIsCreateOnly(wanted: wanted)
-    }
+    /// This app sent that PATCH and stopped the run on it. Then it stopped the
+    /// run on a clearer sentence, which is a better error and the same halt:
+    /// the developer still could not finish an apply over a setting the App
+    /// Store was never going to take. Nothing here attempts it now. The plan
+    /// does not offer the step, and `Validator.availability` says the store
+    /// holds a different answer and where to change it.
+
 
     func appleAppPrice() async throws {
         guard let price = manifest.pricing?.base else { return }
