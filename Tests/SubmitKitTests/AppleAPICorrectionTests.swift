@@ -572,6 +572,47 @@ struct AppleAPICorrectionTests {
         #expect(calls.contains { $0.path == "/v2/appAvailabilities" })
     }
 
+    /// A resource created inside another request carries a local id, and App
+    /// Store Connect takes exactly one shape for it.
+    ///
+    /// The reported failure: "The provided included entity id
+    /// 'price-3A2BD60D-A12A-4530-9745-E8F457270767' has invalid format. For
+    /// inline creation, the id must be a local id with the format
+    /// '${local-id}'." The run stopped at "Write the app price schedule" and
+    /// the whole apply with it. Every `included` block in this file is written
+    /// the same way, so the territory create carried the same fault waiting
+    /// for the first app that had no availability record.
+    @Test func inlineCreationUsesAppleLocalIds() async throws {
+        #expect(Runner.localID("price-0") == "${price-0}")
+
+        var manifest = appleManifest()
+        manifest.pricing = Manifest.Pricing(
+            base: Price(amount: 0, currency: "USD"),
+            territories: [Manifest.TerritoryAvailability(territory: "USA")])
+        var actual = ActualState()
+        actual.apple = ActualState.Apple()
+        let runner = correctionRunner(.availabilityExisting, manifest: manifest,
+                                      actual: actual)
+
+        try await runner.appleAvailability()
+
+        let create = try #require(CorrectionStubProtocol.log.all
+            .first { $0.method == "POST" && $0.path == "/v2/appAvailabilities" })
+        let included = try #require(create.body["included"] as? [[String: Any]])
+        let ids = included.compactMap { $0["id"] as? String }
+        #expect(!ids.isEmpty)
+        #expect(ids.allSatisfy { $0.hasPrefix("${") && $0.hasSuffix("}") })
+        // And the relationship points at the same local id, or the store has a
+        // row it cannot attach to anything.
+        let data = try #require(create.body["data"] as? [String: Any])
+        let relationships = try #require(data["relationships"] as? [String: Any])
+        let territories = try #require(
+            relationships["territoryAvailabilities"] as? [String: Any])
+        let referenced = (territories["data"] as? [[String: Any]] ?? [])
+            .compactMap { $0["id"] as? String }
+        #expect(referenced == ids)
+    }
+
     /// The drop deletes every localization the manifest does not name, and an
     /// absent `locales` key named none of them. So an apply that touched a
     /// purchase for any other reason stripped the names off products the

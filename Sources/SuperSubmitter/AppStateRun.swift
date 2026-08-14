@@ -342,6 +342,7 @@ extension AppState {
         case .details: .details
         case .media: .media
         case .gaming: .gaming
+        case .availability: .availability
         case .money: .money
         case .marketing: .marketing
         case .reviewInfo: .reviewInfo

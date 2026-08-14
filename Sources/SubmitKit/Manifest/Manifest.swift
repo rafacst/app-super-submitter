@@ -614,14 +614,34 @@ extension Manifest {
 extension Manifest {
     public struct Pricing: Codable, Sendable, Equatable {
         public var base: Price
+        /// Whether Google Play converts the base price into every currency it
+        /// sells in. A price question, and the label on the control says so.
+        ///
+        /// It used to answer for Apple as well, as `availableInNewTerritories`,
+        /// which is not a price question at all: it is whether the App Store
+        /// offers this app in territories Apple adds in future. One key meant
+        /// two unrelated things, the only control for it was labelled for
+        /// Google, and an Apple-only app could not reach it at all. So a
+        /// developer who had never seen the question had an answer sent on
+        /// their behalf. See `appleNewTerritories`.
         public var autoConvertOtherTerritories: Bool?
+        /// Whether the App Store offers this app in territories Apple adds
+        /// after it ships.
+        ///
+        /// Apple takes it when an app's availability record is created and by
+        /// no call afterwards, so on an app that has ever been on sale this is
+        /// a statement of what the store holds rather than a value to send.
+        /// `Validator.availability` says so when the two disagree.
+        public var appleNewTerritories: Bool?
         /// App Store availability by ISO 3166-1 alpha-3 territory id.
         public var territories: [TerritoryAvailability]?
 
         public init(base: Price, autoConvertOtherTerritories: Bool? = nil,
+                    appleNewTerritories: Bool? = nil,
                     territories: [TerritoryAvailability]? = nil) {
             self.base = base
             self.autoConvertOtherTerritories = autoConvertOtherTerritories
+            self.appleNewTerritories = appleNewTerritories
             self.territories = territories
         }
     }

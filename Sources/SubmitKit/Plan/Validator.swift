@@ -913,7 +913,7 @@ public enum Validator {
                 result.append(Finding(
                     id: "money.pricePoint", severity: .warning,
                     message: "The App Store resolved \(resolved) \(requested.currency) for a request of \(requested.amount) \(requested.currency).",
-                    location: "Monetization · Base price", fix: .money))
+                    location: "Availability · Base price", fix: .availability))
             }
         }
 
@@ -977,8 +977,11 @@ public enum Validator {
         // purchase and no plan for nothing, so those two read a shorter ladder.
         let productPoints = apple.pricePoints.filter { $0 > 0 }
 
-        func finding(_ price: Price?, points: [Decimal],
-                     id: String, location: String) -> Finding? {
+        // The app's own price is fixed on Availability and a product's price on
+        // Monetization, so the finding names the tab that holds the field. A
+        // jump to the other one lands on a screen with no price on it.
+        func finding(_ price: Price?, points: [Decimal], id: String,
+                     location: String, fix: FixTarget = .money) -> Finding? {
             guard let price, (price.territory ?? "USA") == ladderTerritory,
                   !points.contains(price.amount),
                   let nearest = StateReader.nearest(to: price.amount, in: points)
@@ -986,12 +989,13 @@ public enum Validator {
             return Finding(
                 id: "money.offLadder.\(id)", severity: .warning,
                 message: "The App Store has no \(price.amount) \(price.currency) price point. It would sell this at \(nearest) \(price.currency).",
-                location: location, fix: .money)
+                location: location, fix: fix)
         }
 
         var result: [Finding] = []
         result += [finding(input.manifest.pricing?.base, points: apple.pricePoints,
-                           id: "base", location: "Monetization · Base price")].compactMap { $0 }
+                           id: "base", location: "Availability · Base price",
+                           fix: .availability)].compactMap { $0 }
         for purchase in input.manifest.purchases ?? [] {
             result += [finding(purchase.price, points: productPoints, id: purchase.id,
                                location: "Monetization · \(purchase.id)")].compactMap { $0 }
@@ -1597,12 +1601,12 @@ public enum Validator {
     static func availability(_ input: Planner.Input) -> [Finding] {
         guard input.stores.contains(.apple),
               let apple = input.actual.apple, apple.hasAvailabilityRecord,
-              let wanted = input.manifest.pricing?.autoConvertOtherTerritories,
+              let wanted = input.manifest.pricing?.appleNewTerritories,
               let held = apple.availableInNewTerritories, wanted != held else { return [] }
         return [Finding(
             id: "availability.newTerritories", severity: .warning,
             message: "store.yaml offers this app in new territories \(wanted ? "automatically" : "only where you say so"), and the App Store holds the opposite. Apple takes that setting when an app's availability is first created and by no call after it, so this one is changed in App Store Connect under Pricing and Availability.",
-            location: "Monetization · Availability", fix: .money)]
+            location: "Availability · Countries", fix: .availability)]
     }
 
     // MARK: - The update

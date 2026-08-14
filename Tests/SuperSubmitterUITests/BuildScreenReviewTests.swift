@@ -349,6 +349,41 @@ private func buildReviewState() -> AppState {
     #expect(project.contains("flow.blockingReason"))
 }
 
+/// Two exclusive answers whose labels have to be read are a radio group on the
+/// Mac. A segmented control is for switching a view, and both of these decide
+/// what the tab does rather than which part of it shows.
+@Test func theTwoBuildQuestionsAreRadioGroups() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+
+    #expect(build.contains("Build from project"))
+    #expect(!build.contains(".pickerStyle(.segmented)"))
+    #expect(build.components(separatedBy: ".pickerStyle(.radioGroup)").count == 3)
+}
+
+/// The tab opens on the two answers that fit almost every app: this Mac has
+/// the project, and the app ships no encryption of its own.
+@MainActor
+@Test func theBuildTabOpensOnTheOrdinaryAnswers() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    #expect(state.showBuildFromProject)
+
+    // No Apple app, no Apple question: the answer belongs to a build going to
+    // the App Store, and Google asks nothing of the kind.
+    state.defaultEncryptionAnswer()
+    #expect(state.encryptionAnswer == nil)
+
+    state.manifest.setAppleApp(appID: "1", bundleID: "com.example.app")
+    state.defaultEncryptionAnswer()
+    #expect(state.encryptionAnswer == false)
+
+    // And it never writes over an answer. A developer who said yes keeps yes,
+    // including across the next visit to the tab.
+    state.setEncryptionAnswer(true)
+    state.defaultEncryptionAnswer()
+    #expect(state.encryptionAnswer == true)
+}
+
 // MARK: - The platform is a choice
 
 /// One app id ships iOS and macOS and the two are not in step: the Mac app can

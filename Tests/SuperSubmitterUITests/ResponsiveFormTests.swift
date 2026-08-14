@@ -117,7 +117,9 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
 /// A base amount is an App Store price point, never arbitrary text. Currency
 /// comes first because it determines which monetary values make sense.
 @Test func basePriceIsCurrencyThenPricePicker() throws {
-    let money = try responsiveFormSource("Sources/SuperSubmitter/Tabs/MoneyTab.swift")
+    // The price of the app is the Availability tab's. It was the top panel of
+    // Monetization, over the products it has nothing to do with.
+    let money = try responsiveFormSource("Sources/SuperSubmitter/Tabs/AvailabilityTab.swift")
     let start = try #require(money.range(of: "private var priceSection"))
     let end = try #require(money.range(of: "private var resolvedPoint"))
     let section = String(money[start.lowerBound..<end.lowerBound])

@@ -644,6 +644,111 @@ public extension Manifest {
         return wrote
     }
 
+    /// The detail Apple holds about products the manifest already names.
+    ///
+    /// `mergeAppleMoney` above writes a catalog and only when there is none, so
+    /// everything the store knows about a product stopped at the door the
+    /// moment `store.yaml` held one line about it. That is the ordinary case:
+    /// an import writes the group, the plan and its duration, and the price,
+    /// the store name and the billing type it read in the same breath were
+    /// dropped. The tab then drew "Pick a price" beside a subscription that has
+    /// been selling for a year, and the developer was asked to retype what the
+    /// App Store had already told the app twice.
+    ///
+    /// Blanks only, the same rule as everything else here: a value in the file
+    /// is the developer's answer and a screen they walked past may not change
+    /// it. `territory` is the country the prices were read in, and `currency`
+    /// is what that country charges in — Apple's `customerPrice` is a bare
+    /// number, so the currency has to come from the read that named it.
+    @discardableResult
+    mutating func mergeAppleCatalog(_ apple: ActualState.Apple, territory: String,
+                                    currency: String?) -> Bool {
+        var wrote = false
+
+        for index in (purchases ?? []).indices {
+            guard let held = apple.catalog[purchases![index].id] else { continue }
+            if purchases![index].name == nil, let name = held.name {
+                purchases![index].name = name
+                wrote = true
+            }
+            if purchases![index].reviewNote == nil, let note = held.reviewNote {
+                purchases![index].reviewNote = note
+                wrote = true
+            }
+            if purchases![index].price == nil,
+               let price = Self.applePrice(held, territory: territory, currency: currency) {
+                purchases![index].price = price
+                wrote = true
+            }
+            if Self.fill(&purchases![index].locales, from: held) { wrote = true }
+        }
+
+        for group in (subscriptions ?? []).indices {
+            for plan in subscriptions![group].plans.indices {
+                let id = subscriptions![group].plans[plan].id
+                guard let held = apple.catalog[id] else { continue }
+                if subscriptions![group].plans[plan].price == nil,
+                   let price = Self.applePrice(held, territory: territory,
+                                               currency: currency) {
+                    subscriptions![group].plans[plan].price = price
+                    wrote = true
+                }
+                // Apple keeps the territories of a subscription separated by
+                // billing type, so a product that answers under exactly one
+                // type has named it. Two is a plan the store splits, and this
+                // has no way to choose between them.
+                if subscriptions![group].plans[plan].applePlanType == nil,
+                   held.subscriptionPlanTerritories.count == 1,
+                   let type = held.subscriptionPlanTerritories.keys.first {
+                    subscriptions![group].plans[plan].applePlanType = type
+                    wrote = true
+                }
+                if Self.fill(&subscriptions![group].plans[plan].locales, from: held) {
+                    wrote = true
+                }
+            }
+        }
+        return wrote
+    }
+
+    /// The store name and description of a product, in the locales the
+    /// manifest has nothing for.
+    private static func fill(_ locales: inout [String: ProductLocale]?,
+                             from held: ActualState.Apple.CatalogProduct) -> Bool {
+        var wrote = false
+        for (code, text) in held.locales {
+            guard locales?[code] == nil,
+                  text.name != nil || text.description != nil else { continue }
+            var product = ProductLocale()
+            product.name = text.name
+            product.description = text.description
+            locales = locales ?? [:]
+            locales?[code] = product
+            wrote = true
+        }
+        return wrote
+    }
+
+    /// One product's price in the territory it was read in.
+    ///
+    /// Apple answers `customerPrice` as a bare number, so a price with no
+    /// currency beside it is half an answer and this returns none: a manifest
+    /// that names 19.90 of nothing prices the product in whatever the next
+    /// reader assumes.
+    private static func applePrice(_ held: ActualState.Apple.CatalogProduct,
+                                   territory: String, currency: String?) -> Price? {
+        guard let currency, !currency.isEmpty,
+              let text = held.prices[territory] else { return nil }
+        // A price the store sent with its currency already on it, which is what
+        // the Play side and every fixture in this app look like.
+        let parts = text.split(separator: " ")
+        let amount = parts.count == 2 ? String(parts[1]) : text
+        guard let value = Decimal(string: amount) else { return nil }
+        return Price(amount: value,
+                     currency: parts.count == 2 ? String(parts[0]) : currency,
+                     territory: territory)
+    }
+
     /// A store answer never clears an answer that another store already gave.
     private mutating func mergeImportedReview(_ imported: ImportedReview) {
         var review = self.review ?? Review()

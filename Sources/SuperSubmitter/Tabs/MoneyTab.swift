@@ -1,7 +1,12 @@
 import SubmitKit
 import SwiftUI
 
-/// Tab 5. Provider credentials stay in Keychain; catalog and prices live in the manifest.
+/// What the app sells inside itself. Provider credentials stay in Keychain;
+/// the catalog lives in the manifest.
+///
+/// The price of the app and the countries it sells in are the Availability
+/// tab's. They were the top two panels here, which made one screen answer two
+/// questions and left the countries filed under the name of the catalogue.
 struct MoneyTab: View {
     @Environment(AppState.self) private var state
 
@@ -27,21 +32,6 @@ struct MoneyTab: View {
             // Yellow, not red. Red says irreversible in this app, and a value
             // the developer can fix in the next keystroke is not that.
             if let error = state.moneyError { WarningNote(error) }
-            // One column per store. The same money reaches the two of them in
-            // two different shapes — Apple sells at a price point off a ladder
-            // it publishes, Play takes micros and converts per currency — and
-            // one "Base price" panel over one "Availability" panel said neither.
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 14) {
-                    priceSection
-                    if state.stores.contains(.google) { googleMoneySection }
-                }
-                VStack(alignment: .leading, spacing: 14) {
-                    priceSection
-                    if state.stores.contains(.google) { googleMoneySection }
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
             purchasesSection
             subscriptionsSection
             // The two App Store surfaces beside the catalogue: who can test
@@ -54,75 +44,12 @@ struct MoneyTab: View {
             if state.provider != .none { providerCatalog }
         }
         .frame(maxWidth: 940, alignment: .leading)
-        .onChange(of: state.priceAmount) { _, _ in state.updateBasePrice() }
-        .onChange(of: state.priceCurrency) { _, _ in state.updateBasePrice() }
-        .onChange(of: state.priceTerritory) { _, _ in
-            state.updateBasePrice()
-            // The ladder is one country's money, so the territory names which
-            // prices every Amount field on this tab may offer.
-            Task { await state.loadApplePricePoints() }
-        }
+        // The ladder every Amount field on this tab offers. The base territory
+        // that decides which country's money it is belongs to Availability;
+        // this reads whatever that tab last set.
         .task { await state.loadApplePricePoints() }
         // What the store already charges and sells, for an app that is on it.
         .task { await state.loadStoreMonetization() }
-    }
-
-    /// The price, under the store whose ladder decides it.
-    ///
-    /// It carries the fields even when Apple is not selected, because the base
-    /// price is one value and something has to own it.
-    private var priceSection: some View {
-        @Bindable var state = state
-        let apple = state.stores.contains(.apple)
-        return Section_(apple ? "App Store" : "Base price",
-                        icon: apple ? nil : "dollarsign.circle.fill",
-                        tint: Theme.green, anchor: "money.basePrice",
-                        note: apple ? "A price point, not a number." : nil) {
-            VStack(alignment: .leading, spacing: 9) {
-                FieldRow {
-                    LabeledField("Currency", width: 120) {
-                        ChoiceField(value: $state.priceCurrency,
-                                    choices: StoreValues.currencies,
-                                    emptyLabel: "Pick a currency", allowsNone: false)
-                    }
-                    // The app's own ladder, which carries the free row that a
-                    // purchase below must not offer. See `amountField`.
-                    LabeledField("Amount") {
-                        amountField($state.priceAmount, points: state.applePricePoints)
-                    }
-                }
-                LabeledField("Base territory", anchor: "money.baseTerritory") {
-                    ChoiceField(value: $state.priceTerritory,
-                                choices: StoreValues.appleTerritories,
-                                emptyLabel: "Pick a territory")
-                }
-                Text("Other territories are converted by the stores.")
-                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                // The Google half of this moved to the Play column, where the
-                // rest of what Play does with the price already lives.
-                if !state.stores.contains(.google) {
-                    Toggle("Convert the base price for every Google region",
-                           isOn: state.autoConvertPricesBinding)
-                        .disabled(true)
-                }
-                resolvedPoint
-                if state.stores.contains(.apple) {
-                    LabeledField("Territories", anchor: "money.appStoreTerritories") {
-                        MultiChoiceField(text: state.appTerritoriesBinding,
-                                         choices: StoreValues.appleTerritories,
-                                         emptyLabel: "Every territory Apple sells in")
-                    }
-                    Link("Edit App Store countries ↗",
-                         destination: URL(string: "https://appstoreconnect.apple.com/apps")!)
-                        .font(Theme.font(size: 12))
-                }
-                Spacer(minLength: 0)
-            }
-            // The stretch happens before the panel is painted, so the two
-            // panels on this row draw to one height instead of two.
-            .frame(maxHeight: .infinity, alignment: .top)
-            .storePanel()
-        }
     }
 
     /// A price, offered the way App Store Connect offers one.
@@ -142,64 +69,6 @@ struct MoneyTab: View {
                     emptyLabel: points.isEmpty ? "Prices unavailable" : "Pick a price",
                     allowsNone: false)
             .disabled(points.isEmpty)
-    }
-
-    /// Apple sells at a price point, never at the amount you typed. The panel
-    /// shows what Apple resolved and warns over a 5 percent gap. Spec 6.7.
-    @ViewBuilder
-    private var resolvedPoint: some View {
-        if state.stores.contains(.apple) {
-            if let resolved = state.actualState.apple?.priceAmount,
-               let requested = state.manifest.pricing?.base {
-                let gap = state.priceGap ?? 0
-                HStack(spacing: 8) {
-                    Text("App Store price point")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    Text("\(resolved.description) \(requested.currency)")
-                        .font(Theme.mono(11.5))
-                        .foregroundStyle(gap > 0.05 ? Theme.yellow : Theme.text)
-                    if gap > 0.05 {
-                        StatePill(text: "\(Int((gap * 100).rounded()))% off the request",
-                                  foreground: Theme.yellow, background: Theme.yellowBg)
-                    }
-                    Spacer(minLength: 0)
-                }
-            } else {
-                Text("Read the stores on the Summary tab to see the App Store price point.")
-                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
-            }
-        }
-    }
-
-
-    /// What Play does with the same money.
-    ///
-    /// Play takes micros and converts per currency, so it holds no ladder and
-    /// no price point. What it does hold is the conversion and the countries,
-    /// and both used to sit in an "Availability" panel that named the App Store
-    /// in its only field.
-    private var googleMoneySection: some View {
-        Section_("Google Play", tint: Theme.playGreen, anchor: "money.availability",
-                 note: "Micros, per currency.") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Play takes the base price beside this and converts it into every currency it sells in. There is no price point to resolve.")
-                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Toggle("Convert the base price for every Google region",
-                       isOn: state.autoConvertPricesBinding)
-                LabeledField("Countries") {
-                    Text("Every country Play sells in, unless the Play Console says otherwise.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Link("Open Play Console countries ↗",
-                     destination: URL(string: "https://play.google.com/console/")!)
-                Spacer(minLength: 0)
-            }
-            .font(Theme.font(size: 12))
-            .frame(maxHeight: .infinity, alignment: .top)
-            .storePanel()
-        }
     }
 
     private var purchasesSection: some View {

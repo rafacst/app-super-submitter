@@ -940,7 +940,7 @@ extension Runner {
                 api, path: "/v2/inAppPurchases/\(purchaseID)/pricePoints"
                     + "?filter%5Bterritory%5D=\(territory)")
             if let point = ApplePricePoints.nearest(points, to: price.amount)?.id {
-                let priceID = "price-\(UUID().uuidString)"
+                let priceID = Self.localID("price-0")
                 try await api.apple("POST", "/v1/inAppPurchasePriceSchedules", body: [
                     "data": [
                         "type": "inAppPurchasePriceSchedules",
@@ -1115,7 +1115,7 @@ extension Runner {
             if let preorder = item.preOrderEnabled { attributes["preOrderEnabled"] = preorder }
             if let date = item.releaseDate { attributes["releaseDate"] = date }
             return [
-                "type": "territoryAvailabilities", "id": "territory-\(index)",
+                "type": "territoryAvailabilities", "id": Self.localID("territory-\(index)"),
                 "attributes": attributes,
                 "relationships": ["territory": [
                     "data": ["type": "territories", "id": item.territory]]],
@@ -1124,7 +1124,7 @@ extension Runner {
         let data: [String: Any] = [
                 "type": "appAvailabilities",
                 "attributes": ["availableInNewTerritories":
-                                manifest.pricing?.autoConvertOtherTerritories ?? true],
+                                manifest.pricing?.appleNewTerritories ?? true],
                 "relationships": [
                     "app": ["data": ["type": "apps", "id": appleAppID]],
                     "territoryAvailabilities": ["data": included.map {
@@ -1223,7 +1223,7 @@ extension Runner {
         let points = try await ApplePricePoints.app(api, appID: appleAppID,
                                                     territory: territory)
         guard let point = ApplePricePoints.nearest(points, to: price.amount)?.id else { return }
-        let appPriceID = "price-\(UUID().uuidString)"
+        let appPriceID = Self.localID("price-0")
         try await api.apple("POST", "/v1/appPriceSchedules", body: [
             "data": [
                 "type": "appPriceSchedules",
@@ -1241,6 +1241,16 @@ extension Runner {
             ]],
         ])
     }
+
+    /// The id of a resource created inside another request.
+    ///
+    /// App Store Connect calls it a local id, and it takes exactly one shape:
+    /// `${name}`. A plain string is refused outright — "The provided included
+    /// entity id 'price-3A2BD60D…' has invalid format. For inline creation,
+    /// the id must be a local id with the format '${local-id}'" — and the run
+    /// stops on the step. Every write that carries an `included` block goes
+    /// through here.
+    static func localID(_ name: String) -> String { "${\(name)}" }
 
     func appleBuildNumber() -> String {
         // The build carries the number. The manifest never holds a second copy.

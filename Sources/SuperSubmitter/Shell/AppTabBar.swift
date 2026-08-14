@@ -21,11 +21,25 @@ struct AppTabBar: View {
         // off the side and the bar keeps its height.
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                HStack(spacing: 4) {
-                    ForEach(Array(state.appRows.enumerated()), id: \.element.id) { index, app in
-                        AppTab(index: index, app: app)
-                            .id(app.id)
+                HStack(spacing: 8) {
+                    // One box of segments, which is the tab view the Mac uses
+                    // for switching what the window is showing. The tabs were
+                    // loose buttons on the band: the selected one drew a card
+                    // and the others drew nothing at all, so a window with one
+                    // app showed a single floating chip and no control.
+                    HStack(spacing: 2) {
+                        ForEach(Array(state.appRows.enumerated()),
+                                id: \.element.id) { index, app in
+                            AppTab(index: index, app: app)
+                                .id(app.id)
+                        }
                     }
+                    .padding(2)
+                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+                    // Outside the box. It adds an app rather than choosing one,
+                    // and a command among the choices reads as another choice.
                     addButton
                 }
                 .padding(.horizontal, 8)
@@ -63,10 +77,17 @@ struct AppTabBar: View {
 
 /// One app's tab.
 ///
-/// The icon and the name say which app, the status chip says where the stores
-/// have it, and the dot says this app is building right now. The dot is the
-/// whole reason the bar exists: a build that is no longer on the screen is
-/// still running, and before this there was no way for the window to say so.
+/// The icon and the name say which app, and the dot says this app is building
+/// right now. The dot is the whole reason the bar exists: a build that is no
+/// longer on the screen is still running, and before this there was no way for
+/// the window to say so.
+///
+/// The store standing is not here. A tab bar answers "which app", and a chip
+/// reading "Store draft" beside every name answered a question nobody asked at
+/// the moment they were picking one — it doubled the width of each tab, so the
+/// names got squeezed into an ellipsis and the one thing the bar is for became
+/// the hardest thing on it to read. The standing is still on the screens that
+/// are about it, and the tooltip carries it here.
 private struct AppTab: View {
     @Environment(AppState.self) private var state
     let index: Int
@@ -88,16 +109,17 @@ private struct AppTab: View {
                     .foregroundStyle(selected ? Theme.text : Theme.text2)
                     .lineLimit(1)
                 if state.isBuilding(appID: app.id) { BuildingDot() }
-                AppStatusChip(mark: state.appMark(appKey: app.key))
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background {
+                // The raised segment inside the box, the way the system draws
+                // the chosen one: one step lighter than the track, with the
+                // shadow that lifts it. The others are the track itself.
                 if selected {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Theme.content)
-                        .overlay(RoundedRectangle(cornerRadius: 7)
-                            .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Theme.raised)
+                        .shadow(color: .black.opacity(0.18), radius: 1.5, y: 0.5)
                 }
             }
             .contentShape(.rect)
@@ -106,7 +128,9 @@ private struct AppTab: View {
         // The name truncates at 180 points. A tab bar of five apps whose names
         // all start "My Company " is five identical tabs otherwise.
         .frame(maxWidth: 180)
-        .help(app.name)
+        // The standing, in the one place that costs the bar no width. It was a
+        // chip on the tab itself.
+        .help("\(app.name) · \(state.appMark(appKey: app.key).explained)")
         .contextMenu {
             Button("Update from the Stores…") {
                 state.selectApp(at: index)
