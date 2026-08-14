@@ -1,5 +1,29 @@
 import Foundation
 
+/// Why the App Store would not take a submission.
+public enum ReleaseError: Error, LocalizedError {
+    /// Apple refused the submit and named no resource. `blockers` is what the
+    /// app found by asking, one line per item.
+    case submissionBlocked(reason: String, blockers: [String])
+
+    public var errorDescription: String? {
+        switch self {
+        case .submissionBlocked(let reason, let blockers):
+            """
+            \(reason)
+
+            \(blockers.count == 1 ? "This is what the submission is waiting on:"
+                : "These are what the submission is waiting on:")
+            \(blockers.map { "· \($0)" }.joined(separator: "\n"))
+
+            Fix or remove the item above in App Store Connect, then send again. \
+            Cancel the submission first if the same item keeps coming back, \
+            because an open submission keeps the items it already holds.
+            """
+        }
+    }
+}
+
 /// The two irreversible calls. Spec section 7.9.
 ///
 /// Each method releases **one** store. There is no method here that releases
@@ -27,10 +51,9 @@ public struct ReleaseClient: Sendable {
             $0["attributes"]["state"].string == "READY_FOR_REVIEW"
                 && $0["attributes"]["platform"].string == platform
         })?["id"].string {
-            try await api.apple("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: [
-                "data": ["type": "reviewSubmissions", "id": submissionID,
-                         "attributes": ["submitted": true]],
-            ])
+            // A submission left open by an earlier attempt still holds that
+            // attempt's items, so a refusal here is about one of them.
+            try await submit(submissionID: submissionID, refused: [])
             return submissionID
         }
         let submission = JSON(data: try await api.apple("POST", "/v1/reviewSubmissions", body: [
@@ -55,6 +78,11 @@ public struct ReleaseClient: Sendable {
             ],
         ])
 
+        // Every add below is optional and every refusal is kept. Apple names
+        // the resource when it turns an add away and names nothing at all when
+        // it refuses the submit, so this list is the evidence.
+        var refused: [String] = []
+
         // The purchases join the same submission, so one Apple review covers
         // the version and the purchases together.
         let purchases = JSON(data: try await api.apple(
@@ -63,41 +91,125 @@ public struct ReleaseClient: Sendable {
             guard let purchaseID = purchase["id"].string,
                   let versionID = await editableVersionID(
                     path: "/v2/inAppPurchases/\(purchaseID)/versions") else { continue }
-            await addItem(to: submissionID, relationship: "inAppPurchaseVersion",
-                          type: "inAppPurchaseVersions", id: versionID)
+            let name = purchase["attributes"]["productId"].string ?? purchaseID
+            if let line = await addItem(
+                to: submissionID, relationship: "inAppPurchaseVersion",
+                type: "inAppPurchaseVersions", id: versionID,
+                label: "The in-app purchase \(name)") { refused.append(line) }
         }
 
-        await addMarketingItems(appID: appID, versionID: versionID,
-                                submissionID: submissionID)
-        await addSubscriptionItems(appID: appID, submissionID: submissionID)
+        refused += await addMarketingItems(appID: appID, versionID: versionID,
+                                           submissionID: submissionID)
+        refused += await addSubscriptionItems(appID: appID, submissionID: submissionID)
 
-        try await api.apple("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: [
-            "data": ["type": "reviewSubmissions", "id": submissionID,
-                     "attributes": ["submitted": true]],
-        ])
+        try await submit(submissionID: submissionID, refused: refused)
         return submissionID
     }
 
-    /// One item on the open review submission.
+    /// The point of no return, and the one place that turns Apple's "check
+    /// associated errors" into the errors themselves.
+    private func submit(submissionID: String, refused: [String]) async throws {
+        do {
+            try await api.apple("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: [
+                "data": ["type": "reviewSubmissions", "id": submissionID,
+                         "attributes": ["submitted": true]],
+            ])
+        } catch {
+            let blockers = await submissionBlockers(submissionID: submissionID,
+                                                    refused: refused)
+            guard !blockers.isEmpty else { throw error }
+            throw ReleaseError.submissionBlocked(reason: error.localizedDescription,
+                                                 blockers: blockers)
+        }
+    }
+
+    /// One item on the open review submission, and what Apple said if it
+    /// refused the item.
     ///
     /// A single item that Apple refuses is never a reason to abandon the
     /// version submission. Step 4 still holds the whole decision, and a
     /// rejected item leaves the version untouched.
     ///
+    /// The refusal is returned rather than dropped, because this is where Apple
+    /// names the resource. The submit that follows answers "This resource
+    /// cannot be reviewed, please check associated errors to see why" and names
+    /// nothing at all, so a swallowed line here was the whole of the evidence.
+    ///
     /// `// ponytail: one add, six callers. Six copies of the same body would
     /// // drift on the seventh resource Apple adds.`
     private func addItem(to submissionID: String, relationship: String,
-                         type: String, id: String) async {
-        _ = try? await api.apple("POST", "/v1/reviewSubmissionItems", body: [
-            "data": [
-                "type": "reviewSubmissionItems",
-                "relationships": [
-                    "reviewSubmission": ["data": ["type": "reviewSubmissions",
-                                                  "id": submissionID]],
-                    relationship: ["data": ["type": type, "id": id]],
+                         type: String, id: String, label: String) async -> String? {
+        do {
+            _ = try await api.apple("POST", "/v1/reviewSubmissionItems", body: [
+                "data": [
+                    "type": "reviewSubmissionItems",
+                    "relationships": [
+                        "reviewSubmission": ["data": ["type": "reviewSubmissions",
+                                                      "id": submissionID]],
+                        relationship: ["data": ["type": type, "id": id]],
+                    ],
                 ],
-            ],
-        ])
+            ])
+            return nil
+        } catch {
+            return "\(label): \(error.localizedDescription)"
+        }
+    }
+
+    /// What the submission holds and where each item stands, after Apple has
+    /// refused to take it.
+    ///
+    /// Apple's own sentence for a refused submit names no resource, so this
+    /// reads the items back and names them. `refused` carries the adds Apple
+    /// turned away, which is the better evidence of the two, because this app
+    /// knew the human name of the thing it was attaching.
+    private func submissionBlockers(submissionID: String,
+                                    refused: [String]) async -> [String] {
+        var lines = refused
+        guard let response = try? await api.apple(
+            "GET", "/v1/reviewSubmissions/\(submissionID)/items?limit=200")
+        else { return lines }
+        for item in JSON(data: response.data)["data"].array {
+            let state = item["attributes"]["state"].string ?? ""
+            guard state != "READY_FOR_REVIEW", state != "ACCEPTED",
+                  state != "APPROVED" else { continue }
+            let named = Self.itemName(item)
+            lines.append("\(named) is \(Self.stateText(state)).")
+        }
+        return lines
+    }
+
+    /// Which resource one item covers. Apple hangs thirteen relationships off
+    /// a submission item and fills exactly one of them.
+    static func itemName(_ item: JSON) -> String {
+        let names: [(key: String, noun: String)] = [
+            ("appStoreVersion", "The App Store version"),
+            ("appCustomProductPageVersion", "A custom product page"),
+            ("appStoreVersionExperimentV2", "A product page test"),
+            ("appStoreVersionExperiment", "A product page test"),
+            ("appEvent", "An in-app event"),
+            ("inAppPurchaseVersion", "An in-app purchase"),
+            ("subscriptionVersion", "A subscription"),
+            ("subscriptionGroupVersion", "A subscription group"),
+            ("backgroundAssetVersion", "A background asset"),
+            ("gameCenterAchievementVersion", "A Game Center achievement"),
+            ("gameCenterLeaderboardVersion", "A Game Center leaderboard"),
+            ("gameCenterLeaderboardSetVersion", "A Game Center leaderboard set"),
+            ("gameCenterActivityVersion", "A Game Center activity"),
+            ("gameCenterChallengeVersion", "A Game Center challenge"),
+        ]
+        for entry in names {
+            guard let id = item["relationships"][entry.key]["data"]["id"].string
+            else { continue }
+            return "\(entry.noun) (\(id))"
+        }
+        return "An item of this submission (\(item["id"].string ?? "unknown"))"
+    }
+
+    /// `NOT_READY_FOR_REVIEW` as "not ready for review".
+    static func stateText(_ state: String) -> String {
+        state.isEmpty ? "in a state Apple did not name"
+            : state.replacingOccurrences(of: "_", with: " ").lowercased()
     }
 
     private func editableVersionID(path: String) async -> String? {
@@ -116,18 +228,23 @@ public struct ReleaseClient: Sendable {
     /// Apple accepts an item in one state only, so each read filters before it
     /// sends. A page or an event in any other state already reached a review.
     private func addMarketingItems(appID: String, versionID: String,
-                                   submissionID: String) async {
+                                   submissionID: String) async -> [String] {
+        var refused: [String] = []
         if let events = try? await api.apple(
             "GET", "/v1/apps/\(appID)/appEvents?limit=200") {
             for event in JSON(data: events.data)["data"].array
             where event["attributes"]["eventState"].string == "READY_FOR_REVIEW" {
                 guard let id = event["id"].string else { continue }
-                await addItem(to: submissionID, relationship: "appEvent",
-                              type: "appEvents", id: id)
+                let name = event["attributes"]["referenceName"].string ?? id
+                if let line = await addItem(
+                    to: submissionID, relationship: "appEvent", type: "appEvents", id: id,
+                    label: "The in-app event \(name)") { refused.append(line) }
             }
         }
 
-        // A custom product page submits its newest version, never the page.
+        // A custom product page submits its newest version, never the page. The
+        // page carries the name, and the name is what the developer has to go
+        // and look at, so it is read here and not from the version.
         if let pages = try? await api.apple(
             "GET", "/v1/apps/\(appID)/appCustomProductPages?limit=200") {
             for page in JSON(data: pages.data)["data"].array {
@@ -135,12 +252,14 @@ public struct ReleaseClient: Sendable {
                       let versions = try? await api.apple(
                         "GET", "/v1/appCustomProductPages/\(pageID)"
                             + "/appCustomProductPageVersions?limit=200") else { continue }
+                let name = page["attributes"]["name"].string ?? pageID
                 for version in JSON(data: versions.data)["data"].array
                 where version["attributes"]["state"].string == "PREPARE_FOR_SUBMISSION" {
                     guard let id = version["id"].string else { continue }
-                    await addItem(to: submissionID,
-                                  relationship: "appCustomProductPageVersion",
-                                  type: "appCustomProductPageVersions", id: id)
+                    if let line = await addItem(
+                        to: submissionID, relationship: "appCustomProductPageVersion",
+                        type: "appCustomProductPageVersions", id: id,
+                        label: "The custom product page \(name)") { refused.append(line) }
                 }
             }
         }
@@ -151,26 +270,33 @@ public struct ReleaseClient: Sendable {
             for experiment in JSON(data: experiments.data)["data"].array
             where experiment["attributes"]["state"].string == "PREPARE_FOR_SUBMISSION" {
                 guard let id = experiment["id"].string else { continue }
-                await addItem(to: submissionID,
-                              relationship: "appStoreVersionExperimentV2",
-                              type: "appStoreVersionExperiments", id: id)
+                let name = experiment["attributes"]["name"].string ?? id
+                if let line = await addItem(
+                    to: submissionID, relationship: "appStoreVersionExperimentV2",
+                    type: "appStoreVersionExperiments", id: id,
+                    label: "The product page test \(name)") { refused.append(line) }
             }
         }
+        return refused
     }
 
     /// Add editable subscription and group versions to this review submission.
-    private func addSubscriptionItems(appID: String, submissionID: String) async {
+    private func addSubscriptionItems(appID: String, submissionID: String) async -> [String] {
         guard let groups = try? await api.apple(
             "GET", "/v1/apps/\(appID)/subscriptionGroups?include=subscriptions&limit=200")
-        else { return }
+        else { return [] }
         let payload = JSON(data: groups.data)
+        var refused: [String] = []
 
         for group in payload["data"].array {
             guard let id = group["id"].string,
                   let versionID = await editableVersionID(
                     path: "/v1/subscriptionGroups/\(id)/versions") else { continue }
-            await addItem(to: submissionID, relationship: "subscriptionGroupVersion",
-                          type: "subscriptionGroupVersions", id: versionID)
+            let name = group["attributes"]["referenceName"].string ?? id
+            if let line = await addItem(
+                to: submissionID, relationship: "subscriptionGroupVersion",
+                type: "subscriptionGroupVersions", id: versionID,
+                label: "The subscription group \(name)") { refused.append(line) }
         }
 
         for subscription in payload["included"].array
@@ -178,9 +304,13 @@ public struct ReleaseClient: Sendable {
             guard let id = subscription["id"].string,
                   let versionID = await editableVersionID(
                     path: "/v1/subscriptions/\(id)/versions") else { continue }
-            await addItem(to: submissionID, relationship: "subscriptionVersion",
-                          type: "subscriptionVersions", id: versionID)
+            let name = subscription["attributes"]["productId"].string ?? id
+            if let line = await addItem(
+                to: submissionID, relationship: "subscriptionVersion",
+                type: "subscriptionVersions", id: versionID,
+                label: "The subscription \(name)") { refused.append(line) }
         }
+        return refused
     }
 
     /// The open submission that a cancel can still reach, if one exists.
