@@ -75,6 +75,14 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     // disk, and no snapshot or draft encodes a `Tab`. The numbers fix the
     // sidebar order and do nothing else.
     case gaming
+    // Where the app sells, and for how much. It was the top half of
+    // Monetization, under a heading that named the products: an app on sale in
+    // one country had nowhere at all to say so, because the one screen that
+    // held the territory list called itself by the name of the catalogue and
+    // buried the countries under a price field. A price and a country are the
+    // same question — is this app for sale here, and at what — and the
+    // purchases inside it are a different one.
+    case availability
     case money
     case marketing
     case reviewInfo
@@ -126,6 +134,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .details: "Details"
         case .media: "Media"
         case .gaming: "Gaming"
+        case .availability: "Availability"
         case .money: "Monetization"
         case .marketing: "Marketing"
         case .reviewInfo: "Review info"
@@ -141,8 +150,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var modes: Set<Mode> {
         switch self {
         case .stores: [.publishing, .managing]
-        case .build, .betaTesting, .gaming, .money, .reviewInfo, .plan,
-             .release: [.publishing]
+        case .build, .betaTesting, .gaming, .availability, .money, .reviewInfo,
+             .plan, .release: [.publishing]
         // What the listing says and what it shows are the two things a
         // manager changes most, and Managing had nowhere to show them: an
         // imported app filled these tabs and the mode that imported it could
@@ -183,6 +192,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .details: "list.bullet.rectangle"
         case .media: "photo.stack"
         case .gaming: "gamecontroller"
+        case .availability: "globe"
         case .money: "dollarsign.square"
         case .marketing: "megaphone"
         case .reviewInfo: "checkmark.square"
@@ -225,7 +235,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .details: "Write the listing text, the keywords and the support links"
         case .media: "Add the screenshots, the icon and the promotional video"
         case .gaming: "Set up the achievements, the leaderboards and the matchmaking of a game"
-        case .money: "Define selling price, in-app purchases, subscriptions and more"
+        case .availability: "Set the price of the app, and the countries it sells in"
+        case .money: "Define the in-app purchases, the subscriptions and the offers"
         case .marketing: "Set up custom product pages, tests and in-app events"
         case .reviewInfo: "Give the reviewer the contact, the demo account and the notes"
         case .plan: "Check every change before it reaches a store"
@@ -266,7 +277,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // same reason: the wrong answer is the one that puts a read-only
         // screen under Send, beside the two buttons that talk to a store.
         case .stores, .account, .settings, .storePage, .build, .betaTesting,
-             .details, .media, .gaming, .money, .marketing, .reviewInfo: .edits
+             .details, .media, .gaming, .availability, .money, .marketing,
+             .reviewInfo: .edits
         case .plan: .reads
         case .release, .liveApp: .releases
         }

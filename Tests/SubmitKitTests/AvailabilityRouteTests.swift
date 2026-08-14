@@ -91,7 +91,7 @@ private final class AvailabilityStub: URLProtocol, @unchecked Sendable {
 }
 
 private func availabilityRunner(_ territories: [Manifest.TerritoryAvailability],
-                                autoConvert: Bool? = nil,
+                                newTerritories: Bool? = nil,
                                 heldAutoConvert: Bool? = nil) -> Runner {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [AvailabilityStub.self]
@@ -103,7 +103,7 @@ private func availabilityRunner(_ territories: [Manifest.TerritoryAvailability],
     manifest.apps.apple?.appId = "app-1"
     manifest.pricing = Manifest.Pricing(
         base: Price(amount: 0, currency: "USD"),
-        autoConvertOtherTerritories: autoConvert, territories: territories)
+        appleNewTerritories: newTerritories, territories: territories)
     var actual = ActualState()
     var apple = ActualState.Apple()
     apple.availableInNewTerritories = heldAutoConvert
@@ -182,7 +182,7 @@ struct AvailabilityRouteTests {
     /// So the run says so instead of stopping on a request that cannot work.
     @Test func changingNewTerritoriesOnAnExistingRecordSendsNothing() async throws {
         AvailabilityStub.start()
-        let runner = availabilityRunner([], autoConvert: false, heldAutoConvert: true)
+        let runner = availabilityRunner([], newTerritories: false, heldAutoConvert: true)
 
         try await runner.appleAvailability()
 
@@ -196,7 +196,7 @@ struct AvailabilityRouteTests {
 
     @Test func anAnswerTheStoreAlreadyHoldsIsNotWritten() async throws {
         AvailabilityStub.start()
-        let runner = availabilityRunner([], autoConvert: true, heldAutoConvert: true)
+        let runner = availabilityRunner([], newTerritories: true, heldAutoConvert: true)
 
         try await runner.appleAvailability()
 
@@ -223,7 +223,7 @@ struct AvailabilityRouteTests {
         AvailabilityStub.start(holding: false)
         let runner = availabilityRunner([
             Manifest.TerritoryAvailability(territory: "BRA", available: true),
-        ], autoConvert: true)
+        ], newTerritories: true)
 
         try await runner.appleAvailability()
 

@@ -153,15 +153,20 @@ enum FieldIndex {
         .init(id: "gaming.send", label: "Send to Game Center", tab: .gaming,
               keywords: ["apply", "write", "publish", "game center"]),
 
-        // MARK: Monetization
-        .init(id: "money.basePrice", label: "Base price", tab: .money,
+        // MARK: Availability
+        .init(id: "availability.basePrice", label: "Base price", tab: .availability,
               keywords: ["price", "cost", "amount", "currency", "tier"]),
-        .init(id: "money.baseTerritory", label: "Base territory", tab: .money,
-              keywords: ["country", "region", "price point"]),
-        .init(id: "money.availability", label: "Countries", tab: .money,
-              keywords: ["availability", "territories", "countries", "regions", "where", "play"]),
-        .init(id: "money.appStoreTerritories", label: "Territories",
-              tab: .money, keywords: ["countries", "regions", "apple", "app store"]),
+        .init(id: "availability.baseTerritory", label: "Base territory",
+              tab: .availability, keywords: ["country", "region", "price point"]),
+        .init(id: "availability.territories", label: "Territories",
+              tab: .availability,
+              keywords: ["countries", "regions", "availability", "where",
+                         "apple", "app store", "on sale"]),
+        .init(id: "availability.google", label: "Countries", tab: .availability,
+              keywords: ["availability", "territories", "countries", "regions",
+                         "where", "play"]),
+
+        // MARK: Monetization
         .init(id: "money.purchases", label: "In-app purchases", tab: .money,
               keywords: ["iap", "product id", "consumable", "entitlement",
                          "review screenshot", "hosted content"]),

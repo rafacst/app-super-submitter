@@ -336,6 +336,73 @@ public enum StoreValues {
         }
         return result.sorted { $0.label < $1.label }
     }()
+
+    /// One continent, and the App Store territories on it.
+    public struct TerritoryGroup: Sendable, Equatable, Identifiable {
+        /// The UN M49 code ICU groups by, or `other`.
+        public let id: String
+        public let name: String
+        public let territories: [Choice]
+
+        public init(id: String, name: String, territories: [Choice]) {
+            self.id = id
+            self.name = name
+            self.territories = territories
+        }
+    }
+
+    /// The territories, in continents.
+    ///
+    /// A flat list of 266 countries is a haystack, and picking the twenty a
+    /// game ships in meant reading all of them. ICU already knows which
+    /// continent each region is on, so the grouping is asked for rather than
+    /// typed: a hand-written table of 266 rows is wrong in one of them and
+    /// goes stale the next time a country changes name.
+    ///
+    /// `extra` carries the codes that reached the app from somewhere other
+    /// than ICU: Apple sells in Kosovo as `XKS`, which no ISO alpha-3 covers
+    /// and this list therefore cannot contain. A code the store or the
+    /// manifest names has to be on the screen — it is a country the app may
+    /// already sell in, and one that is not drawn is one the developer cannot
+    /// see, cannot keep, and cannot turn off.
+    public static func territoryGroups(including extra: Set<String> = []) -> [TerritoryGroup] {
+        var groups = baseTerritoryGroups
+        let known = Set(groups.flatMap { $0.territories.map(\.value) })
+        let unknown = extra.subtracting(known).sorted()
+        guard !unknown.isEmpty else { return groups }
+        groups.append(TerritoryGroup(
+            id: "other", name: "Elsewhere",
+            territories: unknown.map { Choice($0, "\(territoryName($0)) (\($0))") }))
+        return groups
+    }
+
+    /// The name of a code ICU has no alpha-3 for. Apple's `XKS` is Kosovo,
+    /// whose alpha-2 ICU does know.
+    static func territoryName(_ code: String) -> String {
+        if let name = Locale.current.localizedString(forRegionCode: code) { return name }
+        let short = String(code.prefix(2))
+        return Locale.current.localizedString(forRegionCode: short) ?? code
+    }
+
+    /// Built once. Four codes ICU still answers for are dead states — the
+    /// Netherlands Antilles, Serbia and Montenegro, the Soviet Union and
+    /// Yugoslavia — and each is a region with no continent, so this drops
+    /// them: Apple sells in none of them, and a run that names a territory the
+    /// store does not hold stops on it.
+    static let baseTerritoryGroups: [TerritoryGroup] = {
+        var byContinent: [String: [Choice]] = [:]
+        for choice in appleTerritories {
+            guard let two = Locale(identifier: "und_\(choice.value)").region?.identifier,
+                  let continent = Locale.Region(two).continent?.identifier else { continue }
+            byContinent[continent, default: []].append(choice)
+        }
+        return byContinent
+            .map { TerritoryGroup(id: $0.key,
+                                  name: Locale.current.localizedString(forRegionCode: $0.key)
+                                      ?? $0.key,
+                                  territories: $0.value.sorted { $0.label < $1.label }) }
+            .sorted { $0.name < $1.name }
+    }()
 }
 
 // MARK: - The text a chooser reads and writes

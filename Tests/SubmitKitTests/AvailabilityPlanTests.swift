@@ -9,7 +9,7 @@ import Testing
 /// "The run stopped at Write the territory availability", and the write it
 /// stopped on cannot succeed at all. Two mistakes met.
 ///
-/// The manifest carried `autoConvertOtherTerritories: true` because saving a
+/// The manifest carried this answer because saving a
 /// price wrote that default, not because a developer chose it. The planner then
 /// compared it against `availableInNewTerritories`, which the store read leaves
 /// nil, and a `Bool` against a nil `Bool?` differs. So the step was planned on
@@ -42,7 +42,7 @@ private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
 /// be written at all. A step for it is a step that must fail, whatever the two
 /// values are.
 @Test func aLiveAppPlansNoWriteForNewTerritories() {
-    let pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: true)
+    let pricing = Manifest.Pricing(base: freePrice, appleNewTerritories: true)
 
     #expect(!hasAvailabilityStep(plan(pricing) { $0.availableInNewTerritories = false }))
 }
@@ -55,7 +55,7 @@ private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
 
 /// The store's answer, when the store gives one and it agrees.
 @Test func anAnswerTheStoreAlreadyHoldsPlansNoWrite() {
-    let pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: true)
+    let pricing = Manifest.Pricing(base: freePrice, appleNewTerritories: true)
 
     #expect(!hasAvailabilityStep(plan(pricing) { $0.availableInNewTerritories = true }))
 }
@@ -65,7 +65,7 @@ private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
 @Test func aDisagreementTheStoreWillNotTakeIsReported() {
     var manifest = Manifest()
     manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
-    manifest.pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: false)
+    manifest.pricing = Manifest.Pricing(base: freePrice, appleNewTerritories: false)
     var apple = ActualState.Apple()
     apple.availableInNewTerritories = true
     var actual = ActualState()
@@ -82,7 +82,7 @@ private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
 /// An app with no record yet is the create, and the create is the one call that
 /// carries this attribute.
 @Test func anAppWithNoRecordStillWritesTheSetting() {
-    let pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: false)
+    let pricing = Manifest.Pricing(base: freePrice, appleNewTerritories: false)
 
     #expect(hasAvailabilityStep(plan(pricing)))
 }

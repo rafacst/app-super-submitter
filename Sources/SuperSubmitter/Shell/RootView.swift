@@ -80,6 +80,40 @@ struct RootView: View {
                 .navigationTitle(state.showsEntryScreen ? "" : windowTitle)
                 // The app being edited. See `windowSubtitle`.
                 .navigationSubtitle(state.showsEntryScreen ? "" : windowSubtitle)
+                // The two controls that belong to the window rather than to
+                // the screen under it: how the app looks, and the way into the
+                // field palette.
+                //
+                // They were the first two items of the band below, in front of
+                // the tab's own controls and the save. That band says what the
+                // screen is for and carries what the screen can do, so a
+                // light switch and a search glyph in the middle of it read as
+                // two more things this tab does. The title bar is where the
+                // Mac puts a window's own commands, and it is the one strip
+                // that is on the screen at every moment — including the entry
+                // screen, where the band draws nothing at all and the
+                // appearance switch used to disappear with it.
+                // Two items and not one group. A group is one control in the
+                // system's eyes: it draws the pair inside a single lozenge, so
+                // a light switch and a field search read as two halves of one
+                // thing. They have nothing to do with each other.
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) { AppearanceSwitch() }
+                    if #available(macOS 26.0, *) {
+                        ToolbarSpacer(.fixed, placement: .primaryAction)
+                    }
+                    if state.manifestURL != nil {
+                        ToolbarItem(placement: .primaryAction) {
+                            // The shortcut is in the tooltip, so the button
+                            // teaches its own replacement.
+                            Button { state.showFieldSearch = true } label: {
+                                Image(systemName: "magnifyingglass")
+                            }
+                            .accessibilityLabel("Find a field")
+                            .help("Find a field  ⌘F")
+                        }
+                    }
+                }
                 // The proxy icon. `store.yaml` is a real file that the app
                 // writes on every keystroke, so this window is a document
                 // window and had none of the affordances of one.
@@ -644,58 +678,16 @@ private struct ContentHeader: View {
                                     pendingRelease: state.hasPendingRelease,
                                     locales: state.locales.count)
 
-            // Light and dark, one click away, on every screen. It sits before
-            // the search glyph and outside the `manifestURL` guard below:
-            // reading a screen is the one thing a person does whether an app is
-            // linked or not, so the control that decides how a screen reads
-            // cannot depend on one.
-            HeaderCluster(morphOn: shape) { AppearanceSwitch() }
+            // The appearance switch and the field palette are in the title bar
+            // now. Both belong to the window and not to the tab, and one of
+            // them has to survive the entry screen, where this band is not
+            // drawn at all. See `RootView.toolbar`.
 
             // What is stopping the release, from whichever screen the question
             // occurred to you. It draws nothing while nothing is stopping it,
             // so the band stays quiet on the weeks it has no news.
             if state.manifestURL != nil {
                 HeaderCluster(morphOn: shape) { BlockersButton() }
-            }
-
-            // The palette, with a way in that is not the menu bar.
-            //
-            // It was reachable at Command-F and from Edit, and nowhere on the
-            // screen said so. It is the fastest thing in the app — it finds a
-            // field across nine tabs and scrolls to it — and a developer who
-            // never opens a menu never learns it exists. The shortcut sits in
-            // the tooltip, so the button teaches its own replacement.
-            if state.manifestURL != nil {
-                HeaderCluster(morphOn: shape) {
-                    Button { state.showFieldSearch = true } label: {
-                        if state.selectedTab == .stores {
-                            HStack(spacing: 6) {
-                                Image(systemName: "magnifyingglass")
-                                Text("Search")
-                                Text("⌘F")
-                                    .font(Theme.mono(10.5, weight: .semibold))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1)
-                                    .background(Theme.sep2,
-                                                in: RoundedRectangle(cornerRadius: 4))
-                            }
-                            .font(Theme.font(size: 12.5))
-                            .foregroundStyle(Theme.text2)
-                            .padding(.horizontal, 8)
-                            .frame(height: 24)
-                            .contentShape(.rect)
-                        } else {
-                            Image(systemName: "magnifyingglass")
-                                .font(Theme.font(size: 13))
-                                .foregroundStyle(Theme.text2)
-                                .frame(width: 24, height: 24)
-                                .contentShape(.rect)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Find a field")
-                    .help("Find a field  ⌘F")
-                }
             }
 
             if state.manifestURL != nil { switch state.selectedTab {
@@ -778,8 +770,18 @@ private struct ContentHeader: View {
             // list of linked apps lives in user defaults, and a developer who
             // lost it lost the sidebar while every file was still on disk.
             // Nothing to copy with no app linked, so it draws nothing there.
+            //
+            // The standing of the open app rides beside it. It was a chip on
+            // every tab of the app bar, where it doubled the width of each tab
+            // and squeezed the names it sat next to; here it is one chip, for
+            // the one app the window is showing.
             if !state.linkedApps.isEmpty {
-                HeaderCluster(morphOn: shape) { DraftButton() }
+                HeaderCluster(morphOn: shape) {
+                    if let app = state.currentApp {
+                        AppStatusChip(mark: state.appMark(appKey: app.key))
+                    }
+                    DraftButton()
+                }
             }
         }
         .padding(.leading, 20)

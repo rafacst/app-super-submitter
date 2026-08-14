@@ -23,19 +23,141 @@ extension AppState {
         })
     }
 
-    var appTerritoriesBinding: Binding<String> {
-        Binding(get: {
-            (self.manifest.pricing?.territories ?? []).filter(\.available)
-                .map(\.territory).joined(separator: ", ")
-        }, set: { value in
+    /// Whether the App Store offers this app in territories Apple adds later.
+    ///
+    /// Its own control and its own key. It was the Google price-conversion
+    /// checkbox: one value meant two unrelated things, the label named the
+    /// Google one, and an App Store app with no Play listing was shown that
+    /// checkbox greyed out. So the only way to answer Apple's question was to
+    /// not know you were answering it.
+    var appleNewTerritoriesBinding: Binding<Bool> {
+        Binding(get: { self.manifest.pricing?.appleNewTerritories ?? true }, set: { value in
             guard var pricing = self.manifest.pricing else { return }
-            let codes = Self.splitList(value).map { $0.uppercased() }
-            pricing.territories = codes.isEmpty ? nil : codes.map {
-                Manifest.TerritoryAvailability(territory: $0)
-            }
+            pricing.appleNewTerritories = value
             self.manifest.pricing = pricing
             self.saveManifestReportingErrors()
         })
+    }
+
+    // The comma-separated territory field is gone. `TerritoryPicker` writes
+    // the countries now, and it writes both halves of the answer: the old
+    // binding kept only the ticked ones, so unticking a country removed its
+    // row and the plan then left that country exactly as the store had it.
+
+    /// False while there is no price to hang them on.
+    var canEditTerritories: Bool { manifest.pricing != nil }
+
+    /// The countries the picker draws a tick against.
+    ///
+    /// Two sources, and the manifest wins where it speaks. `store.yaml` names
+    /// the countries the developer has an opinion about; the store's own
+    /// record answers for the rest. An app on sale in 175 countries whose
+    /// manifest names one therefore opens with 175 ticked and not with one:
+    /// what the screen shows is what the app sells, and a tick the developer
+    /// never made is never written until they change something.
+    var territoryTicks: Set<String> {
+        var ticks = Set(liveAppleTerritories)
+        for row in manifest.pricing?.territories ?? [] {
+            if row.available { ticks.insert(row.territory) } else { ticks.remove(row.territory) }
+        }
+        return ticks
+    }
+
+    /// Whether `store.yaml` has an opinion about the countries at all.
+    var territoriesFollowTheStore: Bool { (manifest.pricing?.territories ?? []).isEmpty }
+
+    /// The rows of the picker, in continents.
+    ///
+    /// The store's own codes are folded in, because Apple sells in territories
+    /// no ISO alpha-3 covers — Kosovo is `XKS` — and a country the picker
+    /// cannot draw is one the developer cannot see, cannot keep, and cannot
+    /// turn off.
+    var territoryGroups: [StoreValues.TerritoryGroup] {
+        StoreValues.territoryGroups(including: Set(liveAppleTerritories)
+            .union((manifest.pricing?.territories ?? []).map(\.territory)))
+    }
+
+    /// Ticks or clears one country, a whole continent, or the whole planet.
+    ///
+    /// The write is the whole answer and not the change: every country that is
+    /// ticked is written `available: true`, and every country the store sells
+    /// in today that is not ticked is written `available: false`. Anything
+    /// else and unticking a country would do nothing at all — the old field
+    /// wrote the ticked ones and dropped the rest, and a territory the
+    /// manifest does not name is a territory the plan leaves alone.
+    ///
+    /// Rows the manifest already holds are edited in place, so a preorder date
+    /// or a release date on a country survives a tick.
+    func setTerritories(_ codes: [String], selling: Bool) {
+        guard var pricing = manifest.pricing else { return }
+        var ticks = territoryTicks
+        if selling { ticks.formUnion(codes) } else { ticks.subtract(codes) }
+
+        var rows: [String: Manifest.TerritoryAvailability] = [:]
+        for row in pricing.territories ?? [] { rows[row.territory] = row }
+        for code in ticks {
+            rows[code, default: Manifest.TerritoryAvailability(territory: code)]
+                .available = true
+        }
+        // The countries with an answer to keep: the ones already named, and the
+        // ones the store sells in. A country nobody has ever mentioned and that
+        // is not on sale needs no row saying it is off.
+        for code in Set(rows.keys).union(liveAppleTerritories) where !ticks.contains(code) {
+            rows[code, default: Manifest.TerritoryAvailability(territory: code)]
+                .available = false
+        }
+        pricing.territories = rows.values.sorted { $0.territory < $1.territory }
+        manifest.pricing = pricing
+        saveManifestReportingErrors()
+    }
+
+    /// The territories the App Store says this app is on sale in, as the last
+    /// read found them.
+    ///
+    /// The read has always fetched this and no screen has ever shown it. A
+    /// developer whose app sells in Brazil alone had no way to see that here,
+    /// and the field above offers to change a set the app would not show.
+    ///
+    /// Sorted, because a dictionary hands its keys over in no order and a list
+    /// of countries that reshuffles between reads reads as a change.
+    var liveAppleTerritories: [String] {
+        (actualState.apple?.territoryAvailability ?? [:])
+            .filter(\.value).keys.sorted()
+    }
+
+    /// How many territories the App Store record holds, listed or not.
+    ///
+    /// The list above is paged; this number is Apple's own count. They differ
+    /// only when a page failed, and a screen that says "3 countries" over a
+    /// record of 175 is worse than one that says nothing.
+    var liveAppleTerritoryCount: Int? { actualState.apple?.territoryCount }
+
+    /// Reads where the App Store sells this app, for the tab that asks.
+    ///
+    /// The whole store read on the Summary tab fills this, and nothing else
+    /// did. So the answer to "which countries is my app in" needed a read of
+    /// every resource the app owns, and the developer of an app on sale in one
+    /// country had no screen that said which one.
+    ///
+    /// Once. `hasAvailabilityRecord` is false until a read lands, and it is
+    /// what stops the tab from asking again on every redraw. An app that has
+    /// no record at all answers 404, which leaves the flag false and asks
+    /// again on the next visit: that is one request for an app with nothing to
+    /// report, and it is how a first submission notices the record appearing.
+    func loadAppleAvailability() async {
+        guard stores.contains(.apple), let appID = appleActionAppID,
+              credentials.apple != nil,
+              actualState.apple?.hasAvailabilityRecord != true,
+              let availability = try? await diagnostics().appAvailability(appID: appID)
+        else { return }
+        // The developer can move to another app while Apple answers. What came
+        // back is that app's availability, not this one's.
+        guard appID == appleActionAppID else { return }
+        var apple = actualState.apple ?? ActualState.Apple()
+        apple.territoryAvailability = availability.territories
+        apple.availableInNewTerritories = availability.newTerritories
+        apple.territoryCount = availability.total
+        actualState.apple = apple
     }
 
     func purchaseMetadataBinding(index: Int, key: String) -> Binding<String> {

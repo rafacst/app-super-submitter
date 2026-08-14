@@ -267,7 +267,7 @@ public enum ConsoleChecklist {
                         "Confirmed: the App Store sells at \($0)"
                             + (apple?.pricePointTerritory.map { " in \($0)" } ?? "") + "."
                     } ?? manifest.pricing.map {
-                        "The Monetization tab names \($0.base.amount) \($0.base.currency). The apply writes it, so this needs no console visit."
+                        "The Availability tab names \($0.base.amount) \($0.base.currency). The apply writes it, so this needs no console visit."
                     } ?? (published ? Self.assumed : "The manifest names no base price."),
                     link: "\(base)/pricing",
                     state: apple?.currentPriceAmount == nil && manifest.pricing == nil && !published

@@ -23,6 +23,10 @@ struct BuildTab: View {
             storeTools
         }
         .frame(maxWidth: 1040, alignment: .leading)
+        // The export compliance answer, for an app nobody has asked. See
+        // `AppState.defaultEncryptionAnswer`: the tab that asks the question is
+        // the tab that fills it in.
+        .task { state.defaultEncryptionAnswer() }
     }
 
     /// The two questions this tab asks before there is a package: where the
@@ -52,28 +56,20 @@ struct BuildTab: View {
         VStack(alignment: .leading, spacing: 9) {
             panelHead("shippingbox.fill", tint: Theme.accent, title: "Build source",
                       detail: "Where the package comes from")
-            HStack(spacing: 0) {
-                ForEach([false, true], id: \.self) { fromProject in
-                    let selected = state.showBuildFromProject == fromProject
-                    Button {
-                        state.showBuildFromProject = fromProject
-                    } label: {
-                        Text(fromProject ? "Build from project" : "Import a package")
-                            .font(Theme.font(size: 12, weight: selected ? .semibold : .regular))
-                            .foregroundStyle(selected ? Theme.accentText : Theme.text)
-                            .padding(.horizontal, 14).padding(.vertical, 5)
-                            .frame(maxWidth: .infinity)
-                            .background(selected ? Theme.accent : .clear)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
+            // A radio group, which is what the Mac uses for two or three
+            // exclusive choices whose labels have to be read. A segmented
+            // control is for switching a view; this one decides what the whole
+            // tab below it does, and the option that is not chosen was drawn in
+            // the same box as the one that is.
+            Picker("Build source", selection: Binding(
+                get: { state.showBuildFromProject },
+                set: { state.showBuildFromProject = $0 })) {
+                Text("Build from project").tag(true)
+                Text("Import a package").tag(false)
             }
-            .background(Theme.sunken)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7)
-                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+            .font(Theme.font(size: 12))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .storePanel(padding: 10, horizontal: 13)
@@ -110,8 +106,9 @@ struct BuildTab: View {
                 Text("Uses no non-exempt encryption").tag(Bool?.some(false))
                 Text("It does use encryption").tag(Bool?.some(true))
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.radioGroup)
             .labelsHidden()
+            .font(Theme.font(size: 12))
             // The answer above is what creates the need for this, so the
             // paperwork appears with the answer that owes it and stays out
             // of the way of every app that does not.

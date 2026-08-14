@@ -405,7 +405,12 @@ final class AppState {
     func isBuilding(appID: UUID) -> Bool {
         buildFlows[appID]?.isBusy ?? false
     }
-    var showBuildFromProject = false
+    /// The Build tab opens on the project builder.
+    ///
+    /// Importing a package is the answer for a build somebody else produced,
+    /// and it was the one the tab opened on, so the ordinary case — this Mac
+    /// has the project, build it — was one click away every single time.
+    var showBuildFromProject = true
     var buildRead = false
     var packages: [AppPackage.Kind: AppPackage] = [:]
     var packageErrors: [AppPackage.Kind: String] = [:]
@@ -752,6 +757,7 @@ final class AppState {
         case .details: .details
         case .media: .media
         case .gaming: .gaming
+        case .availability: .availability
         case .money: .money
         case .marketing: .marketing
         case .reviewInfo: .reviewInfo
@@ -1906,19 +1912,26 @@ final class AppState {
         case .invalid(let message):
             moneyError = message
         case .valid(let price):
-            // Whatever the manifest already said, including nothing.
+            // The price, and nothing else about the block.
             //
-            // This defaulted to `true`, so saving a price wrote an answer about
-            // territory availability that the developer had never given. An
-            // absent key means "do not manage this", and inventing one here
-            // made the planner compare a value nobody chose against the store
-            // and queue "Write the territory availability" on an app whose
-            // countries had not been touched. The toggle on the Monetization
-            // tab still shows `true` when the key is absent, because a checkbox
-            // has to draw something; pressing it is what writes the key.
-            manifest.pricing = Manifest.Pricing(
-                base: price,
-                autoConvertOtherTerritories: manifest.pricing?.autoConvertOtherTerritories)
+            // It used to build a new `Pricing` from the price alone, carrying
+            // one key across by hand, so every other key in the block was
+            // dropped on the keystroke: a developer who picked their countries
+            // and then changed the amount lost the country list, silently, on
+            // a screen that shows both. The territories and the new-territory
+            // answer live in this block too.
+            //
+            // Nothing is invented for a block that does not exist yet. The
+            // defaults were `true`, so saving a price wrote an answer about
+            // territory availability that the developer had never given, and
+            // the planner then queued "Write the territory availability" on an
+            // app whose countries nobody had touched. An absent key means "do
+            // not manage this". The toggles still draw `true` when the key is
+            // absent, because a checkbox has to draw something; pressing one is
+            // what writes the key.
+            var pricing = manifest.pricing ?? Manifest.Pricing(base: price)
+            pricing.base = price
+            manifest.pricing = pricing
             saveManifestReportingErrors()
             moneyError = nil
         }
@@ -2393,8 +2406,8 @@ final class AppState {
     /// Fetches the ladder for the base territory when the one in hand is for
     /// another country, or for no country at all.
     ///
-    /// The Monetization tab calls this when it opens and whenever the base
-    /// territory moves. Without it the prices arrived only with a whole store
+    /// The Availability tab calls this when it opens and whenever the base
+    /// territory moves, and Monetization calls it for the product prices. Without it the prices arrived only with a whole store
     /// read from the Summary tab, so the field that asks for the first price
     /// was a plain box on the one screen where a developer sets a price, and
     /// moving the territory left the old country's money on offer.
@@ -2513,6 +2526,19 @@ final class AppState {
         apple.subscriptionGroupLocales.merge(subscriptions.groups.locales) { _, new in new }
         apple.catalogRead = true
         actualState.apple = apple
+
+        // And into the file, for the products it already names. The catalog
+        // read carries the price, the store text and the billing type of every
+        // product on this tab, and until now none of it reached a field: the
+        // list merge writes a catalog only when there is none, so an app with
+        // one line about a subscription kept every blank under it for ever.
+        if manifest.mergeAppleCatalog(apple, territory: basePriceTerritory,
+                                      currency: apple.priceCurrency
+                                          ?? manifest.pricing?.base.currency) {
+            registerManifestUndo()
+            syncEditingStateFromManifest()
+            saveManifestReportingErrors()
+        }
     }
 
     /// The prices Apple sells at, as the picker's rows.
@@ -2756,6 +2782,27 @@ final class AppState {
         saveManifestReportingErrors()
     }
 
+    /// The answer the Build tab opens with when nobody has given one.
+    ///
+    /// "Uses no non-exempt encryption" is the answer for almost every app:
+    /// HTTPS and the platform's own cryptography are exempt, and the developer
+    /// who does ship their own has the other option one click away with the
+    /// paperwork behind it.
+    ///
+    /// It writes the key rather than only drawing it selected. The button that
+    /// starts a build waits on this key being present — see
+    /// `BuildFlow.blockingReason` — so a radio that showed an answer the file
+    /// did not hold would be a selected option beside a blocked button and
+    /// nothing to press to unblock it.
+    ///
+    /// This is a declaration to Apple, and this app now makes it on the
+    /// developer's behalf until they say otherwise. The panel says which
+    /// answer is selected, on the tab they have to visit to build.
+    func defaultEncryptionAnswer() {
+        guard manifest.apps.apple != nil, encryptionAnswer == nil else { return }
+        setEncryptionAnswer(false)
+    }
+
     // MARK: - The export compliance declaration
 
     /// The paperwork that the encryption toggle above creates the need for.
@@ -2891,6 +2938,7 @@ final class AppState {
         case .betaTesting: target = .betaTesting
         case .details: target = .details
         case .media: target = .media
+        case .availability: target = .availability
         case .money: target = .money
         case .marketing: target = .marketing
         case .reviewInfo: target = .reviewInfo

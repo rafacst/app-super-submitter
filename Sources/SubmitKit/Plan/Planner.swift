@@ -399,7 +399,7 @@ public enum Planner {
         //
         // An app with no record yet is the create, and the create carries this
         // attribute, so there it is real work.
-        let autoAvailabilityDiffers = manifest.pricing?.autoConvertOtherTerritories != nil
+        let autoAvailabilityDiffers = manifest.pricing?.appleNewTerritories != nil
             && actual?.hasAvailabilityRecord != true
         // The same rule, one territory at a time. A territory the read does not
         // list is one this app knows nothing about, and `appleUpdateTerritories`

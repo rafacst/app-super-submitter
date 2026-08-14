@@ -743,51 +743,25 @@ struct BadgeView: View {
 /// both halves now, which is what made this safe to bring back: the switch
 /// picks which of two named jobs the column shows, and the column is the four
 /// or the eight rows of that job rather than all twelve.
+/// The system's segmented control, which is what this is.
+///
+/// It was a hand-drawn one: two buttons, a matched-geometry pill, a per-mode
+/// tint and a shadow. All of that is a segmented control with a spring
+/// animation bolted to it, and the Mac already draws one — with the user's own
+/// accent, the right metrics at every text size, and the keyboard and
+/// VoiceOver behaviour that a pair of plain buttons does not have.
 struct ModeSwitch: View {
     @Environment(AppState.self) private var state
-    /// The pill is one view that moves between the two halves, so the switch
-    /// slides instead of blinking from one fill to another.
-    @Namespace private var pill
 
     var body: some View {
-        HStack(spacing: 2) {
+        Picker("Job", selection: Binding(get: { state.mode },
+                                         set: { state.mode = $0 })) {
             ForEach(Mode.allCases) { mode in
-                let selected = state.mode == mode
-                Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-                        state.mode = mode
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: mode.symbol)
-                            .font(.system(size: 10.5))
-                        Text(mode.title)
-                            .font(.system(size: 12,
-                                          weight: selected ? .semibold : .regular))
-                    }
-                    .foregroundStyle(selected ? Theme.accentText : Theme.text2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .frame(maxWidth: .infinity)
-                    .background {
-                        if selected {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(mode.tint)
-                                .matchedGeometryEffect(id: "modePill", in: pill)
-                                .shadow(color: mode.tint.opacity(0.45), radius: 3, y: 1)
-                        }
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(mode.title)
-                .accessibilityHint(mode.line)
-                .accessibilityAddTraits(selected ? .isSelected : [])
+                Text(mode.title).tag(mode)
             }
         }
-        .padding(2)
-        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel("What you are doing")
     }
 }

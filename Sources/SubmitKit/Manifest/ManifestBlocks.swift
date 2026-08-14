@@ -8,7 +8,8 @@ import Yams
 /// `// ponytail: slice the encoded document by top-level key. A second
 /// // per-tab serializer would be a second place for the schema to drift.`
 public enum ManifestBlock: String, Sendable, CaseIterable {
-    case stores, build, details, media, gaming, money, marketing, reviewInfo
+    case stores, build, details, media, gaming, availability, money, marketing,
+         reviewInfo
 
     /// The top-level keys of `store.yaml` that this tab writes.
     public var keys: [String] {
@@ -18,7 +19,10 @@ public enum ManifestBlock: String, Sendable, CaseIterable {
         case .details: ["listing"]
         case .media: ["media"]
         case .gaming: ["gameCenter"]
-        case .money: ["monetization", "pricing", "purchases", "subscriptions",
+        // `pricing` holds the price of the app and the territories it sells
+        // in, and both are the Availability tab's now.
+        case .availability: ["pricing"]
+        case .money: ["monetization", "purchases", "subscriptions",
                       "entitlements", "offerings"]
         case .marketing: ["marketing"]
         case .reviewInfo: ["review"]

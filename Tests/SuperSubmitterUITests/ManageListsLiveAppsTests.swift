@@ -282,11 +282,20 @@ import Testing
         let sidebar = try String(
             contentsOf: Self.root.appending(path: "Sources/SuperSubmitter/Shell/Sidebar.swift"),
             encoding: .utf8)
+        let shell = try String(
+            contentsOf: Self.root.appending(path: "Sources/SuperSubmitter/Shell/RootView.swift"),
+            encoding: .utf8)
 
         #expect(bar.contains("state.appRows"))
-        // Every tab wears a word, and an app nobody has read wears "Unknown".
+        // The standing still has a word, and an app nobody has read wears
+        // "Unknown".
         #expect(sidebar.contains("let mark: AppleStanding\n"))
-        #expect(bar.contains("AppStatusChip(mark: state.appMark(appKey: app.key))"))
+        // One chip, for the app the window is showing, beside the save. It was
+        // a chip on every tab of the bar, where it doubled the width of each
+        // tab and truncated the names the bar exists to show. Each tab keeps
+        // the sentence in its tooltip.
+        #expect(shell.contains("AppStatusChip(mark: state.appMark(appKey: app.key))"))
+        #expect(bar.contains("state.appMark(appKey: app.key).explained"))
         // And a tab says when its app is busy, which is the reason the bar
         // exists: a build the developer has switched away from is still running.
         #expect(bar.contains("state.isBuilding(appID: app.id)"))

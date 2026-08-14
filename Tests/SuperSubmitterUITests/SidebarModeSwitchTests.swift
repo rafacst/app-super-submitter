@@ -107,6 +107,11 @@ import Testing
         // And the groups follow it. A switch that draws every group is a
         // switch that changes nothing.
         #expect(sidebar.contains("$0.mode == state.mode"))
+        // The system's segmented control, not a pair of buttons with a pill
+        // animated between them: two exclusive choices in a sidebar header is
+        // the control the Mac already draws.
+        #expect(sidebar.contains(".pickerStyle(.segmented)"))
+        #expect(!sidebar.contains("matchedGeometryEffect"))
     }
 
     /// An empty window has no app, and every row in these groups is a step of

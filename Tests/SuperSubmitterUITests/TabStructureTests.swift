@@ -24,8 +24,8 @@ import Testing
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
         "Stores", "Store page", "Build", "Beta testing", "Details", "Media",
-        "Gaming", "Monetization", "Review info", "Summary", "Release", "Account",
-        "Settings",
+        "Gaming", "Availability", "Monetization", "Review info", "Summary",
+        "Release", "Account", "Settings",
     ])
     #expect(Tab.plan.zone == .reads)
     #expect(Tab.release.zone == .releases)
@@ -47,9 +47,11 @@ import Testing
     // The store page leads both groups. It is the one screen that answers
     // "what will they see", which is what a developer opens an app to look at,
     // and it had no row at all while the app list was in this column.
+    // Availability precedes Monetization: what the app costs and where it
+    // sells is one question, and what it sells inside itself is the next one.
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
         == ["Store page", "Build", "Beta testing", "Details", "Media", "Gaming",
-            "Monetization", "Review info"])
+            "Availability", "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
@@ -126,8 +128,8 @@ import Testing
         == ["Stores", "Store page", "Live listing", "Live media", "Marketing",
             "Live app", "Account", "Settings"])
     // Nothing that builds, tests, plans, writes, or releases reaches a manager.
-    #expect(managing.isDisjoint(with: [.build, .betaTesting, .money, .reviewInfo,
-                                       .plan, .release]))
+    #expect(managing.isDisjoint(with: [.build, .betaTesting, .availability, .money,
+                                       .reviewInfo, .plan, .release]))
     // Every tab belongs somewhere, or the sidebar would hide it for good.
     #expect(Tab.allCases.allSatisfy { !$0.modes.isEmpty })
 }

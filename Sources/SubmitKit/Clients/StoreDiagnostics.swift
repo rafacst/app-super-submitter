@@ -250,6 +250,65 @@ public struct StoreDiagnostics: Sendable {
         }
     }
 
+    /// Where the App Store sells one app today.
+    ///
+    /// The whole store read fetches this on the Summary tab, and nothing else
+    /// did: a developer opening the tab that lists the countries saw an empty
+    /// list until they had run a read of every resource the app has. This is
+    /// the same two facts on their own.
+    public struct Availability: Sendable, Equatable {
+        /// Every territory the record names, and whether the app sells there.
+        public var territories: [String: Bool]
+        public var newTerritories: Bool?
+        /// What Apple says the record holds, which is the number to trust: the
+        /// list above is paged and a page may be missing.
+        public var total: Int?
+
+        public init(territories: [String: Bool] = [:], newTerritories: Bool? = nil,
+                    total: Int? = nil) {
+            self.territories = territories
+            self.newTerritories = newTerritories
+            self.total = total
+        }
+    }
+
+    /// The availability record, and every territory in it.
+    ///
+    /// Two requests, because the include on the record is one page long and an
+    /// app on sale in 175 countries would come back as 50. The second one pages
+    /// the relationship to the end, the way `territories()` does.
+    public func appAvailability(appID: String) async throws -> Availability {
+        let record = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities").data)
+        let relationship = record["data"]["relationships"]["territoryAvailabilities"]
+        var result = Availability(
+            newTerritories: record["data"]["attributes"]["availableInNewTerritories"].bool,
+            total: relationship["meta"]["paging"]["total"].int)
+        Self.readTerritoryAvailabilities(record["included"], into: &result)
+        guard let id = record["data"]["id"].string,
+              result.total ?? 0 > result.territories.count else { return result }
+
+        var path: String? = "/v2/appAvailabilities/\(StateReader.escape(id))"
+            + "/territoryAvailabilities?limit=200&include=territory"
+        var seen: Set<String> = []
+        while let current = path, seen.insert(current).inserted, seen.count < 20 {
+            let page = JSON(data: try await api.apple("GET", current).data)
+            Self.readTerritoryAvailabilities(page["data"], into: &result)
+            path = page["links"]["next"].string.flatMap(Self.appleNextPath)
+        }
+        return result
+    }
+
+    /// The territory id lives on the relationship, never on the row itself.
+    static func readTerritoryAvailabilities(_ items: JSON, into result: inout Availability) {
+        for item in items.array
+        where item["type"].string == "territoryAvailabilities" {
+            guard let code = item["relationships"]["territory"]["data"]["id"].string
+            else { continue }
+            result.territories[code] = item["attributes"]["available"].bool ?? false
+        }
+    }
+
     /// Every App Store territory. The availability block, the licence
     /// agreement, and the price territory all name one of these ids, and the
     /// developer has no other list to check a code against.
