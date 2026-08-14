@@ -33,12 +33,8 @@ struct RootView: View {
                 // The edge of the column, drawn by hand.
                 //
                 // `NavigationSplitView` separates its columns by material and
-                // not by a rule, which works while the sidebar is vibrant over
-                // the desktop. This app paints `Theme.content` behind the whole
-                // split view, so the two columns land eleven levels of grey
-                // apart in dark mode and the boundary between them measured as
-                // a tone step with no line in it at all. The column had no
-                // contour: the sidebar and the page ran together.
+                // not by a rule. Both columns use `Theme.content`, so without
+                // this divider the boundary has no contour at all.
                 //
                 // `Divider` and not a `Theme.hairline` rectangle. Two reasons,
                 // both measured. A half-point rule lands on the split view's
@@ -71,15 +67,13 @@ struct RootView: View {
                 // for one screen, and the loudest one was the one the sidebar
                 // had already answered by drawing a selected row. The band
                 // keeps the question and the controls; the name of the screen
-                // moves up beside the sidebar toggle, and the app being edited
-                // follows it as the subtitle.
+                // moves up beside the sidebar toggle. The selected app is
+                // already named by its tab directly below.
                 //
                 // Nothing on the entry screen, which is not a tab and names no
                 // app. It is the same test the band makes, so the title bar and
                 // the band can never disagree about which screen this is.
                 .navigationTitle(state.showsEntryScreen ? "" : windowTitle)
-                // The app being edited. See `windowSubtitle`.
-                .navigationSubtitle(state.showsEntryScreen ? "" : windowSubtitle)
                 // The two controls that belong to the window rather than to
                 // the screen under it: how the app looks, and the way into the
                 // field palette.
@@ -149,10 +143,8 @@ struct RootView: View {
         // of the column came out in the page colour, so the sidebar had no top
         // edge and its trailing contour began halfway down the window.
         //
-        // Each column paints its own strip instead. The content column and the
-        // inspector both carry `Theme.content` into the safe area, which is
-        // what closed the seam; the sidebar keeps the system's own material and
-        // the rule above runs the full height beside it.
+        // The split and its columns use `Theme.content`; the rule above keeps
+        // the equal surfaces distinct.
         .background(Theme.content)
         .foregroundStyle(Theme.text)
         .font(Theme.font(size: 13))
@@ -222,21 +214,9 @@ struct RootView: View {
         }
     }
 
-    /// The screen, then the app it is showing. Every tab, with no exception.
-    ///
-    /// Stores used to be one: it put the app's name on the title and
-    /// `store.yaml` under it, on the grounds that a window with a proxy icon
-    /// names its file. It cost more than it bought. One tab out of twelve
-    /// answered "what am I looking at" with a different pair of facts, so the
-    /// title bar changed meaning as you moved down the sidebar, and the file
-    /// name is the one fact of the three that nobody needs: the proxy icon is
-    /// the file, the Files card gives the path, and there is only ever one
-    /// `store.yaml` per app.
+    /// The screen the window is showing. The selected app is in the tab bar.
     private var windowTitle: String { state.selectedTab.title(in: state.mode) }
 
-    /// The app being edited, and never the name of this program. The program
-    /// name is on the menu bar, in the Dock, and in About.
-    private var windowSubtitle: String { state.currentApp?.name ?? "" }
 }
 
 /// The content column: the header, then the tab.
@@ -281,15 +261,11 @@ private struct ContentArea: View {
             // room.
             // The apps, above everything the app-specific screens draw.
             //
-            // No bar on the entry screen: there is no app to switch to and its
-            // whole job is one centred choice. It appears with the first linked
-            // app, which is the moment the question "which one" starts existing.
-            if !state.showsEntryScreen, !state.hasNoOpenApp {
-                AppTabBar()
-            }
+            // The Add app tab keeps the bar useful before the first app exists
+            // and while the entry screen is open.
+            AppTabBar()
             if !state.showsEntryScreen {
                 ContentHeader(scrolled: scrolled)
-                if state.selectedTab == .stores { StoresStatusBar() }
             }
             if state.showsLiveWriteWarning { LiveWriteBar(); Hairline() }
             HStack(spacing: 0) {

@@ -33,14 +33,12 @@ struct AppTabBar: View {
                             AppTab(index: index, app: app)
                                 .id(app.id)
                         }
+                        addButton
                     }
                     .padding(2)
                     .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
-                    // Outside the box. It adds an app rather than choosing one,
-                    // and a command among the choices reads as another choice.
-                    addButton
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
@@ -56,22 +54,29 @@ struct AppTabBar: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thickMaterial)
-        .overlay(alignment: .bottom) { Divider() }
+        .frame(maxWidth: .infinity, minHeight: Theme.headerHeight,
+               maxHeight: Theme.headerHeight, alignment: .leading)
+        .background(Theme.content)
     }
 
     private var addButton: some View {
         Button { state.showEntryScreen = true } label: {
-            Image(systemName: "plus")
-                .font(Theme.font(size: 11, weight: .medium))
-                .foregroundStyle(Theme.text2)
-                .frame(width: 24, height: 24)
+            Label("Add app", systemImage: "plus")
+                .font(Theme.font(size: 12, weight: state.showsEntryScreen ? .semibold : .regular))
+                .foregroundStyle(state.showsEntryScreen ? Theme.text : Theme.text2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background {
+                    if state.showsEntryScreen {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Theme.raised)
+                            .shadow(color: .black.opacity(0.18), radius: 1.5, y: 0.5)
+                    }
+                }
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .help("Add an app")
-        .accessibilityLabel("Add an app")
+        .accessibilityAddTraits(state.showsEntryScreen ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -93,7 +98,9 @@ private struct AppTab: View {
     let index: Int
     let app: AppSummary
 
-    private var selected: Bool { index == state.selectedAppIndex }
+    private var selected: Bool {
+        index == state.selectedAppIndex && !state.showsEntryScreen
+    }
 
     var body: some View {
         Button {
