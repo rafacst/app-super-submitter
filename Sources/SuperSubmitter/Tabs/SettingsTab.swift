@@ -116,18 +116,17 @@ struct SettingsTab: View {
     /// says so before the first click.
     private var nuclear: some View {
         @Bindable var state = state
-        return VStack(alignment: .leading, spacing: 13) {
+        return VStack(alignment: .leading, spacing: 10) {
             SettingRow("Start over", symbol: "exclamationmark.octagon", alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Erase everything Super Submitter knows and return to the first-run screen.")
-                        .font(Theme.font(size: 12))
+                        .font(Theme.font(size: 11.5))
                         .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Note("This forgets every linked app, every key and password you entered, your account, and the archives, logs and settings Super Submitter wrote. It deletes no store.yaml anywhere, including the one a managed app keeps here. Your projects, your developer accounts, and everything already published are untouched.")
+                    Note("Forgets every linked app, key, password and archive. No store.yaml is deleted, and nothing already published changes.")
                     Button("Erase everything") { state.nuclearFirstConfirm = true }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.red)
-                        .controlSize(.large)
                 }
             }
         }
@@ -158,7 +157,7 @@ struct SettingsTab: View {
     }
 
     private var workspace: some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: 10) {
             SettingRow("Appearance", symbol: "circle.lefthalf.filled") {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(Appearance.allCases) { Text($0.label).tag($0) }
@@ -197,9 +196,9 @@ struct SettingsTab: View {
     }
 
     private var files: some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: 10) {
             SettingRow("Manifest path", symbol: "doc.text", alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(state.manifestURL?.path ?? "No app is open.")
                         .font(Theme.mono(11))
                         .foregroundStyle(state.manifestURL == nil ? Theme.text3 : Theme.text)
@@ -209,8 +208,8 @@ struct SettingsTab: View {
                         .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 7) {
-                        QuietButton(title: "Show in Finder") { state.revealManifest() }
-                        QuietButton(title: "Copy path") {
+                        QuietButton(title: "Reveal") { state.revealManifest() }
+                        QuietButton(title: "Copy") {
                             state.copyToPasteboard(state.manifestURL?.path ?? "")
                         }
                     }
@@ -219,15 +218,15 @@ struct SettingsTab: View {
             }
 
             SettingRow("Drafts", symbol: "clock.arrow.circlepath", alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(draftSummary)
-                        .font(Theme.font(size: 12))
+                        .font(Theme.font(size: 11.5))
                         .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Note("A draft copies the list of linked apps and the text of every store.yaml into Application Support, where an app update cannot reach them. Restoring puts back only what is missing: a store.yaml that is still on disk is never written over. A draft holds no key and no password. Those stay in the Keychain.")
+                    Note("Copies every store.yaml where an app update cannot reach it. Restoring writes back only what is missing. Keys stay in the Keychain.")
                     HStack(spacing: 7) {
                         QuietButton(title: "Save progress") { state.saveDraft() }
-                        QuietButton(title: "Restore the newest") { restoring = true }
+                        QuietButton(title: "Restore newest") { restoring = true }
                             .disabled(drafts.isEmpty)
                         QuietButton(title: "Reveal") { state.revealDrafts() }
                     }
@@ -243,20 +242,20 @@ struct SettingsTab: View {
             }
 
             SettingRow("Build storage", symbol: "internaldrive", alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(state.buildStorageSummary)
-                        .font(Theme.font(size: 12))
+                        .font(Theme.font(size: 11.5))
                         .frame(maxWidth: Self.controlWidth, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Note("Archives and App Bundles are kept outside your repository. Deleting run data removes the logs and the temporary files and leaves every archive alone. Deleting the archives removes the builds this app made and kept. Neither one touches your project: an Android App Bundle is Gradle's own output inside it, so it is never one of these.")
+                    Note("Kept outside your repository. Run data is logs and temporary files; the archives are the builds this app made. Your project is untouched.")
                     HStack(spacing: 7) {
                         QuietButton(title: "Reveal") { state.revealBuildStorage() }
-                        QuietButton(title: "Delete old run data") {
+                        QuietButton(title: "Delete run data") {
                             state.pruneBuildStorage()
                         }
                         // Shut while a run is going. An upload reads the
                         // archive it is sending.
-                        QuietButton(title: "Delete the archives") {
+                        QuietButton(title: "Delete archives") {
                             deletingArchives = true
                         }
                         .disabled(state.buildFlow.isBusy)
@@ -274,7 +273,7 @@ struct SettingsTab: View {
     }
 
     private var provider: some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: 10) {
             SettingRow("Provider", symbol: "arrow.triangle.2.circlepath", alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("Provider", selection: Binding(
@@ -287,7 +286,7 @@ struct SettingsTab: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .frame(maxWidth: Self.controlWidth, alignment: .leading)
-                    Note("The provider mirrors the same purchases into one more catalog. The plan and the apply cover it beside the two stores.")
+                    Note("Mirrors the same purchases into one more catalog. The plan and the apply cover it beside the two stores.")
                     if state.provider == .revenuecat { revenueCat }
                     if state.provider == .adapty { adapty }
                 }
@@ -295,17 +294,17 @@ struct SettingsTab: View {
 
             Hairline()
 
-            Text("The App Store and Google Play keys live on the Stores tab, next to the connection that needs them.")
-                .font(Theme.font(size: 11.5))
+            Text("The store keys live on the Stores tab, beside the connection that needs them.")
+                .font(Theme.font(size: 10.5))
                 .foregroundStyle(Theme.text2)
-                .lineSpacing(3)
+                .lineSpacing(2.5)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var revenueCat: some View {
         @Bindable var state = state
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 6) {
             SecureField("Secret v2 API key", text: $state.revenueCatAPIKey)
             TextField("Project ID", text: $state.revenueCatProjectID)
             // The status sits under the button and not beside it. It carries
@@ -326,7 +325,7 @@ struct SettingsTab: View {
     }
 
     private var adapty: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Note("Adapty authenticates through its own CLI. This app reads the status and never runs the login.")
             connectionRow(state.adaptyConnection)
             HStack(spacing: 7) {
@@ -418,7 +417,7 @@ private struct SettingRow<Content: View>: View {
                     // of line with the one above it.
                     .frame(width: 16)
                 Text(label)
-                    .font(Theme.font(size: 12.5))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(Theme.text2)
                 Spacer(minLength: 0)
             }
@@ -465,7 +464,7 @@ private struct Check: View {
     var body: some View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(title).font(Theme.font(size: 12.5))
+                Text(title).font(Theme.font(size: 12))
                 Note(note)
             }
         }
@@ -481,9 +480,9 @@ private struct Note: View {
 
     var body: some View {
         Text(text)
-            .font(Theme.font(size: 11))
+            .font(Theme.font(size: 10.5))
             .foregroundStyle(Theme.text2)
-            .lineSpacing(3)
+            .lineSpacing(2.5)
             .frame(maxWidth: SettingsTab.controlWidth, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
     }

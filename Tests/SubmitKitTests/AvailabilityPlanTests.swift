@@ -36,12 +36,15 @@ private func hasAvailabilityStep(_ steps: [PlanStep]) -> Bool {
 
 private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
 
-/// The reported shape: a price, the default that came with it, and a store that
-/// answers nothing about new territories.
-@Test func anUnreadAnswerPlansNoWrite() {
+/// The reported shape: a live app, a price, and the default that came with it.
+///
+/// The App Store already holds an availability record, so this setting cannot
+/// be written at all. A step for it is a step that must fail, whatever the two
+/// values are.
+@Test func aLiveAppPlansNoWriteForNewTerritories() {
     let pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: true)
 
-    #expect(!hasAvailabilityStep(plan(pricing)))
+    #expect(!hasAvailabilityStep(plan(pricing) { $0.availableInNewTerritories = false }))
 }
 
 /// And the manifest no longer carries an answer nobody gave, so the usual case
@@ -57,12 +60,31 @@ private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
     #expect(!hasAvailabilityStep(plan(pricing) { $0.availableInNewTerritories = true }))
 }
 
-/// A real disagreement is still planned. The rule is "unknown is not
-/// different", never "never write".
-@Test func anAnswerTheDeveloperChangedIsStillPlanned() {
+/// A real disagreement is not silently dropped either. The plan cannot carry
+/// it, so the Summary says it in words and names where to change it.
+@Test func aDisagreementTheStoreWillNotTakeIsReported() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    manifest.pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: false)
+    var apple = ActualState.Apple()
+    apple.availableInNewTerritories = true
+    var actual = ActualState()
+    actual.apple = apple
+
+    let finding = try! #require(
+        Validator.findings(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+            .first { $0.id == "availability.newTerritories" })
+
+    #expect(finding.severity == .warning)
+    #expect(finding.message.contains("App Store Connect"))
+}
+
+/// An app with no record yet is the create, and the create is the one call that
+/// carries this attribute.
+@Test func anAppWithNoRecordStillWritesTheSetting() {
     let pricing = Manifest.Pricing(base: freePrice, autoConvertOtherTerritories: false)
 
-    #expect(hasAvailabilityStep(plan(pricing) { $0.availableInNewTerritories = true }))
+    #expect(hasAvailabilityStep(plan(pricing)))
 }
 
 /// A territory the store lists and the manifest disagrees with.

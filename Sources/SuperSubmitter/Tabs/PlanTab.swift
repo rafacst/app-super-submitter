@@ -73,7 +73,7 @@ enum RunwayStep {
     @MainActor
     static func plan(_ state: AppState) -> String {
         guard let plan = state.plan else {
-            return state.planReading ? "reading the stores" : "not read yet"
+            return state.planReading ? "fetching store data" : "not read yet"
         }
         return "\(plan.writeCount) writes · \(plan.uploadCount) uploads"
     }
@@ -472,7 +472,10 @@ struct PlanTab: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 11) {
                 Spinner()
-                Text("Reading both stores. This writes nothing.")
+                // Not "both stores": an app that goes to one was told the app
+                // was reading two. And not "this writes nothing" either, which
+                // answered a question nobody asked while they waited.
+                Text("Fetching store data")
                     .font(Theme.font(size: 13))
                     .foregroundStyle(Theme.text2)
             }
