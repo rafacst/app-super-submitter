@@ -59,19 +59,28 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(!tracks.contains("googleTestersBinding"))
 }
 
-/// The store page is a whole tab like every other, and the app's own name is
-/// the only way in: it has no row among the sidebar's groups.
+/// The store page is a whole tab like every other, and it has a row of its own.
 ///
-/// The wiring runs from the app row to `selectedTab` to the content column, so
-/// a half-finished move would leave a name in the column that opens nothing.
-@Test func theSidebarNameOpensTheStorePageTab() throws {
-    let sidebar = try responsiveFormSource("Sources/SuperSubmitter/Shell/Sidebar.swift")
+/// It used to have none: the app list sat at the head of the sidebar and
+/// pressing an app's name opened it, so a row beside that name would have put
+/// one destination in the column twice. The apps are the tab bar across the top
+/// of the window now and pressing one keeps the screen you are reading, so
+/// nothing opened the store page any more and it needs its row back.
+@Test func theStorePageHasARowOfItsOwn() throws {
     let content = try responsiveFormSource("Sources/SuperSubmitter/Tabs/TabContent.swift")
+    let bar = try responsiveFormSource("Sources/SuperSubmitter/Shell/AppTabBar.swift")
 
-    #expect(sidebar.contains("state.selectedTab = .storePage"))
     #expect(content.contains("case .storePage: StorePage()"))
-    #expect(!Tab.storePage.isListed)
-    #expect(Destination.all(hasApp: true).allSatisfy { $0.tab != .storePage })
+    #expect(Tab.storePage.isListed)
+    // Under Publish, where the developer looks at the page their draft makes,
+    // and under Manage, where they look at the page the store is serving.
+    #expect(Destination.rows(in: .publish, hasApp: true).contains { $0.tab == .storePage })
+    #expect(Destination.rows(in: .manage, hasApp: true).contains { $0.tab == .storePage })
+
+    // And the bar changes app without moving off the screen you are on. It is
+    // the whole reason the row came back.
+    #expect(bar.contains("state.selectApp(at: index)"))
+    #expect(!bar.contains("selectedTab = .storePage"))
 }
 
 @Test func theWideBuildScreenKeepsBothStoreCardsInOneRow() throws {

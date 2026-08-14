@@ -183,8 +183,8 @@ public enum Validator {
     /// A file whose size Apple does not recognise is left out: the size check
     /// above has already reported it, and counting it under a made-up heading
     /// would report the same file twice under two different words.
-    static func appleDisplayTypeCounts(_ paths: [String], root: URL?,
-                                       deviceClass: Manifest.DeviceClass) -> [String: Int] {
+    public static func appleDisplayTypeCounts(_ paths: [String], root: URL?,
+                                              deviceClass: Manifest.DeviceClass) -> [String: Int] {
         var counts: [String: Int] = [:]
         for path in paths {
             guard let url = Planner.resolve(path, root: root),
@@ -1590,13 +1590,14 @@ public enum Validator {
     /// sittings, and an error on a half-built manifest teaches the developer
     /// to ignore the Summary tab.
     ///
-    /// Only one field lands here. The rest of Apple's update requirements are
-    /// carried by a build or inherited from the released version, so they gate
-    /// the release button in `ConsoleChecklist` and not the apply. An apply
-    /// leaves a draft, and a draft is allowed to be unfinished.
+    /// Two fields land here, and both are What's New. The rest of Apple's
+    /// update requirements are carried by a build or inherited from the
+    /// released version, so they gate the release button in `ConsoleChecklist`
+    /// and not the apply. An apply leaves a draft, and a draft is allowed to be
+    /// unfinished.
     static func update(_ input: Planner.Input) -> [Finding] {
         guard input.stores.contains(.apple),
-              input.actual.apple?.liveVersionString != nil,
+              let live = input.actual.apple?.liveVersionString,
               let listing = input.manifest.listing else { return [] }
         var result: [Finding] = []
 
@@ -1605,11 +1606,34 @@ public enum Validator {
             // needs nothing from the manifest, and demanding it there would
             // break the rule that an absent key means "do not manage".
             let stored = input.actual.apple?.versionLocales[code]?.whatsNew ?? ""
-            guard input.manifest.listingText(locale: code, field: .whatsNew).isEmpty,
-                  stored.isEmpty else { continue }
+            let wanted = input.manifest.listingText(locale: code, field: .whatsNew)
+            if wanted.isEmpty, stored.isEmpty {
+                result.append(Finding(
+                    id: "update.whatsNew.\(code)", severity: .error,
+                    message: "An update needs What's New. The App Store asks for it on every version after the first.",
+                    location: "Details · \(code) · What's new", fix: .details))
+                continue
+            }
+            // The notes of the release that is already on sale, about to go out
+            // again as the notes of the next one.
+            //
+            // Nothing else in the app can catch this. An import of a live app
+            // fills What's New from the version customers are reading, so the
+            // field is full and the rule above stays quiet. The plan then
+            // compares the manifest against that same released version, finds
+            // the two identical, and writes nothing, which is correct and
+            // silent. Apple pre-fills a new version from the last one, so the
+            // words survive all the way to the store without one screen in the
+            // app ever saying whose words they are.
+            //
+            // A warning and not an error. Shipping the same sentence twice is
+            // unusual rather than impossible, and a warning is acknowledged
+            // rather than argued with.
+            let shipped = input.actual.apple?.liveVersionLocales[code]?.whatsNew ?? ""
+            guard !wanted.isEmpty, !shipped.isEmpty, wanted == shipped else { continue }
             result.append(Finding(
-                id: "update.whatsNew.\(code)", severity: .error,
-                message: "An update needs What's New. The App Store asks for it on every version after the first.",
+                id: "update.staleWhatsNew.\(code)", severity: .warning,
+                message: "What's New is still what \(live) told customers. Write the notes for this version, or acknowledge that they are the same.",
                 location: "Details · \(code) · What's new", fix: .details))
         }
         return result

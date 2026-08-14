@@ -305,16 +305,17 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
 
     /// Whether the sidebar draws a row for the tab.
     ///
-    /// Every one but the store page, and that one is not hidden: it is opened
-    /// by the app's own name at the head of the column, which is the control a
-    /// developer already presses to look at one of their apps. A row beside it
-    /// would put one destination in the column twice, and the column's
-    /// selection can stand on only one of them.
+    /// All of them. The store page was the one exception, because the app list
+    /// sat at the head of the column and pressing an app's name opened it, so a
+    /// row beside it would have put one destination in the column twice.
     ///
-    /// It is not `standsAlone`. Those three are about this Mac and live in the
-    /// box at the foot of the column; this one is about one app, and it is the
-    /// most app-specific screen there is.
-    var isListed: Bool { self != .storePage }
+    /// The app list is the tab bar across the top of the window now. Pressing an
+    /// app there switches app and stays on the screen you were reading, which is
+    /// what a tab bar is for, so nothing opens the store page any more. It goes
+    /// back to being an ordinary row of the group it belongs to, in both jobs:
+    /// a publisher looks at the page their draft will make and a manager looks
+    /// at the page the store is serving.
+    var isListed: Bool { true }
 }
 
 /// A group of sidebar rows.
@@ -394,13 +395,10 @@ struct Destination: Hashable, Identifiable {
     /// have not earned rather than a place that does not apply.
     ///
     /// Stores, Settings and Account are in no section. None of them is a step of
-    /// the work — each is answered once for the whole Mac — and the box at the
+    /// the work, each is answered once for the whole Mac, and the box at the
     /// foot of the column holds all three. Stores was listed under Publish and
     /// again under Manage, which is the same screen twice in a column whose
     /// selection can only be standing on one of them.
-    ///
-    /// The store page is in no section either, and for that same rule: the app
-    /// list above these groups already opens it. See `Tab.isListed`.
     static func rows(in section: SidebarSection, hasApp: Bool) -> [Destination] {
         guard hasApp else { return [] }
         let mode: Mode = section == .manage ? .managing : .publishing

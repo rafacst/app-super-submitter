@@ -57,10 +57,17 @@ struct CatalogPriceInput {
 
 enum MediaInputError: LocalizedError {
     case tooMany(limit: Int)
+    /// The App Store counts one screen size at a time, so the refusal names the
+    /// size. "At most 10 for this device size" was said over a Phone bucket
+    /// holding four screen sizes, and it left the developer counting tiles that
+    /// the store counts in four separate places.
+    case tooManyForSize(displayType: String, limit: Int)
 
     var errorDescription: String? {
         switch self {
         case .tooMany(let limit): "You can add at most \(limit) files to this device size."
+        case .tooManyForSize(let displayType, let limit):
+            "The App Store takes at most \(limit) screenshots of \(displayType). Remove one of that size, or add a picture of another size."
         }
     }
 }
@@ -348,7 +355,47 @@ final class AppState {
     /// Mac, so a test that writes the real one unlinks the developer's own
     /// projects. Nothing but a test passes another.
     @ObservationIgnored let buildStorage: BuildStorage
-    @ObservationIgnored lazy var buildFlow = BuildFlow(app: self, storage: buildStorage)
+    /// One flow per linked app, so a build is the app's and not the window's.
+    ///
+    /// It was one flow for the whole window. Nothing cancelled it on a switch
+    /// and nothing rebound it, so opening another app handed that app the
+    /// controls of the first one's running build: its Build tab drew the other
+    /// app's log and its progress, and pressing Build there drove the same run.
+    /// The app tabs make that switch a normal thing to do, which is the point of
+    /// them, so the flow now belongs to the app it was started on.
+    ///
+    /// Kept for the life of the window and never pruned. A flow is small, a
+    /// developer has a handful of apps, and dropping one would drop a build that
+    /// is still running.
+    @ObservationIgnored private var buildFlows: [UUID: BuildFlow] = [:]
+    /// The open app's flow. A window with no app linked yet still needs one:
+    /// the Build tab is reachable before any app exists, and the entry screen
+    /// builds from a project that has no `store.yaml` beside it yet.
+    var buildFlow: BuildFlow { flow(for: openAppID) }
+
+    /// The app a flow belongs to, or a fixed key while none is open.
+    private var openAppID: UUID {
+        linkedApps.indices.contains(selectedAppIndex)
+            ? linkedApps[selectedAppIndex].id
+            : Self.unlinkedFlowID
+    }
+
+    private static let unlinkedFlowID = UUID(
+        uuidString: "00000000-0000-0000-0000-000000000000") ?? UUID()
+
+    private func flow(for id: UUID) -> BuildFlow {
+        if let existing = buildFlows[id] { return existing }
+        let created = BuildFlow(app: self, storage: buildStorage)
+        buildFlows[id] = created
+        return created
+    }
+
+    /// Whether any app other than the open one has a build or a send in flight.
+    /// The tab bar draws a mark on those tabs, so work that is no longer on the
+    /// screen still says it is happening.
+    func isBuilding(appID: UUID) -> Bool {
+        buildFlows[appID]?.isBusy ?? false
+    }
     var showBuildFromProject = false
     var buildRead = false
     var packages: [AppPackage.Kind: AppPackage] = [:]
@@ -599,12 +646,8 @@ final class AppState {
                 id: record.id,
                 name: record.name,
                 initials: Self.initials(for: record.name),
-                // The same rule as the run and as the Media tab: relative to
-                // the manifest, absolute when it says so, and nil when the
-                // file is gone. The row then draws the initials.
-                icon: loaded?.media?.icon.flatMap {
-                    Planner.resolve($0, root: url.deletingLastPathComponent())
-                },
+                icon: rowIcon(loaded, root: url.deletingLastPathComponent(),
+                              selected: selected),
                 summary: "\(version) · \(summary(for: loaded, selected: selected))",
                 apple: health(.apple, manifest: loaded, selected: selected),
                 google: health(.google, manifest: loaded, selected: selected),
@@ -615,6 +658,29 @@ final class AppState {
                 // next launch. Every other row answers from what was learned.
                 isLive: (selected && isUpdatingLiveApp) || isAppLive(appKey: key))
         }
+    }
+
+    /// The picture beside one app's name, wherever this Mac has one.
+    ///
+    /// `media.icon` leads: it is a file the developer chose and Play uploads it.
+    /// Apple takes no icon file at all, so an App Store app has none of its own
+    /// here, and the answer for it is the copy the import downloaded out of the
+    /// build. That is in the store snapshot beside `store.yaml`.
+    ///
+    /// The same rule as the run and as the Media tab: relative to the manifest,
+    /// absolute when it says so, and nil when the file is gone. The row then
+    /// draws the initials.
+    ///
+    /// `// ponytail: one snapshot read per unopened row, which is the cost this
+    /// // property already pays to read that row's manifest. Cache both together
+    /// // if a developer with thirty apps ever feels it.`
+    private func rowIcon(_ loaded: Manifest?, root: URL, selected: Bool) -> URL? {
+        if let chosen = loaded?.media?.icon.flatMap({ Planner.resolve($0, root: root) }),
+           FileManager.default.fileExists(atPath: chosen.path) {
+            return chosen
+        }
+        let snapshot = selected ? storeSnapshot : StoreSnapshot.load(fromRoot: root)
+        return snapshot.localIcon(defaultLocale: loaded?.listing?.defaultLocale)
     }
 
     /// The key one app is remembered under, open or not.
@@ -790,11 +856,12 @@ final class AppState {
         selectedAppIndex = index
         guard !linkedApps.isEmpty else { return }
         activateLinkedApp(at: index)
-        // The tab stays where it is, and the sidebar row moves it. Touching an
-        // app's name opens that app's store page — see `AppsSection` — and the
-        // other callers of this are not that touch: an import that switches
-        // app under the developer, and the move off a draft when Manage cannot
-        // list it. Neither one is a request to go and look at the page.
+        // The tab stays where it is, for every caller now. Pressing an app in
+        // the sidebar used to open that app's store page, which meant switching
+        // app also moved you off whatever you were reading. The apps are a tab
+        // bar across the top of the window, and a tab bar changes which app you
+        // are working on and not which screen of it you are looking at, so
+        // comparing one app's Details with another's is two clicks.
         // Where App Store review has each of them. Picking an app is the
         // moment a developer needs to know whether this one is frozen, and
         // whether the others are, so the sweep runs on every change as well as
@@ -1682,11 +1749,10 @@ final class AppState {
             }
         } else {
             do {
-                let limit = stores.contains(.google) ? 8 : 10
                 let existing = mediaPaths(deviceClass: deviceClass)
-                guard existing.count + urls.count <= limit else {
-                    throw MediaInputError.tooMany(limit: limit)
-                }
+                let arriving = urls.map(manifestPath(for:))
+                try checkMediaLimits(existing: existing, arriving: arriving,
+                                     deviceClass: deviceClass)
                 var paths: [String] = []
                 for url in urls {
                     let accessed = url.startAccessingSecurityScopedResource()
@@ -1703,6 +1769,36 @@ final class AppState {
                 mediaError = error.localizedDescription
             }
         }
+    }
+
+    /// How many pictures one device size may still take, by the rule each store
+    /// actually counts by.
+    ///
+    /// Apple takes 10 per **display type** and Google takes 8 per device class.
+    /// `Validator.media` already applies exactly this, and this is the door that
+    /// rule stands behind: the two are the same call now, so they cannot drift
+    /// apart a second time.
+    ///
+    /// They had. This counted the whole bucket against Apple's per-size limit,
+    /// and the Phone bucket is the one that holds several sizes: an app shipping
+    /// a 6.9 inch set and a 6.5 inch set has up to twenty phone files and every
+    /// one of them is legal. So "Send these 15 again" refused all fifteen and
+    /// named a limit the App Store does not have. The iPad went through the same
+    /// door untouched, because an iPad app usually ships one size.
+    private func checkMediaLimits(existing: [String], arriving: [String],
+                                  deviceClass: Manifest.DeviceClass) throws {
+        if stores.contains(.google), existing.count + arriving.count > 8 {
+            throw MediaInputError.tooMany(limit: 8)
+        }
+        guard stores.contains(.apple) else { return }
+        let counts = Validator.appleDisplayTypeCounts(existing + arriving,
+                                                      root: manifestRoot,
+                                                      deviceClass: deviceClass)
+        // Sorted, so a bucket that overflows twice over always names the same
+        // size rather than whichever one the dictionary offered that day.
+        guard let over = counts.sorted(by: { $0.key < $1.key })
+            .first(where: { $0.value > 10 }) else { return }
+        throw MediaInputError.tooManyForSize(displayType: over.key, limit: 10)
     }
 
     func moveMedia(_ path: String, by offset: Int, deviceClass: Manifest.DeviceClass,

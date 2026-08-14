@@ -74,9 +74,8 @@ import Testing
     }
 
     /// Nothing leaves the app with the switch. Every step of the work is still
-    /// reachable, the three screens about this Mac are in the footer box, which
-    /// no mode can hide, and the store page is opened by the app list above the
-    /// groups, which no mode hides either.
+    /// reachable, and the three screens about this Mac are in the footer box,
+    /// which no mode can hide.
     @Test func theSwitchHidesNoTab() {
         let reachable = Set(Mode.allCases.flatMap { mode in
             SidebarSection.allCases
@@ -84,8 +83,7 @@ import Testing
                 .flatMap { Destination.rows(in: $0, hasApp: true) }
                 .map(\.tab)
         })
-        #expect(Set(Tab.allCases).subtracting(reachable)
-            == [.stores, .settings, .account, .storePage])
+        #expect(Set(Tab.allCases).subtracting(reachable) == [.stores, .settings, .account])
     }
 
     /// The column is shorter for it. That is the whole point: a manager reads

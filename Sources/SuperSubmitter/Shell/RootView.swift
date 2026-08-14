@@ -206,6 +206,14 @@ private struct ContentArea: View {
             // a screen whose whole job is one centred choice — and the traffic
             // lights sit on the sidebar panel, not here, so nothing needs the
             // room.
+            // The apps, above everything the app-specific screens draw.
+            //
+            // No bar on the entry screen: there is no app to switch to and its
+            // whole job is one centred choice. It appears with the first linked
+            // app, which is the moment the question "which one" starts existing.
+            if !state.showsEntryScreen, !state.hasNoOpenApp {
+                AppTabBar()
+            }
             if !state.showsEntryScreen {
                 ContentHeader(scrolled: scrolled)
                 if state.selectedTab == .stores { StoresStatusBar() }
