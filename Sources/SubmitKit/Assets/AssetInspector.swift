@@ -158,6 +158,20 @@ public enum AssetInspector {
             // it for an older screenshot set, and it shares its pixels with
             // `APP_IPAD_PRO_3GEN_129`, so no size row names it.
             "APP_IPAD_PRO_129": .tablet10,
+            // Read only, and it is why this is here rather than in the size
+            // table. `ScreenshotDisplayType` has no `APP_IPHONE_69`: Apple's
+            // largest iPhone value is `APP_IPHONE_67`, and the 6.9 inch
+            // pictures at 1320 x 2868 go into that set. The size table named
+            // `APP_IPHONE_69` and every upload of a 6.9 inch set was refused
+            // 409, "'APP_IPHONE_69' is not a valid value for the attribute
+            // 'screenshotDisplayType'", which stopped the run on the first
+            // screenshot step.
+            //
+            // The value stays understood on the way in. Apple prints "6.9″" in
+            // Media Manager and may yet answer with the string, and a bucket
+            // this app does not recognise is a set of screenshots dropped on
+            // import without a word.
+            "APP_IPHONE_69": .phone,
         ]
         // In `allCases` order, not dictionary order, and the first class to
         // claim a display type keeps it. The TV and the vision share 3840 x

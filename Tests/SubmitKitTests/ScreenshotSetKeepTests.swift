@@ -62,7 +62,7 @@ struct ScreenshotSetKeepTests {
 
         // Both classes, from one call, whichever step is running.
         let keep = await runner.appleWantedBuckets(locale: "en-US")
-        #expect(keep == ["APP_IPHONE_69", "APP_IPAD_PRO_3GEN_129"])
+        #expect(keep == ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129"])
 
         // A locale the manifest says nothing about keeps nothing, which is how
         // a dropped device class still gets its set removed.

@@ -160,7 +160,8 @@ private func localeStep(_ manifest: Manifest, _ actual: ActualState) -> PlanStep
 // MARK: - The screenshots
 
 /// A real PNG, because `AssetInspector` reads the pixel size off the file and
-/// the display type comes from that size. 1320 x 2868 is `APP_IPHONE_69`.
+/// the display type comes from that size. 1320 x 2868 is `APP_IPHONE_67`:
+/// Apple has no 6.9 inch value and takes those pictures into the 6.7 inch set.
 private func writeScreenshot(_ url: URL, gray: CGFloat) throws {
     let width = 1_320, height = 2_868
     guard let context = CGContext(data: nil, width: width, height: height,
@@ -218,7 +219,7 @@ private struct ScreenshotSet {
     // What Apple carries into the new version: the released version's set,
     // in the released version's order.
     let actual = liveState { apple in
-        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_69"] = set.checksums
+        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_67"] = set.checksums
     }
 
     let step = set.mediaStep(actual)
@@ -230,7 +231,7 @@ private struct ScreenshotSet {
     defer { set.cleanUp() }
 
     let actual = liveState { apple in
-        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_69"] =
+        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_67"] =
             [set.checksums[0], "a-checksum-from-the-old-picture"]
     }
 
@@ -245,7 +246,7 @@ private struct ScreenshotSet {
     // The same two files, the other way round. The store shows them in order,
     // so this is a real edit and a set compare would have missed it.
     let actual = liveState { apple in
-        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_69"] = set.checksums.reversed()
+        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_67"] = set.checksums.reversed()
     }
 
     #expect(set.mediaStep(actual) != nil)
@@ -259,8 +260,8 @@ private struct ScreenshotSet {
     // written, so the live set says nothing about what an upload would replace.
     let actual = liveState { apple in
         apple.versionId = "version-9"
-        apple.screenshotChecksumOrder["en-US/APP_IPHONE_69"] = ["stale", "stale-two"]
-        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_69"] = set.checksums
+        apple.screenshotChecksumOrder["en-US/APP_IPHONE_67"] = ["stale", "stale-two"]
+        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_67"] = set.checksums
     }
 
     #expect(set.mediaStep(actual) != nil)
@@ -281,7 +282,7 @@ private struct ScreenshotSet {
 
     // A read that happened and simply holds other pictures is verified.
     let compared = try! #require(set.mediaStep(liveState { apple in
-        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_69"] = ["old", "older"]
+        apple.liveScreenshotChecksumOrder["en-US/APP_IPHONE_67"] = ["old", "older"]
     }))
     #expect(compared.comparison == .verified)
 }

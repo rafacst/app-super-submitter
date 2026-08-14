@@ -514,13 +514,38 @@ public enum ConnectionError: Error, LocalizedError {
 
     /// The store's own words, when they are words.
     ///
-    /// A payload that is still JSON, or a wall of it, says nothing to a
-    /// developer, so it is dropped rather than printed at them.
+    /// A payload that is still JSON says nothing to a developer, so it is
+    /// dropped rather than printed at them.
+    ///
+    /// Length is not the same test, and treating it as one threw away the one
+    /// sentence that mattered. Apple refused a screenshot set with:
+    ///
+    ///     'APP_IPHONE_69' is not a valid value for the attribute
+    ///     'screenshotDisplayType'. Expected one of: 'APP_DESKTOP',
+    ///     'APP_WATCH_SERIES_3', … forty more …
+    ///
+    /// which is seven hundred characters, so the whole thing was dropped and
+    /// the developer read "The store already holds something that conflicts
+    /// with this" over a run that had stopped for a reason Apple had named
+    /// exactly. The first sentence is the reason; the enumeration after it is
+    /// the machine talking to itself.
+    ///
+    /// So a long answer is cut to its first sentence rather than binned, and
+    /// only a first sentence that is itself unreadably long is truncated.
     static func sentence(from detail: String) -> String {
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.hasPrefix("{"), !trimmed.hasPrefix("["),
-              !trimmed.hasPrefix("<"), trimmed.count <= 240 else { return "" }
-        return trimmed.hasSuffix(".") ? trimmed : trimmed + "."
+              !trimmed.hasPrefix("<") else { return "" }
+        guard trimmed.count > 240 else {
+            return trimmed.hasSuffix(".") ? trimmed : trimmed + "."
+        }
+        // ". " and not ".", so a version number or a file name inside the
+        // sentence does not end it.
+        if let stop = trimmed.range(of: ". "), stop.lowerBound < trimmed.index(
+            trimmed.startIndex, offsetBy: 240, limitedBy: trimmed.endIndex) ?? trimmed.endIndex {
+            return String(trimmed[..<stop.lowerBound]) + "."
+        }
+        return String(trimmed.prefix(240)).trimmingCharacters(in: .whitespaces) + "…"
     }
 }
 
