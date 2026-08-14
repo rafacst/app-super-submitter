@@ -66,8 +66,6 @@ public struct BundleInfo: Sendable, Equatable {
     public var applicationID = ""
     public var versionName = ""
     public var versionCode = 0
-    public var minimumSDK: String?
-    public var permissions: [String] = []
     public var size: Int64 = 0
     public var sha256 = ""
     public var certificateSubject: String?
@@ -439,8 +437,6 @@ public struct AndroidBuildService: Sendable {
         info.applicationID = package.identifier ?? ""
         info.versionName = package.versionName ?? ""
         info.versionCode = package.buildNumber.flatMap(Int.init) ?? 0
-        info.minimumSDK = package.minimumOS
-        info.permissions = package.privacyHints
         let data = try Data(contentsOf: bundle, options: .mappedIfSafe)
         info.size = Int64(data.count)
         info.sha256 = Checksums.sha256(data)

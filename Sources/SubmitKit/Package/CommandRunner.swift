@@ -11,16 +11,7 @@ public struct CommandResult: Sendable {
     }
 }
 
-/// The seam that keeps the tests off the file system and off the network.
-///
-/// The real runner starts a process. A test runner returns a fixture and
-/// records the argument list. Spec section 12.2 uses the same seam for the
-/// Adapty CLI.
-public protocol CommandRunning: Sendable {
-    func run(_ executable: String, _ arguments: [String]) throws -> CommandResult
-}
-
-public struct ProcessRunner: CommandRunning {
+public struct ProcessRunner: Sendable {
     public init() {}
 
     public func run(_ executable: String, _ arguments: [String]) throws -> CommandResult {

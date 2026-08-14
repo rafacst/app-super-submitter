@@ -225,13 +225,9 @@ public struct StoreDiagnostics: Sendable {
 
     public struct AppCategory: Sendable, Equatable, Identifiable {
         public var id: String
-        public var platform: String?
-        public var parentId: String?
 
-        public init(id: String, platform: String? = nil, parentId: String? = nil) {
+        public init(id: String) {
             self.id = id
-            self.platform = platform
-            self.parentId = parentId
         }
     }
 
@@ -243,10 +239,7 @@ public struct StoreDiagnostics: Sendable {
         let payload = JSON(data: try await api.apple("GET", path).data)
         return payload["data"].array.compactMap { item in
             guard let id = item["id"].string else { return nil }
-            return AppCategory(
-                id: id,
-                platform: item["attributes"]["platforms"].array.first?.string,
-                parentId: item["relationships"]["parent"]["data"]["id"].string)
+            return AppCategory(id: id)
         }
     }
 

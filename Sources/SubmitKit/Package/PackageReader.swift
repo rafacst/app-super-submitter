@@ -7,9 +7,9 @@ import Foundation
 /// SDK, so it runs on the machine that submits, not on the machine that
 /// builds.
 public struct PackageReader: Sendable {
-    private let runner: any CommandRunning
+    private let runner: ProcessRunner
 
-    public init(runner: any CommandRunning = ProcessRunner()) {
+    public init(runner: ProcessRunner = ProcessRunner()) {
         self.runner = runner
     }
 

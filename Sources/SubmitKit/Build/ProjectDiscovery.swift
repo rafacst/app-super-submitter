@@ -168,7 +168,7 @@ public enum ProjectDiscovery {
 
     /// The git revision of the folder, when it is a repository. Informational.
     public static func revision(at root: URL,
-                                runner: any CommandRunning = ProcessRunner())
+                                runner: ProcessRunner = ProcessRunner())
         -> BuildCandidate.SourceRevision? {
         guard let head = try? runner.run("/usr/bin/git",
                                          ["-C", root.path, "rev-parse", "HEAD"]),

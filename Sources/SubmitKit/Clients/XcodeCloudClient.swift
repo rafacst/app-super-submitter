@@ -233,18 +233,16 @@ public struct XcodeCloudClient: Sendable {
         public var id: String
         public var name: String
         public var owner: String?
-        public var httpCloneURL: String?
         /// The branches and the tags, and the open pull requests.
         public var references: [String] = []
         public var pullRequests: [String] = []
 
         public init(id: String, name: String, owner: String? = nil,
-                    httpCloneURL: String? = nil, references: [String] = [],
+                    references: [String] = [],
                     pullRequests: [String] = []) {
             self.id = id
             self.name = name
             self.owner = owner
-            self.httpCloneURL = httpCloneURL
             self.references = references
             self.pullRequests = pullRequests
         }
@@ -343,8 +341,7 @@ public struct XcodeCloudClient: Sendable {
         let attributes = item["attributes"]
         return Repository(id: id,
                           name: attributes["repositoryName"].string ?? id,
-                          owner: attributes["ownerName"].string,
-                          httpCloneURL: attributes["httpCloneUrl"].string)
+                          owner: attributes["ownerName"].string)
     }
 
     static func parseWorkflow(_ item: JSON, productName: String) -> Workflow? {
