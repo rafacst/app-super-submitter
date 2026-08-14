@@ -8,7 +8,7 @@ struct SuperSubmitterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     init() {
-        PostHogClient.setup()
+        AptabaseClient.setup()
     }
     // The real defaults, the real Keychain, and the real app list, except
     // while `tools/screenshots.sh` or a `--demo` run is on. See ScreenshotMode.

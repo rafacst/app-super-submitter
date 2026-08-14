@@ -1,6 +1,6 @@
 import AppKit
+import Aptabase
 import Foundation
-import PostHog
 import SubmitKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -63,9 +63,9 @@ extension BuildFlow {
         uploadProgress = 0
         startedAt = Date()
         run.move(to: .building)
-        PostHogSDK.shared.capture("project_build_started", properties: [
+        Aptabase.shared.trackEvent("project_build_started", with: [
             "platform": project.platform == .android ? "android" : "apple",
-            "allow_provisioning_updates": allowProvisioningUpdates
+            "allow_provisioning_updates": allowProvisioningUpdates ? 1 : 0
         ])
         try? storage.save(run)
 
@@ -219,10 +219,10 @@ extension BuildFlow {
         candidate.mismatches = mismatches(for: candidate)
         self.candidate = candidate
         run.candidateIdentity = candidate.logicalIdentity
-        PostHogSDK.shared.capture("artifact_inspected", properties: [
+        Aptabase.shared.trackEvent("artifact_inspected", with: [
             "platform": run.platform == .android ? "android" : "apple",
             "source": "imported",
-            "has_blocking_mismatches": !candidate.blockingMismatches.isEmpty
+            "has_blocking_mismatches": candidate.blockingMismatches.isEmpty ? 0 : 1
         ])
         await recheckRemote(for: candidate)
         run.move(to: .needsUploadConfirmation)
@@ -288,10 +288,10 @@ extension BuildFlow {
         candidate.mismatches = mismatches(for: candidate)
         self.candidate = candidate
         run.candidateIdentity = candidate.logicalIdentity
-        PostHogSDK.shared.capture("artifact_inspected", properties: [
+        Aptabase.shared.trackEvent("artifact_inspected", with: [
             "platform": project.platform == .android ? "android" : "apple",
             "source": "project_build",
-            "has_blocking_mismatches": !candidate.blockingMismatches.isEmpty
+            "has_blocking_mismatches": candidate.blockingMismatches.isEmpty ? 0 : 1
         ])
         try? storage.save(run)
 
@@ -485,7 +485,7 @@ extension BuildFlow {
         uploadProgress = 0
         artifactOnly = false
         run.move(to: .uploading)
-        PostHogSDK.shared.capture("artifact_upload_started", properties: [
+        Aptabase.shared.trackEvent("artifact_upload_started", with: [
             "platform": candidate.platform == .android ? "android" : "apple"
         ])
         try? storage.save(run)
@@ -578,7 +578,7 @@ extension BuildFlow {
                     successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
                     run.move(to: .complete)
                     storeGainedABuild()
-                    PostHogSDK.shared.capture("artifact_upload_completed", properties: [
+                    Aptabase.shared.trackEvent("artifact_upload_completed", with: [
                         "platform": "apple"
                     ])
                     try? storage.save(run)
@@ -655,7 +655,7 @@ extension BuildFlow {
         successLink = "https://play.google.com/console"
         run.move(to: .complete)
         storeGainedABuild()
-        PostHogSDK.shared.capture("artifact_upload_completed", properties: [
+        Aptabase.shared.trackEvent("artifact_upload_completed", with: [
             "platform": "android"
         ])
         try? storage.save(run)
@@ -770,7 +770,7 @@ extension BuildFlow {
         flushLog()
         if !logLines.isEmpty { logOpen = true }
         run.move(to: value.category.needsReconciliation ? .recoveryRequired : .failed)
-        PostHogSDK.shared.capture("build_flow_failed", properties: [
+        Aptabase.shared.trackEvent("build_flow_failed", with: [
             "stage": value.stage
         ])
         try? storage.save(run)

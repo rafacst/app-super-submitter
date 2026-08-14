@@ -39,16 +39,16 @@
 	<string>Copyright © 2026 Rafa CST</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SSAptabaseAppKey</key>
+	<string>$(APTABASE_APP_KEY)</string>
+	<key>SSAptabaseHost</key>
+	<string>$(APTABASE_HOST)</string>
 	<key>SSEntitlementPublicKeys</key>
 	<string>$(ENTITLEMENT_PUBLIC_KEYS)</string>
 	<key>SSGoogleOAuthClientID</key>
 	<string>$(GOOGLE_OAUTH_CLIENT_ID)</string>
 	<key>SSLicensingBaseURL</key>
 	<string>$(LICENSING_BASE_URL)</string>
-	<key>SSPostHogHost</key>
-	<string>$(POSTHOG_HOST)</string>
-	<key>SSPostHogProjectToken</key>
-	<string>$(POSTHOG_PROJECT_TOKEN)</string>
 	<key>SSSupabasePublishableKey</key>
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>SSSupabaseURL</key>

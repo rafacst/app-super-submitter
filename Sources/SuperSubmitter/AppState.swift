@@ -1,7 +1,7 @@
 import AppKit
+import Aptabase
 import Foundation
 import Observation
-import PostHog
 import SubmitKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -183,10 +183,10 @@ final class AppState {
             // `flushSave` drains both and costs nothing when nothing waits, so
             // this adds no write to a plain tab switch and no timer anywhere.
             flushSave()
-            // A tab is this app's screen. `captureScreenViews` swizzles a
-            // UIKit class that a Mac does not have, so the SDK sees no screen
-            // on its own and every event would carry the same one.
-            PostHogSDK.shared.screen(selectedTab.title, properties: ["mode": mode.rawValue])
+            // A tab is this app's screen, and the SDK has no screen-view call
+            // of its own: an event is the only unit it sends.
+            Aptabase.shared.trackEvent("screen_view",
+                                       with: ["screen": selectedTab.title, "mode": mode.rawValue])
             // Picking a tab answers the entry screen: you asked for the two
             // doors and then chose a third thing instead. Without this,
             // pressing "Add app" and changing your mind left the flag set, and
@@ -292,14 +292,8 @@ final class AppState {
     /// The address the Supabase account is signed in with.
     ///
     /// Every door that signs a developer in writes it, and signing out clears
-    /// it, so it is the one value that says who is using the app. See
-    /// `PostHogClient.identify(_:)`.
-    var accountEmail: String? {
-        didSet {
-            guard accountEmail != oldValue else { return }
-            PostHogClient.identify(accountEmail)
-        }
-    }
+    /// it, so it is the one value that says who is using the app.
+    var accountEmail: String?
     /// Whether the sign-in form is open beside the Account tab.
     ///
     /// A panel on the right, not a sheet. It was a sheet over a sheet: the
