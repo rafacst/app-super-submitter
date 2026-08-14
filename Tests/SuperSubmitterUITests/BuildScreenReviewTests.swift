@@ -297,7 +297,7 @@ private func buildReviewState() -> AppState {
     try ManifestFile.save(manifest, to: url)
     try state.load(from: url)
 
-    let flow = BuildFlow(app: state)
+    let flow = BuildFlow(app: state, owner: state.openAppID)
     flow.run.platform = .ios
     #expect(flow.blockingReason != nil)
 
@@ -319,7 +319,7 @@ private func buildReviewState() -> AppState {
     try ManifestFile.save(manifest, to: url)
     try state.load(from: url)
 
-    let flow = BuildFlow(app: state)
+    let flow = BuildFlow(app: state, owner: state.openAppID)
     flow.run.platform = .android
     #expect(flow.blockingReason == nil)
 }

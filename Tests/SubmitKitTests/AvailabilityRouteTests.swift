@@ -169,16 +169,25 @@ struct AvailabilityRouteTests {
         #expect(written["available"] == nil)
     }
 
-    /// `availableInNewTerritories` is an attribute of the create, and after the
-    /// create it lives on the app.
-    @Test func addingNewTerritoriesAutomaticallyIsWrittenOnTheApp() async throws {
+    /// `availableInNewTerritories` is an attribute of the create and of nothing
+    /// else. Once an app holds an availability record, no route changes it.
+    ///
+    /// This used to send `PATCH /v1/apps/{id}`, which Apple's own reference
+    /// still documents and the store refuses: 409, "'availableInNewTerritories'
+    /// is not an attribute on the resource 'apps'". The other two routes were
+    /// already known closed: `PATCH /v2/appAvailabilities/{id}` answers 403 and
+    /// "Allowed operations are: CREATE, GET_INSTANCE", and a second create
+    /// answers 409.
+    ///
+    /// So the run says so instead of stopping on a request that cannot work.
+    @Test func changingNewTerritoriesOnAnExistingRecordIsRefusedInWords() async throws {
         AvailabilityStub.start()
         let runner = availabilityRunner([], autoConvert: false, heldAutoConvert: true)
 
-        try await runner.appleAvailability()
-
-        let written = try #require(AvailabilityStub.patched("/v1/apps/app-1"))
-        #expect(written["availableInNewTerritories"] as? Bool == false)
+        await #expect(throws: RunError.self) { try await runner.appleAvailability() }
+        // And nothing was sent. A request Apple refuses is not worth the round
+        // trip, and a 409 in the log reads as a conflict the developer caused.
+        #expect(AvailabilityStub.patched("/v1/apps/app-1") == nil)
     }
 
     @Test func anAnswerTheStoreAlreadyHoldsIsNotWritten() async throws {

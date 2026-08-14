@@ -18,36 +18,66 @@ enum BuildSidebarStatus: Equatable {
     }
 }
 
-/// The app a running upload is sending to, frozen when the developer pressed
-/// Upload.
+/// The app one build belongs to: its manifest, its keys, its folder.
 ///
-/// The window switches apps and a send may not follow it. A build runs for
-/// minutes, the app tabs exist so that another app can be worked on while it
-/// does, and every field below used to be read off the front-most `AppState` in
-/// the middle of the upload: switching tabs mid-send pointed the upload, the
-/// processing poll and the conflict re-check at whichever app was open by then,
-/// under that app's store id and that app's key.
+/// A build runs for minutes and the window does not wait for it. The app tabs
+/// exist so another app can be worked on meanwhile, and every field below used
+/// to be read off the front-most `AppState` at the moment the background work
+/// happened to ask. Two artifacts built at once came out crossed:
 ///
-/// Frozen at the press and not at the build. The archive on disk is signed and
-/// inert; the send is the step that names a store record, and the press is when
-/// the developer said which one.
-struct BuildTarget {
-    var appleAppID: String?
+///     store.yaml identifier: the preflight said com.rafacst.receitorio
+///     and the artifact holds com.rafacst.deckdeckdeck.
+///     store.yaml version: the preflight said 1.5 and the artifact holds 1.6.1.
+///
+/// Both halves of that sentence were right. The artifact was DeckDeckDeck's and
+/// the `store.yaml` was Receitório's, because the developer had moved on by the
+/// time the archive finished and the comparison read whatever tab was in front.
+/// The same read decided which App Store id the conflict check asked about and,
+/// worse, which `store.yaml` the finished artifact was written into.
+///
+/// So a flow carries its app rather than looking it up. See `BuildFlow.context`
+/// for when this is refreshed and when it is held still.
+struct BuildContext {
+    /// The linked record this build belongs to. Every write goes back to this
+    /// app and to no other.
+    var appID: UUID
+    var manifest: Manifest
+    var manifestURL: URL?
+    var stores: Set<Store>
+    var applePlatform: Manifest.Platform
     var appleCredential: AppleCredential?
-    var googlePackageName: String?
-    var googleTrack: String
+    var credentials: StoreCredentials
     /// An actor built from the credentials of that moment, so a key changed on
     /// another tab cannot re-sign a send already under way.
     var api: StoreAPI
 
-    @MainActor init(_ app: AppState) {
-        appleAppID = app.manifest.apps.apple?.appId
+    var manifestRoot: URL? { manifestURL?.deletingLastPathComponent() }
+    var appleAppID: String? { manifest.apps.apple?.appId }
+    var googlePackageName: String? { manifest.apps.google?.packageName }
+    var googleTrack: String { manifest.googlePrimaryTrack }
+
+    @MainActor init(_ app: AppState, appID: UUID) {
+        self.appID = appID
+        manifest = app.manifest
+        manifestURL = app.manifestURL
+        stores = app.stores
+        applePlatform = app.applePlatform
+        credentials = app.credentials
         appleCredential = app.credentials.apple.flatMap {
             $0.privateKeyPEM.isEmpty ? nil : $0
         }
-        googlePackageName = app.manifest.apps.google?.packageName
-        googleTrack = app.manifest.googlePrimaryTrack
         api = app.readOnlyAPI()
+    }
+
+    /// An app that is not there, for a flow built without one. Every field is
+    /// the empty answer, so nothing falls back to another app's.
+    init(appID: UUID) {
+        self.appID = appID
+        manifest = Manifest()
+        stores = []
+        applePlatform = .ios
+        credentials = StoreCredentials()
+        api = StoreAPI(credentials: StoreCredentials(), record: { _ in })
     }
 }
 
@@ -65,8 +95,39 @@ struct BuildTarget {
 final class BuildFlow {
     @ObservationIgnored weak var app: AppState?
     @ObservationIgnored var task: Task<Void, Never>?
-    /// Set for as long as a send is in flight. See `BuildTarget`.
-    @ObservationIgnored var target: BuildTarget?
+
+    /// The app this flow builds for. It never changes.
+    @ObservationIgnored let owner: UUID
+
+    /// The owner's manifest, keys and folder. See `BuildContext` for the two
+    /// artifacts this crossed.
+    ///
+    /// Live while this flow's app is the one on screen and nothing is running,
+    /// so an edit to `store.yaml` is seen by the next preflight. Held still
+    /// otherwise, which covers both ways a flow stops being the front-most
+    /// thing: the developer opens another tab, or the run starts and they carry
+    /// on editing. A run that reads a manifest halfway through an edit is the
+    /// same class of bug as one that reads another app's.
+    var context: BuildContext {
+        guard let app, !isBusy, app.isOpenApp(owner) else { return heldContext }
+        heldContext = BuildContext(app, appID: owner)
+        return heldContext
+    }
+
+    /// Mutated from `context`'s getter, which a class allows, and unobserved so
+    /// that refreshing it inside a view's body invalidates nothing.
+    @ObservationIgnored private var heldContext: BuildContext
+
+    /// Takes the copy the run will use, at the moment the run starts.
+    ///
+    /// `context` refreshes itself whenever it is asked and the flow is idle, so
+    /// this is usually the same value it already holds. It is explicit because
+    /// "usually" is not a guarantee: nothing promises that a view read the
+    /// context between the last edit and the press.
+    func holdContext() {
+        guard let app, app.isOpenApp(owner) else { return }
+        heldContext = BuildContext(app, appID: owner)
+    }
     /// Injectable so a test can link and restore projects against a folder of
     /// its own. The default is the one the app ships with; nothing but a test
     /// ever passes another.
@@ -134,10 +195,16 @@ final class BuildFlow {
     /// `app` is already weak and optional, so the initialiser says so too. It
     /// lets the log tests build a flow without an `AppState`, which reads the
     /// Keychain and the defaults and answers nothing this flow needs.
-    init(app: AppState?, storage: BuildStorage = BuildStorage()) {
+    init(app: AppState?, owner: UUID = UUID(), storage: BuildStorage = BuildStorage()) {
         self.app = app
+        self.owner = owner
         self.storage = storage
         self.run = UploadRun(platform: .ios)
+        // A flow with no app is a test's flow. It answers about an app that
+        // does not exist rather than about whichever one is open, which is the
+        // same rule the rest of this type follows.
+        heldContext = app.map { BuildContext($0, appID: owner) }
+            ?? BuildContext(appID: owner)
     }
 
     // MARK: - Linking
@@ -240,7 +307,7 @@ final class BuildFlow {
     /// exactly where it was.
     func adoptTheAppFolder() {
         guard project == nil, candidate == nil, failure == nil, !state.isActive,
-              let root = app?.manifestRoot else { return }
+              let root = context.manifestRoot else { return }
         discover(root: root, quietWhenEmpty: true)
     }
 
@@ -285,7 +352,7 @@ final class BuildFlow {
         var project = LinkedSourceProject(
             platform: platform, rootPath: root.path,
             containerPath: container.path, containerKind: container.kind,
-            manifestPath: app?.manifestURL?.path)
+            manifestPath: context.manifestURL?.path)
         project.folderBookmark = try? root.bookmarkData(includingResourceValuesForKeys: nil,
                                                         relativeTo: nil)
         project.selection.allowProvisioningUpdates = allowProvisioningUpdates
@@ -360,7 +427,7 @@ final class BuildFlow {
         // app's project. A running build keeps the tab as it is, because
         // killing it to redraw a card would cost the developer the build.
         if let held = project?.manifestPath, !state.isActive,
-           held != app?.manifestURL?.standardizedFileURL.path {
+           held != context.manifestURL?.standardizedFileURL.path {
             reset()
         }
         guard project == nil else { return }
@@ -397,7 +464,7 @@ final class BuildFlow {
 
     /// Every link this app has, one per store at most.
     func savedProjectsForOpenApp() -> [LinkedSourceProject] {
-        guard let manifest = app?.manifestURL?.standardizedFileURL.path else { return [] }
+        guard let manifest = context.manifestURL?.standardizedFileURL.path else { return [] }
         let root = (manifest as NSString).deletingLastPathComponent
         let list = storage.loadProjects()
         let named = list.filter { $0.manifestPath == manifest }
@@ -591,7 +658,7 @@ final class BuildFlow {
         self.project?.productIdentifier = settings.bundleIdentifier
 
         // The manifest is a constraint, never a command to edit the project.
-        if let expected = app?.manifest.apps.apple?.bundleId, !expected.isEmpty,
+        if let expected = context.manifest.apps.apple?.bundleId, !expected.isEmpty,
            let actual = settings.bundleIdentifier, expected != actual {
             blocking = "The project builds \(actual) and store.yaml names \(expected). Change the selection or the manifest."
         }
@@ -600,13 +667,13 @@ final class BuildFlow {
 
     private func appleRemoteCheck(settings: AppleBuildSettings) async {
         nextFreeBuildNumber = nil
-        guard let app, let appID = app.manifest.apps.apple?.appId, !appID.isEmpty,
+        guard let appID = context.appleAppID, !appID.isEmpty,
               let bundleIdentifier = settings.bundleIdentifier else {
             snapshot.remoteConflict = "No App Store app is connected, so no conflict check ran."
             return
         }
         do {
-            let check = try await UploadService(api: app.readOnlyAPI()).checkApple(
+            let check = try await UploadService(api: context.api).checkApple(
                 appID: appID, platform: run.platform, bundleIdentifier: bundleIdentifier,
                 marketingVersion: settings.marketingVersion ?? "",
                 buildVersion: settings.currentProjectVersion)
@@ -673,7 +740,7 @@ final class BuildFlow {
         // produce, and the manifest says where it is going: a package name
         // typed on the tab above cannot make Gradle build that package.
         snapshot.productIdentifier = identity.applicationID
-            ?? app?.manifest.apps.google?.packageName
+            ?? context.googlePackageName
         // No override is read here. `buildBundle` runs the variant task and
         // passes no property, because a plain Android project takes neither
         // number from the command line, and a row showing a number Gradle will
@@ -686,7 +753,7 @@ final class BuildFlow {
     }
 
     private func googleRemoteCheck() async {
-        guard let app, let packageName = app.manifest.apps.google?.packageName,
+        guard let packageName = context.googlePackageName,
               !packageName.isEmpty else {
             // The project's own applicationId goes in the sentence. The row
             // said the package was missing while the module beside it named
@@ -698,9 +765,9 @@ final class BuildFlow {
             return
         }
         do {
-            let check = try await UploadService(api: app.readOnlyAPI()).checkGoogle(
+            let check = try await UploadService(api: context.api).checkGoogle(
                 packageName: packageName,
-                track: app.manifest.googlePrimaryTrack,
+                track: context.googleTrack,
                 versionCode: nil)
             snapshot.remoteConflict = check.highestVersionCode
                 .map { "The highest version code in Google Play is \($0)." }
@@ -776,7 +843,7 @@ final class BuildFlow {
     /// that has always built 1.0.0 is not disagreeing with the App Store's
     /// 1.4.1: the two stores number apart.
     var versionFromManifest: String? {
-        guard let wanted = app?.manifest.versionName(for: run.platform.store), !wanted.isEmpty,
+        guard let wanted = context.manifest.versionName(for: run.platform.store), !wanted.isEmpty,
               let building = snapshot.marketingVersion, !building.isEmpty,
               wanted != building else { return nil }
         return wanted
@@ -856,7 +923,7 @@ final class BuildFlow {
     /// The setter throws away the store snapshot and the plan, which is right:
     /// both describe the other train.
     private func adoptAppleTrain() {
-        guard let app, run.platform.store == .apple, app.manifest.apps.apple != nil else {
+        guard let app, run.platform.store == .apple, context.manifest.apps.apple != nil else {
             return
         }
         let wanted: Manifest.Platform = run.platform == .macos ? .macOS : .ios
@@ -897,7 +964,8 @@ final class BuildFlow {
     /// one link, is one build, and a second button for it would do what the
     /// first one already does.
     var canBuildBothStores: Bool {
-        guard let stores = app?.stores, stores.count > 1 else { return false }
+        let stores = context.stores
+        guard stores.count > 1 else { return false }
         return stores.allSatisfy { savedProject(for: $0) != nil }
     }
 
@@ -945,7 +1013,7 @@ final class BuildFlow {
               candidate?.blockingMismatches.isEmpty == true else { return }
         // The App Bundle goes into `store.yaml` before the tab moves on. It is
         // the only record of it, and the card is about to draw another store.
-        app?.adoptBuiltArtifact()
+        app?.adoptBuiltArtifact(from: self)
         guard adoptLink(for: next) else { return }
         await refreshPreflight()
         guard canBuild else { return }

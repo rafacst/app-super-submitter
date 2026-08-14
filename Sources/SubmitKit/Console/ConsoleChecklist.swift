@@ -105,7 +105,16 @@ public enum ConsoleChecklist {
         // states can stop calling work the apply is about to do a blocker.
         let namedBuild = manifest.release?.build?.ios ?? manifest.release?.build?.macos ?? ""
         let attached = apple?.attachedBuildId != nil
-        let ready = attached || apple?.buildIdForVersion != nil || !namedBuild.isEmpty
+        // A build the developer picked from the store's own list, under Ship
+        // this build. It is the third way to answer this row and it was the one
+        // way that did not count: the row went on saying "Every submission
+        // needs a build" on every screen after the choice, and only a store
+        // read or an apply cleared it. Nothing about the choice is pending. The
+        // number is in `store.yaml`, the plan draws the attach row from it, and
+        // the apply sends it, which is exactly what a named build does.
+        let picked = manifest.release?.apple?.buildNumber ?? ""
+        let ready = attached || apple?.buildIdForVersion != nil
+            || !namedBuild.isEmpty || !picked.isEmpty
         let reason: String
         if attached {
             reason = "Confirmed: a build is attached."
@@ -113,6 +122,8 @@ public enum ConsoleChecklist {
             reason = "A build is uploaded and no version holds it. Run the apply to attach it."
         } else if !namedBuild.isEmpty {
             reason = "The manifest names \(namedBuild). Run the apply to upload and attach it."
+        } else if !picked.isEmpty {
+            reason = "store.yaml ships build \(picked) from App Store Connect. Run the apply to attach it."
         } else {
             reason = "Every submission needs a build. Build one on the Build tab, or pick one that App Store Connect already holds under Builds in App Store Connect."
         }

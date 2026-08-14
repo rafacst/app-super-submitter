@@ -141,12 +141,12 @@ import Testing
         state.link(manifestAt: twoURL)
 
         // Link a project for the app that is open, then for the other.
-        await BuildFlow(app: state, storage: storage)
+        await BuildFlow(app: state, owner: state.openAppID, storage: storage)
             .select(container: container("two.xcodeproj", under: twoURL),
                     root: twoURL.deletingLastPathComponent())
         state.selectApp(at: try #require(
             state.linkedApps.firstIndex { $0.manifestPath == oneURL.path }))
-        await BuildFlow(app: state, storage: storage)
+        await BuildFlow(app: state, owner: state.openAppID, storage: storage)
             .select(container: container("one.xcodeproj", under: oneURL),
                     root: oneURL.deletingLastPathComponent())
 
@@ -157,7 +157,7 @@ import Testing
         for url in [oneURL, twoURL] {
             relaunched.selectApp(at: try #require(
                 relaunched.linkedApps.firstIndex { $0.manifestPath == url.path }))
-            let flow = BuildFlow(app: relaunched, storage: storage)
+            let flow = BuildFlow(app: relaunched, owner: relaunched.openAppID, storage: storage)
             flow.loadSavedProject()
             #expect(flow.project?.manifestPath == url.path)
             #expect(flow.project?.rootPath == url.deletingLastPathComponent().path)
@@ -184,7 +184,7 @@ import Testing
         let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                              storeAccount: "test-\(UUID().uuidString)")
         state.manifestURL = URL(fileURLWithPath: manifest)
-        let flow = BuildFlow(app: state, storage: storage)
+        let flow = BuildFlow(app: state, owner: state.openAppID, storage: storage)
 
         #expect(flow.savedProject(for: .apple)?.containerKind == .project)
         #expect(flow.savedProject(for: .google)?.containerKind == .gradle)
@@ -298,7 +298,7 @@ import Testing
         let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                              storeAccount: "test-\(UUID().uuidString)")
         state.manifestURL = manifestURL
-        let flow = BuildFlow(app: state, storage: storage)
+        let flow = BuildFlow(app: state, owner: state.openAppID, storage: storage)
         await flow.select(container: container("mine.xcodeproj", under: manifestURL), root: home)
         #expect(storage.loadProjects().count == 1)
 
