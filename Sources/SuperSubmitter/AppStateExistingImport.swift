@@ -238,13 +238,20 @@ extension AppState {
     ///
     /// A file that will not download keeps the store's URL, so it is still on
     /// the screen and still slow, rather than gone.
+    ///
+    /// `group` puts a set that is not the version's own page in a folder of its
+    /// own. The version's page keeps the plain layout, because that folder is
+    /// what "send these again" reads, and a custom product page's pictures must
+    /// never end up in it.
     func materializeImportedAssets(_ assets: [ImportedStoreAsset], store: Store,
-                                   root: URL) async -> (failures: [String],
-                                                        local: [ImportedStoreAsset]) {
+                                   root: URL,
+                                   group: String? = nil) async -> (failures: [String],
+                                                                   local: [ImportedStoreAsset]) {
         var failures: [String] = []
         var local: [ImportedStoreAsset] = []
         for asset in assets {
-            guard let destination = Self.importDestination(asset, store: store, root: root)
+            guard let destination = Self.importDestination(asset, store: store, root: root,
+                                                           group: group)
             else {
                 failures.append("\(store.storeName) \(asset.kind): the store named a path outside the import folder.")
                 local.append(asset)
@@ -275,33 +282,49 @@ extension AppState {
     func cacheLiveMedia(_ actual: ActualState) async {
         guard let root = manifestURL?.deletingLastPathComponent(),
               let apple = actual.apple else { return }
-        // The page name goes in the file name, because the folder is keyed by
-        // locale and screen size and every page answers for the same two. Two
-        // pages whose first 6.5 inch picture is called `shot.png` would land on
-        // one path, and the download skips a file that is already there, so one
-        // page would have shown the other page's pictures.
-        let pageAssets = apple.productPages.flatMap { page in
-            page.assets.map {
-                ImportedStoreAsset(locale: $0.locale, kind: $0.kind, url: $0.url,
-                                   fileName: "\(Self.safeComponent(page.name))-\($0.fileName)")
-            }
+        // The version's own page first, into the plain folder that
+        // `resendLiveMedia` reads back.
+        if !apple.liveAssets.isEmpty {
+            let landed = await materializeImportedAssets(apple.liveAssets, store: .apple,
+                                                         root: root)
+            storeSnapshot.rememberLocalCopies(
+                zip(apple.liveAssets, landed.local).map { ($0.url, $1.url) })
         }
-        let assets = apple.liveAssets + pageAssets
-        guard !assets.isEmpty else { return }
-        let landed = await materializeImportedAssets(assets, store: .apple, root: root)
-        storeSnapshot.rememberLocalCopies(
-            zip(assets, landed.local).map { ($0.url, $1.url) })
+        // Then each other page, in a folder of its own. Two pages answer for
+        // the same locale and the same screen size, and the download skips a
+        // file that is already there, so one folder would have shown one page's
+        // pictures under every page's name.
+        for page in apple.productPages where !page.assets.isEmpty {
+            let landed = await materializeImportedAssets(page.assets, store: .apple,
+                                                         root: root, group: page.name)
+            storeSnapshot.rememberLocalCopies(
+                zip(page.assets, landed.local).map { ($0.url, $1.url) })
+        }
     }
 
     /// Where one store asset belongs under `Store Import/`, or nil when the
     /// name the store sent would put it somewhere else entirely.
     static func importDestination(_ asset: ImportedStoreAsset, store: Store,
-                                  root: URL) -> URL? {
+                                  root: URL, group: String? = nil) -> URL? {
         let folder = root.appendingPathComponent(importFolder).standardizedFileURL
-        let destination = [store.rawValue, safeComponent(asset.locale),
-                           safeComponent(asset.kind), safeComponent(asset.fileName)]
+        let components = [store.rawValue]
+            + (group.map { ["pages", safeComponent($0)] } ?? [])
+            + [safeComponent(asset.locale), safeComponent(asset.kind),
+               safeComponent(asset.fileName)]
+        let destination = components
             .reduce(folder) { $0.appendingPathComponent($1) }.standardizedFileURL
         return isSafeImportDestination(destination, root: root) ? destination : nil
+    }
+
+    /// Where the version's own page keeps one screen size of one locale.
+    /// `resendLiveMedia` reads it, so it holds the version page and nothing
+    /// else: `pages/` sits beside it, not inside it.
+    static func importedMediaFolder(root: URL, store: Store, locale: String,
+                                    displayType: String) -> URL {
+        [store.rawValue, safeComponent(locale), safeComponent(displayType)]
+            .reduce(root.appendingPathComponent(importFolder)) {
+                $0.appendingPathComponent($1)
+            }.standardizedFileURL
     }
 
     private func download(_ asset: ImportedStoreAsset, to destination: URL,
@@ -356,6 +379,52 @@ extension AppState {
             CharacterSet(charactersIn: "-_."))
         let cleaned = raw.components(separatedBy: allowed.inverted).joined(separator: "-")
         return cleaned.isEmpty || cleaned == "." || cleaned == ".." ? "unnamed" : cleaned
+    }
+
+    /// The pictures the App Store was showing, ready to be sent back to it.
+    ///
+    /// The import downloads every live screenshot and every preview, and until
+    /// now they were a picture of the store and nothing more: the manifest kept
+    /// them out on purpose, so there was no way to say "send these again". A
+    /// developer whose set was removed from the store, and who no longer had the
+    /// files anywhere else, had this folder full of them and no route back.
+    ///
+    /// It reads the disk and not the snapshot, because the case that needs it
+    /// most is the one where the store no longer holds the set at all.
+    ///
+    /// Screenshots only. An App Store preview is served as an HLS stream, so
+    /// what the import saved under a `.mov` name is the playlist that points at
+    /// Apple's own low resolution renditions, and not the film the developer
+    /// uploaded. Offering it back would send a text file to the store.
+    func resendableLiveMedia(deviceClass: Manifest.DeviceClass) -> [URL] {
+        guard let root = manifestURL?.deletingLastPathComponent() else { return [] }
+        var result: [URL] = []
+        for displayType in AssetInspector.appleDisplayTypeNames.map(\.type)
+        where AssetInspector.deviceClass(forAppleDisplayType: displayType) == deviceClass {
+            let folder = Self.importedMediaFolder(root: root, store: .apple,
+                                                  locale: locale, displayType: displayType)
+            let files = (try? FileManager.default.contentsOfDirectory(
+                at: folder, includingPropertiesForKeys: nil)) ?? []
+            result += files.filter { !StoreSnapshot.isVideo($0) }
+        }
+        // The import numbers each file by the place the store showed it in, so
+        // the order the developer published is the order that goes back.
+        return result.sorted { $0.lastPathComponent.localizedStandardCompare(
+            $1.lastPathComponent) == .orderedAscending }
+    }
+
+    /// Puts them in `store.yaml`, so the next apply uploads them.
+    ///
+    /// It goes through `addMediaFiles`, so the same size and format checks run
+    /// as for a file the developer picked by hand. A picture Apple served and
+    /// this app downloaded still has to be one the App Store will take back.
+    func resendLiveMedia(deviceClass: Manifest.DeviceClass) {
+        let files = resendableLiveMedia(deviceClass: deviceClass)
+        guard !files.isEmpty else {
+            mediaError = "Super Submitter has no downloaded copy of that size. Import the app again to fetch what the store holds."
+            return
+        }
+        addMediaFiles(files, deviceClass: deviceClass)
     }
 
     /// Where the import puts what it downloads, relative to `store.yaml`.

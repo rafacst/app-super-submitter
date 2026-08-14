@@ -290,6 +290,7 @@ struct MediaTab: View {
                 }
                 mergeControl(device)
                 liveScreenshots(live)
+                resendControl(device)
                 productPages(device)
             }
         }
@@ -467,6 +468,32 @@ struct MediaTab: View {
             .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
+        }
+    }
+
+    /// Sends the pictures the store already shows back to it.
+    ///
+    /// The import downloads every live screenshot, and until now they were a
+    /// picture of the store and nothing more. A developer whose set left the
+    /// store, and who no longer had the files anywhere else, had them in the
+    /// project folder with no route back into `store.yaml`.
+    ///
+    /// It says the count, because pressing it fills a bucket that reads "0 of
+    /// 10" and the next apply then replaces the whole size with these.
+    @ViewBuilder
+    private func resendControl(_ device: Manifest.DeviceClass) -> some View {
+        let files = state.resendableLiveMedia(deviceClass: device)
+        if !files.isEmpty, state.mediaPaths(deviceClass: device).isEmpty {
+            HStack(spacing: 8) {
+                QuietButton(title: "Send these \(files.count) again") {
+                    state.resendLiveMedia(deviceClass: device)
+                }
+                Text("Adds the downloaded copies to store.yaml. The App Store serves previews as a stream, so a video cannot go back this way.")
+                    .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 6)
+            }
+            .padding(.top, 2)
         }
     }
 
