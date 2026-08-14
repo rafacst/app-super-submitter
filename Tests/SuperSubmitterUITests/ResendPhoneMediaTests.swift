@@ -60,12 +60,16 @@ private func openApp(_ sizes: [(Int, Int)]) throws -> (state: AppState, files: [
     return (state, files, folder)
 }
 
-/// The reported shape: two iPhone sizes, six pictures each. Twelve in one
+/// The reported shape: two iPhone sets, six pictures each. Twelve in one
 /// bucket, and not one display type over the limit.
+///
+/// 6.9 inch and 6.5 inch, which really are two sets. 6.9 and 6.7 are not: Apple
+/// has no `APP_IPHONE_69` and takes the 1320 x 2868 pictures into the 6.7 inch
+/// set, so those two count together and ten of them is the limit.
 @MainActor
 @Test func everyIPhoneSizeGoesBackTogether() throws {
     let (state, files, folder) = try openApp(
-        Array(repeating: (1320, 2868), count: 6) + Array(repeating: (1290, 2796), count: 6))
+        Array(repeating: (1320, 2868), count: 6) + Array(repeating: (1242, 2688), count: 6))
     defer { try? FileManager.default.removeItem(at: folder) }
 
     state.addMediaFiles(files, deviceClass: .phone)
@@ -83,9 +87,10 @@ private func openApp(_ sizes: [(Int, Int)]) throws -> (state: AppState, files: [
     state.addMediaFiles(files, deviceClass: .phone)
 
     let error = try #require(state.mediaError)
-    // It names the size, because the bucket holds several and the developer
-    // is being asked to remove one of a particular one.
-    #expect(error.contains("APP_IPHONE_69"))
+    // It names the set, because the bucket holds several and the developer is
+    // being asked to remove one of a particular one. The 6.9 inch pictures are
+    // counted under 6.7, which is the set Apple puts them in.
+    #expect(error.contains("APP_IPHONE_67"))
     #expect(state.mediaPaths(deviceClass: .phone).isEmpty)
 }
 

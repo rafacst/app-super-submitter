@@ -46,18 +46,46 @@ struct ScreenshotDisplayTypeCountTests {
         return (root, paths)
     }
 
-    /// The reported shape: five pictures at each of two iPhone sizes. Fourteen
-    /// in one bucket, and not one display type over the limit.
+    /// The reported shape: five pictures at each of two iPhone sizes. Ten in
+    /// one bucket, and not one display type over the limit.
+    ///
+    /// 6.7 inch and 6.5 inch, which really are two sets. 6.9 is not a third:
+    /// Apple has no `APP_IPHONE_69` in `ScreenshotDisplayType`, and the
+    /// 1320 x 2868 pictures go into the 6.7 inch set with the rest.
     @Test func theSamePicturesAtTwoSizesAreTwoSets() throws {
         let (root, paths) = try write(Array(repeating: (1284, 2778), count: 5)
-                                      + Array(repeating: (1320, 2868), count: 5))
+                                      + Array(repeating: (1242, 2688), count: 5))
         defer { try? FileManager.default.removeItem(at: root) }
 
         let counts = Validator.appleDisplayTypeCounts(paths, root: root, deviceClass: .phone)
 
         #expect(counts["APP_IPHONE_67"] == 5)
-        #expect(counts["APP_IPHONE_69"] == 5)
+        #expect(counts["APP_IPHONE_65"] == 5)
         #expect(counts.values.allSatisfy { $0 <= 10 })
+    }
+
+    /// The 6.9 inch set is the 6.7 inch set.
+    ///
+    /// The size table named `APP_IPHONE_69`, which Apple's own enumeration does
+    /// not carry, so every upload of a 6.9 inch set was refused: "'APP_IPHONE_69'
+    /// is not a valid value for the attribute 'screenshotDisplayType'". The run
+    /// stopped on the first screenshot step of an app whose pictures were all
+    /// the right size.
+    @Test func theSixNineInchPicturesGoIntoTheSixSevenInchSet() throws {
+        let (root, paths) = try write(Array(repeating: (1320, 2868), count: 3)
+                                      + Array(repeating: (1290, 2796), count: 2))
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let counts = Validator.appleDisplayTypeCounts(paths, root: root, deviceClass: .phone)
+
+        #expect(counts == ["APP_IPHONE_67": 5])
+        #expect(counts["APP_IPHONE_69"] == nil)
+    }
+
+    /// And the string is still understood on the way in, so an import never
+    /// drops a set Apple happens to name that way.
+    @Test func theStoreMayStillCallItSixNineInch() {
+        #expect(AssetInspector.deviceClass(forAppleDisplayType: "APP_IPHONE_69") == .phone)
     }
 
     /// The limit still bites where Apple actually applies it.
