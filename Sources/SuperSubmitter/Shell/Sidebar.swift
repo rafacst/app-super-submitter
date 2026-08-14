@@ -1,16 +1,15 @@
 import SubmitKit
 import SwiftUI
 
-/// The sidebar: an app switcher, a `List` of destinations in sections, and an
-/// account control at the foot.
+/// The sidebar: a `List` of destinations in sections and an account control at
+/// the foot.
 ///
 /// It was a hand-built column — a `VStack` of custom buttons, each drawing its
 /// own selected band, inside a floating panel with the window buttons nudged
 /// in by hand. Every part of that had a system equivalent that already
 /// behaves the way a Mac user expects, so this is a `List` in its sidebar
 /// style inside a `NavigationSplitView`, and the system draws the selection,
-/// the section headers, the vibrancy, the row metrics, the divider, and the
-/// collapse.
+/// the section headers, the row metrics, the divider, and the collapse.
 ///
 /// Three controls went with it, each because it was a navigation system
 /// competing with this one:
@@ -111,10 +110,13 @@ struct Sidebar: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(Theme.content)
             // The scroll ends above the floor, so the last row can be reached
             // and nothing sits under the footer for good.
             .safeAreaPadding(.bottom, footerHeight)
-            .safeAreaPadding(.top, switchHeight)
+            .safeAreaPadding(.top, Theme.headerHeight
+                * (state.showsEntryScreen ? 1 : 2))
             .overlay(alignment: .bottom) { footer }
             .overlay(alignment: .top) { modeSwitch }
             .task(id: selection.wrappedValue) {
@@ -134,19 +136,21 @@ struct Sidebar: View {
     /// list in a `VStack` to seat a control above it draws no column at all.
     private var modeSwitch: some View {
         VStack(spacing: 0) {
-            ModeSwitch()
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
-            Divider()
+            if !state.showsEntryScreen {
+                Color.clear.frame(height: Theme.headerHeight)
+            }
+            VStack(spacing: 0) {
+                ModeSwitch()
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                Divider()
+            }
+            .frame(height: Theme.headerHeight, alignment: .bottom)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .bottomLeading)
         // The rows scroll under this, so it cannot be transparent.
-        .background(.thickMaterial)
+        .background(Theme.content)
     }
-
-    /// Enough for the switch and the rule under it. Through `Theme.scaled`,
-    /// because the switch is text.
-    private var switchHeight: CGFloat { Theme.scaled(38) }
 
     /// Enough for the three rows about this Mac, and for the offer when it
     /// shows.
@@ -197,7 +201,7 @@ struct Sidebar: View {
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         // The rows scroll under this, so it cannot be transparent.
-        .background(.thickMaterial)
+        .background(Theme.content)
     }
 }
 

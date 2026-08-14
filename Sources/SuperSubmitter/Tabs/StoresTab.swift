@@ -54,48 +54,6 @@ struct StoresTab: View {
 
 }
 
-/// The store-account state that stays visible while the tab scrolls.
-struct StoresStatusBar: View {
-    @Environment(AppState.self) private var state
-
-    private var disconnected: [Store] {
-        state.stores.filter { !state.connection(for: $0).isConnected }
-            .sorted { $0.rawValue < $1.rawValue }
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            if !disconnected.isEmpty {
-                // A red "N blockers ›" pill stood here and counted the stores
-                // with no key. Two things were wrong with it. It wore a chevron
-                // and opened nothing, and the header band above it now carries
-                // that word for the release: one screen said "2 blockers" and
-                // "4 blockers" at once, about two different things.
-                //
-                // The sentence beside it already names each store and what is
-                // missing, which is the whole of what the pill counted.
-                HStack(spacing: 6) {
-                    Circle().fill(Theme.yellow).frame(width: 7, height: 7)
-                    Text(disconnected.map { "\($0.storeName) is not connected" }
-                        .joined(separator: " · "))
-                }
-                .font(Theme.font(size: 12.5))
-                .foregroundStyle(Theme.text2)
-                .accessibilityElement(children: .combine)
-            }
-            Spacer(minLength: 8)
-            Text("One key per account, for every app on this Mac")
-                .font(Theme.font(size: 12))
-                .foregroundStyle(Theme.text3)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised)
-        .overlay(alignment: .bottom) { Hairline() }
-    }
-}
-
 private struct AppleCredentialPanel: View {
     @Environment(AppState.self) private var state
     @State private var importerOpen = false

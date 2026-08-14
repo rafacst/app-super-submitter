@@ -83,6 +83,35 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(!bar.contains("selectedTab = .storePage"))
 }
 
+@Test func addAppIsAPermanentTab() throws {
+    let bar = try responsiveFormSource("Sources/SuperSubmitter/Shell/AppTabBar.swift")
+    let shell = try responsiveFormSource("Sources/SuperSubmitter/Shell/RootView.swift")
+
+    #expect(bar.contains("Label(\"Add app\", systemImage: \"plus\")"))
+    #expect(bar.contains("state.showEntryScreen = true"))
+    #expect(bar.contains("index == state.selectedAppIndex && !state.showsEntryScreen"))
+    #expect(shell.contains("AppTabBar()"))
+    #expect(!shell.contains("if !state.showsEntryScreen, !state.hasNoOpenApp"))
+}
+
+@Test func theShellUsesOneSurfaceAndTwoHeaderLines() throws {
+    let sidebar = try responsiveFormSource("Sources/SuperSubmitter/Shell/Sidebar.swift")
+    let shell = try responsiveFormSource("Sources/SuperSubmitter/Shell/RootView.swift")
+    let appBar = try responsiveFormSource("Sources/SuperSubmitter/Shell/AppTabBar.swift")
+    let stores = try responsiveFormSource("Sources/SuperSubmitter/Tabs/StoresTab.swift")
+
+    #expect(sidebar.contains(".scrollContentBackground(.hidden)"))
+    #expect(sidebar.contains(".background(Theme.content)"))
+    #expect(sidebar.contains("* (state.showsEntryScreen ? 1 : 2)"))
+    #expect(appBar.contains("maxHeight: Theme.headerHeight"))
+    #expect(shell.contains("ContentHeader(scrolled: scrolled)"))
+    #expect(shell.contains(".navigationTitle("))
+    #expect(shell.contains("Text(state.selectedTab.summary)"))
+    #expect(!shell.contains(".navigationSubtitle("))
+    #expect(!shell.contains("StoresStatusBar()"))
+    #expect(!stores.contains("struct StoresStatusBar"))
+}
+
 @Test func theWideBuildScreenKeepsBothStoreCardsInOneRow() throws {
     let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
     let start = try #require(build.range(of: "private var storeBuildColumns"))
