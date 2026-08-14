@@ -327,10 +327,10 @@ struct ExistingAppImportSheet: View {
         let panel = NSOpenPanel()
         if let name = model.selectedGroupName {
             panel.title = "Select the folder of \(name)"
-            panel.message = "Choose the folder of \(name). Super Submitter writes store.yaml inside it."
+            panel.explain("Choose the folder of \(name). store.yaml goes inside it.")
         } else {
             panel.title = "Select the folder for these apps"
-            panel.message = "Choose the folder that holds your app folders. Each app takes its own folder inside it."
+            panel.explain("Choose the folder that holds your app folders. Each takes its own.")
         }
         panel.prompt = "Select"
         panel.canChooseDirectories = true
