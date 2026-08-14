@@ -34,7 +34,6 @@ struct Sidebar: View {
     /// `@AppStorage` and not `@State`: a group a developer closed is a
     /// decision, and re-opening it on every launch would undo that decision
     /// every morning. One key per group, because they close independently.
-    @AppStorage("sidebar.apps.open") private var appsOpen = true
     @AppStorage("sidebar.publish.open") private var publishOpen = true
     @AppStorage("sidebar.send.open") private var sendOpen = true
     @AppStorage("sidebar.manage.open") private var manageOpen = true
@@ -83,20 +82,30 @@ struct Sidebar: View {
         // the thing being asked for does not get to sit closer to the work.
         ScrollViewReader { proxy in
             List(selection: selection) {
-                AppsSection(isOpen: $appsOpen)
+                // The apps were a group here. They are the tab bar across the
+                // top of the window now: see `AppTabBar`. The column is one
+                // level of the hierarchy again, which is the screens of the app
+                // the bar has selected.
 
                 // Every group wears its heading, including a job that has only
                 // one. Manage was the lone group of its job and drew none, so
                 // its four rows stood loose under the app list with nothing
                 // naming them, and the group could not be collapsed at all:
                 // the heading is the control that folds it.
-                ForEach(SidebarSection.allCases.filter { $0.mode == state.mode }) { section in
+                let sections = SidebarSection.allCases.filter { $0.mode == state.mode }
+                ForEach(sections) { section in
                     let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
                     if !rows.isEmpty {
                         Section(isExpanded: isOpen(section)) {
                             ForEach(rows) { DestinationRow(destination: $0) }
                         } header: {
-                            GroupHeader(title: section.title, isOpen: isOpen(section))
+                            // No rule on the first one: the mode switch draws
+                            // its own directly above it. The Apps group used to
+                            // be the first and carried this; with the apps in
+                            // the tab bar the rule belongs to whichever group
+                            // now leads the column.
+                            GroupHeader(title: section.title, isOpen: isOpen(section),
+                                        rule: section != sections.first)
                         }
                     }
                 }
@@ -110,9 +119,6 @@ struct Sidebar: View {
             .overlay(alignment: .top) { modeSwitch }
             .task(id: selection.wrappedValue) {
                 guard let destination = selection.wrappedValue,
-                      // The store page is on no row, so there is nothing here
-                      // to scroll to and asking for it scrolls the column to
-                      // an id the list does not hold.
                       destination.tab.isListed,
                       destination.mode == .managing else { return }
                 await Task.yield()
@@ -242,103 +248,6 @@ private struct FooterRow: View {
     }
 }
 
-/// The apps, as a group that opens and closes like the three below it.
-///
-/// It was a pull-down button. A pull-down says "one of these" in the smallest
-/// space, which was right while the apps sat in a `safeAreaInset` that could
-/// hold one control. Now that every other group is a list that opens, an app
-/// list that hides behind a click is the odd one out, and the developer who
-/// wants to see what they have linked has to press something to find out.
-///
-/// The row is not selectable. `List` selection means "the destination you are
-/// on", and the app being worked on is another level of the same hierarchy: a
-/// tick marks the current one, the way a pull-down marked it.
-private struct AppsSection: View {
-    @Environment(AppState.self) private var state
-    @Binding var isOpen: Bool
-
-    /// The apps of the job the developer is doing, each with its own place in
-    /// the list.
-    ///
-    /// Managing runs the app that is already live, so a draft has nothing for
-    /// it: no customers, no listing anybody is reading, no crash rate. It is
-    /// listed under Publish alone until a store ships it.
-    ///
-    /// The index comes from the whole list and not from the filtered one.
-    /// `selectApp(at:)` counts the linked apps, so a filtered position would
-    /// open the wrong app the moment one row is hidden.
-    private var rows: [(index: Int, app: AppSummary)] {
-        state.appRows.enumerated()
-            .filter { state.mode == .publishing || $0.element.isLive }
-            .map { (index: $0.offset, app: $0.element) }
-    }
-
-    var body: some View {
-        Section(isExpanded: $isOpen) {
-            ForEach(rows, id: \.app.id) { index, app in
-                // The name opens the app, and then the page a customer would
-                // see of it. The store page has no row in the groups below,
-                // because this is its row: the name is what a developer
-                // presses to look at one of their apps, and a second row
-                // naming the same screen would be one destination twice. See
-                // `Tab.isListed`.
-                Button {
-                    state.selectApp(at: index)
-                    state.selectedTab = .storePage
-                } label: {
-                    HStack(spacing: 7) {
-                        AppIconBadge(icon: app.icon, initials: app.initials, size: 16)
-                        Text(app.name).lineLimit(1)
-                        // Where the stores have this app, before it is opened.
-                        // Every rule about a review used to read the open app
-                        // alone, so a developer with six linked apps opened
-                        // each one to find out which were frozen.
-                        AppStatusChip(mark: state.appMark(appKey: app.key))
-                        Spacer(minLength: 6)
-                        if index == state.selectedAppIndex {
-                            Image(systemName: "checkmark")
-                                .font(Theme.font(size: 10, weight: .semibold))
-                                .foregroundStyle(.tint)
-                        }
-                    }
-                    .contentShape(.rect)
-                }
-                // The name truncates at the column edge, and the status column
-                // takes room the name used to have.
-                .help(app.name)
-                .buttonStyle(.plain)
-                // The two actions that belong to one app, on that app. They
-                // were in the pull-down, where they read as actions on
-                // "whichever app is current" and could be pressed while
-                // looking at another one.
-                .contextMenu {
-                    Button("Update from the Stores…") {
-                        state.selectApp(at: index)
-                        state.showExistingAppImport = true
-                    }
-                    Divider()
-                    Button("Remove from Super Submitter…") { state.askToRemoveApp(at: index) }
-                }
-                .accessibilityAddTraits(index == state.selectedAppIndex ? [.isSelected] : [])
-            }
-
-            // The entry screen, not a folder picker. "Add App" is the question
-            // "what do I want to do", and the entry screen is where that
-            // question is already answered three ways.
-            Button { state.showEntryScreen = true } label: {
-                Label("Add App…", systemImage: "plus")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-        } header: {
-            // No rule. The mode switch and its own divider sit directly above.
-            GroupHeader(title: "Apps", isOpen: $isOpen, rule: false)
-        }
-    }
-}
-
 /// Where the stores have one app, beside the name it belongs to.
 ///
 /// It follows the name and takes only the width of its own word. The chip
@@ -350,7 +259,7 @@ private struct AppsSection: View {
 /// Every row wears one, and an app nobody has read yet wears "Unknown". A blank
 /// says nothing at all, and the row it sat on could be an app with no news or
 /// an app this Mac has never asked about. See `appMark`.
-private struct AppStatusChip: View {
+struct AppStatusChip: View {
     let mark: AppleStanding
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dim = false

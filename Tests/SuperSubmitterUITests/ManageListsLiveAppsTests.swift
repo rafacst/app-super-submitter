@@ -273,13 +273,23 @@ import Testing
 
     // MARK: - Where it shows
 
-    @Test func theSidebarListsTheAppsByIt() throws {
+    /// The apps are the tab bar across the top of the window now, so the list
+    /// this rule governs moved out of the sidebar with them.
+    @Test func theTabBarListsTheAppsByIt() throws {
+        let bar = try String(
+            contentsOf: Self.root.appending(path: "Sources/SuperSubmitter/Shell/AppTabBar.swift"),
+            encoding: .utf8)
         let sidebar = try String(
             contentsOf: Self.root.appending(path: "Sources/SuperSubmitter/Shell/Sidebar.swift"),
             encoding: .utf8)
-        #expect(sidebar.contains("$0.element.isLive"))
-        // Every row wears a word, and an app nobody has read wears "Unknown".
+
+        #expect(bar.contains("state.appRows"))
+        // Every tab wears a word, and an app nobody has read wears "Unknown".
         #expect(sidebar.contains("let mark: AppleStanding\n"))
+        #expect(bar.contains("AppStatusChip(mark: state.appMark(appKey: app.key))"))
+        // And a tab says when its app is busy, which is the reason the bar
+        // exists: a build the developer has switched away from is still running.
+        #expect(bar.contains("state.isBuilding(appID: app.id)"))
     }
 
     /// Linking is where the question is asked, because it is the only moment

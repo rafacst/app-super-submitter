@@ -18,15 +18,55 @@ enum BuildSidebarStatus: Equatable {
     }
 }
 
+/// The app a running upload is sending to, frozen when the developer pressed
+/// Upload.
+///
+/// The window switches apps and a send may not follow it. A build runs for
+/// minutes, the app tabs exist so that another app can be worked on while it
+/// does, and every field below used to be read off the front-most `AppState` in
+/// the middle of the upload: switching tabs mid-send pointed the upload, the
+/// processing poll and the conflict re-check at whichever app was open by then,
+/// under that app's store id and that app's key.
+///
+/// Frozen at the press and not at the build. The archive on disk is signed and
+/// inert; the send is the step that names a store record, and the press is when
+/// the developer said which one.
+struct BuildTarget {
+    var appleAppID: String?
+    var appleCredential: AppleCredential?
+    var googlePackageName: String?
+    var googleTrack: String
+    /// An actor built from the credentials of that moment, so a key changed on
+    /// another tab cannot re-sign a send already under way.
+    var api: StoreAPI
+
+    @MainActor init(_ app: AppState) {
+        appleAppID = app.manifest.apps.apple?.appId
+        appleCredential = app.credentials.apple.flatMap {
+            $0.privateKeyPEM.isEmpty ? nil : $0
+        }
+        googlePackageName = app.manifest.apps.google?.packageName
+        googleTrack = app.manifest.googlePrimaryTrack
+        api = app.readOnlyAPI()
+    }
+}
+
 /// Build from Project. upload-spec sections 5 and 10.
 ///
 /// The state machine lives in `UploadRun`; this type moves it and holds what
 /// each screen shows. Every rule stays in SubmitKit.
+///
+/// One of these per app, kept by `AppState.buildFlows`. It was one for the whole
+/// window, so the tab bar would have handed app B the controls of app A's
+/// running build: B's Build tab drew A's log and A's progress, and pressing
+/// Build there drove the same run.
 @Observable
 @MainActor
 final class BuildFlow {
     @ObservationIgnored weak var app: AppState?
     @ObservationIgnored var task: Task<Void, Never>?
+    /// Set for as long as a send is in flight. See `BuildTarget`.
+    @ObservationIgnored var target: BuildTarget?
     /// Injectable so a test can link and restore projects against a folder of
     /// its own. The default is the one the app ships with; nothing but a test
     /// ever passes another.

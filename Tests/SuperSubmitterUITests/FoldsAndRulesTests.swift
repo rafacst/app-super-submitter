@@ -60,8 +60,11 @@ import Testing
         let group = String(sidebar[header.lowerBound...])
 
         #expect(group.contains("Divider()"))
-        // The first group has the mode switch and its own rule above it.
-        #expect(sidebar.contains("rule: false"))
+        // The first group has the mode switch and its own rule above it. It
+        // used to be the Apps group, which passed `rule: false` outright; the
+        // apps are the tab bar now, so whichever group leads the column takes
+        // the exception.
+        #expect(sidebar.contains("rule: section != sections.first"))
         // And the fold itself moves, which a bare binding set from a tap does
         // not do on its own.
         #expect(group.contains("withMotion"))

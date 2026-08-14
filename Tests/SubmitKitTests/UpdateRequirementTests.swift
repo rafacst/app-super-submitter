@@ -92,6 +92,55 @@ private func row(_ id: String, _ manifest: Manifest, _ actual: ActualState) -> C
     #expect(!ids.contains("update.whatsNew.pt-BR"))
 }
 
+// MARK: - The note of the release that already shipped
+
+/// The gap an import of a live app leaves, and the one no other screen catches.
+///
+/// The import fills What's New from the version customers are reading, so the
+/// field is full and the rule above stays quiet. The plan then compares the
+/// manifest against that same released version, finds them identical, and
+/// writes nothing, which is correct and silent. Apple pre-fills a new version
+/// from the last one, so the words reach the store either way.
+private func shipped(_ note: String) -> ActualState {
+    live { apple in
+        apple.liveVersionLocales["en-US"] = {
+            var locale = ActualState.Apple.VersionLocale()
+            locale.id = "loc-live"
+            locale.whatsNew = note
+            return locale
+        }()
+    }
+}
+
+@Test func theNotesOfTheLiveVersionAreNotTheNotesOfTheNextOne() {
+    let finding = try! #require(findings(updatable(), shipped("Faster scanning."))
+        .first { $0.id == "update.staleWhatsNew.en-US" })
+
+    #expect(finding.severity == .warning)
+    #expect(finding.fix == .details)
+    // It names the version whose words these are, because "still the old
+    // notes" is not actionable without knowing which release wrote them.
+    #expect(finding.message.contains("3.1.0"))
+}
+
+@Test func aNoteTheDeveloperRewroteRaisesNothing() {
+    #expect(!findings(updatable(whatsNew: "Now with widgets."), shipped("Faster scanning."))
+        .contains { $0.id.hasPrefix("update.staleWhatsNew") })
+}
+
+@Test func aFirstSubmissionHasNoLiveNoteToRepeat() {
+    #expect(!findings(updatable(), ActualState())
+        .contains { $0.id.hasPrefix("update.staleWhatsNew") })
+}
+
+@Test func anEmptyNoteIsTheMissingRuleAndNotThisOne() {
+    // One row per locale, never two. The field is empty, so it is the error
+    // above and this rule has nothing to add.
+    let ids = findings(updatable(whatsNew: nil), shipped("Faster scanning.")).map(\.id)
+    #expect(ids.contains("update.whatsNew.en-US"))
+    #expect(!ids.contains("update.staleWhatsNew.en-US"))
+}
+
 // MARK: - The build and the compliance answer hold the release button
 
 /// A first submission needs every one of these, and used to be asked for none.

@@ -94,6 +94,24 @@ struct StoreSnapshot: Codable, Equatable {
     }
 
     /// The icon one store shows for this listing, if the app has seen it.
+    /// The app's own icon, for a row that names neither a store nor a language.
+    ///
+    /// Apple keeps one picture for the whole app, so it leads. Play keys its
+    /// icon by language and a switcher row is in no language, so the listing's
+    /// own default comes next and the lowest code stands in after that, which
+    /// is an order rather than whichever key the dictionary offered first.
+    ///
+    /// File URLs only. The badge draws an `NSImage` off the disk, and
+    /// `captureAppleIcon` stores Apple's own https URL after a submission.
+    func localIcon(defaultLocale: String?) -> URL? {
+        let candidates = [appleIcon]
+            + [defaultLocale.flatMap { googleIcons?[$0] }]
+            + (googleIcons?.sorted { $0.key < $1.key }.map(\.value) ?? [])
+        return candidates.compactMap { $0 }.first {
+            $0.isFileURL && FileManager.default.fileExists(atPath: $0.path)
+        }
+    }
+
     func icon(_ store: Store, locale: String) -> URL? {
         switch store {
         case .apple: appleIcon
@@ -351,10 +369,36 @@ struct StoreSnapshot: Codable, Equatable {
         var freshPreviews: [String: [Manifest.DeviceClass: [URL]]] = [:]
         var freshBuckets: [String: [String: [URL]]] = [:]
         for asset in imported.assets {
+            let url = resolve(asset.url)
+            // The icon and the banner belong to no device class, and the guard
+            // below drops everything that belongs to none.
+            //
+            // `merge(art:)` takes these two on the read path and this merge had
+            // no equivalent, so an import downloaded the icon, wrote it under
+            // `Store Import/`, and then dropped the one line that says where it
+            // went. `removeImportedMedia` clears `media.icon` at the same time,
+            // because an imported path may not sit in the manifest as something
+            // to upload, so nothing anywhere held an icon: every imported app
+            // wore its initials in the switcher, and its own store page told it
+            // there was no icon to show yet.
+            switch asset.kind {
+            case "icon":
+                if store == .apple {
+                    appleIcon = url
+                } else {
+                    googleIcons = (googleIcons ?? [:])
+                        .merging([asset.locale: url]) { _, new in new }
+                }
+                continue
+            case "featureGraphic":
+                featureGraphics = (featureGraphics ?? [:])
+                    .merging([asset.locale: url]) { _, new in new }
+                continue
+            default: break
+            }
             guard let device = asset.deviceClass else { continue }
             // Apple names a video bucket by the same display type as a
             // screenshot, so the file extension tells the two apart.
-            let url = resolve(asset.url)
             if store == .apple, Self.isVideo(asset.url) {
                 freshPreviews[asset.locale, default: [:]][device, default: []].append(url)
             } else {

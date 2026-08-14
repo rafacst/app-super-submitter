@@ -44,26 +44,30 @@ import Testing
     // Build made before a customer ever sees it. Gaming follows Media, because
     // an achievement image is the last thing a game describes before it is
     // priced.
+    // The store page leads both groups. It is the one screen that answers
+    // "what will they see", which is what a developer opens an app to look at,
+    // and it had no row at all while the app list was in this column.
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
-        == ["Build", "Beta testing", "Details", "Media", "Gaming",
+        == ["Store page", "Build", "Beta testing", "Details", "Media", "Gaming",
             "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
-        == ["Live listing", "Live media", "Marketing", "Live app"])
+        == ["Store page", "Live listing", "Live media", "Marketing", "Live app"])
 
     // Publish and Send are the manifest against the stores: everything that
     // only edits `store.yaml`, then the two screens that talk to a store.
     #expect(Destination.rows(in: .publish, hasApp: true).allSatisfy { $0.tab.zone == .edits })
     #expect(Destination.rows(in: .send, hasApp: true).allSatisfy { $0.tab.zone != .edits })
 
-    // Nothing is lost. Three of the four off the list are about this Mac
-    // rather than about an app, and the box at the foot of the sidebar holds
-    // them; the fourth is the store page, which the app's own name opens.
+    // Nothing is lost. The three off the list are about this Mac rather than
+    // about an app, and the box at the foot of the sidebar holds them.
     let listed = Set(Destination.all(hasApp: true).map(\.tab))
-    #expect(Set(Tab.allCases).subtracting(listed)
-        == [.stores, .settings, .account, .storePage])
-    #expect(Set(Tab.allCases.filter { !$0.isListed }) == [.storePage])
+    #expect(Set(Tab.allCases).subtracting(listed) == [.stores, .settings, .account])
+    // Every tab about one app is on a row now. The store page was the one
+    // exception, opened by the app's name while the app list was in this
+    // column, and that list is the tab bar at the top of the window.
+    #expect(Tab.allCases.filter { !$0.isListed }.isEmpty)
     #expect(Set(Tab.allCases.filter(\.standsAlone)) == [.stores, .settings, .account])
     // Stores was listed under Publish and again under Manage, which is one
     // screen in two rows of a column that can only stand on one of them.
