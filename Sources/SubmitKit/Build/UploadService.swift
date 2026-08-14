@@ -132,6 +132,19 @@ public struct UploadService: Sendable {
         /// from this list is what became of each build, and that is a fact
         /// about the version holding it, not about the file.
         public var versionState: String?
+
+        public init(id: String, number: String, version: String, processed: Bool,
+                    state: String, expired: Bool, uploaded: Date? = nil,
+                    versionState: String? = nil) {
+            self.id = id
+            self.number = number
+            self.version = version
+            self.processed = processed
+            self.state = state
+            self.expired = expired
+            self.uploaded = uploaded
+            self.versionState = versionState
+        }
     }
 
     /// Every build App Store Connect holds for one app and one platform.

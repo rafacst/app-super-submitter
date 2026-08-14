@@ -52,7 +52,9 @@ private func scratchStorageRoot() throws -> URL {
                          storeAccount: "test-\(UUID().uuidString)",
                          buildStorage: storage)
     state.manifestURL = URL(fileURLWithPath: mine)
-    let flow = BuildFlow(app: state, storage: storage)
+    // The open app's own flow. A flow belongs to one app and reads that
+    // app's stores, so one built for nobody would answer for nobody.
+    let flow = BuildFlow(app: state, owner: state.openAppID, storage: storage)
 
     flow.loadSavedProject()
 
@@ -88,7 +90,9 @@ private func scratchStorageRoot() throws -> URL {
     state.manifestURL = URL(fileURLWithPath: mine)
     state.setStore(.apple, enabled: true)
     state.setStore(.google, enabled: true)
-    let flow = BuildFlow(app: state, storage: storage)
+    // The open app's own flow. A flow belongs to one app and reads that
+    // app's stores, so one built for nobody would answer for nobody.
+    let flow = BuildFlow(app: state, owner: state.openAppID, storage: storage)
 
     #expect(flow.canBuildBothStores)
     #expect(flow.savedProject(for: .apple)?.containerKind == .project)

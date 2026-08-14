@@ -373,6 +373,10 @@ public enum RunError: Error, LocalizedError {
     /// Territories the manifest asks for that the App Store does not list for
     /// this app. See `AppleApply.appleUpdateTerritories`.
     case unknownTerritories([String])
+    /// The App Store takes `availableInNewTerritories` when an app's
+    /// availability record is created and never afterwards. See
+    /// `AppleApply.appleAvailableInNewTerritories`.
+    case availabilityIsCreateOnly(wanted: Bool)
 
     public var errorDescription: String? {
         switch self {
@@ -388,6 +392,8 @@ public enum RunError: Error, LocalizedError {
             "The upload failed. \(detail)"
         case .processingFailed(let detail):
             "The store rejected the upload. \(detail)"
+        case .availabilityIsCreateOnly(let wanted):
+            "The App Store will not change whether this app is offered in new territories. Apple takes that setting when an app's availability is first created, and this app already has one, so it is changed in App Store Connect under Pricing and Availability. Set it to \(wanted ? "on" : "off") there, or set it back in Monetization to leave it alone."
         case .unknownTerritories(let territories):
             "App Store Connect lists no availability for \(territories.joined(separator: ", ")) on this app, so \(territories.count == 1 ? "that territory was" : "those territories were") not written. Every other territory in store.yaml was. Check the territory codes, which Apple writes as three letters such as BRA and USA."
         case .encryptionAnswerFixed(let held, let wanted):

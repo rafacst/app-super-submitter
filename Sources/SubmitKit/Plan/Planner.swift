@@ -382,11 +382,29 @@ public enum Planner {
         }
         let wantedAvailability = Dictionary(uniqueKeysWithValues:
             (manifest.pricing?.territories ?? []).map { ($0.territory, $0.available) })
-        let autoAvailabilityDiffers = manifest.pricing?.autoConvertOtherTerritories.map {
-            $0 != actual?.availableInNewTerritories
-        } ?? false
-        let territoryAvailabilityDiffers = wantedAvailability.contains {
-            actual?.territoryAvailability[$0.key] != $0.value
+        // An answer the store has not given is not a different answer.
+        //
+        // This compared a `Bool` against a `Bool?`, so a store value of nil read
+        // as "differs" and the step was planned on every run of every app, for
+        // ever. Nil is what the read leaves when App Store Connect does not
+        // return the attribute, and the write it queued cannot succeed: Apple
+        // refuses `availableInNewTerritories` on `apps` and takes it only on the
+        // create. So an update whose countries nobody had touched ended with
+        // "The run stopped at Write the territory availability".
+        let autoAvailabilityDiffers = if let wanted = manifest.pricing?.autoConvertOtherTerritories,
+                                         let held = actual?.availableInNewTerritories {
+            wanted != held
+        } else {
+            false
+        }
+        // The same rule, one territory at a time. A territory the read does not
+        // list is one this app knows nothing about, and `appleUpdateTerritories`
+        // reports those rather than writing them.
+        let territoryAvailabilityDiffers = wantedAvailability.contains { wanted in
+            guard let held = actual?.territoryAvailability[wanted.key] else {
+                return actual?.territoryAvailability.isEmpty ?? true
+            }
+            return held != wanted.value
         }
         if autoAvailabilityDiffers || territoryAvailabilityDiffers {
             steps.append(PlanStep(

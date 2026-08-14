@@ -41,7 +41,7 @@ import Testing
         let (state, folder) = try workspace(versionState: "WAITING_FOR_REVIEW")
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        let flow = BuildFlow(app: state)
+        let flow = BuildFlow(app: state, owner: state.openAppID)
         flow.run.platform = .ios
         #expect(flow.uploadBlockedByReview != nil)
     }
@@ -51,7 +51,7 @@ import Testing
         let (state, folder) = try workspace(versionState: "PREPARE_FOR_SUBMISSION")
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        let flow = BuildFlow(app: state)
+        let flow = BuildFlow(app: state, owner: state.openAppID)
         flow.run.platform = .ios
         #expect(flow.uploadBlockedByReview == nil)
     }
@@ -61,7 +61,7 @@ import Testing
         let (state, folder) = try workspace(versionState: "IN_REVIEW")
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        let flow = BuildFlow(app: state)
+        let flow = BuildFlow(app: state, owner: state.openAppID)
         flow.run.platform = .android
         #expect(flow.uploadBlockedByReview == nil)
     }

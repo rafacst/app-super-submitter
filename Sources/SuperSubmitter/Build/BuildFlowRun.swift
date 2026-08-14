@@ -35,7 +35,7 @@ extension BuildFlow {
     /// hold the button, or the build stops with nowhere to unstop it.
     var blockingReason: String? {
         if let blocking { return blocking }
-        guard let app, run.platform != .android, app.stores.contains(.apple),
+        guard let app, run.platform != .android, context.stores.contains(.apple),
               app.encryptionAnswer == nil else { return nil }
         return "Answer the export compliance question above. Apple asks it once per build and refuses the submission without it."
     }
@@ -51,6 +51,11 @@ extension BuildFlow {
     func startBuild() {
         guard canBuild, let project else { return }
         showBuildConfirmation = false
+        // The app this build is for, held from here until the run ends. The
+        // developer is free to open another tab the moment this returns, and
+        // everything after it compares the artifact against a manifest. See
+        // `BuildContext`.
+        holdContext()
         failure = nil
         clearLog()
         candidate = nil
@@ -92,7 +97,7 @@ extension BuildFlow {
         let bundleID = snapshot.productIdentifier ?? "unknown"
         let archivePath = try storage.archiveURL(bundleID: bundleID, runID: run.id)
         var authentication: AppleAuthenticationFiles?
-        if let credential = app?.credentials.apple, !credential.privateKeyPEM.isEmpty {
+        if let credential = context.appleCredential {
             authentication = try AppleAuthenticationFiles.materialize(
                 credential: credential, runID: run.id, storage: storage)
         }
@@ -358,21 +363,26 @@ extension BuildFlow {
                 blocks: false)
 
         // The manifest is a validation constraint. A mismatch blocks upload.
-        if let manifest = app?.manifest {
-            let expectedIdentifier = candidate.platform == .android
-                ? manifest.apps.google?.packageName
-                : manifest.apps.apple?.bundleId
-            compare("store.yaml identifier", expectedIdentifier, candidate.productIdentifier,
-                    blocks: true)
-            // The version of the store this artifact is going to. Comparing an
-            // App Bundle against the App Store's number is what blocked an
-            // upload of the version the Android project has always built.
-            if let versionName = manifest.versionName(
-                for: candidate.platform == .android ? .google : .apple),
-               !versionName.isEmpty, versionName != candidate.marketingVersion {
-                result.append(.init(field: "store.yaml version", expected: versionName,
-                                    actual: candidate.marketingVersion, blocksUpload: true))
-            }
+        //
+        // This flow's own manifest, and it used to be the front-most app's.
+        // Two artifacts built at once reported each other: "store.yaml
+        // identifier: the preflight said com.rafacst.receitorio and the
+        // artifact holds com.rafacst.deckdeckdeck". Both halves were true, and
+        // neither belonged in the same sentence. See `BuildContext`.
+        let manifest = context.manifest
+        let expectedIdentifier = candidate.platform == .android
+            ? manifest.apps.google?.packageName
+            : manifest.apps.apple?.bundleId
+        compare("store.yaml identifier", expectedIdentifier, candidate.productIdentifier,
+                blocks: true)
+        // The version of the store this artifact is going to. Comparing an
+        // App Bundle against the App Store's number is what blocked an
+        // upload of the version the Android project has always built.
+        if let versionName = manifest.versionName(
+            for: candidate.platform == .android ? .google : .apple),
+           !versionName.isEmpty, versionName != candidate.marketingVersion {
+            result.append(.init(field: "store.yaml version", expected: versionName,
+                                actual: candidate.marketingVersion, blocksUpload: true))
         }
         if candidate.signingSummary.verified == false {
             result.append(.init(field: "Signature", expected: "verified",
@@ -410,8 +420,8 @@ extension BuildFlow {
     var uploadConfirmationText: String {
         guard let candidate else { return "" }
         let destination = candidate.platform == .android
-            ? "Google Play · \(app?.manifest.apps.google?.packageName ?? "")"
-            : "App Store Connect · \(app?.manifest.apps.apple?.appId ?? "")"
+            ? "Google Play · \(context.googlePackageName ?? "")"
+            : "App Store Connect · \(context.appleAppID ?? "")"
         return "Upload \(candidate.productIdentifier) version \(candidate.marketingVersion) "
             + "build \(candidate.buildVersion) to \(destination). The upload creates or "
             + "supplies a draft and does not submit it for review."
@@ -419,12 +429,11 @@ extension BuildFlow {
 
     /// One fresh read-only conflict check runs immediately before the upload.
     private func recheckRemote(for candidate: BuildCandidate) async {
-        guard let target else { return }
-        let service = UploadService(api: target.api)
+        let service = UploadService(api: context.api)
         do {
             switch candidate.platform {
             case .ios, .macos:
-                guard let appID = target.appleAppID, !appID.isEmpty else { return }
+                guard let appID = context.appleAppID, !appID.isEmpty else { return }
                 let check = try await service.checkApple(
                     appID: appID, platform: candidate.platform,
                     bundleIdentifier: candidate.productIdentifier,
@@ -443,11 +452,11 @@ extension BuildFlow {
                                                      Int(candidate.buildVersion) ?? 0) + 1)
                 }
             case .android:
-                guard let packageName = target.googlePackageName,
+                guard let packageName = context.googlePackageName,
                       !packageName.isEmpty else { return }
                 let check = try await service.checkGoogle(
                     packageName: packageName,
-                    track: target.googleTrack,
+                    track: context.googleTrack,
                     versionCode: Int(candidate.buildVersion))
                 snapshot.remoteConflict = check.blocking
                     ?? "No conflict. The highest version code is \(check.highestVersionCode.map(String.init) ?? "none")."
@@ -468,9 +477,10 @@ extension BuildFlow {
             return
         }
         showUploadConfirmation = false
-        // The store record this send is for, read once, here. See `BuildTarget`:
-        // every step below runs while the developer is free to open another app.
-        target = BuildTarget(app)
+        // The app this send is for, held from here on. See `BuildContext`:
+        // every step below runs while the developer is free to open another
+        // tab and edit another manifest.
+        holdContext()
         failure = nil
         uploadProgress = 0
         artifactOnly = false
@@ -509,7 +519,7 @@ extension BuildFlow {
         let service = AppleBuildService(runner: ToolProcess(redactor: redactor),
                                         storage: storage)
         var authentication: AppleAuthenticationFiles?
-        if let credential = target?.appleCredential {
+        if let credential = context.appleCredential {
             authentication = try AppleAuthenticationFiles.materialize(
                 credential: credential, runID: run.id, storage: storage)
         }
@@ -541,13 +551,13 @@ extension BuildFlow {
     /// upload-spec 8.16. The poll survives a relaunch, and **Stop waiting**
     /// never pretends that the upload was cancelled.
     func pollApple(_ candidate: BuildCandidate) async {
-        guard let target, let appID = target.appleAppID, !appID.isEmpty else {
+        guard let appID = context.appleAppID, !appID.isEmpty else {
             run.move(to: .recoveryRequired)
             processingLabel = "The upload finished, but no App Store app is linked for processing checks."
             try? storage.save(run)
             return
         }
-        let service = UploadService(api: target.api)
+        let service = UploadService(api: context.api)
         var attempt = 0
         while !Task.isCancelled, attempt < 40 {
             attempt += 1
@@ -603,17 +613,16 @@ extension BuildFlow {
 
     func resumeChecking() {
         guard let candidate else { return }
-        // A relaunch keeps the run and loses the target with it, so the poll is
-        // pointed at the app whose Build tab this button is on. That is the same
-        // app: the run belongs to one flow and one flow belongs to one app.
-        if target == nil, let app { target = BuildTarget(app) }
+        // A relaunch keeps the run and loses the held copy with it, so the poll
+        // is pointed at this flow's own app. It is the right one either way: a
+        // run belongs to one flow and a flow belongs to one app.
+        holdContext()
         run.move(to: .processingOrValidating)
         task = Task { [weak self] in await self?.pollApple(candidate) }
     }
 
     private func uploadGoogle(_ candidate: BuildCandidate) async throws {
-        guard let target else { return }
-        guard let packageName = target.googlePackageName, !packageName.isEmpty else {
+        guard let packageName = context.googlePackageName, !packageName.isEmpty else {
             throw BuildFailure(category: .authentication, stage: "Upload the bundle",
                                message: "Enter the Google Play package name on the Stores tab.")
         }
@@ -622,12 +631,12 @@ extension BuildFlow {
                                message: "The inspected bundle has no valid positive version code.",
                                retainedArtifact: candidate.artifactPath)
         }
-        let service = UploadService(api: target.api)
+        let service = UploadService(api: context.api)
         record(preview: "POST edits · upload bundle · commit changesNotSentForReview=true")
         run.cleanupState = .pending
         let result = try await service.uploadGoogleBundle(
             packageName: packageName,
-            track: target.googleTrack,
+            track: context.googleTrack,
             bundle: candidate.artifactURL,
             expectedVersionCode: versionCode,
             versionName: candidate.marketingVersion,
@@ -685,14 +694,14 @@ extension BuildFlow {
     /// front-most app here would have deleted a draft belonging to whichever app
     /// the developer had opened while the cancel was reconciling.
     private func reconcileAfterCancel() async {
-        guard let target, let candidate, candidate.platform == .android,
-              let packageName = target.googlePackageName else {
+        guard let candidate, candidate.platform == .android,
+              let packageName = context.googlePackageName else {
             run.move(to: .cancelled)
             return
         }
-        let service = UploadService(api: target.api)
+        let service = UploadService(api: context.api)
         if let landed = try? await service.reconcileGoogle(
-            packageName: packageName, track: target.googleTrack,
+            packageName: packageName, track: context.googleTrack,
             versionCode: Int(candidate.buildVersion) ?? 0), landed {
             processingLabel = "The upload had already reached Google Play, so it was not undone."
             run.cleanupState = .complete
@@ -716,12 +725,12 @@ extension BuildFlow {
     func retryCleanup() {
         // The target the edit was made under. A relaunch loses it, and the flow
         // belongs to one app, so its own app answers for it after that.
-        let store = target ?? app.map(BuildTarget.init)
-        guard let store, let packageName = store.googlePackageName,
+        guard let packageName = context.googlePackageName,
               let editID = run.remoteIDs["googleEdit"] else { return }
+        let api = context.api
         Task { [weak self] in
             do {
-                try await UploadService(api: store.api)
+                try await UploadService(api: api)
                     .deleteEdit(packageName: packageName, editID: editID)
                 self?.run.cleanupState = .complete
             } catch {
@@ -848,10 +857,13 @@ extension BuildFlow {
     /// The literals that must never reach a log, a preview, or a diagnostic.
     var redactor: Redactor {
         var literals: [String] = []
-        if let apple = app?.credentials.apple { literals.append(apple.privateKeyPEM) }
-        if let google = app?.credentials.google { literals.append(google.privateKey) }
-        if let key = app?.credentials.revenueCatKey { literals.append(key) }
-        if let reviewer = app?.credentials.reviewer { literals.append(reviewer.password) }
+        // This app's own keys, so a log redacts the secrets of the build that
+        // wrote it and never those of whichever tab is in front.
+        let credentials = context.credentials
+        if let apple = credentials.apple { literals.append(apple.privateKeyPEM) }
+        if let google = credentials.google { literals.append(google.privateKey) }
+        if let key = credentials.revenueCatKey { literals.append(key) }
+        if let reviewer = credentials.reviewer { literals.append(reviewer.password) }
         return Redactor(literals: literals)
     }
 

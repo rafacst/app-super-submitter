@@ -858,7 +858,7 @@ struct BuildFromProjectView: View {
                     }
                 }
                 QuietButton(title: "Continue to Summary") {
-                    state.adoptBuiltArtifact()
+                    state.adoptBuiltArtifact(from: flow)
                     state.selectedTab = .plan
                 }
                 Spacer(minLength: 0)

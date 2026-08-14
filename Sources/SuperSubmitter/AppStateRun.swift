@@ -273,21 +273,45 @@ extension AppState {
     /// as a package, so the apply failed on it and uploaded a build twice.
     /// The store read finds the uploaded build instead, and the plan attaches
     /// it.
-    func adoptBuiltArtifact() {
-        guard let candidate = buildFlow.candidate else { return }
-        var release = manifest.release ?? Manifest.Release()
-        if candidate.platform == .android {
-            var build = release.build ?? Manifest.Release.Build()
-            build.android = candidate.artifactPath
-            release.build = build
+    /// Writes what a build produced into the `store.yaml` of the app it was
+    /// built for.
+    ///
+    /// `from` and not "the open app". This read `manifest`, which is whichever
+    /// app is in front, and it runs when a build finishes: an archive that
+    /// completed while the developer was working on another tab wrote its path
+    /// and its marketing version into that app's `store.yaml`. Two builds at
+    /// once is the ordinary case the app tabs invite, and this is the write
+    /// that would have crossed them on disk.
+    ///
+    /// An app that is not open is edited through its own file. Nothing here
+    /// touches the manifest held in memory for the app the developer is
+    /// reading, and its own flow will see the change on the next load.
+    func adoptBuiltArtifact(from flow: BuildFlow) {
+        guard let candidate = flow.candidate else { return }
+        func adopt(_ manifest: inout Manifest) {
+            var release = manifest.release ?? Manifest.Release()
+            if candidate.platform == .android {
+                var build = release.build ?? Manifest.Release.Build()
+                build.android = candidate.artifactPath
+                release.build = build
+            }
+            manifest.release = release
+            // The store this artifact goes to, and not both of them. An App
+            // Bundle holding 1.0.0 used to name the version for the App Store
+            // as well.
+            let store = candidate.platform.store
+            if manifest.versionName(for: store) == nil, !candidate.marketingVersion.isEmpty {
+                manifest.setReleaseVersionName(candidate.marketingVersion, for: store)
+            }
         }
-        manifest.release = release
-        // The store this artifact goes to, and not both of them. An App Bundle
-        // holding 1.0.0 used to name the version for the App Store as well.
-        let store = candidate.platform.store
-        if manifest.versionName(for: store) == nil, !candidate.marketingVersion.isEmpty {
-            manifest.setReleaseVersionName(candidate.marketingVersion, for: store)
+        guard isOpenApp(flow.owner) else {
+            guard let url = flow.context.manifestURL,
+                  var stored = try? ManifestFile.load(from: url) else { return }
+            adopt(&stored)
+            try? ManifestFile.save(stored, to: url)
+            return
         }
+        adopt(&manifest)
         saveManifest()
         // The plan must read the store again now that a build landed.
         invalidatePlan()

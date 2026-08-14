@@ -374,7 +374,7 @@ final class AppState {
     var buildFlow: BuildFlow { flow(for: openAppID) }
 
     /// The app a flow belongs to, or a fixed key while none is open.
-    private var openAppID: UUID {
+    var openAppID: UUID {
         linkedApps.indices.contains(selectedAppIndex)
             ? linkedApps[selectedAppIndex].id
             : Self.unlinkedFlowID
@@ -385,10 +385,19 @@ final class AppState {
 
     private func flow(for id: UUID) -> BuildFlow {
         if let existing = buildFlows[id] { return existing }
-        let created = BuildFlow(app: self, storage: buildStorage)
+        let created = BuildFlow(app: self, owner: id, storage: buildStorage)
         buildFlows[id] = created
         return created
     }
+
+    /// Whether one linked app is the one on screen.
+    ///
+    /// Every background job asks this before it reads or writes through this
+    /// object. A build runs for minutes and the developer is free to open
+    /// another tab while it does, so "the app" and "the app in front" are two
+    /// different questions and the second one is never the one a running build
+    /// means. See `BuildContext`.
+    func isOpenApp(_ id: UUID) -> Bool { openAppID == id }
 
     /// Whether any app other than the open one has a build or a send in flight.
     /// The tab bar draws a mark on those tabs, so work that is no longer on the
@@ -1897,9 +1906,19 @@ final class AppState {
         case .invalid(let message):
             moneyError = message
         case .valid(let price):
+            // Whatever the manifest already said, including nothing.
+            //
+            // This defaulted to `true`, so saving a price wrote an answer about
+            // territory availability that the developer had never given. An
+            // absent key means "do not manage this", and inventing one here
+            // made the planner compare a value nobody chose against the store
+            // and queue "Write the territory availability" on an app whose
+            // countries had not been touched. The toggle on the Monetization
+            // tab still shows `true` when the key is absent, because a checkbox
+            // has to draw something; pressing it is what writes the key.
             manifest.pricing = Manifest.Pricing(
                 base: price,
-                autoConvertOtherTerritories: manifest.pricing?.autoConvertOtherTerritories ?? true)
+                autoConvertOtherTerritories: manifest.pricing?.autoConvertOtherTerritories)
             saveManifestReportingErrors()
             moneyError = nil
         }
@@ -3432,6 +3451,33 @@ final class AppState {
         storePlans = [:]
         acknowledged = []
         clearStoppedRun()
+        refreshConsoleRows()
+    }
+
+    /// Rebuilds the release checklist from what the app now holds.
+    ///
+    /// The checklist is a function of the manifest, the last store read and the
+    /// chosen stores, which is exactly what the plan is a function of, so it is
+    /// rebuilt wherever the plan is thrown away.
+    ///
+    /// It used to be built in two places only: a store read, and opening an
+    /// app. Every other way of satisfying a row left the banner saying the row
+    /// was still open. Picking a build under Ship this build writes the number
+    /// into `store.yaml` and the plan draws the attach row from it, and the
+    /// banner on every screen went on reading "Every submission needs a build"
+    /// until a read or an apply happened to rebuild the rows.
+    ///
+    /// Empty with no app open. The rows are about one app's submission, and an
+    /// empty manifest would answer for a submission nobody is preparing.
+    func refreshConsoleRows() {
+        guard manifestURL != nil else {
+            consoleRows = []
+            refreshDockBadge()
+            return
+        }
+        consoleRows = ConsoleChecklist.rows(manifest: manifest, actual: actualState,
+                                            stores: stores)
+        refreshDockBadge()
     }
 
     func persistLinkedApps() {

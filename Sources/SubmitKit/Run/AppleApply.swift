@@ -1195,13 +1195,24 @@ extension Runner {
     /// It is an attribute of the app, not of the availability, once the
     /// availability exists. Skipped when the store already agrees, so a run
     /// that changes only a territory does not also write this.
+    /// Apple takes this on the create and nowhere else.
+    ///
+    /// Every route is closed once the app holds an availability record.
+    /// `PATCH /v2/appAvailabilities/{id}` answers 403 and "Allowed operations
+    /// are: CREATE, GET_INSTANCE"; a second `POST` answers 409; and
+    /// `PATCH /v1/apps/{id}` answers 409 and "'availableInNewTerritories' is
+    /// not an attribute on the resource 'apps'". Apple's own reference still
+    /// documents that last one, and the store refuses it.
+    ///
+    /// So this reports rather than sending a request that cannot succeed. It is
+    /// reached only when the developer changed the toggle and the store's
+    /// answer is known to differ: an unread answer plans no step at all, and a
+    /// value nobody set is no longer written into the manifest.
     private func appleAvailableInNewTerritories() async throws {
         guard let wanted = manifest.pricing?.autoConvertOtherTerritories,
-              wanted != actual.apple?.availableInNewTerritories else { return }
-        try await api.apple("PATCH", "/v1/apps/\(appleAppID)", body: [
-            "data": ["type": "apps", "id": appleAppID,
-                     "attributes": ["availableInNewTerritories": wanted]],
-        ])
+              let held = actual.apple?.availableInNewTerritories,
+              wanted != held else { return }
+        throw RunError.availabilityIsCreateOnly(wanted: wanted)
     }
 
     func appleAppPrice() async throws {

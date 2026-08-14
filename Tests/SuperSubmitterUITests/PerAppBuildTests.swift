@@ -73,23 +73,53 @@ private func window(_ count: Int) throws -> (state: AppState, folder: URL) {
     #expect(!state.buildFlow.isBusy)
 }
 
-/// The store record a send is for, frozen when the developer pressed Upload.
+/// The app a build compares itself against, once the developer has moved on.
 ///
-/// Reading it off the front-most `AppState` mid-send pointed the upload, the
-/// processing poll, the conflict re-check and the cancel cleanup at whichever
-/// app was open by then. The cleanup is the one that would have deleted a draft
-/// belonging to the wrong app.
+/// This is the reported bug. Two artifacts were built at once and the finished
+/// one reported the other app's manifest:
+///
+///     store.yaml identifier: the preflight said com.rafacst.receitorio
+///     and the artifact holds com.rafacst.deckdeckdeck.
+///
+/// Every read went through the front-most `AppState`, so the identity check,
+/// the conflict check, the signing key and the write of the finished artifact
+/// all followed the tab rather than the build.
 @MainActor
-@Test func aSendKeepsTheAppItWasStartedFor() throws {
+@Test func aBuildComparesItselfAgainstItsOwnApp() throws {
     let (state, folder) = try window(2)
     defer { try? FileManager.default.removeItem(at: folder) }
 
     state.selectApp(at: 0)
-    let target = BuildTarget(state)
-    #expect(target.appleAppID == "100000000")
+    let first = state.buildFlow
+    #expect(first.context.appleAppID == "100000000")
 
+    // The developer opens the other app while the first one is building.
     state.selectApp(at: 1)
-    // The window moved on. The frozen target did not.
     #expect(state.manifest.apps.apple?.appId == "100000001")
-    #expect(target.appleAppID == "100000000")
+    #expect(state.buildFlow.context.appleAppID == "100000001")
+    // The build that is still running answers for the app it belongs to.
+    #expect(first.context.appleAppID == "100000000")
+    #expect(first.context.appID == state.linkedApps[0].id)
+}
+
+/// And it stops following the front-most app the moment it starts running, so
+/// an edit made on another tab cannot reach a run that is already comparing.
+@MainActor
+@Test func aRunningBuildHoldsTheManifestItStartedWith() throws {
+    let (state, folder) = try window(1)
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    state.selectApp(at: 0)
+    let flow = state.buildFlow
+    flow.holdContext()
+    let reached = flow.run.moveToPreflight()
+        && flow.run.move(to: .readyToBuild)
+        && flow.run.move(to: .building)
+    #expect(reached)
+
+    // The developer keeps working on the same app while it builds.
+    state.manifest.setAppleApp(appID: "999999999", bundleID: "com.example.changed")
+
+    #expect(state.manifest.apps.apple?.appId == "999999999")
+    #expect(flow.context.appleAppID == "100000000")
 }
