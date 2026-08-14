@@ -187,6 +187,24 @@ extension Runner {
         return result
     }
 
+    /// The device classes the manifest fills for one locale, which are the only
+    /// ones a run is allowed to clear.
+    ///
+    /// The Media tab makes one promise twice: "An empty size keeps what is
+    /// live", and "Leave this size empty to keep them". A group the developer
+    /// left alone is a group this app was never given anything for, and it is
+    /// not an instruction to take the App Store's pictures down.
+    func appleFilledDeviceClasses(locale: String, previews: Bool) -> Set<Manifest.DeviceClass> {
+        var result: Set<Manifest.DeviceClass> = []
+        for deviceClass in Manifest.DeviceClass.allCases {
+            let paths = previews
+                ? manifest.mediaPaths(locale: locale, deviceClass: deviceClass, previews: true)
+                : manifest.mediaPaths(locale: locale, deviceClass: deviceClass, store: .apple)
+            if !paths.isEmpty { result.insert(deviceClass) }
+        }
+        return result
+    }
+
     func appleScreenshots(locale: String, files: [MediaUpload], index: Int) async throws {
         guard let localizationID = appleVersionLocalizationIDs[locale] else {
             throw RunError.missingLocalization(locale)
@@ -210,7 +228,8 @@ extension Runner {
         try await appleDropMediaSets(
             localizationID: localizationID, collection: "appScreenshotSets",
             typeKey: "screenshotDisplayType", path: "/v1/appScreenshotSets",
-            keeping: appleWantedBuckets(locale: locale))
+            keeping: appleWantedBuckets(locale: locale),
+            replacing: appleFilledDeviceClasses(locale: locale, previews: false))
 
         for bucket in wantedBuckets {
             let setID = try await appleScreenshotSet(displayType: bucket,
@@ -1145,49 +1164,51 @@ extension Runner {
         attributes[key] = value
     }
 
-    /// Removes the media sets of a locale that the manifest no longer fills.
+    /// Replaces the preview sets of a device class the manifest fills.
     ///
-    /// The planner emits no upload step for a device class that went to zero,
-    /// so nothing else ever visits those sets. This runs from the locale
-    /// writer, which every managed locale reaches on every apply.
+    /// The planner emits no upload step for a device class whose preview type
+    /// changed, so nothing else visits the set it left. This runs from the
+    /// locale writer, which every managed locale reaches on every apply.
     ///
-    /// A preview type comes from the device class alone, so the manifest names
-    /// the whole wanted set. A screenshot display type comes from the pixel
-    /// size of the file, so this only clears the screenshots of a locale that
-    /// names none at all. `appleScreenshots` clears the rest, where the
-    /// resolved buckets are in hand.
+    /// It used to clear the screenshots too, of any locale that named none at
+    /// all. That is a locale the developer gave this app nothing for, and the
+    /// Media tab promises such a locale keeps what the store shows, so the
+    /// apply took down published screenshots that it had never been handed a
+    /// replacement for. `appleScreenshots` clears a class the manifest fills,
+    /// where the resolved buckets are in hand, and that is the only clearing
+    /// screenshots get.
     func appleDropEmptyMediaSets(_ locale: String) async throws {
         guard let localizationID = appleVersionLocalizationIDs[locale] else { return }
 
         var previewTypes: Set<String> = []
-        var screenshotCount = 0
         for deviceClass in Manifest.DeviceClass.allCases {
             if !manifest.mediaPaths(locale: locale, deviceClass: deviceClass,
                                     previews: true).isEmpty,
                let type = AssetInspector.applePreviewType(for: deviceClass) {
                 previewTypes.insert(type)
             }
-            screenshotCount += manifest.mediaPaths(locale: locale,
-                                                   deviceClass: deviceClass,
-                                                   store: .apple).count
         }
 
         try await appleDropMediaSets(
             localizationID: localizationID, collection: "appPreviewSets",
-            typeKey: "previewType", path: "/v1/appPreviewSets", keeping: previewTypes)
-
-        if screenshotCount == 0 {
-            try await appleDropMediaSets(
-                localizationID: localizationID, collection: "appScreenshotSets",
-                typeKey: "screenshotDisplayType", path: "/v1/appScreenshotSets",
-                keeping: [])
-        }
+            typeKey: "previewType", path: "/v1/appPreviewSets", keeping: previewTypes,
+            replacing: appleFilledDeviceClasses(locale: locale, previews: true))
     }
 
     /// One removal, both set kinds. Apple deletes the screenshots or the
     /// previews with the set, so this needs no second pass over the children.
+    ///
+    /// `replacing` is the whole safety of this call: only a device class the
+    /// manifest fills can lose anything. Without it the keep list was the
+    /// buckets the manifest named and nothing else, so a run deleted every set
+    /// of every class the developer had not filled, and a locale that named no
+    /// picture at all deleted the lot. That is the opposite of what the Media
+    /// tab tells the developer twice, and it took down screenshots that were
+    /// published and were never this app's to remove.
     func appleDropMediaSets(localizationID: String, collection: String, typeKey: String,
-                            path: String, keeping wanted: Set<String>) async throws {
+                            path: String, keeping wanted: Set<String>,
+                            replacing filled: Set<Manifest.DeviceClass>) async throws {
+        guard !filled.isEmpty else { return }
         guard let response = try? await api.apple(
             "GET", "/v1/appStoreVersionLocalizations/\(localizationID)/\(collection)?limit=50")
         else { return }
@@ -1195,6 +1216,10 @@ extension Runner {
             guard let id = item["id"].string,
                   let type = item["attributes"][typeKey].string,
                   !wanted.contains(type) else { continue }
+            // A display type this build cannot place belongs to no class the
+            // manifest can have filled, so it stays. Guessing costs pictures.
+            guard let device = AssetInspector.deviceClass(forAppleDisplayType: type),
+                  filled.contains(device) else { continue }
             try await api.apple("DELETE", "\(path)/\(id)")
         }
     }
