@@ -1157,7 +1157,7 @@ public struct StateReader: Sendable {
         for item in payload["included"].array where item["type"].string == "appPricePoints" {
             guard let id = item["id"].string,
                   let amount = item["attributes"]["customerPrice"].string
-                    .flatMap({ Decimal(string: $0) }) else { continue }
+                    .flatMap({ Price.amount(from: $0) }) else { continue }
             amounts[id] = amount
         }
         let rows = payload["data"].array

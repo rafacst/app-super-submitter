@@ -68,13 +68,25 @@ extension AppState {
 
     /// The rows of the picker, in continents.
     ///
-    /// The store's own codes are folded in, because Apple sells in territories
-    /// no ISO alpha-3 covers — Kosovo is `XKS` — and a country the picker
-    /// cannot draw is one the developer cannot see, cannot keep, and cannot
-    /// turn off.
+    /// Apple's own list of territories when the record answered with one, and
+    /// ICU's regions only until then. The two are not the same list: ICU knows
+    /// 262 regions, the App Store sells in 175, and the difference is places
+    /// with no store and codes that name one country twice.
     var territoryGroups: [StoreValues.TerritoryGroup] {
-        StoreValues.territoryGroups(including: Set(liveAppleTerritories)
-            .union((manifest.pricing?.territories ?? []).map(\.territory)))
+        StoreValues.territoryGroups(
+            store: storeTerritories,
+            including: Set((manifest.pricing?.territories ?? []).map(\.territory)))
+    }
+
+    /// Every territory the App Store availability record names, on sale or
+    /// not. Empty until a read lands, and empty again when the read came back
+    /// short: a partial record would hide countries the app sells in, and half
+    /// a list is worse than the general one.
+    var storeTerritories: Set<String> {
+        guard let apple = actualState.apple else { return [] }
+        let codes = Set(apple.territoryAvailability.keys)
+        guard !codes.isEmpty, codes.count >= (apple.territoryCount ?? 0) else { return [] }
+        return codes
     }
 
     /// Ticks or clears one country, a whole continent, or the whole planet.

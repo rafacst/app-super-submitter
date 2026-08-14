@@ -199,13 +199,20 @@ struct AvailabilityTab: View {
     @ViewBuilder
     private var liveTerritories: some View {
         if state.actualState.apple?.hasAvailabilityRecord == true {
+            let selling = state.liveAppleTerritories.count
             HStack(spacing: 8) {
                 StatePill(text: "On the App Store", foreground: Theme.green,
                           background: Theme.greenBg)
-                Text("The App Store sells this app in "
-                     + Self.countLine(state.liveAppleTerritories.count,
-                                      total: state.liveAppleTerritoryCount) + " today")
+                Text("The App Store sells this app in \(Self.countLine(selling)) today")
                     .font(Theme.font(size: 12))
+                // The other half of Apple's own summary. The record holds a row
+                // per territory whether the app sells there or not, and that
+                // row count is what this line used to print as the number of
+                // countries: an app on sale in Brazil alone read "175".
+                if let held = state.liveAppleTerritoryCount, held > selling {
+                    Text("\(held - selling) not available")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
+                }
                 Spacer(minLength: 0)
             }
         } else if state.appleActionAppID == nil || !state.hasCredential(for: .apple) {
@@ -221,11 +228,13 @@ struct AvailabilityTab: View {
 
     /// "1 country", and never "1 countries".
     ///
-    /// The total is Apple's own count of the record and the list is what came
-    /// back over the pages. They agree in every ordinary case; when a page
-    /// fails they do not, and the number the developer needs is Apple's.
-    static func countLine(_ listed: Int, total: Int?) -> String {
-        let count = max(listed, total ?? 0)
+    /// Counted from the territories the record marks available, and from
+    /// nothing else. It used to take the larger of that and `territoryCount`,
+    /// which is the number of rows the record holds — every territory Apple
+    /// sells in, each carrying a yes or a no. An app available in Brazil alone
+    /// therefore reported 175 countries, which is the count of the question
+    /// rather than of the answer.
+    static func countLine(_ count: Int) -> String {
         if count == 0 { return "no country" }
         return count == 1 ? "1 country" : "\(count) countries"
     }

@@ -98,9 +98,16 @@ struct RootView: View {
                 // a light switch and a field search read as two halves of one
                 // thing. They have nothing to do with each other.
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) { AppearanceSwitch() }
+                    // No lozenge behind this one. The system draws a circular
+                    // glass container around a toolbar item, which is right for
+                    // a glyph and wrong for a switch: the capsule came out
+                    // inside a circle, one control drawn in two shapes.
                     if #available(macOS 26.0, *) {
+                        ToolbarItem(placement: .primaryAction) { AppearanceSwitch() }
+                            .sharedBackgroundVisibility(.hidden)
                         ToolbarSpacer(.fixed, placement: .primaryAction)
+                    } else {
+                        ToolbarItem(placement: .primaryAction) { AppearanceSwitch() }
                     }
                     if state.manifestURL != nil {
                         ToolbarItem(placement: .primaryAction) {
@@ -162,7 +169,15 @@ struct RootView: View {
         }
         .sheet(item: $state.releaseSheet) { store in ReleaseSheet(store: store).appMessage() }
         .sheet(isPresented: $state.showAddLocale) { AddLocaleSheet().appMessage() }
-        .sheet(isPresented: $state.showFieldSearch) { FieldSearchSheet().appMessage() }
+        // The palette, over the window rather than in a sheet.
+        //
+        // A sheet on the Mac is modal: it takes the window, dims nothing that
+        // it does not cover, and there is no click outside it to catch. Every
+        // palette people know — Spotlight, the command bar in an editor — shuts
+        // when you press away from it, and this one could only be closed with
+        // Escape or by picking a row.
+        .overlay { fieldSearch }
+        .motion(.smooth(duration: 0.16), value: state.showFieldSearch)
         .confirmationDialog("Remove \(state.removalName) from Super Submitter?",
                             isPresented: Binding(
                                 get: { state.appPendingRemoval != nil },
@@ -180,6 +195,30 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await state.refreshEntitlement() }
+        }
+    }
+
+    /// The field palette, and the press that shuts it.
+    ///
+    /// The backdrop is a view of its own and not a background on the panel:
+    /// the whole point is that the area *around* the panel is a target, and it
+    /// has to darken the window as well, or a panel floating over a bright tab
+    /// reads as part of that tab.
+    @ViewBuilder
+    private var fieldSearch: some View {
+        if state.showFieldSearch {
+            ZStack(alignment: .top) {
+                Color.black.opacity(0.28)
+                    .ignoresSafeArea()
+                    .contentShape(.rect)
+                    .onTapGesture { state.showFieldSearch = false }
+                    .accessibilityLabel("Close the field search")
+                    .accessibilityAddTraits(.isButton)
+                FieldSearchSheet()
+                    .shadow(color: .black.opacity(0.35), radius: 26, y: 10)
+                    .padding(.top, 110)
+            }
+            .transition(.opacity)
         }
     }
 
@@ -308,8 +347,26 @@ private struct ContentArea: View {
         .onChange(of: state.selectedTab) { scrolled = false }
     }
 
+    /// The tab, in the scroll view every tab needs — except the one that is a
+    /// form.
+    ///
+    /// Settings is a grouped `Form`, and a grouped form is a list: it brings
+    /// its own scrolling, its own insets and its own background. Inside this
+    /// scroll view that is a scroll view within a scroll view, which is a
+    /// height nothing can agree on. It also anchors no field, so the jump the
+    /// palette runs has nothing to look for there.
     @ViewBuilder
     private var tabScroll: some View {
+        if state.selectedTab == .settings {
+            TabContent(tab: .settings)
+                .background(Theme.content)
+        } else {
+            scrollingTab
+        }
+    }
+
+    @ViewBuilder
+    private var scrollingTab: some View {
         let scroll = ScrollViewReader { proxy in
             ScrollView {
                 TabContent(tab: state.selectedTab)

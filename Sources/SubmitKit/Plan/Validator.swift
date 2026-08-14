@@ -394,6 +394,19 @@ public enum Validator {
                     row, family: family,
                     exists: input.actual.apple?.gameCenter?.objects(family)[row.id] != nil)
 
+                // Apple types this one a date and a time. Every other Apple
+                // date in the manifest is a plain day, and the field takes
+                // free text, so the day is what gets typed into it.
+                if let start = row.write.attributes["recurrenceStartDate"],
+                   !start.isEmpty, !isDateTime(start) {
+                    result.append(Finding(
+                        id: "gameCenter.\(family.rawValue).recurrenceStart.\(row.id)",
+                        severity: .error,
+                        message: "recurrenceStartDate is a date and a time, for example 2026-09-01T00:00:00Z. \(row.name) names \(start).",
+                        location: "Gaming · \(family.label.capitalized) · \(row.name)",
+                        fix: .gaming, fixAnchor: family.anchor))
+                }
+
                 if row.locales.isEmpty {
                     result.append(Finding(
                         id: "gameCenter.\(family.rawValue).noLocale.\(row.id)",
@@ -928,6 +941,20 @@ public enum Validator {
                     message: "The App Store offers no \(plan.duration) subscription duration.",
                     location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
             }
+            // The manifest keeps one duration list and both stores read it,
+            // and the two stores do not sell the same periods. Apple has a
+            // two-month subscription and Google has none, so a plan that
+            // passed the check above still fails at the Google apply. The
+            // duration is immutable once a base plan exists, which makes a
+            // wrong one a new base plan and not an edit.
+            for plan in group.plans
+            where input.stores.contains(.google)
+                && GoogleDurations.name(for: plan.duration) == nil {
+                result.append(Finding(
+                    id: "money.googleDuration.\(plan.id)", severity: .error,
+                    message: "Google Play offers no \(plan.duration) billing period. It accepts \(GoogleDurations.supported.joined(separator: ", ")).",
+                    location: "Monetization · \(group.groupId) · \(plan.id)", fix: .money))
+            }
             if input.stores.contains(.apple) {
                 for plan in group.plans
                 where plan.availableTerritories?.isEmpty == false
@@ -973,9 +1000,21 @@ public enum Validator {
         guard input.stores.contains(.apple), let apple = input.actual.apple,
               let ladderTerritory = apple.pricePointTerritory,
               !apple.pricePoints.isEmpty else { return [] }
-        // The App Store gives the app itself away for nothing. It sells no
-        // purchase and no plan for nothing, so those two read a shorter ladder.
-        let productPoints = apple.pricePoints.filter { $0 > 0 }
+        // A product is priced off its own table and not off the app's, and the
+        // two are different lists: in BRL the app sells at R$17.50 and R$18.00
+        // and a subscription at R$14.90 and R$19.90. Checking a product against
+        // the app's ladder therefore passed prices the store will not take and
+        // failed prices it will.
+        //
+        // The app ladder minus its free row is the fallback, because that is
+        // the only list an app whose products nobody has read can be checked
+        // against, and a rough check that warns is better than none. The App
+        // Store gives the app itself away for nothing and sells no product for
+        // nothing, which is what the filter is for.
+        let purchasePoints = apple.purchasePricePoints.isEmpty
+            ? apple.pricePoints.filter { $0 > 0 } : apple.purchasePricePoints
+        let planPoints = apple.subscriptionPricePoints.isEmpty
+            ? apple.pricePoints.filter { $0 > 0 } : apple.subscriptionPricePoints
 
         // The app's own price is fixed on Availability and a product's price on
         // Monetization, so the finding names the tab that holds the field. A
@@ -997,12 +1036,12 @@ public enum Validator {
                            id: "base", location: "Availability · Base price",
                            fix: .availability)].compactMap { $0 }
         for purchase in input.manifest.purchases ?? [] {
-            result += [finding(purchase.price, points: productPoints, id: purchase.id,
+            result += [finding(purchase.price, points: purchasePoints, id: purchase.id,
                                location: "Monetization · \(purchase.id)")].compactMap { $0 }
         }
         for group in input.manifest.subscriptions ?? [] {
             for plan in group.plans {
-                result += [finding(plan.price, points: productPoints, id: plan.id,
+                result += [finding(plan.price, points: planPoints, id: plan.id,
                                    location: "Monetization · \(group.groupId) · \(plan.id)")]
                     .compactMap { $0 }
             }
@@ -1177,6 +1216,20 @@ public enum Validator {
         return formatter.string(from: date) == text
     }
 
+    /// `2026-09-01T00:00:00Z`, and nothing that only looks like it.
+    ///
+    /// Apple types a handful of fields `date-time` and the rest of its dates
+    /// `date`. A plain `2026-09-01` is the shape the manifest uses nearly
+    /// everywhere, which is exactly why it gets typed into the few fields
+    /// that refuse it.
+    static func isDateTime(_ text: String) -> Bool {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        if formatter.date(from: text) != nil { return true }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: text) != nil
+    }
+
     /// The promotional image of a purchase or a plan. Apple asks for 1024 by
     /// 1024 and rejects anything else, and the writer would send it anyway.
     private static func promotionalImageFindings(_ input: Planner.Input) -> [Finding] {
@@ -1300,6 +1353,28 @@ public enum Validator {
                     id: "marketing.routingType", severity: .error,
                     message: "The routing app coverage must be a .geojson file.",
                     location: "Marketing · Routing coverage", fix: .marketing))
+            }
+        }
+
+        if let nomination = marketing.nomination {
+            let location = "Marketing · \(nomination.name)"
+            // Apple types both of these `date-time`, and every other Apple
+            // date in this manifest is a plain day. A `2026-08-14` here is
+            // the mistake the shape of the rest of the file invites.
+            for (field, value) in [("publishStartDate", nomination.publishStartDate),
+                                   ("publishEndDate", nomination.publishEndDate)] {
+                guard let value, !value.isEmpty, !isDateTime(value) else { continue }
+                result.append(Finding(
+                    id: "marketing.nominationDate.\(field)", severity: .error,
+                    message: "\(field) is a date and a time, for example 2026-09-01T00:00:00Z. The nomination \(nomination.name) names \(value).",
+                    location: location, fix: .marketing))
+            }
+            // Apple requires the start on the create and on no call after it.
+            if nomination.publishStartDate?.isEmpty != false {
+                result.append(Finding(
+                    id: "marketing.nominationStart", severity: .error,
+                    message: "The nomination \(nomination.name) names no publishStartDate. The App Store requires one to create a nomination, so nothing is submitted without it.",
+                    location: location, fix: .marketing))
             }
         }
 
@@ -1599,14 +1674,30 @@ public enum Validator {
     /// not going to send it, and the one thing worse than a step that fails is
     /// a setting that is quietly ignored.
     static func availability(_ input: Planner.Input) -> [Finding] {
-        guard input.stores.contains(.apple),
-              let apple = input.actual.apple, apple.hasAvailabilityRecord,
-              let wanted = input.manifest.pricing?.appleNewTerritories,
-              let held = apple.availableInNewTerritories, wanted != held else { return [] }
-        return [Finding(
-            id: "availability.newTerritories", severity: .warning,
-            message: "store.yaml offers this app in new territories \(wanted ? "automatically" : "only where you say so"), and the App Store holds the opposite. Apple takes that setting when an app's availability is first created and by no call after it, so this one is changed in App Store Connect under Pricing and Availability.",
-            location: "Availability · Countries", fix: .availability)]
+        guard input.stores.contains(.apple) else { return [] }
+        var result: [Finding] = []
+
+        // Apple types `releaseDate` a plain day. The apply sends the manifest
+        // string as it stands, once per territory, so a value that is not a
+        // day stops the run in the middle of a list of countries.
+        for item in input.manifest.pricing?.territories ?? [] {
+            guard let date = item.releaseDate, !date.isEmpty,
+                  !isCalendarDay(date) else { continue }
+            result.append(Finding(
+                id: "availability.releaseDate.\(item.territory)", severity: .error,
+                message: "releaseDate is a YYYY-MM-DD day. \(item.territory) names \(date).",
+                location: "Availability · Countries", fix: .availability))
+        }
+
+        if let apple = input.actual.apple, apple.hasAvailabilityRecord,
+           let wanted = input.manifest.pricing?.appleNewTerritories,
+           let held = apple.availableInNewTerritories, wanted != held {
+            result.append(Finding(
+                id: "availability.newTerritories", severity: .warning,
+                message: "store.yaml offers this app in new territories \(wanted ? "automatically" : "only where you say so"), and the App Store holds the opposite. Apple takes that setting when an app's availability is first created and by no call after it, so this one is changed in App Store Connect under Pricing and Availability.",
+                location: "Availability · Countries", fix: .availability))
+        }
+        return result
     }
 
     // MARK: - The update
@@ -1733,6 +1824,31 @@ public enum AppleDurations {
     public static func gracePeriod(days: Int) -> String {
         let choices = [(3, "THREE_DAYS"), (16, "SIXTEEN_DAYS"), (28, "TWENTY_EIGHT_DAYS")]
         return choices.min { abs($0.0 - days) < abs($1.0 - days) }?.1 ?? "SIXTEEN_DAYS"
+    }
+}
+
+/// The billing periods that Google Play sells a base plan on.
+///
+/// The manifest shares one duration list with the App Store and the two
+/// stores do not offer the same periods. Apple sells two months and Google
+/// does not, so a manifest that satisfies `AppleDurations` can still be
+/// refused by Play, and the base plan duration is immutable after the create.
+///
+/// `ponytail: typed from the Play help center. The API reference in docs/
+/// says "refer to the help center" and enumerates nothing, so this list has
+/// no reference on disk to check it against. It is the one place in this app
+/// that guesses at a store's accepted values, and a store that adds a period
+/// makes this a false error until the row is added.`
+public enum GoogleDurations {
+    public static let map: [String: String] = [
+        "P1W": "1 week", "P1M": "1 month", "P3M": "3 months",
+        "P6M": "6 months", "P1Y": "1 year",
+    ]
+
+    public static var supported: [String] { map.keys.sorted() }
+
+    public static func name(for duration: String) -> String? {
+        map[duration.uppercased()]
     }
 }
 

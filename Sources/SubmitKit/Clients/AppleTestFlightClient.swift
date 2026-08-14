@@ -192,13 +192,33 @@ public struct AppleTestFlightClient: Sendable {
                 try await api.apple("POST", "/v1/betaTesters", body: body)
             } catch ConnectionError.http(let status, _) where status == 409 {
                 // Apple already knows the address. Attaching it to the group
-                // is the remaining half of the work.
+                // is the remaining half of the work, and the relationship
+                // names the tester by id. A `betaTesters` id is opaque and it
+                // is not the address, so the address is looked up first. This
+                // used to post the email as the id, which matched no tester.
+                let found = JSON(data: try await api.apple(
+                    "GET",
+                    "/v1/betaTesters?filter%5Bemail%5D=\(Self.queryValue(email))&limit=1").data)
+                guard let testerID = found["data"].array.first?["id"].string else {
+                    throw ConnectionError.http(
+                        409,
+                        "The App Store holds \(email) already and did not answer with it, so the group could not take it.")
+                }
                 try await api.apple(
                     "POST", "/v1/betaGroups/\(groupID)/relationships/betaTesters",
-                    body: ["data": [["type": "betaTesters", "id": email]]])
+                    body: ["data": [["type": "betaTesters", "id": testerID]]])
             }
         }
         return missing.count
+    }
+
+    /// One query value. `StateReader.escape` allows a path and leaves `+`
+    /// alone, and a `+` in a query is a space by the time a server reads it.
+    /// An address like `someone+beta@example.com` is a real address.
+    static func queryValue(_ value: String) -> String {
+        value.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed
+                .subtracting(CharacterSet(charactersIn: "+&=?#"))) ?? value
     }
 
     /// Gives one build to a group. Apple sends the build to every tester in it.

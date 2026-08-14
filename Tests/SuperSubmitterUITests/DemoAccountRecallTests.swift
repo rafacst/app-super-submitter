@@ -111,12 +111,15 @@ struct PricePointChoiceTests {
     }
 
     private func state(stores: Set<Store>, points: [Decimal],
+                       purchasePoints: [Decimal] = [], planPoints: [Decimal] = [],
                        readFor: String? = "USA", territory: String = "",
                        currency: String = "") -> AppState {
         let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                              storeAccount: "test-\(UUID().uuidString)")
         var apple = ActualState.Apple()
         apple.pricePoints = points
+        apple.purchasePricePoints = purchasePoints
+        apple.subscriptionPricePoints = planPoints
         apple.pricePointTerritory = readFor
         var actual = ActualState()
         actual.apple = apple
@@ -187,8 +190,47 @@ struct PricePointChoiceTests {
         // The App Store sells the app for nothing. It sells no purchase and no
         // subscription plan for nothing, so that row would be a write Apple
         // refuses.
-        let state = state(stores: [.apple], points: points(["0", "0.99"]))
+        let state = state(stores: [.apple], points: points(["0", "0.99"]),
+                          purchasePoints: points(["0", "0.99"]))
         #expect(state.applePricePoints.map(\.value) == ["0", "0.99"])
-        #expect(state.appleProductPricePoints.map(\.value) == ["0.99"])
+        #expect(state.applePurchasePricePoints.map(\.value) == ["0.99"])
+    }
+
+    /// Three ladders, and a product is priced off neither of the other two.
+    ///
+    /// The reported bug: a Brazilian subscription was offered R$17.50, R$18.00
+    /// and R$18.50 — the app's own price points — while App Store Connect
+    /// offers R$14.90, R$19.90 and R$24.90 for the same product. Every row in
+    /// that menu was a price the store does not sell a subscription at, and the
+    /// apply resolved the choice to the nearest real one without saying so.
+    @Test func eachKindOfProductIsPricedOffItsOwnLadder() {
+        let state = state(stores: [.apple], points: points(["17.50", "18.00"]),
+                          purchasePoints: points(["9.90", "19.90"]),
+                          planPoints: points(["14.90", "19.90", "24.90"]))
+
+        #expect(state.applePricePoints.map(\.value) == ["17.5", "18"])
+        #expect(state.applePurchasePricePoints.map(\.value) == ["9.9", "19.9"])
+        #expect(state.appleSubscriptionPricePoints.map(\.value) == ["14.9", "19.9", "24.9"])
+    }
+
+    /// Until the product ladder is read there is no product ladder. The app's
+    /// was offered in its place, which is a menu of wrong answers given with
+    /// confidence; an empty one makes the picker say so.
+    @Test func anUnreadProductLadderOffersNothing() {
+        let state = state(stores: [.apple], points: points(["17.50", "18.00"]))
+
+        #expect(!state.applePricePoints.isEmpty)
+        #expect(state.applePurchasePricePoints.isEmpty)
+        #expect(state.appleSubscriptionPricePoints.isEmpty)
+    }
+
+    /// And a ladder read for another country is not this country's money,
+    /// whichever of the three it is.
+    @Test func aProductLadderIsNeverOfferedInAnotherTerritory() {
+        let moved = state(stores: [.apple], points: points(["17.50"]),
+                          planPoints: points(["14.90"]), readFor: "USA",
+                          territory: "BRA")
+
+        #expect(moved.appleSubscriptionPricePoints.isEmpty)
     }
 }

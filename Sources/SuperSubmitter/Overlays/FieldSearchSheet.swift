@@ -69,7 +69,6 @@ enum PaletteMatch: Identifiable, Equatable {
 /// the arrow keys and never says so is one most people only ever click.
 struct FieldSearchSheet: View {
     @Environment(AppState.self) private var state
-    @Environment(\.dismiss) private var dismiss
 
     /// Seeded only by the screenshot harness, so the results list has
     /// something in it. Empty in every real launch.
@@ -112,7 +111,7 @@ struct FieldSearchSheet: View {
             .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
         // Escape closes it. The rows below take the arrows and Return, and
         // this catches the key whichever row holds the focus.
-        .onKeyPress(.escape) { dismiss(); return .handled }
+        .onKeyPress(.escape) { close(); return .handled }
         .onKeyPress(.upArrow) { move(-1) }
         .onKeyPress(.downArrow) { move(1) }
         .onKeyPress(.return) { open() }
@@ -339,6 +338,12 @@ struct FieldSearchSheet: View {
         return .handled
     }
 
+    /// The one way out, and every way out goes through it: Escape, a press
+    /// away from the panel, and opening a result. It was `dismiss()`, which
+    /// belongs to a presentation — the palette is an overlay on the window now,
+    /// so that call had nothing to close but the window itself.
+    private func close() { state.showFieldSearch = false }
+
     private func open() -> KeyPress.Result {
         guard results.indices.contains(selection) else { return .ignored }
         open(results[selection])
@@ -346,9 +351,9 @@ struct FieldSearchSheet: View {
     }
 
     private func open(_ match: PaletteMatch) {
-        // Dismiss first. The shell hosts one sheet, and the scroll it is about
-        // to run happens behind this one.
-        dismiss()
+        // Shut it first. The scroll this is about to run happens on the tab
+        // behind the palette.
+        close()
         switch match {
         case .field(let entry): state.jump(to: entry)
         case .step(let step): state.open(step.link)

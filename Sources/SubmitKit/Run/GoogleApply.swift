@@ -447,7 +447,8 @@ extension Runner {
     private func googleRegionalPricing(_ price: Price) async throws
         -> (configs: [[String: Any]], version: [String: Any]) {
         guard manifest.pricing?.autoConvertOtherTerritories != false else {
-            return ([["regionCode": price.territory ?? "US", "price": Self.money(price),
+            return ([["regionCode": Self.googleRegion(price.territory ?? "US"),
+                      "price": Self.money(price),
                       "availability": "AVAILABLE"]], ["version": "2022/02"])
         }
         let response = try await api.google(
@@ -463,7 +464,8 @@ extension Runner {
         }
         let version = object["regionVersion"] as? [String: Any] ?? ["version": "2022/02"]
         return (configs.isEmpty
-            ? [["regionCode": price.territory ?? "US", "price": Self.money(price),
+            ? [["regionCode": Self.googleRegion(price.territory ?? "US"),
+                "price": Self.money(price),
                 "availability": "AVAILABLE"]]
             : configs, version)
     }
@@ -516,5 +518,29 @@ extension Runner {
             "units": String(value.units),
             "nanos": value.nanos,
         ]
+    }
+
+    /// One territory code, the way Google names it.
+    ///
+    /// The manifest holds one territory field and both stores read it. The
+    /// App Store spells a territory in ISO 3166-1 alpha-3 and Google wants
+    /// alpha-2, so `USA` has to leave here as `US`. ICU already normalises a
+    /// real alpha-3 to its alpha-2, which is the same trick the territory
+    /// chooser uses, so no table of 250 rows is typed out here.
+    ///
+    /// A code ICU cannot place goes out as it came in. Google then names it
+    /// in the error, which beats this file guessing at a country.
+    static func googleRegion(_ code: String) -> String {
+        guard code.count == 3,
+              let two = Locale(identifier: "und_\(code)").region?.identifier,
+              two.count == 2 else { return code.uppercased() }
+        return two
+    }
+
+    /// The regions one offer sells in. An empty list means the United States,
+    /// which is the fallback every other Google price in this file uses.
+    static func googleRegions(_ regions: [String]?) -> [String] {
+        let named = (regions ?? []).filter { !$0.isEmpty }.map(googleRegion)
+        return named.isEmpty ? ["US"] : named
     }
 }

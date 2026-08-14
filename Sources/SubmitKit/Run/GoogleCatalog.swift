@@ -76,36 +76,12 @@ extension Runner {
         guard !offers.isEmpty else { return }
         let packageName = manifest.apps.google?.packageName ?? ""
 
-        let requests = offers.map { offer -> [String: Any] in
-            var phase: [String: Any] = [
-                "recurrenceCount": offer.periods ?? 1,
-            ]
-            if let duration = offer.duration { phase["duration"] = duration }
-            switch offer.kind {
-            case .freeTrial:
-                phase["freePriceOverride"] = [:]
-            case .introPrice, .offerCode, .promotional, .winBack:
-                if let price = offer.price {
-                    phase["absoluteDiscount"] = Self.money(price)
-                }
-            }
-
-            var payload: [String: Any] = [
-                "packageName": packageName,
-                "productId": productId,
-                "basePlanId": basePlanId,
-                "offerId": offer.id,
-                "phases": [phase],
-            ]
-            let regions = (offer.regions ?? []).filter { !$0.isEmpty }
-            payload["regionalConfigs"] = (regions.isEmpty ? ["US"] : regions).map {
-                ["regionCode": $0, "newSubscriberAvailability": true]
-            }
-            if let eligibility = offer.eligibility {
-                payload["targeting"] = Self.googleTargeting(eligibility)
-            }
-            return ["updateSubscriptionOfferRequest": [
-                "subscriptionOffer": payload, "allowMissing": true]]
+        let requests = try offers.map {
+            ["updateSubscriptionOfferRequest": [
+                "subscriptionOffer": try Self.googleOfferPayload(
+                    $0, packageName: packageName, productId: productId,
+                    basePlanId: basePlanId),
+                "allowMissing": true]]
         }
 
         try await api.google(
@@ -113,6 +89,65 @@ extension Runner {
             "\(monetizationBase)/subscriptions/\(StateReader.escape(productId))"
                 + "/basePlans/\(StateReader.escape(basePlanId))/offers:batchUpdate",
             body: ["requests": requests])
+    }
+
+    /// One `SubscriptionOffer`, as Google shapes it.
+    ///
+    /// The whole of the shape is here and nothing of the request is, so a
+    /// wrong shape is one fix in one place and one test without a network.
+    ///
+    /// This used to write the price on the phase itself, as `absoluteDiscount`
+    /// or as a `freePriceOverride` that no current schema holds, and it left
+    /// the phase's own `regionalConfigs` out. Google prices a phase per
+    /// region and refuses the rest.
+    static func googleOfferPayload(_ offer: Manifest.Offer, packageName: String,
+                                   productId: String,
+                                   basePlanId: String) throws -> [String: Any] {
+        let regions = googleRegions(offer.regions)
+        // The price of a phase is one of four shapes: `price`,
+        // `relativeDiscount`, `absoluteDiscount`, `free`. The manifest names
+        // the amount the customer pays, the same value the App Store takes
+        // for a pay-up-front offer, so `price` is the one that says it. None
+        // of the four means "no price", so a paid offer without one stops
+        // here rather than reaching the store as a giveaway.
+        let override: [String: Any]
+        switch offer.kind {
+        case .freeTrial:
+            override = ["free": [:]]
+        case .introPrice, .offerCode, .promotional, .winBack:
+            guard let price = offer.price else {
+                throw ConnectionError.http(
+                    400,
+                    "The offer \(offer.id) names no price, and Google prices a paid offer per region.")
+            }
+            override = ["price": money(price)]
+        }
+        // Google requires one phase config for every region the offer lists,
+        // so both lists are built from the one list.
+        let phase: [String: Any] = [
+            "recurrenceCount": offer.periods ?? 1,
+            "duration": offer.duration ?? "P1M",
+            "regionalConfigs": regions.map { region -> [String: Any] in
+                var config = override
+                config["regionCode"] = region
+                return config
+            },
+        ]
+
+        var payload: [String: Any] = [
+            "packageName": packageName,
+            "productId": productId,
+            "basePlanId": basePlanId,
+            "offerId": offer.id,
+            "phases": [phase],
+            "regionalConfigs": regions.map {
+                ["regionCode": $0, "newSubscriberAvailability": true]
+            },
+        ]
+        if let eligibility = offer.eligibility {
+            payload["targeting"] = googleTargeting(eligibility)
+        }
+        return payload
     }
 
     /// The discounts on a one-time product. Google keys them by the purchase
@@ -131,10 +166,8 @@ extension Runner {
                 "offerId": offer.id,
             ]
             if let price = offer.price {
-                payload["discountedPrice"] = ["regionalConfigs": (
-                    (offer.regions ?? []).filter { !$0.isEmpty }.isEmpty
-                        ? ["US"] : (offer.regions ?? []).filter { !$0.isEmpty }
-                ).map { ["regionCode": $0, "price": Self.money(price)] }]
+                payload["discountedPrice"] = ["regionalConfigs": Self.googleRegions(offer.regions)
+                    .map { ["regionCode": $0, "price": Self.money(price)] }]
             }
             return ["updateOneTimeProductOfferRequest": [
                 "oneTimeProductOffer": payload, "allowMissing": true]]
@@ -214,7 +247,7 @@ extension Runner {
                 "productId": productId,
                 "basePlanId": basePlanId,
                 "regionalPriceMigrations": regions.map {
-                    ["regionCode": $0,
+                    ["regionCode": Self.googleRegion($0),
                      "priceIncreaseType": "PRICE_INCREASE_TYPE_OPT_OUT"]
                 },
                 "regionsVersion": ["version": "2022/02"],

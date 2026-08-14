@@ -1850,13 +1850,44 @@ public struct Price: Codable, Sendable, Equatable {
         case amount, currency, territory
     }
 
+    /// Money from text, or nil for text this cannot read whole.
+    ///
+    /// `Decimal(string:)` stops at the first character it dislikes and keeps
+    /// the part it already read. `Decimal(string: "4,99")` is 4, in every
+    /// locale, and nothing says so. A price that quietly rounds itself down
+    /// to the whole currency unit reaches a real store and a real customer,
+    /// so this reads the whole string or none of it.
+    ///
+    /// One comma with a cent pair behind it is a decimal comma, which is how
+    /// most of the world writes a price, and `4,99` is read as 4.99. Every
+    /// other comma is ambiguous: `1,299` is one thousand two hundred and
+    /// ninety-nine in one country and 1.299 in the next. Those are refused
+    /// rather than guessed at, and the developer retypes the price.
+    public static func amount(from text: String) -> Decimal? {
+        var text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.contains("."), let comma = text.firstIndex(of: ","),
+           text.lastIndex(of: ",") == comma,
+           (1...2).contains(text.distance(from: text.index(after: comma), to: text.endIndex)) {
+            text.replaceSubrange(comma...comma, with: ".")
+        }
+        let digits = text.hasPrefix("-") ? String(text.dropFirst()) : text
+        let parts = digits.split(separator: ".", omittingEmptySubsequences: false)
+        // One dot at most, digits on both sides of it, and something after
+        // the dot when there is one. `.5` is half a unit and `4.` is a price
+        // somebody is still typing.
+        guard (1...2).contains(parts.count), parts.last?.isEmpty == false,
+              parts.allSatisfy({ $0.allSatisfy { $0.isASCII && $0.isNumber } })
+        else { return nil }
+        return Decimal(string: text)
+    }
+
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.currency = try c.decode(String.self, forKey: .currency)
         self.territory = try c.decodeIfPresent(String.self, forKey: .territory)
 
         if let text = try? c.decode(String.self, forKey: .amount) {
-            guard let decimal = Decimal(string: text) else {
+            guard let decimal = Price.amount(from: text) else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .amount, in: c, debugDescription: "The amount is not a number: \(text)")
             }

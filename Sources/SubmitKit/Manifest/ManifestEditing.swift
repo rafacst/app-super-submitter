@@ -743,7 +743,7 @@ public extension Manifest {
         // the Play side and every fixture in this app look like.
         let parts = text.split(separator: " ")
         let amount = parts.count == 2 ? String(parts[1]) : text
-        guard let value = Decimal(string: amount) else { return nil }
+        guard let value = Price.amount(from: amount) else { return nil }
         return Price(amount: value,
                      currency: parts.count == 2 ? String(parts[0]) : currency,
                      territory: territory)

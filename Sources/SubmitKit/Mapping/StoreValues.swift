@@ -359,20 +359,36 @@ public enum StoreValues {
     /// typed: a hand-written table of 266 rows is wrong in one of them and
     /// goes stale the next time a country changes name.
     ///
+    /// `store` is the territory list the App Store itself answered with, and it
+    /// wins over ICU whenever it is there. ICU knows 262 regions and Apple
+    /// sells in 175: the rest are places no App Store has ever existed, plus
+    /// pairs like `COD` and `ZAR` that are one country under two codes. Every
+    /// one of them was a row a developer could tick, and a run that names a
+    /// territory the store does not hold stops on it.
+    ///
     /// `extra` carries the codes that reached the app from somewhere other
     /// than ICU: Apple sells in Kosovo as `XKS`, which no ISO alpha-3 covers
     /// and this list therefore cannot contain. A code the store or the
     /// manifest names has to be on the screen — it is a country the app may
     /// already sell in, and one that is not drawn is one the developer cannot
     /// see, cannot keep, and cannot turn off.
-    public static func territoryGroups(including extra: Set<String> = []) -> [TerritoryGroup] {
-        var groups = baseTerritoryGroups
-        let known = Set(groups.flatMap { $0.territories.map(\.value) })
-        let unknown = extra.subtracting(known).sorted()
-        guard !unknown.isEmpty else { return groups }
+    public static func territoryGroups(store: Set<String> = [],
+                                       including extra: Set<String> = []) -> [TerritoryGroup] {
+        let known = Set(baseTerritoryGroups.flatMap { $0.territories.map(\.value) })
+        // With no answer from the store, everything ICU places on a continent.
+        // It is the only list there is before a read, and it is a superset.
+        let universe = (store.isEmpty ? known : store).union(extra)
+        var groups = baseTerritoryGroups.compactMap { group -> TerritoryGroup? in
+            let kept = group.territories.filter { universe.contains($0.value) }
+            return kept.isEmpty ? nil
+                : TerritoryGroup(id: group.id, name: group.name, territories: kept)
+        }
+        let placed = Set(groups.flatMap { $0.territories.map(\.value) })
+        let unplaced = universe.subtracting(placed).sorted()
+        guard !unplaced.isEmpty else { return groups }
         groups.append(TerritoryGroup(
             id: "other", name: "Elsewhere",
-            territories: unknown.map { Choice($0, "\(territoryName($0)) (\($0))") }))
+            territories: unplaced.map { Choice($0, "\(territoryName($0)) (\($0))") }))
         return groups
     }
 

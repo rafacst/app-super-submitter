@@ -49,7 +49,12 @@ struct MoneyTab: View {
         // this reads whatever that tab last set.
         .task { await state.loadApplePricePoints() }
         // What the store already charges and sells, for an app that is on it.
-        .task { await state.loadStoreMonetization() }
+        // It reads the catalog, and the two product ladders are read off a
+        // product, so they follow it rather than racing it.
+        .task {
+            await state.loadStoreMonetization()
+            await state.loadAppleProductPricePoints()
+        }
     }
 
     /// A price, offered the way App Store Connect offers one.
@@ -59,12 +64,14 @@ struct MoneyTab: View {
     /// to the nearest point behind the developer's back, and the app was the
     /// only place where 4.95 looked like a price you could charge.
     ///
+    /// The ladder is the one for that kind of product: a subscription is not
+    /// priced off the purchase table and neither is priced off the app's.
+    ///
     /// If the ladder is unavailable, the picker stays visible but unavailable.
     /// Arbitrary text would promise a price the store may refuse.
     @ViewBuilder
     private func amountField(_ value: Binding<String>,
-                             points: [StoreValues.Choice]? = nil) -> some View {
-        let points = points ?? state.appleProductPricePoints
+                             points: [StoreValues.Choice]) -> some View {
         ChoiceField(value: value, choices: points,
                     emptyLabel: points.isEmpty ? "Prices unavailable" : "Pick a price",
                     allowsNone: false)
@@ -170,7 +177,7 @@ struct MoneyTab: View {
         // Compared as numbers with a half-cent tolerance, not as `Decimal`
         // equality: a ladder built from float literals and a price parsed from
         // a string are the same money and different bit patterns.
-        guard let amount = Decimal(string: digits) else { return nil }
+        guard let amount = Price.amount(from: digits) else { return nil }
         let wanted = NSDecimalNumber(decimal: amount).doubleValue
         guard let index = apple.pricePoints.firstIndex(where: {
             abs(NSDecimalNumber(decimal: $0).doubleValue - wanted) < 0.005
@@ -474,7 +481,8 @@ struct MoneyTab: View {
                                 TextField("", text: state.purchaseBinding(index: index, field: .name))
                             }
                             LabeledField("Amount", width: 110) {
-                                amountField(state.purchaseBinding(index: index, field: .amount))
+                                amountField(state.purchaseBinding(index: index, field: .amount),
+                                            points: state.applePurchasePricePoints)
                             }
                             LabeledField("Currency", width: 175) {
                                 ChoiceField(value: state.purchaseBinding(index: index, field: .currency),
@@ -618,7 +626,9 @@ struct MoneyTab: View {
                                 FieldRow {
                                     LabeledField("Amount", width: 110) {
                                         amountField(state.planBinding(groupIndex: groupIndex,
-                                                                      planIndex: planIndex, field: .amount))
+                                                                      planIndex: planIndex,
+                                                                      field: .amount),
+                                                    points: state.appleSubscriptionPricePoints)
                                     }
                                     LabeledField("Currency", width: 175) {
                                         ChoiceField(value: state.planBinding(groupIndex: groupIndex, planIndex: planIndex, field: .currency),
