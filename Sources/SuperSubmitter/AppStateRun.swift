@@ -902,6 +902,51 @@ extension AppState {
     }
 
     /// The other half of `release`. One store, one button, one failure.
+    // MARK: - Deleting a draft version
+
+    /// The version this app is allowed to delete, and its number, or nil when
+    /// there is nothing to offer.
+    ///
+    /// Only a version the developer can still edit, and never one Apple is
+    /// holding: a version in review belongs to Apple until it answers, and one
+    /// that shipped is what the customers have.
+    var deletableAppleVersion: (id: String, number: String)? {
+        guard let apple = actualState.apple, let id = apple.versionId,
+              let state = apple.versionState,
+              AppleVersionState.editable.contains(state) else { return nil }
+        return (id, apple.versionString ?? manifest.versionName(for: .apple) ?? "this version")
+    }
+
+    /// Deletes the draft version in App Store Connect.
+    ///
+    /// It closes the review submission first when one is open, because Apple
+    /// refuses to delete a version that is sitting in one and the developer
+    /// would read that refusal as the delete being impossible.
+    ///
+    /// Nothing here is recoverable, which is why the screen asks twice.
+    func deleteAppleDraftVersion() async {
+        guard releasing == nil, let version = deletableAppleVersion else { return }
+        guard requirePaid(.storeRelease, .release) else { return }
+        releasing = .apple
+        releaseError = nil
+        let client = ReleaseClient(api: readOnlyAPI(), access: access)
+        do {
+            if let appID = manifest.apps.apple?.appId, !appID.isEmpty,
+               let open = try? await client.cancellableAppleSubmission(appID: appID) {
+                try? await client.cancelAppleSubmission(id: open)
+                appleSubmissionID = nil
+            }
+            try await client.deleteAppleDraftVersion(versionID: version.id)
+            PostHogSDK.shared.capture("draft_version_deleted")
+            // The state this app holds describes a version that is gone, and
+            // every tab reads it. The read is the only honest next step.
+            await recheck()
+        } catch {
+            releaseError = "App Store: \(error.localizedDescription)"
+        }
+        releasing = nil
+    }
+
     func undoRelease(_ store: Store) async {
         guard releasing == nil else { return }
         guard requirePaid(.storeRelease, .release) else { return }

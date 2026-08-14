@@ -331,6 +331,20 @@ public struct ReleaseClient: Sendable {
         }?["id"].string
     }
 
+    /// Removes an editable version and everything it holds.
+    ///
+    /// The localizations, the screenshot sets, the previews and the attached
+    /// build go with it, and nothing brings them back. Apple takes this only
+    /// for a version the developer can still edit, and it refuses one that is
+    /// in a review submission, so the caller closes the submission first.
+    ///
+    /// It sits behind the release gate with the cancel above it. Neither one
+    /// ships anything, and both undo more than any other call in this app.
+    public func deleteAppleDraftVersion(versionID: String) async throws {
+        try await access.authorize(.storeRelease)
+        try await api.apple("DELETE", "/v1/appStoreVersions/\(versionID)")
+    }
+
     /// The recovery, and its limit: this works only before the review starts.
     public func cancelAppleSubmission(id: String) async throws {
         try await access.authorize(.storeRelease)
