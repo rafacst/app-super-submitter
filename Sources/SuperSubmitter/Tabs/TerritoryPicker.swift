@@ -15,6 +15,11 @@ import SwiftUI
 struct TerritoryPicker: View {
     @Environment(AppState.self) private var state
 
+    /// The continents that are open. Shut by default: five rows carrying "12
+    /// of 63" each say where the app sells in the height of one paragraph, and
+    /// the countries are there for the continent being changed.
+    @State private var open: Set<String> = []
+
     /// Read once per draw and handed down. `territoryTicks` walks the store
     /// answer and the manifest to build a set, and a row that asks for itself
     /// would build that set 260 times a frame.
@@ -67,28 +72,53 @@ struct TerritoryPicker: View {
                            ticks: Set<String>) -> some View {
         let codes = group.territories.map(\.value)
         let selected = ticks.intersection(codes).count
+        let isOpen = open.contains(group.id)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
+                // The box ticks the continent; the row opens it. Two jobs, two
+                // targets, and the count says what the shut one holds.
                 TickBox(state: Self.mark(selected: selected, of: codes.count)) {
                     state.setTerritories(codes, selling: selected < codes.count)
                 }
-                Text(group.name)
-                    .font(Theme.font(size: 12, weight: .semibold))
-                Text("\(selected) of \(codes.count)")
-                    .font(Theme.mono(10.5)).foregroundStyle(Theme.text3)
-                Spacer(minLength: 0)
-            }
-            // As many columns as the panel has room for. A single column of 63
-            // African countries is the wall of text this control replaced.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 4,
-                                         alignment: .leading)],
-                      alignment: .leading, spacing: 3) {
-                ForEach(group.territories) { territory in
-                    country(territory, ticked: ticks.contains(territory.value))
+                Button {
+                    if isOpen { open.remove(group.id) } else { open.insert(group.id) }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.right")
+                            .font(Theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(Theme.text3)
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                        Text(group.name)
+                            .font(Theme.font(size: 12, weight: .semibold))
+                        Text("\(selected) of \(codes.count)")
+                            .font(Theme.mono(10.5)).foregroundStyle(Theme.text3)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(group.name)
+                .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
             }
-            .padding(.leading, 22)
+            if isOpen {
+                // As many columns as the panel has room for. A single column of
+                // 63 African countries is the wall of text this replaced.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 4,
+                                             alignment: .leading)],
+                          alignment: .leading, spacing: 3) {
+                    ForEach(group.territories) { territory in
+                        country(territory, ticked: ticks.contains(territory.value))
+                    }
+                }
+                .padding(.leading, 22)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        // The clip is what turns the swap into a growth: without it the
+        // countries arrive at full height inside a block that is still one row
+        // tall, and they hang over the continent below for the whole animation.
+        .clipped()
+        .motion(.easeInOut(duration: 0.2), value: isOpen)
     }
 
     private func country(_ territory: StoreValues.Choice, ticked: Bool) -> some View {

@@ -1756,7 +1756,7 @@ public enum Planner {
     }
 
     static func appleNormalizedPrice(_ text: String?) -> String? {
-        guard let text, var value = Decimal(string: text) else { return nil }
+        guard let text, var value = Price.amount(from: text) else { return nil }
         var rounded = Decimal()
         NSDecimalRound(&rounded, &value, 6, .plain)
         return NSDecimalNumber(decimal: rounded).stringValue

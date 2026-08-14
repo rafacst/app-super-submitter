@@ -31,6 +31,26 @@ public enum ApplePricePoints {
         try await all(api, path: "/v1/apps/\(appID)/appPricePoints?filter%5Bterritory%5D=\(territory)")
     }
 
+    /// The ladder an in-app purchase sells at, in one territory.
+    ///
+    /// A different ladder from the app's. Apple prices a product off its own
+    /// table, and the Monetization tab offered the app's: for BRL that put
+    /// R$17.50, R$18.00 and R$18.50 in a menu whose real rows are R$14.90,
+    /// R$19.90 and R$24.90. Every one of those was a price the store does not
+    /// sell at, and the apply then resolved the developer's choice to whatever
+    /// was nearest without saying so.
+    public static func purchase(_ api: StoreAPI, id: String,
+                                territory: String) async throws -> [Point] {
+        try await all(api, path: "/v2/inAppPurchases/\(id)/pricePoints?filter%5Bterritory%5D=\(territory)")
+    }
+
+    /// The ladder an auto-renewable subscription sells at, in one territory.
+    /// Sparser again than the purchase ladder, and its own table.
+    public static func subscription(_ api: StoreAPI, id: String,
+                                    territory: String) async throws -> [Point] {
+        try await all(api, path: "/v1/subscriptions/\(id)/pricePoints?filter%5Bterritory%5D=\(territory)")
+    }
+
     /// Follows `links.next` to the end of the ladder.
     ///
     /// `path` carries the territory filter; the page size belongs here.
@@ -54,7 +74,7 @@ public enum ApplePricePoints {
         payload["data"].array.compactMap { item in
             guard let id = item["id"].string,
                   let text = item["attributes"]["customerPrice"].string,
-                  let amount = Decimal(string: text) else { return nil }
+                  let amount = Price.amount(from: text) else { return nil }
             return Point(id: id, amount: amount)
         }
     }

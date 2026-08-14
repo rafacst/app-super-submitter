@@ -394,6 +394,20 @@ public struct ActualState: Sendable, Equatable {
         /// territory names prices that do not exist in another, so the field
         /// only offers the list while the base territory still matches.
         public var pricePointTerritory: String?
+        /// The ladder Apple sells in-app purchases at, and the one it sells
+        /// subscriptions at, in `pricePointTerritory`.
+        ///
+        /// Three ladders, not one. `pricePoints` above is the app's own, and a
+        /// product is priced off a different and sparser table: in BRL the app
+        /// ladder holds R$17.50 and R$18.00, and a subscription may only be
+        /// R$14.90, R$19.90 or R$24.90. The picker offered the app's list for
+        /// every product, so most of what it offered was unbuyable and the
+        /// apply quietly resolved the choice to whatever was nearest.
+        ///
+        /// Empty until something reads them, and then the app ladder is the
+        /// only list there is.
+        public var purchasePricePoints: [Decimal] = []
+        public var subscriptionPricePoints: [Decimal] = []
         public var currentPriceAmount: Decimal?
         public var priceCurrency: String?
         public var territoryCount: Int?

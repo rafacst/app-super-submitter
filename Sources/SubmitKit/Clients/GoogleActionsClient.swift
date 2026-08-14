@@ -202,16 +202,24 @@ public struct GoogleActionsClient: Sendable {
 
     /// Widens the reach of a draft recovery action. Google adds to the
     /// targeting and never narrows it, so this call only grows the audience.
+    ///
+    /// `targetingUpdate` is one of three shapes and version codes are not
+    /// among them: Google widens by region, by Android API level, or to
+    /// everybody. This used to offer a `versionCodes` argument and put it in
+    /// `androidSdks.sdkLevels`, which is the API level list. Nothing called
+    /// it with a value, and there is no field for it to be right about, so
+    /// the argument is gone. `createRecoveryDraft` still targets the version
+    /// codes, on `targeting.versionList`, which is where they belong.
     public func addRecoveryTargeting(packageName: String, recoveryId: String,
-                                     versionCodes: [Int] = [],
+                                     sdkLevels: [Int] = [],
                                      regions: [String] = [],
                                      allUsers: Bool = false) async throws {
         var update: [String: Any] = [:]
         if allUsers {
             update["allUsers"] = ["isAllUsersRequested": true]
         } else {
-            if !versionCodes.isEmpty {
-                update["androidSdks"] = ["sdkLevels": versionCodes.map(String.init)]
+            if !sdkLevels.isEmpty {
+                update["androidSdks"] = ["sdkLevels": sdkLevels.map(String.init)]
             }
             if !regions.isEmpty { update["regions"] = ["regionCode": regions] }
         }

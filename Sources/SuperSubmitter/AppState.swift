@@ -2407,7 +2407,7 @@ final class AppState {
     /// another country, or for no country at all.
     ///
     /// The Availability tab calls this when it opens and whenever the base
-    /// territory moves, and Monetization calls it for the product prices. Without it the prices arrived only with a whole store
+    /// territory moves. Without it the prices arrived only with a whole store
     /// read from the Summary tab, so the field that asks for the first price
     /// was a plain box on the one screen where a developer sets a price, and
     /// moving the territory left the old country's money on offer.
@@ -2428,7 +2428,57 @@ final class AppState {
         var apple = actualState.apple ?? ActualState.Apple()
         apple.pricePoints = Set(points.map(\.amount)).sorted()
         apple.pricePointTerritory = territory
+        // The ladder moved country, so the two product ladders read for the old
+        // one are the wrong money now.
+        apple.purchasePricePoints = []
+        apple.subscriptionPricePoints = []
         actualState.apple = apple
+    }
+
+    /// The two ladders a product is priced off.
+    ///
+    /// A product does not sell at the app's price points. Apple keeps a table
+    /// per kind, and the subscription one is the sparsest of the three: the
+    /// menu offered R$17.50, R$18.00 and R$18.50 for a Brazilian subscription
+    /// whose real rows are R$14.90, R$19.90 and R$24.90.
+    ///
+    /// One read per kind, not one per product. The ladder belongs to the
+    /// territory and the kind, and Apple hangs it off a product only because
+    /// that is where the route lives — the ids are per product and this uses
+    /// none of them, since the apply resolves the amount against the product it
+    /// is writing. An app with nothing of a kind on the store yet gets no
+    /// ladder for it, and the picker says the prices are unavailable rather
+    /// than offering the app's.
+    ///
+    /// It needs the catalog, so it runs after the catalog read.
+    func loadAppleProductPricePoints() async {
+        guard stores.contains(.apple), credentials.apple != nil,
+              let apple = actualState.apple, apple.catalogRead else { return }
+        let territory = basePriceTerritory
+        guard territory == apple.pricePointTerritory else { return }
+        let api = readOnlyAPI()
+
+        if apple.purchasePricePoints.isEmpty,
+           let id = appleResourceID(of: (manifest.purchases ?? []).map(\.id)),
+           let points = try? await ApplePricePoints.purchase(api, id: id,
+                                                             territory: territory),
+           territory == basePriceTerritory {
+            actualState.apple?.purchasePricePoints = Set(points.map(\.amount)).sorted()
+        }
+        if actualState.apple?.subscriptionPricePoints.isEmpty != false,
+           let id = appleResourceID(of: (manifest.subscriptions ?? [])
+            .flatMap { $0.plans.map(\.id) }),
+           let points = try? await ApplePricePoints.subscription(api, id: id,
+                                                                 territory: territory),
+           territory == basePriceTerritory {
+            actualState.apple?.subscriptionPricePoints = Set(points.map(\.amount)).sorted()
+        }
+    }
+
+    /// Apple's own id for the first of these products that the store holds. The
+    /// manifest's product id names the product; the route wants the resource.
+    private func appleResourceID(of productIds: [String]) -> String? {
+        productIds.lazy.compactMap { self.actualState.apple?.catalog[$0]?.id }.first
     }
 
     /// What the App Store already charges for this app and sells inside it,
@@ -2565,14 +2615,35 @@ final class AppState {
         }
     }
 
-    /// The same ladder, for a purchase or a plan.
+    /// The ladder an in-app purchase is priced off, and the one a subscription
+    /// is priced off.
     ///
-    /// Apple prices an in-app purchase off the territory's price points, the
-    /// way it prices the app. It sells no product for nothing, though: the free
-    /// row belongs to the app alone, and a purchase priced at zero is a write
-    /// the App Store refuses.
-    var appleProductPricePoints: [StoreValues.Choice] {
-        applePricePoints.filter { Decimal(string: $0.value).map { $0 > 0 } ?? true }
+    /// Apple keeps a table per kind and they are not the app's. This offered
+    /// the app's ladder for both, so a Brazilian subscription was offered
+    /// R$17.50 and R$18.00 — prices the App Store does not sell a subscription
+    /// at — and the apply then resolved the choice to the nearest real point
+    /// without saying so. See `loadAppleProductPricePoints`.
+    ///
+    /// Nothing until that read lands. An empty list makes the picker say the
+    /// prices are unavailable, which is the honest state: the app ladder here
+    /// was a list of wrong answers offered with confidence.
+    var applePurchasePricePoints: [StoreValues.Choice] {
+        productLadder(actualState.apple?.purchasePricePoints ?? [])
+    }
+
+    var appleSubscriptionPricePoints: [StoreValues.Choice] {
+        productLadder(actualState.apple?.subscriptionPricePoints ?? [])
+    }
+
+    /// One kind's ladder as the picker's rows, in the territory it was read
+    /// for. The App Store sells no product for nothing, so a zero row is
+    /// dropped: it belongs to the app alone.
+    private func productLadder(_ amounts: [Decimal]) -> [StoreValues.Choice] {
+        guard stores.contains(.apple),
+              actualState.apple?.pricePointTerritory == basePriceTerritory else { return [] }
+        return amounts.filter { $0 > 0 }.sorted().map {
+            StoreValues.Choice("\($0)", priceLabel($0))
+        }
     }
 
     /// One price point in the base price's currency.

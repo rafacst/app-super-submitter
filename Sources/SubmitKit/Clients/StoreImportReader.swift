@@ -853,7 +853,7 @@ public struct StoreImportReader: Sendable {
     private static func firstPrice(_ product: ActualState.Google.CatalogProduct) -> Price? {
         let text = product.prices["US"] ?? product.prices.sorted { $0.key < $1.key }.first?.value
         let parts = (text ?? "").split(separator: " ")
-        guard parts.count == 2, let amount = Decimal(string: String(parts[1])) else { return nil }
+        guard parts.count == 2, let amount = Price.amount(from: String(parts[1])) else { return nil }
         return Price(amount: amount, currency: String(parts[0]))
     }
 }

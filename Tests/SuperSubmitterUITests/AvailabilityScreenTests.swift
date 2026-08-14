@@ -15,18 +15,59 @@ import Testing
     /// A count of one country is not "1 countries", and no country at all is
     /// not "0 countries".
     @Test func theCountryCountReadsAsASentence() {
-        #expect(AvailabilityTab.countLine(1, total: 1) == "1 country")
-        #expect(AvailabilityTab.countLine(175, total: 175) == "175 countries")
-        #expect(AvailabilityTab.countLine(0, total: nil) == "no country")
+        #expect(AvailabilityTab.countLine(1) == "1 country")
+        #expect(AvailabilityTab.countLine(175) == "175 countries")
+        #expect(AvailabilityTab.countLine(0) == "no country")
     }
 
-    /// Apple's own count wins over the list. The list is paged, and a page that
-    /// failed would otherwise report an app in 175 countries as an app in 50.
-    @Test func applesOwnCountBeatsAShortPage() {
-        #expect(AvailabilityTab.countLine(50, total: 175) == "175 countries")
-        // And never the other way round: a total Apple did not send leaves the
-        // list as the only answer there is.
-        #expect(AvailabilityTab.countLine(3, total: nil) == "3 countries")
+    /// The number of countries an app sells in is the number of rows the record
+    /// marks available, and never the number of rows.
+    ///
+    /// The reported bug: App Store Connect said "1 Available, 174 Not
+    /// Available" and this app said the store sells it in 175 countries. The
+    /// record holds a row per territory Apple sells in, carrying a yes or a no,
+    /// and the row count was being read as the answer.
+    @MainActor
+    @Test func theCountIsWhatTheRecordSaysYesTo() {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        var apple = ActualState.Apple()
+        apple.territoryAvailability = ["BRA": true, "USA": false, "PRT": false]
+        apple.territoryCount = 3
+        state.actualState.apple = apple
+
+        #expect(state.liveAppleTerritories == ["BRA"])
+        #expect(AvailabilityTab.countLine(state.liveAppleTerritories.count) == "1 country")
+        #expect(state.liveAppleTerritoryCount == 3)
+    }
+
+    /// The picker offers what Apple sells in, not what ICU knows about.
+    ///
+    /// ICU knows 262 regions and the App Store sells in 175. The difference is
+    /// places with no store at all and codes that name one country twice —
+    /// Congo - Kinshasa is both `COD` and `ZAR` — and every one of them was a
+    /// row a developer could tick. A run that names a territory the store does
+    /// not hold stops on it.
+    @MainActor
+    @Test func thePickerFollowsTheStoresOwnTerritoryList() {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        var apple = ActualState.Apple()
+        apple.territoryAvailability = ["BRA": true, "PRT": false, "AGO": false]
+        apple.territoryCount = 3
+        state.actualState.apple = apple
+
+        let codes = state.territoryGroups.flatMap { $0.territories.map(\.value) }
+        #expect(Set(codes) == ["BRA", "PRT", "AGO"])
+        // Two continents, and each says how many of its own are ticked.
+        #expect(state.territoryGroups.map(\.name).sorted() == ["Africa", "Americas", "Europe"])
+
+        // A record that came back short is no list at all. Half of Apple's
+        // territories would hide countries the app sells in, and the general
+        // list is the better answer until the read is whole.
+        state.actualState.apple?.territoryCount = 175
+        #expect(state.storeTerritories.isEmpty)
+        #expect(state.territoryGroups.flatMap { $0.territories }.count > 200)
     }
 
     /// The picker is continents, and every App Store territory is on one.

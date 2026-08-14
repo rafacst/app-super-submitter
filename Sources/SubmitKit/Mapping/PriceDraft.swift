@@ -13,7 +13,7 @@ public enum PriceDraft {
         let currency = currency.trimmingCharacters(in: .whitespacesAndNewlines)
         let territory = territory.trimmingCharacters(in: .whitespacesAndNewlines)
         if amount.isEmpty { return .empty }
-        guard let decimal = Decimal(string: amount) else {
+        guard let decimal = Price.amount(from: amount) else {
             return .invalid("The price must be a valid decimal amount.")
         }
         guard !currency.isEmpty else {
