@@ -45,10 +45,23 @@ private struct ResizableHeight: ViewModifier {
 
     private var height: Double { min(max(live ?? stored, smallest), tallest) }
 
+    /// Under the box and not over it.
+    ///
+    /// The grip was an overlay on the bottom edge of the `TextEditor`, and a
+    /// `TextEditor` on this platform is an `NSTextView`: a real AppKit view,
+    /// which takes every mouse event inside its own bounds before SwiftUI sees
+    /// it. The handle drew a mark, the cursor never changed over it, the drag
+    /// never started, and the box was as fixed as it had been before any of
+    /// this was written. The border drawn after it covered the mark as well.
+    ///
+    /// Below the box there is no native view in the way, so the drag is a plain
+    /// SwiftUI gesture. It costs the 13 points the handle stands in, which is
+    /// what an affordance that works costs.
     func body(content: Content) -> some View {
-        content
-            .frame(height: CGFloat(height))
-            .overlay(alignment: .bottom) { grip }
+        VStack(spacing: 2) {
+            content.frame(height: CGFloat(height))
+            grip
+        }
     }
 
     /// The handle. A wider hit area than the mark it draws, because a three
@@ -59,6 +72,7 @@ private struct ResizableHeight: ViewModifier {
             .frame(width: 24, height: 3)
             .frame(width: 68, height: 13)
             .contentShape(Rectangle())
+            .help("Drag to make the box taller")
             .gesture(DragGesture(minimumDistance: 1)
                 .onChanged { live = stored + $0.translation.height }
                 // `height` clamps, so what is kept is what was drawn and never

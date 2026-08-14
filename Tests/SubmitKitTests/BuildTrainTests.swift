@@ -26,11 +26,14 @@ private final class BuildsStubProtocol: URLProtocol, @unchecked Sendable {
 
     /// Train `old` holds build 412. Train `new` holds 1 and 2, both processed,
     /// and 3, which Apple is still processing.
+    /// Build 412 shipped: version 3.1.0 holds it and is on sale. Build 2 sits
+    /// on the 3.2.0 draft. Build 1 is free, and 3 is still processing.
     static let payload = """
     {"data":[
       {"id":"b-412","type":"builds",
        "attributes":{"version":"412","processingState":"VALID"},
-       "relationships":{"preReleaseVersion":{"data":{"id":"train-old"}}}},
+       "relationships":{"preReleaseVersion":{"data":{"id":"train-old"}},
+                        "appStoreVersion":{"data":{"id":"ver-live"}}}},
       {"id":"b-1","type":"builds",
        "attributes":{"version":"1","processingState":"VALID",
                      "uploadedDate":"2026-08-01T10:00:00.000Z"},
@@ -38,7 +41,8 @@ private final class BuildsStubProtocol: URLProtocol, @unchecked Sendable {
       {"id":"b-2","type":"builds",
        "attributes":{"version":"2","processingState":"VALID",
                      "usesNonExemptEncryption":false},
-       "relationships":{"preReleaseVersion":{"data":{"id":"train-new"}}}},
+       "relationships":{"preReleaseVersion":{"data":{"id":"train-new"}},
+                        "appStoreVersion":{"data":{"id":"ver-draft"}}}},
       {"id":"b-3","type":"builds",
        "attributes":{"version":"3","processingState":"PROCESSING"},
        "relationships":{"preReleaseVersion":{"data":{"id":"train-new"}}}}
@@ -49,7 +53,11 @@ private final class BuildsStubProtocol: URLProtocol, @unchecked Sendable {
       {"id":"train-new","type":"preReleaseVersions",
        "attributes":{"version":"3.2.0","platform":"IOS"}},
       {"id":"train-mac","type":"preReleaseVersions",
-       "attributes":{"version":"3.2.0","platform":"MAC_OS"}}
+       "attributes":{"version":"3.2.0","platform":"MAC_OS"}},
+      {"id":"ver-live","type":"appStoreVersions",
+       "attributes":{"appVersionState":"READY_FOR_SALE","versionString":"3.1.0"}},
+      {"id":"ver-draft","type":"appStoreVersions",
+       "attributes":{"appStoreState":"PREPARE_FOR_SUBMISSION","versionString":"3.2.0"}}
      ]}
     """
 
@@ -196,6 +204,31 @@ struct ChosenBuildTests {
         #expect(builds.first { $0.id == "b-2" }?.version == "3.2.0")
         #expect(builds.first { $0.id == "b-3" }?.processed == false)
         #expect(builds.first { $0.id == "b-1" }?.uploaded != nil)
+    }
+
+    /// Processing is what the store did to the file. What became of the build
+    /// is the state of the version holding it, and every processed build read
+    /// "Ready" until the list asked for that version: the build that shipped a
+    /// year ago wore the same word as the one nobody has used.
+    @Test func aBuildCarriesTheStateOfTheVersionHoldingIt() async throws {
+        let builds = try await UploadService(api: buildsAPI())
+            .appleBuildChoices(appID: "1", platform: .ios)
+
+        #expect(builds.first { $0.id == "b-412" }?.versionState == "READY_FOR_SALE")
+        // The deprecated key still answers on older records, so it is read too.
+        #expect(builds.first { $0.id == "b-2" }?.versionState == "PREPARE_FOR_SUBMISSION")
+        // No version holds this one. It is free, and it says nothing else.
+        #expect(builds.first { $0.id == "b-1" }?.versionState == nil)
+    }
+
+    @Test func theListAsksForTheVersionThatHoldsEachBuild() async throws {
+        _ = try await UploadService(api: buildsAPI())
+            .appleBuildChoices(appID: "1", platform: .ios)
+
+        #expect(BuildsStubProtocol.paths.contains {
+            $0.hasPrefix("/v1/builds?")
+                && $0.contains("include=preReleaseVersion,appStoreVersion")
+        }, "Without the include, no build knows which version holds it.")
     }
 
     @Test func theListDropsTheOtherPlatform() async throws {

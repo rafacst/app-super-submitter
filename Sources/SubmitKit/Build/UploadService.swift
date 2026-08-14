@@ -123,6 +123,15 @@ public struct UploadService: Sendable {
         public var state: String
         public var expired: Bool
         public var uploaded: Date?
+        /// The state of the App Store version this build is attached to, or nil
+        /// when no version holds it.
+        ///
+        /// Processing is what the store did to the file, and it is all a build
+        /// row used to say: every build that finished processing read "Ready",
+        /// including the one that shipped a year ago. What a developer wants
+        /// from this list is what became of each build, and that is a fact
+        /// about the version holding it, not about the file.
+        public var versionState: String?
     }
 
     /// Every build App Store Connect holds for one app and one platform.
@@ -140,6 +149,7 @@ public struct UploadService: Sendable {
             // The trains of this page name the marketing version of every
             // build on it, and they drop the other platform's builds.
             let trains = StateReader.appleTrains(page, platform: wanted)
+            let versionStates = Self.appleVersionStates(page)
             for build in page["data"].array {
                 guard let id = build["id"].string,
                       let train = build["relationships"]["preReleaseVersion"]["data"]["id"]
@@ -154,10 +164,29 @@ public struct UploadService: Sendable {
                     state: attributes["processingState"].string ?? "PROCESSING",
                     expired: attributes["expired"].bool == true,
                     uploaded: date.flatMap { uploaded.date(from: $0) }
-                        ?? date.flatMap { ISO8601DateFormatter().date(from: $0) }))
+                        ?? date.flatMap { ISO8601DateFormatter().date(from: $0) },
+                    versionState: build["relationships"]["appStoreVersion"]["data"]["id"]
+                        .string.flatMap { versionStates[$0] }))
             }
         }
         return result
+    }
+
+    /// The App Store version id to its state, off the `included` of one page.
+    ///
+    /// `appVersionState` first and `appStoreState` behind it, which is the
+    /// fallback every other reader in this app uses: Apple deprecated the
+    /// second and still answers with it on older records.
+    static func appleVersionStates(_ page: JSON) -> [String: String] {
+        page["included"].array
+            .filter { $0["type"].string == "appStoreVersions" }
+            .reduce(into: [:]) { result, item in
+                guard let id = item["id"].string else { return }
+                let attributes = item["attributes"]
+                guard let state = attributes["appVersionState"].string
+                    ?? attributes["appStoreState"].string else { return }
+                result[id] = state
+            }
     }
 
     private func appleBuilds(appID: String) async throws -> [JSON] {
@@ -167,8 +196,11 @@ public struct UploadService: Sendable {
     /// The pages themselves, because the train of a build lives in the
     /// `included` of the page that carried it.
     private func appleBuildPages(appID: String) async throws -> [JSON] {
+        // Both relationships in one request. The train names the marketing
+        // version of the build, and the App Store version says what became of
+        // it: shipped, in review, or sitting on a draft nobody has sent.
         var path: String? = "/v1/builds?filter%5Bapp%5D=\(appID)"
-            + "&include=preReleaseVersion&limit=200"
+            + "&include=preReleaseVersion,appStoreVersion&limit=200"
         var pages = 0
         var seen: Set<String> = []
         var result: [JSON] = []

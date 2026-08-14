@@ -107,12 +107,22 @@ public struct AppleKeywordsClient: Sendable {
         }
     }
 
-    /// Every keyword Apple holds for the app. This is the pool a localization
-    /// links from, and the app can add nothing to it.
-    public func pool(appID: String, locale: String) async throws -> [String] {
+    /// Every keyword Apple holds for the app, on one platform and in one
+    /// language. This is the pool a localization links from, and the app can
+    /// add nothing to it.
+    ///
+    /// The platform is Apple's requirement and not a choice this app makes. One
+    /// app id carries a train per platform, each with its own approved Keywords
+    /// field, so there is a pool per platform and no such thing as the app's
+    /// keywords. Sending no `filter[platform]` is refused outright, with
+    /// "Filter 'platform' is required for this operation", which reads as a
+    /// fault in the app to everybody who meets it.
+    public func pool(appID: String, locale: String, platform: String)
+        async throws -> [String] {
         let payload = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/searchKeywords",
-            query: [URLQueryItem(name: "filter[locale]", value: locale),
+            query: [URLQueryItem(name: "filter[platform]", value: platform),
+                    URLQueryItem(name: "filter[locale]", value: locale),
                     URLQueryItem(name: "limit", value: "200")]).data)
         return payload["data"].array.compactMap { $0["id"].string }
     }

@@ -45,7 +45,7 @@ struct AppleBuildsPanel: View {
             Text("Builds in App Store Connect")
                 .font(Theme.font(size: 13, weight: .semibold))
             Spacer(minLength: 8)
-            Text("The store holds these; the version takes one")
+            Text("The chip says what became of each one")
                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
         }
         .padding(.bottom, 9)
@@ -78,16 +78,15 @@ struct AppleBuildsPanel: View {
         // Apple takes no build of another version, so the row says so instead
         // of offering a choice that the store would refuse.
         let otherTrain = !train.isEmpty && build.version != train
+        // A build one version already holds is not one Apple lets another take.
+        // The chip says which version has it; a button beside that sentence
+        // would be offering a write the store refuses.
+        let free = build.versionState == nil || attached
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(verbatim: "\(build.version) (\(build.number))")
                 .font(Theme.mono(11.5))
                 .frame(minWidth: Theme.scaled(110), alignment: .leading)
-            if build.processed {
-                StatePill(text: "Ready", foreground: Theme.green, background: Theme.greenBg)
-            } else {
-                StatePill(text: build.expired ? "Expired" : "Processing",
-                          foreground: Theme.yellow, background: Theme.yellowBg)
-            }
+            statePill(build)
             if attached {
                 StatePill(text: "On the version", foreground: Theme.accent,
                           background: Theme.accentBg)
@@ -102,11 +101,49 @@ struct AppleBuildsPanel: View {
                     .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
             } else if chosen {
                 QuietButton(title: "Let the app choose") { state.chooseAppleBuild(nil) }
-            } else if build.processed {
+            } else if build.processed, !build.expired, free {
                 QuietButton(title: "Ship this build") { state.chooseAppleBuild(build) }
             }
         }
         .padding(.vertical, 7)
+    }
+
+    /// What became of one build, in the words the rest of the app uses.
+    ///
+    /// Every processed build read "Ready", including the one that shipped a
+    /// year ago and the one a reviewer is reading right now. Processing is what
+    /// the store did to the file; what a developer comes to this list for is
+    /// what became of the build, and that is the state of the version holding
+    /// it. So the version answers first, in `AppleStanding`'s vocabulary, which
+    /// is the same one the sidebar chip and the Build tab already speak.
+    ///
+    /// The file's own words are left for a build no version has taken: still
+    /// processing, refused by the store, expired past Apple's ninety days, or
+    /// ready and free for a version to take.
+    @ViewBuilder
+    private func statePill(_ build: UploadService.RemoteBuild) -> some View {
+        if build.versionState == "REPLACED_WITH_NEW_VERSION" {
+            // The one word this list takes differently from the app chip. An
+            // app whose newest version replaced an older one is still live, so
+            // the chip beside its name says Live. A build is not the app: the
+            // superseded one shipped and is not what customers are running, and
+            // two rows both reading "Live" is the answer this list exists to
+            // stop giving.
+            StatePill(text: "Replaced", foreground: Theme.text3, background: Theme.sunken)
+        } else if let version = build.versionState {
+            let standing = AppleStanding(state: version)
+            StatePill(text: standing.label, foreground: standing.tint,
+                      background: standing.fill)
+        } else if !build.processed {
+            let refused = ["FAILED", "INVALID"].contains(build.state)
+            StatePill(text: refused ? "Refused" : "Processing",
+                      foreground: refused ? Theme.red : Theme.yellow,
+                      background: refused ? Theme.redBg : Theme.yellowBg)
+        } else if build.expired {
+            StatePill(text: "Expired", foreground: Theme.text3, background: Theme.sunken)
+        } else {
+            StatePill(text: "Ready", foreground: Theme.green, background: Theme.greenBg)
+        }
     }
 
     /// A number in the manifest that the fetched list cannot account for. It is

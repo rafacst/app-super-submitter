@@ -88,10 +88,13 @@ extension AppState {
     /// the app links what the account already holds and invents nothing. No
     /// manifest key holds these: a repository full of opaque Apple ids would
     /// say nothing to anybody.
+    /// The pool belongs to one platform and one language. The platform is the
+    /// one every other read on this app uses, so the picker beside the app id
+    /// moves this list with the rest of the tab.
     func appleKeywordPool() async throws -> [String] {
         guard let appID = appleActionAppID else { return [] }
-        return try await AppleKeywordsClient(api: readOnlyAPI()).pool(appID: appID,
-                                                                    locale: locale)
+        return try await AppleKeywordsClient(api: readOnlyAPI())
+            .pool(appID: appID, locale: locale, platform: applePlatform.rawValue)
     }
 
     /// The custom product page localizations a keyword can attach to.

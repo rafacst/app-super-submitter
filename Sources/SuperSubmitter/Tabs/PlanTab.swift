@@ -104,6 +104,10 @@ struct PlanTab: View {
     @State private var askingCancel = false
     /// The second. Nothing reaches Apple until this one is answered.
     @State private var confirmingCancel = false
+    /// The first of the two questions the delete asks.
+    @State private var askingDelete = false
+    /// The second. Nothing is sent until this one is answered.
+    @State private var confirmingDelete = false
     /// Shut by default. See acknowledgedSummary.
     @State private var showingAcknowledged = false
     /// The systems whose rows are open. Empty, so every column arrives shut.
@@ -121,6 +125,78 @@ struct PlanTab: View {
             // not the first thing this screen has to answer.
             if !state.showsRun { reviewBanner }
             content
+            // What the App Store said about the last cancel, delete or
+            // release. Both of this tab's store calls write it and neither one
+            // printed it, so a refusal read as an action that worked. One line
+            // for both, under the diff and over the panel: two copies of one
+            // sentence is how the tab looked when each button printed its own.
+            if let error = state.releaseError { ErrorLine(text: error) }
+            deleteDraftPanel
+        }
+    }
+
+    // MARK: - Deleting the draft version
+
+    /// The way out of a draft that cannot be repaired.
+    ///
+    /// It stood under the run, which made an apply the price of admission: a
+    /// developer with a draft already in App Store Connect, and no writes left
+    /// worth making, had to send some in order to be offered the delete. The
+    /// read is what finds the draft, so the read is what earns this panel, and
+    /// it stays on the tab through the run that follows.
+    ///
+    /// It offers itself only for a version the developer can still edit, so a
+    /// version in review and a version that shipped never show it at all.
+    @ViewBuilder
+    private var deleteDraftPanel: some View {
+        if let version = state.deletableAppleVersion {
+            let busy = state.releasing == .apple
+            HStack(alignment: .firstTextBaseline, spacing: 11) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Delete the \(state.applePlatform.shortName) draft version \(version.number)")
+                        .font(Theme.font(size: 12.5, weight: .semibold))
+                    Text("Removes the version from App Store Connect with its listing, its screenshots and its build. Nothing brings it back, and the version the customers have is untouched.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                // The call is with Apple and the sheet is gone the moment it is
+                // confirmed, so without this the panel looked exactly as it had
+                // before the press, for the whole of the delete and the read
+                // after it.
+                if busy {
+                    Spinner()
+                    Text("Deleting")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                }
+                QuietButton(title: "Delete the draft") { askingDelete = true }
+                    .disabled(state.releasing != nil || state.isRunning)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .frame(maxWidth: 860, alignment: .leading)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(Theme.sep2, lineWidth: Theme.hairline))
+            // Two questions, and the second one names the version again. One
+            // press is what this app asks for a draft write; a call that takes
+            // a version off App Store Connect has no undo behind it at all.
+            .confirmationDialog("Delete the draft version \(version.number)?",
+                                isPresented: $askingDelete) {
+                Button("Continue") { confirmingDelete = true }
+                Button("Keep it", role: .cancel) {}
+            } message: {
+                Text("The listing, the screenshots, the previews and the attached build go with it. An open review submission is cancelled first.")
+            }
+            .confirmationDialog("This cannot be undone. Delete \(version.number)?",
+                                isPresented: $confirmingDelete) {
+                Button("Delete \(version.number)", role: .destructive) {
+                    Task { await state.deleteAppleDraftVersion() }
+                }
+                Button("Keep it", role: .cancel) {}
+            } message: {
+                Text("Super Submitter reads the store again afterwards, and says so if App Store Connect still holds the version.")
+            }
         }
     }
 
@@ -896,12 +972,6 @@ struct PlanTab: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            // Apple's own refusal. The Release tab prints this and this screen
-            // did not, so a cancel that Apple would not take answered with a
-            // button that came back and nothing else. Only beside the button
-            // that can produce it: the same field carries the Release tab's
-            // failures, and those belong on the tab that sent them.
-            if queued, let error = state.releaseError { ErrorLine(text: error) }
             acknowledgedSummary(plan)
         }
         // Two questions, and the second one names what cannot be undone. One
