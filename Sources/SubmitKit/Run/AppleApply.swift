@@ -1078,8 +1078,34 @@ extension Runner {
         ])
     }
 
+    /// The territories the app sells in, and whether a new one is added on its
+    /// own.
+    ///
+    /// Three resources, because App Store Connect splits this three ways and
+    /// answers an error for every route but the right one:
+    ///
+    /// - `POST /v2/appAvailabilities` creates the record, and only when the app
+    ///   holds none. A second create answers 409 "already exists".
+    /// - `PATCH /v2/appAvailabilities/{id}` does not exist. It answers 403 and
+    ///   "Allowed operations are: CREATE, GET_INSTANCE", which this app read as
+    ///   a role its key was denied and reported as one.
+    /// - `PATCH /v1/territoryAvailabilities/{id}` is how an existing record
+    ///   changes, one territory at a time.
+    /// - `availableInNewTerritories` is an attribute of the create, and after
+    ///   that it lives on the app: `PATCH /v1/apps/{id}` carries it.
     func appleAvailability() async throws {
         let requested = manifest.pricing?.territories ?? []
+        // What the app holds now decides the route, and a stale answer here
+        // sends the run down the branch that errors, so it is read fresh.
+        let held = JSON(data: try await api.apple(
+            "GET", "/v1/apps/\(appleAppID)/appAvailabilityV2").data)
+        if let availabilityID = held["data"]["id"].string {
+            try await appleUpdateTerritories(availabilityID: availabilityID,
+                                             requested: requested)
+            try await appleAvailableInNewTerritories()
+            return
+        }
+
         let included: [[String: Any]] = requested.enumerated().map { index, item in
             var attributes: [String: Any] = ["available": item.available]
             if let preorder = item.preOrderEnabled { attributes["preOrderEnabled"] = preorder }
@@ -1102,13 +1128,80 @@ extension Runner {
                     }],
                 ],
             ]
-        // Always a create, even when the app already holds an availability.
-        // `appAvailabilities` has no UPDATE: Apple answers a PATCH with 403 and
-        // "Allowed operations are: CREATE, GET_INSTANCE", which this app read as
-        // a role the key was denied and reported as one. The create carries the
-        // whole territory set, so it replaces what the store holds.
+        // The app holds no availability, so the create carries the whole set,
+        // `availableInNewTerritories` included.
         try await api.apple("POST", "/v2/appAvailabilities",
                             body: ["data": data, "included": included])
+    }
+
+    /// One PATCH per territory whose answer differs, and none for the rest.
+    ///
+    /// The whole set is written one territory at a time because that is the
+    /// only route Apple offers for a record that already exists. An app on sale
+    /// in every country holds 175 of these, so a run that sent them all would
+    /// spend minutes writing the values the store already had.
+    private func appleUpdateTerritories(
+        availabilityID: String,
+        requested: [Manifest.TerritoryAvailability]) async throws {
+        guard !requested.isEmpty else { return }
+        var held: [String: JSON] = [:]
+        var path: String? = "/v2/appAvailabilities/\(availabilityID)"
+            + "/territoryAvailabilities?limit=200"
+        var pages = 0
+        var seen: Set<String> = []
+        while let current = path, pages < 20, seen.insert(current).inserted {
+            pages += 1
+            let page = JSON(data: try await api.apple("GET", current).data)
+            for item in page["data"].array {
+                guard let territory = item["relationships"]["territory"]["data"]["id"].string
+                else { continue }
+                held[territory] = item
+            }
+            path = page["links"]["next"].string.flatMap(UploadService.appleNextPagePath)
+        }
+
+        // A territory the store does not list is named rather than skipped. A
+        // run that reports success and left a country out is the one outcome
+        // this panel cannot recover from, because nothing says to look.
+        var unknown: [String] = []
+        for item in requested {
+            guard let current = held[item.territory] else {
+                unknown.append(item.territory)
+                continue
+            }
+            let attributes = current["attributes"]
+            var wanted: [String: Any] = [:]
+            if attributes["available"].bool != item.available {
+                wanted["available"] = item.available
+            }
+            if let preorder = item.preOrderEnabled,
+               attributes["preOrderEnabled"].bool != preorder {
+                wanted["preOrderEnabled"] = preorder
+            }
+            if let date = item.releaseDate, attributes["releaseDate"].string != date {
+                wanted["releaseDate"] = date
+            }
+            guard !wanted.isEmpty, let id = current["id"].string else { continue }
+            try await api.apple("PATCH", "/v1/territoryAvailabilities/\(id)", body: [
+                "data": ["type": "territoryAvailabilities", "id": id,
+                         "attributes": wanted],
+            ])
+        }
+        guard unknown.isEmpty else { throw RunError.unknownTerritories(unknown.sorted()) }
+    }
+
+    /// Whether the App Store adds this app to a territory it opens later.
+    ///
+    /// It is an attribute of the app, not of the availability, once the
+    /// availability exists. Skipped when the store already agrees, so a run
+    /// that changes only a territory does not also write this.
+    private func appleAvailableInNewTerritories() async throws {
+        guard let wanted = manifest.pricing?.autoConvertOtherTerritories,
+              wanted != actual.apple?.availableInNewTerritories else { return }
+        try await api.apple("PATCH", "/v1/apps/\(appleAppID)", body: [
+            "data": ["type": "apps", "id": appleAppID,
+                     "attributes": ["availableInNewTerritories": wanted]],
+        ])
     }
 
     func appleAppPrice() async throws {
