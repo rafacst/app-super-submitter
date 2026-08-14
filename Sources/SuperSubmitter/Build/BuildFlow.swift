@@ -206,12 +206,20 @@ final class BuildFlow {
 
     /// upload-spec 7.1. Explicit selection is the consent boundary, so the
     /// panel states what a build can execute before the developer chooses.
+    ///
+    /// One sentence, and it used to be three. The full paragraph named scripts,
+    /// package plug-ins and compiler macros separately, which is 173 characters
+    /// on one line, and AppKit widens the panel until that line fits: it opened
+    /// wider than the window with every sidebar location truncated to six
+    /// letters. See `NSSavePanel.explain`.
+    ///
+    /// Nothing is lost by saying it once. Linking a folder runs none of it, and
+    /// the sentence is said again at the moment code actually runs, on the
+    /// build confirmation sheet. See `buildConfirmationText`.
     func linkFolder() {
         let panel = NSOpenPanel()
         panel.title = "Link a project folder"
-        panel.message = "Super Submitter will inspect this project and run its build. "
-            + "Building may execute scripts, package plug-ins, compiler macros, and other "
-            + "code supplied by the project."
+        panel.explain("Building this project runs scripts and code the project supplies.")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false

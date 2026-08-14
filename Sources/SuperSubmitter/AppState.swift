@@ -951,7 +951,7 @@ final class AppState {
     func chooseAppFolder() {
         let panel = NSOpenPanel()
         panel.title = "Select your app folder"
-        panel.message = "Choose the folder of your app. Super Submitter keeps one small file inside it."
+        panel.explain("Choose the folder of your app. store.yaml goes inside it.")
         panel.prompt = "Select"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -976,7 +976,7 @@ final class AppState {
     func chooseExistingManifest() {
         let panel = NSOpenPanel()
         panel.title = "Continue work on an app"
-        panel.message = "Choose the store.yaml file of the app you want to continue."
+        panel.explain("Choose the store.yaml file of the app you want to continue.")
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
@@ -1408,7 +1408,7 @@ final class AppState {
     func chooseBuildFiles(allowedExtensions: Set<String>) {
         let panel = NSOpenPanel()
         panel.title = "Choose a build"
-        panel.message = "Choose \(allowedExtensions.sorted().map { ".\($0)" }.joined(separator: " or "))."
+        panel.explain("Choose \(allowedExtensions.sorted().map { ".\($0)" }.joined(separator: " or ")).")
         panel.allowsMultipleSelection = allowedExtensions.count > 1
         panel.canChooseDirectories = false
         panel.allowedContentTypes = allowedExtensions.compactMap { UTType(filenameExtension: $0) }
@@ -1422,7 +1422,7 @@ final class AppState {
     func chooseOneFile(allowedExtensions: [String]) -> URL? {
         let panel = NSOpenPanel()
         panel.title = "Choose a file"
-        panel.message = "Choose \(allowedExtensions.sorted().map { ".\($0)" }.joined(separator: " or "))."
+        panel.explain("Choose \(allowedExtensions.sorted().map { ".\($0)" }.joined(separator: " or ")).")
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = allowedExtensions.compactMap { UTType(filenameExtension: $0) }
