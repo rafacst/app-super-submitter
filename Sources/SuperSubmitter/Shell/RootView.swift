@@ -438,13 +438,14 @@ private struct LiveWriteBar: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: "exclamationmark.triangle.fill").font(Theme.font(size: 11))
-            Text("The dry run is off. An apply writes to \(state.storeListText).")
+            Text("Dry Run is off. Update Drafts sends changes to \(state.storeListText).")
                 .font(Theme.font(size: 11.5, weight: .medium))
             Spacer(minLength: 8)
-            Button("Turn the dry run on") { state.dryRun = true }
-                .buttonStyle(.plain)
-                .font(Theme.font(size: 11.5, weight: .semibold))
-                .underline()
+            // A bordered button and not underlined text. The one action on this
+            // strip is the one thing here that has to read as pressable.
+            Button("Enable Dry Run") { state.dryRun = true }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
         .foregroundStyle(Theme.yellow)
         .padding(.horizontal, 20)
@@ -763,17 +764,23 @@ private struct ContentHeader: View {
                     }
                 }
                 HeaderCluster(morphOn: shape) {
-                    Text("Dry run").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                     // Turning the dry run off is the moment an apply becomes a
                     // store write, so that is where the paywall belongs, and
                     // where the question belongs. Turning it back on needs no
                     // question: that direction only ever makes the app safer.
-                    SmallToggle(isOn: Binding(
+                    //
+                    // The native switch, and not a drawn one: it carries the
+                    // keyboard, the focus ring, the VoiceOver value, and the
+                    // system metrics without this file owning any of them.
+                    Toggle("Dry run", isOn: Binding(
                         get: { state.dryRun },
                         set: { value in
                             guard value || state.requirePaid(.storeWrite, .apply) else { return }
                             if value { state.dryRun = true } else { armingLiveWrites = true }
                         }))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .accessibilityHint("When on, Super Submitter builds each request and sends none.")
                 }
             case .release:
                 HeaderCluster(morphOn: shape) {

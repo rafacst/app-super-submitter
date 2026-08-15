@@ -5,12 +5,11 @@ import Testing
 
 /// What the dry run is set to when an app opens.
 ///
-/// It is on by default for a **new** app, and that is the whole rule. The app
-/// used to decide it by looking for a `.super-submitter/runs` folder beside the
-/// manifest, which answers a different question: a run log says this Mac has
-/// run this app through Super Submitter. A fresh clone has none, a second Mac
-/// has none, and a colleague has none, and all three of them were opening an
-/// app that has been on sale for a year with the dry run on.
+/// One rule, and no app is an exception to it: the Settings preference decides,
+/// and it defaults to on. A published app used to open with the dry run off,
+/// which handed the live-write default to the one app state where a wrong write
+/// is read by customers. Liveness is still recorded, and other features still
+/// read it. It no longer decides this.
 @MainActor
 @Suite(.serialized) struct DryRunDefaultTests {
 
@@ -32,11 +31,11 @@ import Testing
         return url
     }
 
-    // MARK: - A published app
+    // MARK: - The preference decides
 
-    /// The report: a live app reopened with the dry run on, so the first apply
-    /// of the morning wrote nothing and said it had succeeded.
-    @Test func aPublishedAppReopensWithTheDryRunOff() throws {
+    /// The report: a live app opened with the dry run off, so the first apply of
+    /// the morning wrote to a listing customers were reading, unasked.
+    @Test func aPublishedAppFollowsThePreference() throws {
         let folder = try folder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
@@ -51,10 +50,15 @@ import Testing
         let relaunched = AppState(defaults: defaults, storeAccount: account)
 
         #expect(relaunched.currentAppKey == "1111")
-        #expect(relaunched.dryRun == false)
+        #expect(relaunched.isAppLive(appKey: "1111"))
+        #expect(relaunched.dryRun == true)
+
+        // And it is the preference and not a constant, for a live app too.
+        defaults.set(false, forKey: "dryRunByDefault")
+        #expect(AppState(defaults: defaults, storeAccount: account).dryRun == false)
     }
 
-    /// The preference still decides for an app no store has taken.
+    /// The same preference, for an app no store has taken.
     @Test func anUnpublishedAppFollowsThePreference() throws {
         let folder = try folder()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -67,14 +71,12 @@ import Testing
 
         #expect(AppState(defaults: defaults, storeAccount: account).dryRun == true)
 
-        // And it is the preference and not a constant.
         defaults.set(false, forKey: "dryRunByDefault")
         #expect(AppState(defaults: defaults, storeAccount: account).dryRun == false)
     }
 
-    /// An app nobody has asked about keeps the safe default. Unknown is not a
-    /// store saying the app has shipped.
-    @Test func anUnknownAppKeepsTheSafeDefault() throws {
+    /// A missing preference is the safe answer and not an empty one.
+    @Test func noPreferenceMeansTheDryRunIsOn() throws {
         let folder = try folder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
@@ -83,6 +85,7 @@ import Testing
         let state = AppState(defaults: defaults, storeAccount: account)
         state.link(manifestAt: try app(appID: "3333", in: folder))
 
+        #expect(defaults.object(forKey: "dryRunByDefault") == nil)
         #expect(state.appLiveStates["3333"] == nil)
         #expect(AppState(defaults: defaults, storeAccount: account).dryRun == true)
     }
@@ -90,7 +93,7 @@ import Testing
     // MARK: - What no longer decides it
 
     /// A run log on this Mac says nothing about whether customers have the app.
-    /// It was the whole of the old rule and it is now none of it.
+    /// It was the whole of the oldest rule and it is now none of it.
     @Test func aLocalRunFolderAloneChangesNothing() throws {
         let folder = try folder()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -98,7 +101,7 @@ import Testing
         let account = "test-\(UUID().uuidString)"
 
         let url = try app(appID: "4444", in: folder)
-        // The folder the old rule read, with a run in it.
+        // The folder that rule read, with a run in it.
         let runs = url.deletingLastPathComponent()
             .appendingPathComponent(".super-submitter/runs", isDirectory: true)
         try FileManager.default.createDirectory(at: runs, withIntermediateDirectories: true)
@@ -107,30 +110,14 @@ import Testing
         let state = AppState(defaults: defaults, storeAccount: account)
         state.link(manifestAt: url)
 
-        // Nobody has said this app shipped, so the safe default stands, run log
-        // or no run log.
         #expect(AppState(defaults: defaults, storeAccount: account).dryRun == true)
-    }
-
-    /// Approved is not shipped. An app Apple has approved and the developer has
-    /// never released has no customers, so it is still a new app here. This is
-    /// the line `AppleVersionState.shipped` already draws, reused rather than
-    /// drawn a second time.
-    @Test func anApprovedFirstVersionIsNotAPublishedApp() {
-        #expect(!AppleVersionState.shipped.contains("PENDING_DEVELOPER_RELEASE"))
-        #expect(AppleVersionState.shipped.contains("READY_FOR_SALE"))
-
-        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
-                             storeAccount: "test-\(UUID().uuidString)")
-        // What the liveness read writes for an approved-but-never-released app.
-        state.rememberAppLiveness("5555", live: false)
-        #expect(!state.isAppLive(appKey: "5555"))
     }
 
     // MARK: - Two apps, one window
 
-    /// Switching apps recomputes it for the app being opened, both ways round.
-    @Test func switchingBetweenALiveAppAndANewOneSwitchesTheDefault() throws {
+    /// Switching apps recomputes the preference, and liveness is no exception to
+    /// it in either direction.
+    @Test func switchingBetweenALiveAppAndANewOneKeepsThePreference() throws {
         let folder = try folder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
@@ -147,30 +134,61 @@ import Testing
 
         state.selectApp(at: live)
         #expect(state.currentAppKey == "6666")
-        #expect(state.dryRun == false)
+        #expect(state.dryRun == true)
 
+        // The developer's own choice for this session, which the next app must
+        // not inherit: the preference is recomputed and not carried over.
+        state.dryRun = false
         state.selectApp(at: fresh)
         #expect(state.currentAppKey == "7777")
         #expect(state.dryRun == true)
 
-        // And back, so the answer is recomputed and not merely inherited.
+        state.dryRun = false
         state.selectApp(at: live)
+        #expect(state.dryRun == true)
+    }
+
+    /// An explicit `false` is still an answer the app takes, and it reaches both
+    /// apps on a switch.
+    @Test func anExplicitFalsePreferenceSurvivesAnAppSwitch() throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        defaults.set(false, forKey: "dryRunByDefault")
+        let account = "test-\(UUID().uuidString)"
+
+        let state = AppState(defaults: defaults, storeAccount: account)
+        state.link(manifestAt: try app(appID: "8888", in: folder))
+        state.link(manifestAt: try app(appID: "9999", in: folder))
+        state.rememberAppLiveness("8888", live: true)
+
+        let live = try #require(state.linkedApps.firstIndex { $0.manifestPath.contains("8888") })
+        let fresh = try #require(state.linkedApps.firstIndex { $0.manifestPath.contains("9999") })
+
+        state.selectApp(at: live)
+        #expect(state.dryRun == false)
+
+        state.dryRun = true
+        state.selectApp(at: fresh)
         #expect(state.dryRun == false)
     }
 
-    /// The default is a default. A developer about to touch a live listing
-    /// turns the dry run back on, and nothing may take it off them again.
-    @Test func theDeveloperCanStillTurnTheDryRunOnForAPublishedApp() throws {
+    /// The default is a default. The switch in the header is the developer's for
+    /// the rest of the session, both ways round.
+    @Test func theDeveloperCanStillSetItForAPublishedApp() throws {
         let folder = try folder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let account = "test-\(UUID().uuidString)"
 
         let state = AppState(defaults: defaults, storeAccount: account)
-        state.link(manifestAt: try app(appID: "8888", in: folder))
-        state.rememberAppLiveness("8888", live: true)
+        state.link(manifestAt: try app(appID: "5555", in: folder))
+        state.rememberAppLiveness("5555", live: true)
 
         let relaunched = AppState(defaults: defaults, storeAccount: account)
+        #expect(relaunched.dryRun == true)
+
+        relaunched.dryRun = false
         #expect(relaunched.dryRun == false)
 
         relaunched.dryRun = true

@@ -33,14 +33,16 @@ struct DirectApplyBar: View {
             }
             Spacer(minLength: 12)
             if running { Spinner() }
-            Button(running ? "Writing…" : "Write to \(destination)") { confirming = true }
+            Button(running ? "Updating drafts…" : "Update Drafts in \(destination)") {
+                confirming = true
+            }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
                 .disabled(changes.isEmpty || running || state.stores.isEmpty)
         }
         .storePanel()
-        .confirmationDialog("Write these to \(destination)?", isPresented: $confirming) {
-            Button("Write them") { state.applyDirectly(target) }
+        .confirmationDialog("Update drafts in \(destination)?", isPresented: $confirming) {
+            Button("Update the drafts") { state.applyDirectly(target) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(confirmationLine)

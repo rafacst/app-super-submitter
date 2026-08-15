@@ -428,7 +428,7 @@ struct PlanTab: View {
                      caption: RunwayStep.build(state), tab: .build),
          RunwayEntry(number: 3, title: "Plan",
                      caption: RunwayStep.plan(state), tab: nil),
-         RunwayEntry(number: 4, title: "Apply",
+         RunwayEntry(number: 4, title: "Update Drafts",
                      caption: RunwayStep.apply(state), tab: nil),
          RunwayEntry(number: 5, title: "Release",
                      caption: RunwayStep.release(state), tab: .release)]
@@ -972,7 +972,7 @@ struct PlanTab: View {
                     if state.releasing == .apple { Spinner() }
                 }
                 if !queued || !blocked {
-                    Menu(state.dryRun ? "Dry run" : "Apply") {
+                    Menu(state.dryRun ? "Preview Requests" : "Update Drafts") {
                         ForEach(state.stores.sorted { $0.rawValue < $1.rawValue }) { store in
                             Button(store.storeName) { choose(store) }
                                 .disabled(!locked && !state.canApply(to: store))
@@ -1018,10 +1018,10 @@ struct PlanTab: View {
         } message: {
             Text("Apple takes no cancel from the moment a reviewer opens the submission. Super Submitter reads the stores again afterwards.")
         }
-        .confirmationDialog("Write to \(confirmingStore?.storeName ?? state.storeListText)?",
+        .confirmationDialog("Update \(confirmingStore?.storeName ?? state.storeListText) drafts?",
                             isPresented: $confirmingApply,
                             titleVisibility: .visible) {
-            Button(confirmingStore == nil ? "Write the drafts" : "Write the draft") {
+            Button(confirmingStore == nil ? "Update the drafts" : "Update the draft") {
                 if let store = confirmingStore { state.startRun(to: store) }
                 else { state.startRun() }
                 confirmingStore = nil

@@ -99,6 +99,15 @@ import Testing
         #expect(state.appMark(appKey: "1111").label == "Unknown")
     }
 
+    /// Approved is not shipped. An app Apple has approved and the developer has
+    /// never released has no customers, so no store has taken it to anybody.
+    /// This is the line `AppleVersionState.shipped` draws, and the liveness read
+    /// in `StoreImportReader` reuses it rather than drawing a second one.
+    @Test func anApprovedFirstVersionIsNotAPublishedApp() {
+        #expect(!AppleVersionState.shipped.contains("PENDING_DEVELOPER_RELEASE"))
+        #expect(AppleVersionState.shipped.contains("READY_FOR_SALE"))
+    }
+
     /// A yes is never taken back, and a no writes only into the silence.
     ///
     /// An app pulled from sale was still published and its listing is still the
