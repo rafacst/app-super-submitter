@@ -29,6 +29,10 @@ extension Runner {
     }
 
     func appleBetaBuild(group name: String) async throws {
+        // Apple refuses a build on an internal group and faults the request,
+        // which stops the run on a row that had nothing to do. An internal
+        // group needs none: its testers get every build of the app.
+        guard !internalBetaGroup(name) else { return }
         guard let buildID = attachedBuildID else {
             throw RunError.uploadFailed("No build is attached, so no group can receive one.")
         }
@@ -91,6 +95,15 @@ extension Runner {
     /// hours ago. `AppleApply` has read the three in this order all along.
     private var attachedBuildID: String? {
         appleBuildID ?? actual.apple?.buildIdForVersion ?? actual.apple?.attachedBuildId
+    }
+
+    /// Whether the group is internal, by the manifest or by the last read.
+    /// Apple settles the kind when it creates a group, so the read is the
+    /// answer for a group the manifest says nothing about.
+    private func internalBetaGroup(_ name: String) -> Bool {
+        manifest.release?.apple?.testFlight?.groups?
+            .first(where: { $0.name == name })?.internalGroup == true
+            || actual.apple?.betaGroups[name]?.internalGroup == true
     }
 
     /// The group id, from this run or from the read. A group that neither one

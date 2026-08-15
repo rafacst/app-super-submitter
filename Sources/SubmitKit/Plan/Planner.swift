@@ -513,10 +513,17 @@ public enum Planner {
             // version, or the App Store version holds one. A beta needs no
             // version, so an upload that never reached a version left every
             // group without the build it was created for.
+            //
+            // Apple refuses the linkage on an internal group: its testers are
+            // the team, and Apple gives them every build of the app already.
+            // The row was raised for one all the same, and the whole send
+            // stopped on "Cannot add internal group to a build".
             let uploading = applePath(input.manifest)
                 .flatMap { resolve($0, root: input.root) } != nil
             let buildID = actual?.buildIdForVersion ?? actual?.attachedBuildId
-            if uploading || (buildID != nil && live?.buildIds.contains(buildID!) != true) {
+            let isInternal = group.internalGroup == true || live?.internalGroup == true
+            if !isInternal,
+               uploading || (buildID != nil && live?.buildIds.contains(buildID!) != true) {
                 steps.append(PlanStep(
                     id: "apple.betaBuild.\(group.name)", system: .apple, kind: .add,
                     summary: "TestFlight  \(group.name)  gets the build",
@@ -2450,7 +2457,9 @@ public enum Planner {
     }
 
     static func applePath(_ manifest: Manifest) -> String? {
-        manifest.release?.build?.ios ?? manifest.release?.build?.macos
+        guard let build = manifest.release?.build else { return nil }
+        return manifest.apps.apple?.platforms.first == .macOS
+            ? build.macos : build.ios
     }
 
     /// The tracks that every Play app already has. Google creates no other.

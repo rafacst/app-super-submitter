@@ -42,31 +42,64 @@ public struct AppleTestFlightClient: Sendable {
         }
     }
 
-    /// Every external group of the app, by name, with its testers.
+    /// Every group of the app, internal and external, by name, with its
+    /// testers and the builds it already holds.
     ///
-    /// The tester read costs one request per group. A group whose testers
-    /// cannot be read keeps an empty set, and the plan then says that nobody
-    /// verified the membership rather than inviting everybody again.
+    /// The tester read costs one request per group, and another per 200
+    /// testers in it. A group whose testers cannot be read keeps an empty set,
+    /// and the plan then says that nobody verified the membership rather than
+    /// inviting everybody again.
     public func groups(appID: String) async throws -> [String: BetaGroup] {
+        // The first page is the read itself: an app with no group answers with
+        // an empty list, and a request that fails is a failure the caller has
+        // to see rather than an app that appears to have none.
         let payload = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/betaGroups?limit=200").data)
-        var result: [String: BetaGroup] = [:]
+        var items = payload["data"].array
+        items += await pagesAfter(payload)
 
-        for item in payload["data"].array {
+        var result: [String: BetaGroup] = [:]
+        for item in items {
             guard var group = Self.parseGroup(item) else { continue }
-            if let response = try? await api.apple(
-                "GET", "/v1/betaGroups/\(group.id)/betaTesters?limit=200") {
-                group.testers = Set(JSON(data: response.data)["data"].array
-                    .compactMap { $0["attributes"]["email"].string?.lowercased() })
-            }
-            if let response = try? await api.apple(
-                "GET", "/v1/betaGroups/\(group.id)/relationships/builds?limit=200") {
-                group.buildIds = Set(JSON(data: response.data)["data"].array
-                    .compactMap { $0["id"].string })
-            }
+            group.testers = Set(await allPages(
+                "/v1/betaGroups/\(group.id)/betaTesters?limit=200")
+                .compactMap { $0["attributes"]["email"].string?.lowercased() })
+            group.buildIds = Set(await allPages(
+                "/v1/betaGroups/\(group.id)/relationships/builds?limit=200")
+                .compactMap { $0["id"].string })
             result[group.name] = group
         }
         return result
+    }
+
+    /// Every `data` row of a list, across the pages Apple splits it into.
+    ///
+    /// Apple caps a page at 200. A group with more testers than that read back
+    /// short, and every address past the two hundredth then counted as a new
+    /// invitation that the plan offered to send again.
+    ///
+    /// It answers with what arrived. A page that fails ends the walk and keeps
+    /// the pages before it, because an empty answer is the one that invites a
+    /// whole group a second time.
+    private func allPages(_ path: String) async -> [JSON] {
+        guard let response = try? await api.apple("GET", path) else { return [] }
+        let payload = JSON(data: response.data)
+        return payload["data"].array + (await pagesAfter(payload))
+    }
+
+    /// The pages after the one in hand. Twenty is a runaway guard and not a
+    /// limit worth reaching: at 200 a page it is 4000 rows.
+    private func pagesAfter(_ payload: JSON) async -> [JSON] {
+        var next = payload["links"]["next"].string.flatMap(StoreDiagnostics.appleNextPath)
+        var items: [JSON] = []
+        var seen: Set<String> = []
+        while let current = next, seen.insert(current).inserted, seen.count <= 20 {
+            guard let response = try? await api.apple("GET", current) else { break }
+            let page = JSON(data: response.data)
+            items += page["data"].array
+            next = page["links"]["next"].string.flatMap(StoreDiagnostics.appleNextPath)
+        }
+        return items
     }
 
     /// The "What to Test" notes that a build already carries, by locale.

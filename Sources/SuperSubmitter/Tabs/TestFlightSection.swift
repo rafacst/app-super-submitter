@@ -69,12 +69,44 @@ struct TestFlightSection: View {
                 group(index)
             }
             Button("Add a group") { state.addBetaGroup() }.controlSize(.small)
+            unlisted
             // One sentence under the list, not one under every card. It says
             // the same thing about every group, and repeated four times it read
             // as four different warnings.
             Text("Apple emails each address the first time it appears here. The plan counts the new ones, so a second apply invites nobody twice.")
                 .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The groups the App Store holds and this manifest does not name.
+    ///
+    /// Without this the list showed the manifest alone, so a group made in App
+    /// Store Connect never appeared and the panel read as though the app had
+    /// none. Taking one in copies the switches and the testers Apple returned,
+    /// so the plan then compares the group rather than creating it again.
+    @ViewBuilder private var unlisted: some View {
+        let held = state.unlistedBetaGroups
+        if !held.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("The App Store holds \(held.count) more \(held.count == 1 ? "group" : "groups"). They are not on this panel until you take them in.")
+                    .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(held, id: \.id) { group in
+                    HStack(spacing: 8) {
+                        Text(group.name).font(Theme.font(size: 11.5))
+                        Text(group.internalGroup == true ? "Internal" : "External")
+                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                        if !group.testers.isEmpty {
+                            Text("\(group.testers.count) testers")
+                                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                        }
+                        Spacer(minLength: 0)
+                        Button("Take it in") { state.adoptBetaGroup(group) }
+                            .controlSize(.small)
+                    }
+                }
+            }
         }
     }
 
@@ -100,6 +132,15 @@ struct TestFlightSection: View {
                 LabeledField("Testers", note: "comma-separated") {
                     TextField("", text: state.betaGroupBinding(index: index, field: .testers))
                 }
+                // A CSV lands in the field beside it and nowhere else. Nothing
+                // reaches Apple until "Send to TestFlight", which is the same
+                // rule the typed addresses follow.
+                Button { state.importTesters(index: index) } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .controlSize(.small)
+                .help("Add the addresses in a CSV to this group")
+                .accessibilityLabel("Import testers from a CSV")
                 Button(role: .destructive) { state.removeBetaGroup(at: index) } label: {
                     Image(systemName: "trash")
                 }
@@ -333,27 +374,35 @@ struct TestFlightSection: View {
 /// group receives, the notes, the page, the licence, the review contact, and
 /// the beta review itself.
 ///
-/// It reads the App Store first, every time. `sendToTestFlight()` says why:
+/// It reads the App Store first, every time. `prepareTestFlightSend()` says why:
 /// a stale comparison here invites somebody twice and asks Apple to create a
 /// group it already holds.
 struct TestFlightSendPanel: View {
     @Environment(AppState.self) private var state
     @State private var confirming = false
+    @State private var prepared: [TestFlightSendPlan] = []
 
     /// The rows below the fold of the confirmation. Four fits the dialog at
     /// every type size; the rest are counted rather than listed.
     private static let namedRows = 4
 
     var body: some View {
-        let rows = state.changes(for: .testFlight)
         let running = state.directApplyRunning(.testFlight)
         let message = state.directApplyMessage(for: .testFlight)
         return VStack(alignment: .leading, spacing: 8) {
+            if state.testFlightPlatformChoices.count > 1 {
+                HStack(spacing: 14) {
+                    Text("Builds to test")
+                        .font(Theme.font(size: 11.5, weight: .medium))
+                    Toggle("iOS", isOn: state.testFlightPlatformBinding(.ios))
+                    Toggle("macOS", isOn: state.testFlightPlatformBinding(.macOS))
+                    Spacer(minLength: 0)
+                }
+                .font(Theme.font(size: 11.5))
+            }
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(rows.isEmpty
-                         ? "TestFlight holds everything on this panel."
-                         : "\(rows.count) \(rows.count == 1 ? "row" : "rows") to send")
+                    Text(platformSummary)
                         .font(Theme.font(size: 12.5, weight: .medium))
                     // The rows themselves belong to the confirmation, where
                     // they are read before anything is sent. Here the first one
@@ -372,7 +421,7 @@ struct TestFlightSendPanel: View {
                 Button(buttonTitle(running: running)) { start() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
-                    .disabled(running || state.planReading || rows.isEmpty)
+                    .disabled(running || state.planReading)
             }
             // Not "a second send invites nobody twice". The group list already
             // says that, and one panel saying one thing twice reads as two
@@ -382,7 +431,7 @@ struct TestFlightSendPanel: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .confirmationDialog("Send this to TestFlight?", isPresented: $confirming) {
-            Button("Send it") { state.applyDirectly(.testFlight) }
+            Button("Send it") { state.applyTestFlight(prepared) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(confirmation)
@@ -396,6 +445,11 @@ struct TestFlightSendPanel: View {
         "Apple emails every new tester, and a beta review takes a place in a queue."
     }
 
+    private var platformSummary: String {
+        let names = state.testFlightPlatforms.map(platformName)
+        return "The \(names.joined(separator: " and ")) \(names.count == 1 ? "build" : "builds") will go to TestFlight."
+    }
+
     private func buttonTitle(running: Bool) -> String {
         if state.planReading { return "Reading…" }
         return running ? "Sending…" : "Send to TestFlight"
@@ -406,13 +460,21 @@ struct TestFlightSendPanel: View {
     /// because it has nothing to compare them against.
     private func start() {
         Task {
-            await state.readStores()
+            prepared = await state.prepareTestFlightSend()
+            guard !prepared.flatMap(\.steps).isEmpty else {
+                state.directApplyTarget = .testFlight
+                state.directApplyState = .idle
+                state.directApplyMessage = "TestFlight already holds the selected builds and settings."
+                return
+            }
             confirming = true
         }
     }
 
     private var confirmation: String {
-        let rows = state.changes(for: .testFlight)
+        let rows = prepared.flatMap { plan in
+            plan.steps.map { "\(platformName(plan.platform))  ·  \($0.summary)" }
+        }
         guard !rows.isEmpty else {
             return "The App Store already holds every row on this panel, so this sends nothing."
         }
@@ -421,5 +483,14 @@ struct TestFlightSendPanel: View {
         return "Super Submitter sends \(rows.count) \(rows.count == 1 ? "row" : "rows") now:\n"
             + named + (rest > 0 ? "\n… and \(rest) more" : "")
             + "\n\nApple emails every address it does not already hold, and a build sent to beta review takes its place in the queue. Neither one can be taken back."
+    }
+
+    private func platformName(_ platform: Manifest.Platform) -> String {
+        switch platform {
+        case .ios: "iOS"
+        case .macOS: "macOS"
+        case .tvOS: "tvOS"
+        case .visionOS: "visionOS"
+        }
     }
 }
