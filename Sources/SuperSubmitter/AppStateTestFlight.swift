@@ -15,6 +15,39 @@ extension AppState {
 
     var betaGroups: [Manifest.Release.TestFlight.Group] { testFlight?.groups ?? [] }
 
+    /// The selected TestFlight build platforms. A manifest from an older
+    /// version keeps the first app platform until the developer changes it.
+    var testFlightPlatforms: [Manifest.Platform] {
+        let supported = testFlightPlatformChoices
+        let selected = testFlight?.platforms?.filter(supported.contains) ?? []
+        if !selected.isEmpty { return selected }
+        if supported.contains(applePlatform) { return [applePlatform] }
+        return supported.first.map { [$0] } ?? [applePlatform]
+    }
+
+    /// TestFlight supports more platforms, but this control answers the two
+    /// build choices that one iOS and macOS app can hold under one app id.
+    var testFlightPlatformChoices: [Manifest.Platform] {
+        let supported = manifest.apps.apple?.platforms ?? []
+        return [Manifest.Platform.ios, .macOS].filter(supported.contains)
+    }
+
+    func testFlightPlatformBinding(_ platform: Manifest.Platform) -> Binding<Bool> {
+        Binding(get: {
+            self.testFlightPlatforms.contains(platform)
+        }, set: { selected in
+            self.editTestFlight { block in
+                var platforms = self.testFlightPlatforms
+                if selected, !platforms.contains(platform) {
+                    platforms.append(platform)
+                } else if !selected, platforms.count > 1 {
+                    platforms.removeAll { $0 == platform }
+                }
+                block.platforms = [Manifest.Platform.ios, .macOS].filter(platforms.contains)
+            }
+        })
+    }
+
     func addTestFlight() {
         guard manifest.release?.apple?.testFlight == nil else { return }
         editTestFlight { _ in }
@@ -73,6 +106,127 @@ extension AppState {
                 }
             }
         })
+    }
+
+    // MARK: - The groups Apple already holds
+
+    /// The groups on the App Store that this manifest does not name.
+    ///
+    /// The read has fetched every group of the app all along, with its testers
+    /// and its switches, and nothing on this panel showed the ones the manifest
+    /// was silent about. The list drew the manifest alone, so a group made in
+    /// App Store Connect was invisible here and the obvious next move was to
+    /// make it a second time.
+    var unlistedBetaGroups: [AppleTestFlightClient.BetaGroup] {
+        let named = Set(betaGroups.map { $0.name })
+        return (actualState.apple?.betaGroups ?? [:]).values
+            .filter { !named.contains($0.name) }
+            .sorted { $0.name < $1.name }
+    }
+
+    /// Copies a group Apple holds into the manifest, with the switches and the
+    /// testers it already carries.
+    ///
+    /// This writes `store.yaml` and calls nobody. The values match what the
+    /// read returned, so the plan finds nothing to change and no address is
+    /// invited a second time.
+    func adoptBetaGroup(_ live: AppleTestFlightClient.BetaGroup) {
+        editTestFlight { block in
+            var groups = block.groups ?? []
+            guard !groups.contains(where: { $0.name == live.name }) else { return }
+            groups.append(.init(name: live.name,
+                                testers: live.testers.isEmpty
+                                    ? nil : live.testers.sorted(),
+                                publicLink: live.publicLink,
+                                publicLinkLimit: live.publicLinkLimit,
+                                automaticBuilds: live.automaticBuilds,
+                                internalGroup: live.internalGroup,
+                                feedback: live.feedback,
+                                iosBuildsOnMac: live.iosBuildsOnMac,
+                                iosBuildsOnVision: live.iosBuildsOnVision))
+            block.groups = groups
+        }
+    }
+
+    // MARK: - Testers from a file
+
+    /// Reads the addresses out of a CSV and adds them to a group.
+    ///
+    /// Nothing here reaches Apple. The addresses land in `store.yaml` beside
+    /// the typed ones, exactly as the field beside the button writes them, and
+    /// "Send to TestFlight" is still the only thing that invites anybody.
+    func importTesters(index: Int) {
+        guard let url = chooseOneFile(allowedExtensions: ["csv"]) else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            // A CSV out of Excel may be UTF-16. Anything else is UTF-8, or
+            // close enough that the addresses survive the replacements: a
+            // Latin-1 byte lands in a name column, and no name is imported.
+            let text = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .utf16)
+                ?? String(decoding: data, as: UTF8.self)
+            let found = Self.addresses(inCSV: text)
+            guard !found.isEmpty else {
+                errorMessage = "No email address in \(url.lastPathComponent)."
+                return
+            }
+            addTesters(found, index: index)
+        } catch {
+            errorMessage = "\(url.lastPathComponent) could not be read."
+        }
+    }
+
+    /// Adds addresses to a group and keeps the ones already there.
+    ///
+    /// Apple matches an address case-insensitively, so the same file imported
+    /// twice adds nobody the second time and no address is invited twice.
+    func addTesters(_ addresses: [String], index: Int) {
+        guard !addresses.isEmpty else { return }
+        editTestFlight { block in
+            guard block.groups?.indices.contains(index) == true else { return }
+            var list = block.groups?[index].testers ?? []
+            var seen = Set(list.map { $0.lowercased() })
+            for address in addresses where seen.insert(address.lowercased()).inserted {
+                list.append(address)
+            }
+            block.groups?[index].testers = list
+        }
+    }
+
+    /// Every address in a CSV, in the order it appears, without repeats.
+    ///
+    /// The file is read for addresses rather than for columns. An App Store
+    /// Connect export carries "First Name,Last Name,Email", a list pasted out
+    /// of a mail client carries `Name <address>`, and a plain column carries
+    /// one address a line under no header at all. The one thing all of them
+    /// agree on is that an address holds an "@" and a name does not, so a
+    /// header row and a quoted "Doe, John" fall out on their own.
+    ///
+    /// // ponytail: a split, not an RFC 4180 parser. No address holds a comma
+    /// // or a quote, so the fields that a real parser would keep together are
+    /// // names, and names are dropped here anyway.
+    static func addresses(inCSV text: String) -> [String] {
+        var seen = Set<String>()
+        // Whitespace separates as well as a comma does. No address holds a
+        // space, and splitting on one is what turns a `Grace Hopper
+        // <grace@example.com>` cell into an address and two names.
+        return text.split(whereSeparator: { $0.isWhitespace || ",;\"".contains($0) })
+            .map { $0.trimmingCharacters(in: addressEdges) }
+            .filter { isEmailAddress($0) && seen.insert($0.lowercased()).inserted }
+    }
+
+    /// The angle brackets a mail client puts around an address.
+    private static let addressEdges = CharacterSet(charactersIn: "<>")
+
+    /// Enough of an address for Apple to email. Apple settles the rest, and it
+    /// faults the whole request over one bad row, so a name column that holds
+    /// an "@" may not reach it.
+    static func isEmailAddress(_ value: String) -> Bool {
+        let parts = value.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty else { return false }
+        let domain = parts[1]
+        return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".")
+            && !value.contains(where: \.isWhitespace)
     }
 
     enum BetaGroupFlag {

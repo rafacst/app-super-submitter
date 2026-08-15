@@ -1,6 +1,14 @@
 import Foundation
 import SubmitKit
 
+struct TestFlightSendPlan: Sendable {
+    let platform: Manifest.Platform
+    let manifest: Manifest
+    let actual: ActualState
+    let steps: [PlanStep]
+    let generation: Int
+}
+
 /// The direct write that the Managing mode uses.
 ///
 /// Publishing writes through the plan: read the stores, show a diff, then
@@ -16,19 +24,80 @@ import SubmitKit
 /// `.testFlight` is the one target that claim does not cover. Its rows email
 /// real testers and its last row takes a place in a review queue, so that
 /// button reads the store first and says in its own words what it is about to
-/// do. `sendToTestFlight()` below is the whole difference.
+/// do. `prepareTestFlightSend()` below is the whole difference.
 @MainActor
 extension AppState {
 
-    /// The read this button owes, and then the write.
-    ///
-    /// Every other direct apply compares against whatever the app last read,
-    /// because a stale comparison there costs one wasted request into a draft.
-    /// Here it costs an invitation sent twice, and a group Apple already holds
-    /// answers 409 to a second create, so the read is not optional.
-    func sendToTestFlight() async {
-        await readStores()
-        applyDirectly(.testFlight)
+    /// Reads and plans each selected build train. TestFlight groups belong to
+    /// the app, so only the first plan carries their shared rows.
+    func prepareTestFlightSend() async -> [TestFlightSendPlan] {
+        guard !planReading else { return [] }
+        let generation = stateGeneration
+        planReading = true
+        defer { planReading = false }
+
+        var plans: [TestFlightSendPlan] = []
+        for platform in testFlightPlatforms {
+            let includesSharedRows = plans.isEmpty
+            let plan = await testFlightSendPlan(
+                platform: platform, generation: generation,
+                includesSharedRows: includesSharedRows)
+            plans.append(plan)
+        }
+        guard generation == stateGeneration else { return [] }
+        return plans
+    }
+
+    /// Runs the prepared platform plans in order. A later platform gets a new
+    /// read after the earlier platform writes the shared group resources.
+    func applyTestFlight(_ prepared: [TestFlightSendPlan]) {
+        guard directApplyState != .running else { return }
+        guard requirePaid(.storeWrite, DirectApplyTarget.testFlight.trigger) else { return }
+        guard let generation = prepared.first?.generation,
+              generation == stateGeneration else {
+            directApplyTarget = .testFlight
+            directApplyState = .idle
+            directApplyMessage = "The TestFlight settings changed. Read them again."
+            return
+        }
+
+        directApplyTarget = .testFlight
+        directApplyState = .running
+        directApplyMessage = ""
+
+        Task {
+            let box = FailureBox()
+            var written = 0
+            for (index, saved) in prepared.enumerated() {
+                let current = index == 0 ? saved : await testFlightSendPlan(
+                    platform: saved.platform, generation: generation,
+                    includesSharedRows: false)
+                guard !current.steps.isEmpty else { continue }
+
+                var only = PlanResult()
+                only.steps = current.steps
+                let runner = Runner(
+                    plan: only, manifest: current.manifest, actual: current.actual,
+                    root: manifestRoot, credentials: credentials, dryRun: false,
+                    access: access, emit: { event in
+                        if case .failure(let failure) = event { box.record(failure.message) }
+                        if case .providerFailed(let message) = event { box.record(message) }
+                    })
+                await runner.run()
+                if box.message != nil { break }
+                written += current.steps.count
+            }
+            guard generation == stateGeneration else { return }
+
+            if let failure = box.message {
+                directApplyState = .failed
+                directApplyMessage = failure
+            } else {
+                directApplyState = .done
+                directApplyMessage = "\(written) TestFlight \(written == 1 ? "row" : "rows") written."
+                invalidatePlan()
+            }
+        }
     }
 
     /// The Game Center errors that would stop the apply partway.
@@ -119,7 +188,10 @@ extension AppState {
     /// lifecycle rows join whenever a Google row does. Without them the run
     /// would write a listing into an edit that was never opened.
     private func rows(for target: DirectApplyTarget) -> [PlanStep] {
-        let plan = directPlan()
+        rows(for: target, in: directPlan())
+    }
+
+    private func rows(for target: DirectApplyTarget, in plan: PlanResult) -> [PlanStep] {
         var owned = plan.steps.filter { step in
             target.prefixes.contains { step.id.hasPrefix($0) }
         }
@@ -139,6 +211,38 @@ extension AppState {
         let lifecycle = Set(["google.openEdit", "google.validate", "google.commit"])
         let ownedIDs = Set(owned.map(\.id))
         return plan.steps.filter { lifecycle.contains($0.id) || ownedIDs.contains($0.id) }
+    }
+
+    private func testFlightSendPlan(
+        platform: Manifest.Platform, generation: Int,
+        includesSharedRows: Bool) async -> TestFlightSendPlan {
+        var platformManifest = manifest
+        if let apple = platformManifest.apps.apple {
+            var platforms = apple.platforms.filter { $0 != platform }
+            platforms.insert(platform, at: 0)
+            platformManifest.setAppleApp(
+                appID: apple.appId, bundleID: apple.bundleId, platforms: platforms)
+        }
+        let actual = await StateReader(api: readOnlyAPI()).read(
+            manifest: platformManifest, stores: [.apple], provider: .none)
+        let result = Planner.plan(Planner.Input(
+            manifest: platformManifest, actual: actual, stores: [.apple],
+            root: manifestRoot, packages: packages))
+        var steps = rows(for: .testFlight, in: result)
+        if !includesSharedRows {
+            steps.removeAll { !Self.isBuildSpecificTestFlightStep($0) }
+        }
+        return TestFlightSendPlan(
+            platform: platform, manifest: platformManifest, actual: actual,
+            steps: steps, generation: generation)
+    }
+
+    private static func isBuildSpecificTestFlightStep(_ step: PlanStep) -> Bool {
+        step.id.hasPrefix("apple.build")
+            || step.id.hasPrefix("apple.betaBuild.")
+            || step.id == "apple.whatToTest"
+            || step.id == "apple.betaAutoNotify"
+            || step.id == "apple.betaReview"
     }
 
     /// The plan behind the button, kept until the manifest or the store read

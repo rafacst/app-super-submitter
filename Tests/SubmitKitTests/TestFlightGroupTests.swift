@@ -244,6 +244,43 @@ private func liveGroup(_ build: (inout AppleTestFlightClient.BetaGroup) -> Void)
     #expect(!bare.steps.contains { $0.id == "apple.betaBuild.QA" })
 }
 
+/// The active platform selects its own local artifact. An iOS-first fallback
+/// sent the IPA again when TestFlight prepared the macOS train.
+@Test func eachTestFlightPlatformUsesItsOwnBuildPath() {
+    var manifest = groupManifest(.init(name: "QA"))
+    manifest.release?.build = Manifest.Release.Build(
+        ios: "App.ipa", macos: "App.pkg")
+    manifest.setAppleApp(
+        appID: "1", bundleID: "com.example.app", platforms: [.ios, .macOS])
+    #expect(Planner.applePath(manifest) == "App.ipa")
+
+    manifest.setAppleApp(
+        appID: "1", bundleID: "com.example.app", platforms: [.macOS, .ios])
+    #expect(Planner.applePath(manifest) == "App.pkg")
+}
+
+/// Apple refuses a build on an internal group: "Cannot add internal group to a
+/// build". The row was raised for one all the same, and it stopped the whole
+/// send. An internal group needs none, because its testers are the team and
+/// Apple gives them every build of the app.
+@Test func anInternalGroupTakesNoBuildRow() {
+    var held = liveGroup { $0.internalGroup = true }
+    held.apple?.buildIdForVersion = "build-9"
+
+    let named = groupManifest(.init(name: "QA", internalGroup: true))
+    #expect(!steps(named, held).contains { $0.id == "apple.betaBuild.QA" })
+
+    // Apple settles the kind when it makes the group, so the read answers for
+    // a manifest that says nothing about it.
+    let silent = groupManifest(.init(name: "QA"))
+    #expect(!steps(silent, held).contains { $0.id == "apple.betaBuild.QA" })
+
+    // An external group is the whole reason the row exists.
+    var external = liveGroup { $0.internalGroup = false }
+    external.apple?.buildIdForVersion = "build-9"
+    #expect(steps(silent, external).contains { $0.id == "apple.betaBuild.QA" })
+}
+
 /// A group that already holds the build takes no second row.
 @Test func aGroupThatHoldsTheBuildIsLeftAlone() {
     let manifest = groupManifest(.init(name: "QA"))

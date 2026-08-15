@@ -212,6 +212,9 @@ extension Manifest {
         /// here receives an invitation, which is why the apply asks for the
         /// plan first.
         public struct TestFlight: Codable, Sendable, Equatable {
+            /// The build platforms that this TestFlight send includes. A
+            /// missing value keeps the original one-platform behavior.
+            public var platforms: [Manifest.Platform]?
             public var groups: [Group]?
             /// The release notes that every tester reads, by locale. Apple
             /// calls this "What to Test" and keys it to the build.
@@ -230,10 +233,12 @@ extension Manifest {
             /// missing key here leaves whatever Apple holds alone.
             public var licenseAgreement: String?
 
-            public init(groups: [Group]? = nil, whatToTest: [String: String]? = nil,
+            public init(platforms: [Manifest.Platform]? = nil, groups: [Group]? = nil,
+                        whatToTest: [String: String]? = nil,
                         autoNotify: Bool? = nil, submitForBetaReview: Bool? = nil,
                         localizations: [String: Localization]? = nil,
                         licenseAgreement: String? = nil) {
+                self.platforms = platforms
                 self.groups = groups
                 self.whatToTest = whatToTest
                 self.autoNotify = autoNotify
