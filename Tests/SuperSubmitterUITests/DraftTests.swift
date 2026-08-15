@@ -140,7 +140,7 @@ struct DraftTests {
         let button = try #require(band.range(of: "DraftButton()"))
         let padding = try #require(band.range(of: ".padding(.leading, 20)"))
 
-        #expect(shell.contains("Save progress"))
+        #expect(shell.contains("Back Up Apps"))
         #expect(button.upperBound < padding.lowerBound, "it is inside the row")
         // Nothing else in the row is drawn after it.
         #expect(!band[button.upperBound..<padding.lowerBound].contains("HeaderCluster"))

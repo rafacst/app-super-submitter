@@ -35,21 +35,33 @@ struct SearchKeywordsPanel: View {
         Section_("Search keywords", icon: "magnifyingglass", tint: Theme.teal,
                  anchor: "details.searchKeywords") {
             VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 5) {
+                // One line, and the rule behind a disclosure. Three paragraphs
+                // stood between the developer and the one list they came for,
+                // and the panel read as an essay with a button in it. The rule
+                // is still here in full for whoever needs it once.
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("This is not the Keywords field above. That one is your hundred characters of search terms, and the manifest owns it.")
-                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        Text("Link an approved App Store keyword to a custom product page.")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text2)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 12)
+                        // Outside the disclosure. The read is the task, and a
+                        // button that has to be opened for is a button nobody
+                        // finds.
                         QuietButton(title: busy ? "Fetching…" : "Fetch the keywords") { load() }
                             .disabled(busy || state.appleActionAppID == nil)
                     }
-                    Text("This sends one of those words to one custom product page. A customer who searches a linked word lands on that page, with the screenshots and the text written for that word, instead of on your default product page. Apple opened this to ordinary App Store search in July 2025.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("The list below is read only. Apple builds it from the Keywords field of your latest approved version and publishes no call that adds a word, so the way to get a new one here is to ship it in that field and have the version approved.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
-                        .fixedSize(horizontal: false, vertical: true)
+
+                    DisclosureGroup("How Apple supplies these keywords") {
+                        Text("Apple builds this read-only list from the Keywords field of the latest approved version. The API links an existing keyword ID. It cannot create a keyword.")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 4)
+                    }
+                    .font(Theme.font(size: 11.5))
+
                     platformRow
                 }
 

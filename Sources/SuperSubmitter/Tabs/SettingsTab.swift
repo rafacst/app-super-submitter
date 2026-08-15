@@ -150,7 +150,7 @@ struct SettingsTab: View {
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
-                        Button("Save progress") { state.saveDraft() }
+                        Button("Back Up Apps") { state.saveDraft() }
                         Button("Restore newest") { restoring = true }
                             .disabled(drafts.isEmpty)
                         Button("Show in Finder") { state.revealDrafts() }
