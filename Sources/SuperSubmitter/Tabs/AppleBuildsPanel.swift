@@ -44,7 +44,6 @@ struct AppleBuildsPanel: View {
             if !builds.isEmpty { list }
             if let chosen = state.chosenAppleBuildNumber, !chosen.isEmpty { chosenLine(chosen) }
         }
-        .storePanel(padding: 14, horizontal: 15)
         .fieldAnchor("build.storeBuilds")
     }
 
