@@ -265,6 +265,7 @@ extension BuildFlow {
                                       verificationDetail: info.signatureDetail),
                 preflightSnapshot: snapshot)
             appleArchiveInfo = info
+            appleArchiveInfos[candidate.id] = info
         case .android:
             guard let toolchain = androidToolchain else {
                 throw BuildFailure(category: .toolchainUnavailable,
@@ -306,11 +307,12 @@ extension BuildFlow {
         // before the upload below: the second artifact is built, never sent,
         // and sending is a separate confirmation either way.
         if queuedStore != nil { return await startQueuedBuild() }
+        if queuedApplePlatform != nil { return await startQueuedAppleBuild() }
 
         // upload-spec 8.14. The app continues by itself only when the first
         // confirmation said it would, no material field changed, and nothing
         // blocks. Android always pauses, because its preflight is a guess.
-        if !alwaysReviewArtifact, project.platform != .android,
+        if !alwaysReviewArtifact, project.platform != .android, otherCandidates.isEmpty,
            candidate.mismatches.isEmpty, blocking == nil {
             startUpload()
         }
@@ -515,6 +517,34 @@ extension BuildFlow {
         }
     }
 
+    /// Makes one retained archive the active upload choice.
+    func selectBuiltCandidate(_ selected: BuildCandidate) {
+        guard !state.isActive, candidate?.id != selected.id,
+              let index = otherCandidates.firstIndex(where: { $0.id == selected.id })
+        else { return }
+        let previous = candidate
+        otherCandidates.remove(at: index)
+        if let previous { otherCandidates.append(previous) }
+        candidate = selected
+        snapshot = selected.preflightSnapshot ?? PreflightSnapshot()
+        appleArchiveInfo = appleArchiveInfos[selected.id]
+        project?.platform = selected.platform
+        adoptAppleTrain()
+        blocking = nil
+        nextFreeBuildNumber = nil
+        failure = nil
+        artifactOnly = false
+        successLink = nil
+        run = UploadRun(platform: selected.platform, linkedProjectID: project?.id,
+                        state: .needsUploadConfirmation)
+        run.candidateIdentity = selected.logicalIdentity
+        try? storage.save(run)
+        task = Task { [weak self] in
+            guard let self else { return }
+            await recheckRemote(for: selected)
+        }
+    }
+
     private func uploadApple(_ candidate: BuildCandidate) async throws {
         let service = AppleBuildService(runner: ToolProcess(redactor: redactor),
                                         storage: storage)
@@ -577,6 +607,7 @@ extension BuildFlow {
                     processingLabel = nil
                     successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
                     run.move(to: .complete)
+                    settledCandidateIDs.insert(candidate.id)
                     storeGainedABuild()
                     Aptabase.shared.trackEvent("artifact_upload_completed", with: [
                         "platform": "apple"
@@ -654,6 +685,7 @@ extension BuildFlow {
         run.cleanupState = .complete
         successLink = "https://play.google.com/console"
         run.move(to: .complete)
+        settledCandidateIDs.insert(candidate.id)
         storeGainedABuild()
         Aptabase.shared.trackEvent("artifact_upload_completed", with: [
             "platform": "android"
@@ -681,6 +713,7 @@ extension BuildFlow {
     func finishCancel() async {
         storage.removeScratch(runID: run.id)
         queuedStore = nil
+        queuedApplePlatform = nil
         if run.state == .uploading || run.cleanupState == .pending {
             await reconcileAfterCancel()
         } else {
@@ -762,6 +795,7 @@ extension BuildFlow {
     func fail(_ value: BuildFailure) {
         storage.removeScratch(runID: run.id)
         queuedStore = nil
+        queuedApplePlatform = nil
         failure = value
         run.lastError = value
         // The panel tells the developer to read the log, so the log is on the
@@ -783,6 +817,7 @@ extension BuildFlow {
     }
 
     func keepArtifact() {
+        if let candidate { settledCandidateIDs.insert(candidate.id) }
         artifactOnly = true
         successLink = nil
         run.move(to: .complete)
@@ -811,6 +846,11 @@ extension BuildFlow {
         storage.removeScratch(runID: run.id)
         run = UploadRun(platform: run.platform, linkedProjectID: project.id)
         candidate = nil
+        otherCandidates = []
+        appleArchiveInfos = [:]
+        settledCandidateIDs = []
+        deletedCandidateIDs = []
+        supportedApplePlatforms = []
         appleArchiveInfo = nil
         clearLog()
         failure = nil
@@ -837,6 +877,11 @@ extension BuildFlow {
         variants = []
         snapshot = PreflightSnapshot()
         candidate = nil
+        otherCandidates = []
+        appleArchiveInfos = [:]
+        settledCandidateIDs = []
+        deletedCandidateIDs = []
+        supportedApplePlatforms = []
         appleArchiveInfo = nil
         clearLog()
         failure = nil
@@ -850,6 +895,7 @@ extension BuildFlow {
         // A queue outlives nothing. A second build that fires after the first
         // was reset, cancelled, or failed is a build nobody asked for.
         queuedStore = nil
+        queuedApplePlatform = nil
     }
 
     // MARK: - Logging

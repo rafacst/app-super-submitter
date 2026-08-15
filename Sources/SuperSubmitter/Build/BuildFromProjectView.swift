@@ -115,6 +115,9 @@ struct BuildFromProjectView: View {
         }
         .sheet(isPresented: Bindable(flow).showBuildConfirmation) { buildConfirmation }
         .sheet(isPresented: Bindable(flow).showBuildBothConfirmation) { buildBothConfirmation }
+        .sheet(isPresented: Bindable(flow).showBuildBothApplePlatformsConfirmation) {
+            buildBothApplePlatformsConfirmation
+        }
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
         .deleteArtifactConfirmation($deleting, flow: flow)
     }
@@ -456,6 +459,11 @@ struct BuildFromProjectView: View {
                             flow.showBuildBothConfirmation = true
                         }
                     }
+                    if flow.canBuildBothApplePlatforms {
+                        QuietButton(title: "Build both Apple platforms") {
+                            flow.showBuildBothApplePlatformsConfirmation = true
+                        }
+                    }
                     ActionButton(title: flow.project?.platform == .android
                                  ? "Build App Bundle" : "Build Archive",
                                  enabled: flow.canBuild) {
@@ -736,6 +744,20 @@ struct BuildFromProjectView: View {
         }
     }
 
+    private var buildBothApplePlatformsConfirmation: some View {
+        ConfirmationSheet(
+            title: "Build both Apple platforms?",
+            body: "Build \(flow.snapshot.scheme ?? "this scheme") for iOS and macOS. This can run scripts and plug-ins supplied by the selected project.",
+            rows: [("Folder", flow.project?.rootPath ?? ""),
+                   ("Container", flow.project?.containerURL.lastPathComponent ?? ""),
+                   ("Destinations", "generic/platform=iOS, generic/platform=macOS")],
+            note: "Super Submitter keeps both archives. Each archive waits for its own upload confirmation.",
+            confirm: "Build Both",
+            destructive: false) {
+            flow.buildBothApplePlatforms()
+        }
+    }
+
     private func folderName(_ store: Store) -> String {
         flow.savedProject(for: store)?.rootURL.lastPathComponent ?? "its folder"
     }
@@ -930,23 +952,30 @@ struct BuildFromProjectView: View {
 /// The artifact this Mac produced, without a panel of its own.
 struct BuiltArtifactSection: View {
     @Environment(AppState.self) private var state
-    @State private var detailsOpen: Bool?
+    @State private var detailsOpen: [UUID: Bool] = [:]
     @State private var deleting = false
 
     private var flow: BuildFlow { state.buildFlow }
 
-    private var showsDetails: Bool {
-        detailsOpen ?? (flow.state == .needsUploadConfirmation)
+    private func showsDetails(_ candidate: BuildCandidate) -> Bool {
+        detailsOpen[candidate.id]
+            ?? (flow.candidate?.id == candidate.id && flow.state == .needsUploadConfirmation)
     }
 
     var body: some View {
-        if let candidate = flow.candidate { card(candidate) }
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(flow.builtCandidates) { candidate in card(candidate) }
+        }
+        .deleteArtifactConfirmation($deleting, flow: flow)
     }
 
     private func card(_ candidate: BuildCandidate) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        let isSelected = flow.candidate?.id == candidate.id
+        let isDeleted = flow.deletedCandidateIDs.contains(candidate.id)
+        return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 9) {
-                Text("Built on this Mac").font(Theme.font(size: 12.5, weight: .semibold))
+                Text("Built on this Mac · \(candidate.platform.label)")
+                    .font(Theme.font(size: 12.5, weight: .semibold))
                 Text("\(candidate.marketingVersion) (\(candidate.buildVersion)) · \(candidate.sizeText)")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .lineLimit(1)
@@ -957,11 +986,11 @@ struct BuiltArtifactSection: View {
                               ? Theme.green : Theme.red,
                           background: candidate.signingSummary.verified == true
                               ? Theme.greenBg : Theme.redBg)
-                QuietButton(title: showsDetails ? "Hide details" : "Show details") {
-                    detailsOpen = !showsDetails
+                QuietButton(title: showsDetails(candidate) ? "Hide details" : "Show details") {
+                    detailsOpen[candidate.id] = !showsDetails(candidate)
                 }
             }
-            if showsDetails {
+            if showsDetails(candidate) {
                 ArtifactRows(rows: Self.rows(candidate))
             }
             ForEach(candidate.mismatches) { mismatch in
@@ -976,7 +1005,7 @@ struct BuiltArtifactSection: View {
                 }
             }
             HStack(spacing: 7) {
-                if flow.state == .needsUploadConfirmation {
+                if isSelected, flow.state == .needsUploadConfirmation {
                     ActionButton(title: "Upload to the store", enabled: flow.canUpload,
                                  paid: (.storeUpload, .upload)) {
                         flow.showUploadConfirmation = true
@@ -985,12 +1014,18 @@ struct BuiltArtifactSection: View {
                         flow.keepArtifact()
                     }
                 }
-                if flow.artifactDeleted {
+                if !isSelected, !flow.state.isActive,
+                   !flow.settledCandidateIDs.contains(candidate.id), !isDeleted {
+                    QuietButton(title: "Prepare this archive for upload") {
+                        flow.selectBuiltCandidate(candidate)
+                    }
+                }
+                if isDeleted {
                     Text("Deleted from this Mac. The record above is what was built.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 } else {
                     QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
-                    if flow.artifactIsDeletable {
+                    if isSelected, flow.artifactIsDeletable {
                         QuietButton(title: "Delete artifact") { deleting = true }
                     }
                 }
@@ -999,7 +1034,7 @@ struct BuiltArtifactSection: View {
                 }
                 Spacer(minLength: 0)
             }
-            if let held = flow.uploadBlockedByReview,
+            if isSelected, let held = flow.uploadBlockedByReview,
                flow.state == .needsUploadConfirmation {
                 HStack(spacing: 8) {
                     StatePill(text: "Held", foreground: Theme.yellow,
@@ -1010,8 +1045,7 @@ struct BuiltArtifactSection: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .motion(.easeInOut(duration: 0.22), value: showsDetails)
-        .deleteArtifactConfirmation($deleting, flow: flow)
+        .motion(.easeInOut(duration: 0.22), value: showsDetails(candidate))
     }
 
     static func rows(_ candidate: BuildCandidate) -> [(String, String)] {

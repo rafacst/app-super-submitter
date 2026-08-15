@@ -153,7 +153,7 @@ struct TwoStoreLinkTests {
         #expect(!flow.canBuildBothApplePlatforms)
     }
 
-    @Test func bothAppleBuildsStartWithIOSAndQueueMacOS() throws {
+    @Test func bothAppleBuildsStartWithTheSelectedPlatform() throws {
         let root = try folder()
         defer { try? FileManager.default.removeItem(at: root) }
         let (flow, state) = flow(root)
@@ -167,9 +167,31 @@ struct TwoStoreLinkTests {
 
         flow.buildBothApplePlatforms()
 
-        #expect(flow.run.platform == .ios)
+        #expect(flow.run.platform == .macos)
         #expect(flow.run.state == .building)
-        #expect(flow.queuedApplePlatform == .macos)
+        #expect(flow.queuedApplePlatform == .ios)
+        flow.task?.cancel()
+    }
+
+    @Test func eitherAppleArchiveCanBecomeTheUploadChoice() {
+        let flow = BuildFlow(app: nil)
+        let ios = BuildCandidate(
+            platform: .ios, productName: "App", productIdentifier: "com.example.app",
+            marketingVersion: "1.0", buildVersion: "1", artifactPath: "/tmp/App-iOS.xcarchive",
+            artifactSize: 1, sha256: "ios")
+        let mac = BuildCandidate(
+            platform: .macos, productName: "App", productIdentifier: "com.example.app",
+            marketingVersion: "1.0", buildVersion: "1", artifactPath: "/tmp/App-Mac.xcarchive",
+            artifactSize: 1, sha256: "mac")
+        flow.candidate = mac
+        flow.otherCandidates = [ios]
+        flow.run = UploadRun(platform: .macos, state: .needsUploadConfirmation)
+
+        flow.selectBuiltCandidate(ios)
+
+        #expect(flow.candidate?.id == ios.id)
+        #expect(flow.otherCandidates.map(\.id) == [mac.id])
+        #expect(flow.run.platform == .ios)
         flow.task?.cancel()
     }
 }
