@@ -448,9 +448,11 @@ public enum Planner {
     /// said nothing, so whatever Apple holds stays, and only a named value that
     /// disagrees earns a step.
     ///
-    /// `internalGroup` is absent on purpose. Apple takes it on the create
-    /// request alone, so a step raised for it would send a value Apple drops
-    /// and the plan would repeat it on every apply.
+    /// `internalGroup` and `automaticBuilds` are absent on purpose. Apple takes
+    /// both on the create request alone, so a step raised for either would send
+    /// a value Apple drops and the plan would repeat it on every apply. Worse
+    /// for `hasAccessToAllBuilds`: Apple faults the whole change rather than
+    /// ignoring the key, and the run stopped there. `Validator` says so.
     private static func betaGroupSettingsDiffer(
         _ group: Manifest.Release.TestFlight.Group,
         _ live: AppleTestFlightClient.BetaGroup?) -> Bool {
@@ -462,7 +464,6 @@ public enum Planner {
             // The cap was not compared, so a raised or a cleared limit left
             // the plan silent and the run never sent the new number.
             || differs(group.publicLinkLimit, live?.publicLinkLimit)
-            || differs(group.automaticBuilds, live?.automaticBuilds)
             || differs(group.feedback, live?.feedback)
             || differs(group.iosBuildsOnMac, live?.iosBuildsOnMac)
             || differs(group.iosBuildsOnVision, live?.iosBuildsOnVision)

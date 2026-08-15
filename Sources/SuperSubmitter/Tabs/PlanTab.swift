@@ -1263,6 +1263,17 @@ private struct ValidationRow: View {
             }
             Spacer(minLength: 8)
             if isWarning { AcknowledgeToggle(id: finding.id) }
+            // The one finding the app can settle by itself. Apple takes this
+            // answer when it creates the availability record and by no call
+            // after it, so the store is right by definition and the only fix
+            // inside this app is to write down what it holds. The message
+            // still says where to change the store instead.
+            if finding.id == Validator.newTerritoriesFindingID,
+               state.canTakeStoreNewTerritories {
+                QuietButton(title: "Use the store's answer") {
+                    state.takeStoreNewTerritories()
+                }
+            }
             if let destination {
                 // "Fix" only where there is something to fix. A hold is
                 // somebody else's turn, so its button offers the place the

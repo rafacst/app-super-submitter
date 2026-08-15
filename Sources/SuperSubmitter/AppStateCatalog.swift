@@ -31,12 +31,45 @@ extension AppState {
     /// checkbox greyed out. So the only way to answer Apple's question was to
     /// not know you were answering it.
     var appleNewTerritoriesBinding: Binding<Bool> {
-        Binding(get: { self.manifest.pricing?.appleNewTerritories ?? true }, set: { value in
+        Binding(get: { self.appleNewTerritoriesAnswer }, set: { value in
             guard var pricing = self.manifest.pricing else { return }
             pricing.appleNewTerritories = value
             self.manifest.pricing = pricing
             self.saveManifestReportingErrors()
         })
+    }
+
+    /// What the switch shows: `store.yaml` where it speaks, the App Store's
+    /// own record where it does not, and `true` only while neither has an
+    /// answer.
+    ///
+    /// It used to show `true` whenever the manifest said nothing. On an app
+    /// whose record holds `false` the switch was therefore already wrong when
+    /// the screen opened, and one click wrote a value that disagreed with a
+    /// store that takes no write for it.
+    var appleNewTerritoriesAnswer: Bool {
+        manifest.pricing?.appleNewTerritories
+            ?? actualState.apple?.availableInNewTerritories ?? true
+    }
+
+    /// Whether `store.yaml` can be settled against the store's own answer.
+    ///
+    /// Apple owns this value once an availability record exists, so the
+    /// disagreement has exactly two ends: change the store in App Store
+    /// Connect, or write down what the store holds. This is the second one,
+    /// and without it the warning had no end inside the app at all.
+    var canTakeStoreNewTerritories: Bool {
+        guard manifest.pricing != nil,
+              let held = actualState.apple?.availableInNewTerritories else { return false }
+        return manifest.pricing?.appleNewTerritories != held
+    }
+
+    func takeStoreNewTerritories() {
+        guard var pricing = manifest.pricing,
+              let held = actualState.apple?.availableInNewTerritories else { return }
+        pricing.appleNewTerritories = held
+        manifest.pricing = pricing
+        saveManifestReportingErrors()
     }
 
     // The comma-separated territory field is gone. `TerritoryPicker` writes
@@ -79,14 +112,15 @@ extension AppState {
     }
 
     /// Every territory the App Store availability record names, on sale or
-    /// not. Empty until a read lands, and empty again when the read came back
-    /// short: a partial record would hide countries the app sells in, and half
-    /// a list is worse than the general one.
+    /// not. Empty until a read lands.
+    ///
+    /// It used to throw the list away whenever it held fewer countries than
+    /// Apple's own count, because the read stopped at the first page of the
+    /// include and half a list is worse than the general one. Both reads page
+    /// the record to the end now, and a page that fails throws rather than
+    /// returning what came before it, so a short list can no longer arrive.
     var storeTerritories: Set<String> {
-        guard let apple = actualState.apple else { return [] }
-        let codes = Set(apple.territoryAvailability.keys)
-        guard !codes.isEmpty, codes.count >= (apple.territoryCount ?? 0) else { return [] }
-        return codes
+        Set(actualState.apple?.territoryAvailability.keys ?? [:].keys)
     }
 
     /// Ticks or clears one country, a whole continent, or the whole planet.

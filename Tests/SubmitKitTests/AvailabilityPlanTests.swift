@@ -112,3 +112,52 @@ private let freePrice = Price(amount: 0, currency: "USD", territory: "USA")
 
     #expect(hasAvailabilityStep(plan(pricing)))
 }
+
+/// Writing the store's answer into `store.yaml` ends the warning. That is the
+/// button on the row, and it is the only end the developer has inside this app:
+/// Apple takes the value on the create and by no call after it.
+@Test func takingTheStoresAnswerClearsTheWarning() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    manifest.pricing = Manifest.Pricing(base: freePrice, appleNewTerritories: false)
+    var actual = ActualState()
+    var apple = ActualState.Apple()
+    apple.availableInNewTerritories = true
+    actual.apple = apple
+
+    func findings(_ manifest: Manifest) -> [Finding] {
+        Validator.findings(Planner.Input(manifest: manifest, actual: actual, stores: [.apple]))
+    }
+    #expect(findings(manifest).contains { $0.id == Validator.newTerritoriesFindingID })
+
+    manifest.pricing?.appleNewTerritories = true
+    #expect(!findings(manifest).contains { $0.id == Validator.newTerritoriesFindingID })
+}
+
+/// Every key the app writes into the pricing block is a key the shipped schema
+/// has. `appleNewTerritories` was not one, so the file the app saves failed to
+/// validate against the schema the app ships beside it.
+@Test func thePricingBlockTheAppWritesValidatesAgainstTheShippedSchema() throws {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "1234567890", bundleID: "com.example.app")
+    var pricing = Manifest.Pricing(base: freePrice, appleNewTerritories: false)
+    pricing.autoConvertOtherTerritories = true
+    pricing.territories = [Manifest.TerritoryAvailability(territory: "BRA", available: true)]
+    manifest.pricing = pricing
+
+    let written = try ManifestFile.decode(ManifestFile.encode(manifest))
+    #expect(written.pricing?.appleNewTerritories == false)
+
+    let schema = try JSONSerialization.jsonObject(
+        with: Data(source("Sources/SubmitKit/Resources/store.schema.json").utf8))
+    let properties = ((((schema as? [String: Any])?["properties"] as? [String: Any])?["pricing"]
+        as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+    #expect((properties["appleNewTerritories"] as? [String: Any])?["type"] as? String
+        == "boolean")
+
+    // The whole block, so the next key that reaches the file without reaching
+    // the schema fails here rather than in somebody's editor.
+    let encoded = try JSONSerialization.jsonObject(
+        with: try JSONEncoder().encode(pricing)) as? [String: Any] ?? [:]
+    #expect(Set(encoded.keys).subtracting(properties.keys).isEmpty)
+}

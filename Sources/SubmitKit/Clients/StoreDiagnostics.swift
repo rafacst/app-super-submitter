@@ -250,16 +250,45 @@ public struct StoreDiagnostics: Sendable {
     /// list until they had run a read of every resource the app has. This is
     /// the same two facts on their own.
     public struct Availability: Sendable, Equatable {
-        /// Every territory the record names, and whether the app sells there.
-        public var territories: [String: Bool]
+        /// One country of the record, as Apple holds it.
+        ///
+        /// The id and the two optional attributes are here because a write
+        /// needs them: `PATCH /v1/territoryAvailabilities/{id}` is the only
+        /// route into a record that exists, and the run compares before it
+        /// sends. The runner used to page this relationship itself to get
+        /// them, without the include, and read a country code off none of it.
+        public struct Row: Sendable, Equatable {
+            public var id: String
+            public var available: Bool
+            public var preOrderEnabled: Bool?
+            public var releaseDate: String?
+
+            public init(id: String, available: Bool, preOrderEnabled: Bool? = nil,
+                        releaseDate: String? = nil) {
+                self.id = id
+                self.available = available
+                self.preOrderEnabled = preOrderEnabled
+                self.releaseDate = releaseDate
+            }
+        }
+
+        /// The id of the record itself, and nil when the app holds none. That
+        /// is the one state that takes a create.
+        public var id: String?
+        /// Every territory the record names, by country code.
+        public var rows: [String: Row]
         public var newTerritories: Bool?
         /// What Apple says the record holds, which is the number to trust: the
         /// list above is paged and a page may be missing.
         public var total: Int?
 
-        public init(territories: [String: Bool] = [:], newTerritories: Bool? = nil,
-                    total: Int? = nil) {
-            self.territories = territories
+        /// Every territory the record names, and whether the app sells there.
+        public var territories: [String: Bool] { rows.mapValues(\.available) }
+
+        public init(id: String? = nil, rows: [String: Row] = [:],
+                    newTerritories: Bool? = nil, total: Int? = nil) {
+            self.id = id
+            self.rows = rows
             self.newTerritories = newTerritories
             self.total = total
         }
@@ -270,16 +299,24 @@ public struct StoreDiagnostics: Sendable {
     /// Two requests, because the include on the record is one page long and an
     /// app on sale in 175 countries would come back as 50. The second one pages
     /// the relationship to the end, the way `territories()` does.
+    ///
+    /// `include=territory` on that second request is not a nicety. Without it
+    /// Apple answers the `territory` relationship of every row with links and
+    /// no `data`, so the rows arrive with no country code on them at all.
     public func appAvailability(appID: String) async throws -> Availability {
         let record = JSON(data: try await api.apple(
             "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities").data)
         let relationship = record["data"]["relationships"]["territoryAvailabilities"]
         var result = Availability(
+            id: record["data"]["id"].string,
             newTerritories: record["data"]["attributes"]["availableInNewTerritories"].bool,
             total: relationship["meta"]["paging"]["total"].int)
         Self.readTerritoryAvailabilities(record["included"], into: &result)
-        guard let id = record["data"]["id"].string,
-              result.total ?? 0 > result.territories.count else { return result }
+        // A record that answered with no count of its own is paged rather than
+        // trusted. Reading half of it and calling that the whole set is what
+        // reports the other half as countries the App Store does not have.
+        guard let id = result.id,
+              result.total ?? .max > result.rows.count else { return result }
 
         var path: String? = "/v2/appAvailabilities/\(StateReader.escape(id))"
             + "/territoryAvailabilities?limit=200&include=territory"
@@ -296,9 +333,15 @@ public struct StoreDiagnostics: Sendable {
     static func readTerritoryAvailabilities(_ items: JSON, into result: inout Availability) {
         for item in items.array
         where item["type"].string == "territoryAvailabilities" {
-            guard let code = item["relationships"]["territory"]["data"]["id"].string
+            guard let code = item["relationships"]["territory"]["data"]["id"].string,
+                  let id = item["id"].string
             else { continue }
-            result.territories[code] = item["attributes"]["available"].bool ?? false
+            let attributes = item["attributes"]
+            result.rows[code] = Availability.Row(
+                id: id,
+                available: attributes["available"].bool ?? false,
+                preOrderEnabled: attributes["preOrderEnabled"].bool,
+                releaseDate: attributes["releaseDate"].string)
         }
     }
 

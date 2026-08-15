@@ -191,6 +191,9 @@
         "autoConvertOtherTerritories": {
           "type": "boolean"
         },
+        "appleNewTerritories": {
+          "type": "boolean"
+        },
         "territories": {
           "type": "array",
           "items": {

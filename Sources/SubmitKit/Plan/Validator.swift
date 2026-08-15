@@ -24,6 +24,7 @@ public enum Validator {
         result += state(input)
         result += update(input)
         result += availability(input)
+        result += appleTestFlightGroups(input)
         // The errors first: tab 7 shows them at the top.
         return result.sorted { lhs, rhs in
             lhs.severity == rhs.severity
@@ -901,6 +902,34 @@ public enum Validator {
         return result
     }
 
+    /// The one TestFlight group setting the App Store will not take from this
+    /// app.
+    ///
+    /// `hasAccessToAllBuilds` is an attribute of the create and of no other
+    /// call. A change that carries it is not ignored: Apple faults the whole
+    /// request with "The attribute 'hasAccessToAllBuilds' can not be included
+    /// in an 'UPDATE' operation", and the apply stopped on the group and never
+    /// reached the steps after it.
+    ///
+    /// A warning, the same answer `availability` gives its own unwritable
+    /// value. The developer named a setting and the app is not going to send
+    /// it, and a setting that is quietly ignored is worse than a step that
+    /// fails.
+    static func appleTestFlightGroups(_ input: Planner.Input) -> [Finding] {
+        guard input.stores.contains(.apple),
+              let apple = input.actual.apple else { return [] }
+        return (input.manifest.release?.apple?.testFlight?.groups ?? []).compactMap { group in
+            guard let live = apple.betaGroups[group.name],
+                  let wanted = group.automaticBuilds,
+                  let held = live.automaticBuilds, wanted != held else { return nil }
+            return Finding(
+                id: "testFlight.automaticBuilds.\(group.name)", severity: .warning,
+                message: "store.yaml gives \(group.name) \(wanted ? "every new build" : "only the builds you name"), and TestFlight holds the opposite. Apple takes that setting when a group is created and by no call after it, so this one is changed in App Store Connect under TestFlight.",
+                location: "Beta testing · TestFlight", fix: .betaTesting,
+                fixAnchor: "build.testFlight")
+        }
+    }
+
     static func looksLikeEmail(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         let parts = trimmed.split(separator: "@", omittingEmptySubsequences: false)
@@ -1673,6 +1702,10 @@ public enum Validator {
     /// A warning and not silence. The developer wrote a value and the app is
     /// not going to send it, and the one thing worse than a step that fails is
     /// a setting that is quietly ignored.
+    /// Named, because the app offers to settle this one: the row carries a
+    /// button that writes the store's own answer into `store.yaml`.
+    public static let newTerritoriesFindingID = "availability.newTerritories"
+
     static func availability(_ input: Planner.Input) -> [Finding] {
         guard input.stores.contains(.apple) else { return [] }
         var result: [Finding] = []
@@ -1693,7 +1726,7 @@ public enum Validator {
            let wanted = input.manifest.pricing?.appleNewTerritories,
            let held = apple.availableInNewTerritories, wanted != held {
             result.append(Finding(
-                id: "availability.newTerritories", severity: .warning,
+                id: newTerritoriesFindingID, severity: .warning,
                 message: "store.yaml offers this app in new territories \(wanted ? "automatically" : "only where you say so"), and the App Store holds the opposite. Apple takes that setting when an app's availability is first created and by no call after it, so this one is changed in App Store Connect under Pricing and Availability.",
                 location: "Availability · Countries", fix: .availability))
         }
