@@ -131,14 +131,20 @@ struct AccountTab: View {
     private func tiles(_ promises: [(title: String, note: String,
                                      symbol: String, tint: Color)]) -> some View {
         ForEach(promises, id: \.title) { promise in
-            HStack(alignment: .top, spacing: 9) {
+            // The icon sits above the words and not beside them. Four tiles
+            // across this card leave about ninety points inside one, and an
+            // icon in the same row took a third of that: "Preview every
+            // change" wrapped onto three lines, "Developer-first" broke at
+            // its own hyphen, and every tile stretched to the tallest of
+            // them. Stacked, each title gets the whole width of its tile.
+            VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: promise.symbol)
                     .font(Theme.font(size: 12.5))
                     .foregroundStyle(promise.tint)
                     .frame(width: 26, height: 26)
                     .background(promise.tint.opacity(0.15),
                                 in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(promise.title)
                         .font(Theme.font(size: 12, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
@@ -147,10 +153,8 @@ struct AccountTab: View {
                         .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 10)
+            .padding(11)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10)
