@@ -301,12 +301,18 @@ struct StorePage: View {
                         }
                     } else {
                         ForEach(urls, id: \.self) { url in
-                            PreviewImage(url: url)
-                                .frame(height: 300)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                // The Media tab opens a screenshot at full
-                                // size on a click and so does this one.
-                                .onTapGesture { QuickLook.show(url) }
+                            // The Media tab opens a screenshot at full size on a
+                            // click and so does this one. A `Button`, because a
+                            // tap gesture is a pointer and nothing else: this
+                            // carousel had no keyboard route to a preview and
+                            // no name for VoiceOver to read.
+                            Button { QuickLook.show(url) } label: {
+                                PreviewImage(url: url)
+                                    .frame(height: 300)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Quick Look")
                         }
                     }
                 }

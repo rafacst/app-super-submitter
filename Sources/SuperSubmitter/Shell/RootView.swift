@@ -211,12 +211,17 @@ struct RootView: View {
     private var fieldSearch: some View {
         if state.showFieldSearch {
             ZStack(alignment: .top) {
-                Color.black.opacity(0.28)
-                    .ignoresSafeArea()
-                    .contentShape(.rect)
-                    .onTapGesture { state.showFieldSearch = false }
-                    .accessibilityLabel("Close the field search")
-                    .accessibilityAddTraits(.isButton)
+                // A `Button` and not a tap gesture wearing a button trait. The
+                // trait announced a control VoiceOver could not operate, which
+                // is the same defect the sidebar headings had. Escape closes
+                // the palette too, and did before this.
+                Button { state.showFieldSearch = false } label: {
+                    Color.black.opacity(0.28)
+                        .ignoresSafeArea()
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close the field search")
                 FieldSearchSheet()
                     .shadow(color: .black.opacity(0.35), radius: 26, y: 10)
                     .padding(.top, 110)
