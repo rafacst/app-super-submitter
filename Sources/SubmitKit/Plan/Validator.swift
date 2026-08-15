@@ -917,6 +917,7 @@ public enum Validator {
     /// fails.
     static func appleTestFlightGroups(_ input: Planner.Input) -> [Finding] {
         guard input.stores.contains(.apple),
+              input.manifest.release?.apple?.testFlight?.platforms?.isEmpty != true,
               let apple = input.actual.apple else { return [] }
         return (input.manifest.release?.apple?.testFlight?.groups ?? []).compactMap { group in
             guard let live = apple.betaGroups[group.name],

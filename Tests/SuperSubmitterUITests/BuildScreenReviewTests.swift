@@ -136,17 +136,17 @@ private func buildReviewState() -> AppState {
     let card = try #require(view.range(of: "private var preflightCard"))
     let rows = try #require(view.range(of: "private func preflightRows"))
     let preflight = String(view[card.lowerBound..<rows.lowerBound])
-    let actions = try #require(view.range(of: "private var actionRow"))
-    let confirmations = try #require(view.range(of: "private var buildConfirmation"))
-    let row = String(view[actions.lowerBound..<confirmations.lowerBound])
+    let artifactStart = try #require(view.range(of: "struct BuiltArtifactSection"))
+    let artifactRows = try #require(view.range(of: "static func rows"))
+    let artifact = String(view[artifactStart.lowerBound..<artifactRows.lowerBound])
 
     #expect(preflight.contains("Build Archive"))
     #expect(preflight.contains("showBuildConfirmation = true"))
-    #expect(!row.contains("Build Archive"))
-    // The upload and the artifact are still answered at the foot of the screen,
-    // beside the artifact they describe.
-    #expect(row.contains("Upload to the store"))
-    #expect(row.contains("Keep the artifact and stop"))
+    #expect(preflight.contains("flow.buildAgain()"))
+    #expect(preflight.contains("flow.chooseBuiltBundle()"))
+    #expect(!view.contains("private var actionRow"))
+    #expect(artifact.contains("Upload to the store"))
+    #expect(artifact.contains("Keep the artifact and stop"))
 }
 
 // MARK: - What the app read folds away
@@ -246,9 +246,11 @@ private func buildReviewState() -> AppState {
     // One panel around the two halves, and neither draws a second one inside it.
     #expect(layout.contains("projectCard"))
     #expect(layout.contains("selectionBlock"))
+    #expect(layout.contains("preflightCard"))
     #expect(layout.contains(".storePanel(horizontal: 15)"))
     #expect(!project.contains(".storePanel("))
     #expect(layout.contains("Text(\"Project\")"))
+    #expect(!checks.contains(".storePanel("))
     // The build's own two answers are choices and not checks, so they moved to
     // the box that holds every other choice.
     #expect(view.contains("private var buildOptions"))
@@ -327,8 +329,8 @@ private func buildReviewState() -> AppState {
 /// Two buttons on one row, both ending a run, drawn at two heights.
 @Test func theArtifactActionsShareOneButtonSize() throws {
     let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
-    let start = try #require(view.range(of: "private var actionRow"))
-    let end = try #require(view.range(of: "// MARK: - 10.5"))
+    let start = try #require(view.range(of: "struct BuiltArtifactSection"))
+    let end = try #require(view.range(of: "static func rows"))
     let row = String(view[start.lowerBound..<end.lowerBound])
 
     #expect(row.contains("ActionButton(title: \"Upload to the store\""))

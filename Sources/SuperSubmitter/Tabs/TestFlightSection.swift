@@ -390,7 +390,7 @@ struct TestFlightSendPanel: View {
         let running = state.directApplyRunning(.testFlight)
         let message = state.directApplyMessage(for: .testFlight)
         return VStack(alignment: .leading, spacing: 8) {
-            if state.testFlightPlatformChoices.count > 1 {
+            if !state.testFlightPlatformChoices.isEmpty {
                 HStack(spacing: 14) {
                     Text("Builds to test")
                         .font(Theme.font(size: 11.5, weight: .medium))
@@ -421,7 +421,7 @@ struct TestFlightSendPanel: View {
                 Button(buttonTitle(running: running)) { start() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
-                    .disabled(running || state.planReading)
+                    .disabled(running || state.planReading || state.testFlightPlatforms.isEmpty)
             }
             // Not "a second send invites nobody twice". The group list already
             // says that, and one panel saying one thing twice reads as two
@@ -447,6 +447,7 @@ struct TestFlightSendPanel: View {
 
     private var platformSummary: String {
         let names = state.testFlightPlatforms.map(platformName)
+        guard !names.isEmpty else { return "No build will go to TestFlight." }
         return "The \(names.joined(separator: " and ")) \(names.count == 1 ? "build" : "builds") will go to TestFlight."
     }
 

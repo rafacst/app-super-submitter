@@ -154,15 +154,15 @@ import Testing
             .first { $0.value == "BRA" }?.label == "Brazil (BRA)")
     }
 
-    /// Apple sells in Kosovo as `XKS`, which no ISO alpha-3 covers, so the ICU
-    /// list cannot hold it. A country the store names has to be tickable, or
-    /// the developer cannot see it, keep it, or turn it off.
+    /// Apple uses current territory codes that ICU sometimes knows through an
+    /// older alias. They still belong to their continent.
     @Test func aCodeOnlyTheStoreKnowsStillGetsARow() {
-        let groups = StoreValues.territoryGroups(including: ["XKS", "BRA"])
-        let elsewhere = groups.first { $0.id == "other" }
+        let groups = StoreValues.territoryGroups(including: ["XKS", "ROU", "BRA", "ZZZ"])
+        let europe = groups.first { $0.name == "Europe" }
 
-        #expect(elsewhere?.territories.map(\.value) == ["XKS"])
-        #expect(elsewhere?.territories.first?.label.contains("Kosovo") == true)
+        #expect(europe?.territories.contains { $0.value == "XKS" } == true)
+        #expect(europe?.territories.contains { $0.value == "ROU" } == true)
+        #expect(groups.first { $0.id == "other" }?.territories.map(\.value) == ["ZZZ"])
         // A code the list already holds does not get a second row.
         #expect(groups.filter { $0.territories.contains { $0.value == "BRA" } }.count == 1)
     }
