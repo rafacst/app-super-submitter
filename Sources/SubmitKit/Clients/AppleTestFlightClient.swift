@@ -137,9 +137,10 @@ public struct AppleTestFlightClient: Sendable {
     ///
     /// Apple splits the attributes of a group across three lists. `name` and
     /// the switches below take a create and a change alike; `isInternalGroup`
-    /// is on the create request alone, so the kind of a group is fixed when
-    /// Apple makes it; and the two platform switches are on the change request
-    /// alone, so a new group takes them in a second call.
+    /// and `hasAccessToAllBuilds` are on the create request alone, so the kind
+    /// of a group and its automatic builds are fixed when Apple makes it; and
+    /// the two platform switches are on the change request alone, so a new
+    /// group takes them in a second call.
     @discardableResult
     public func ensureGroup(appID: String,
                             _ group: Manifest.Release.TestFlight.Group,
@@ -161,9 +162,6 @@ public struct AppleTestFlightClient: Sendable {
                 attributes["publicLinkLimitEnabled"] = false
             }
         }
-        if let automatic = group.automaticBuilds {
-            attributes["hasAccessToAllBuilds"] = automatic
-        }
         if let feedback = group.feedback { attributes["feedbackEnabled"] = feedback }
 
         var changeOnly: [String: Any] = [:]
@@ -180,6 +178,9 @@ public struct AppleTestFlightClient: Sendable {
             return existing.id
         }
         if let isInternal = group.internalGroup { attributes["isInternalGroup"] = isInternal }
+        if let automatic = group.automaticBuilds {
+            attributes["hasAccessToAllBuilds"] = automatic
+        }
         let created = JSON(data: try await api.apple("POST", "/v1/betaGroups", body: [
             "data": [
                 "type": "betaGroups",

@@ -119,6 +119,24 @@ struct TestFlightGroupWriteTests {
         #expect(GroupStub.log.calls == ["PATCH /v1/betaGroups/g1"])
     }
 
+    /// Apple fixes the automatic builds when it makes the group too, and it
+    /// faults the change that carries them rather than dropping the key: "The
+    /// attribute 'hasAccessToAllBuilds' can not be included in an 'UPDATE'
+    /// operation". The apply stopped there and the steps after it never ran.
+    @Test func aChangeNeverSendsTheAutomaticBuildsAndACreateDoes() async throws {
+        let client = testFlightClient()
+        let group = Manifest.Release.TestFlight.Group(name: "QA", automaticBuilds: true)
+
+        _ = try await client.ensureGroup(appID: "1", group,
+                                         existing: AppleTestFlightClient.BetaGroup(
+                                            id: "g1", name: "QA"))
+        #expect(GroupStub.log.attributes("PATCH")["hasAccessToAllBuilds"] == nil)
+
+        let fresh = testFlightClient()
+        _ = try await fresh.ensureGroup(appID: "1", group, existing: nil)
+        #expect(GroupStub.log.attributes("POST")["hasAccessToAllBuilds"] as? Bool == true)
+    }
+
     /// A cap the developer cleared has to be turned off by name. Leaving the
     /// key out left Apple capping the public link at the number it still held.
     @Test func clearingTheCapTurnsTheLimitOffRatherThanSayingNothing() async throws {
@@ -216,6 +234,28 @@ private func liveGroup(_ build: (inout AppleTestFlightClient.BetaGroup) -> Void)
     let manifest = groupManifest(.init(name: "QA", internalGroup: true))
     let held = liveGroup { $0.internalGroup = false }
     #expect(!steps(manifest, held).contains { $0.id == "apple.betaGroup.QA" })
+}
+
+/// The automatic builds are the same story with a worse ending: Apple refuses
+/// the whole change rather than dropping the key, so the step that carried it
+/// stopped the run. The plan says nothing and the Summary tab warns instead.
+@Test func theAutomaticBuildsAloneRaiseNoStepAndWarnInstead() {
+    let manifest = groupManifest(.init(name: "QA", automaticBuilds: true))
+    let held = liveGroup { $0.automaticBuilds = false }
+    let plan = Planner.plan(Planner.Input(manifest: manifest, actual: held,
+                                          stores: [.apple], root: nil))
+
+    #expect(!plan.steps.contains { $0.id == "apple.betaGroup.QA" })
+    let warning = plan.findings.first { $0.id == "testFlight.automaticBuilds.QA" }
+    #expect(warning?.severity == .warning)
+    #expect(warning?.message.contains("QA") == true)
+    #expect(warning?.message.contains("App Store Connect") == true)
+
+    // A group that agrees with TestFlight says nothing at all.
+    let matching = liveGroup { $0.automaticBuilds = true }
+    #expect(!Planner.plan(Planner.Input(manifest: manifest, actual: matching,
+                                        stores: [.apple], root: nil))
+        .findings.contains { $0.id == "testFlight.automaticBuilds.QA" })
 }
 
 /// The build a run uploads is the build its groups receive. The step used to

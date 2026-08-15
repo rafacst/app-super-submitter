@@ -12,7 +12,7 @@ import Testing
 /// of those are the ordinary case and neither one writes a territory.
 
 private final class AvailabilityStub: URLProtocol, @unchecked Sendable {
-    struct Call { var method: String; var path: String; var body: [String: Any] }
+    struct Call { var method: String; var path: String; var query: String; var body: [String: Any] }
 
     nonisolated(unsafe) private static var calls: [Call] = []
     private static let lock = NSLock()
@@ -32,17 +32,42 @@ private final class AvailabilityStub: URLProtocol, @unchecked Sendable {
             .flatMap { $0["attributes"] as? [String: Any] }
     }
 
+    /// One row, the way App Store Connect answers it.
+    ///
+    /// The country code is on the `territory` relationship, and Apple puts it
+    /// there only for a request that asks for `include=territory`. Without the
+    /// include the relationship is a pair of links and the row names no
+    /// country at all, which is the answer the run has to survive reading.
+    private static func row(_ id: String, _ code: String, available: Bool,
+                            includesTerritory: Bool) -> String {
+        let territory = includesTerritory
+            ? #"{"data":{"id":"\#(code)","type":"territories"}}"#
+            : #"{"links":{"self":"https://api.appstoreconnect.apple.com/v2/territoryAvailabilities/\#(id)/relationships/territory"}}"#
+        return """
+        {"id":"\(id)","type":"territoryAvailabilities",
+         "attributes":{"available":\(available)},
+         "relationships":{"territory":\(territory)}}
+        """
+    }
+
     /// BRA is off and USA is on, which is the state the manifest below changes.
-    private static let territories = """
-    {"data":[
-      {"id":"ta-bra","type":"territoryAvailabilities",
-       "attributes":{"available":false},
-       "relationships":{"territory":{"data":{"id":"BRA"}}}},
-      {"id":"ta-usa","type":"territoryAvailabilities",
-       "attributes":{"available":true},
-       "relationships":{"territory":{"data":{"id":"USA"}}}}
-    ]}
-    """
+    /// DEU sits on a second page, so a run that reads one page reports it as a
+    /// country the App Store does not have.
+    private static func territories(page: Int, includesTerritory: Bool) -> String {
+        let next = #""links":{"next":"https://api.appstoreconnect.apple.com/v2/appAvailabilities/avail-1/territoryAvailabilities?limit=200&include=territory&cursor=page2"},"#
+        return page == 1
+            ? """
+            {\(next)"data":[
+              \(row("ta-bra", "BRA", available: false, includesTerritory: includesTerritory)),
+              \(row("ta-usa", "USA", available: true, includesTerritory: includesTerritory))
+            ]}
+            """
+            : """
+            {"data":[
+              \(row("ta-deu", "DEU", available: false, includesTerritory: includesTerritory))
+            ]}
+            """
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -64,9 +89,10 @@ private final class AvailabilityStub: URLProtocol, @unchecked Sendable {
         }
         let body = data.flatMap { try? JSONSerialization.jsonObject(with: $0) }
             as? [String: Any] ?? [:]
+        let query = url.query ?? ""
         Self.lock.withLock {
             Self.calls.append(Call(method: request.httpMethod ?? "",
-                                   path: url.path, body: body))
+                                   path: url.path, query: query, body: body))
         }
 
         let answer: String
@@ -76,7 +102,8 @@ private final class AvailabilityStub: URLProtocol, @unchecked Sendable {
                 ? #"{"data":{"id":"avail-1","type":"appAvailabilities"}}"#
                 : #"{"data":{}}"#
         case "/v2/appAvailabilities/avail-1/territoryAvailabilities":
-            answer = Self.territories
+            answer = Self.territories(page: query.contains("cursor=page2") ? 2 : 1,
+                                      includesTerritory: query.contains("include=territory"))
         default:
             answer = #"{"data":{}}"#
         }
@@ -215,6 +242,37 @@ struct AvailabilityRouteTests {
         await #expect(throws: RunError.self) { try await runner.appleAvailability() }
         // And the territory it could write still landed.
         #expect(AvailabilityStub.patched("/v1/territoryAvailabilities/ta-bra") != nil)
+    }
+
+    /// The one the developer hit next. The run paged the relationship itself
+    /// and asked for no `include=territory`, so App Store Connect answered
+    /// every row with a link where its country code belongs. Nothing matched,
+    /// the run reported about 200 valid codes as countries the App Store does
+    /// not have, and it stopped there.
+    ///
+    /// A page beyond the first is in the answer too: the whole record is read,
+    /// so a country on page two is written and never reported as unknown.
+    @Test func everyPageIsReadAndEveryRowNamesItsCountry() async throws {
+        AvailabilityStub.start()
+        let runner = availabilityRunner([
+            Manifest.TerritoryAvailability(territory: "BRA", available: true),
+            Manifest.TerritoryAvailability(territory: "USA", available: true),
+            Manifest.TerritoryAvailability(territory: "DEU", available: true),
+        ])
+
+        try await runner.appleAvailability()
+
+        #expect(AvailabilityStub.seen.contains {
+            $0.path == "/v2/appAvailabilities/avail-1/territoryAvailabilities"
+                && $0.query.contains("include=territory")
+        })
+        // The two that disagree with the store are written.
+        #expect(AvailabilityStub.patched("/v1/territoryAvailabilities/ta-bra")?["available"]
+            as? Bool == true)
+        #expect(AvailabilityStub.patched("/v1/territoryAvailabilities/ta-deu")?["available"]
+            as? Bool == true)
+        // The one that already agrees is not.
+        #expect(AvailabilityStub.patched("/v1/territoryAvailabilities/ta-usa") == nil)
     }
 
     /// An app that holds no availability yet still takes the create, which is

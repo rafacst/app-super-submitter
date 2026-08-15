@@ -1097,16 +1097,21 @@ extension Runner {
         let requested = manifest.pricing?.territories ?? []
         // What the app holds now decides the route, and a stale answer here
         // sends the run down the branch that errors, so it is read fresh.
-        let held = JSON(data: try await api.apple(
-            "GET", "/v1/apps/\(appleAppID)/appAvailabilityV2").data)
-        if let availabilityID = held["data"]["id"].string {
+        //
+        // The read is `StoreDiagnostics`, which is the one place that pages
+        // this relationship correctly. This function had its own copy of the
+        // loop and asked for no `include=territory`, so Apple answered every
+        // row with a link where its country code belongs, the run matched none
+        // of them, and it reported all 175 countries as ones the App Store
+        // does not list.
+        let held = try await StoreDiagnostics(api: api).appAvailability(appID: appleAppID)
+        if held.id != nil {
             // The territories, and nothing else. `availableInNewTerritories` is
             // an attribute of the create alone, so on a record that exists there
             // is no call to make: see `appleAvailableInNewTerritories` for the
             // three routes Apple refuses. The plan does not offer it either, and
             // `Validator.availability` reports the difference.
-            try await appleUpdateTerritories(availabilityID: availabilityID,
-                                             requested: requested)
+            try await appleUpdateTerritories(held: held.rows, requested: requested)
             return
         }
 
@@ -1145,24 +1150,9 @@ extension Runner {
     /// in every country holds 175 of these, so a run that sent them all would
     /// spend minutes writing the values the store already had.
     private func appleUpdateTerritories(
-        availabilityID: String,
+        held: [String: StoreDiagnostics.Availability.Row],
         requested: [Manifest.TerritoryAvailability]) async throws {
         guard !requested.isEmpty else { return }
-        var held: [String: JSON] = [:]
-        var path: String? = "/v2/appAvailabilities/\(availabilityID)"
-            + "/territoryAvailabilities?limit=200"
-        var pages = 0
-        var seen: Set<String> = []
-        while let current = path, pages < 20, seen.insert(current).inserted {
-            pages += 1
-            let page = JSON(data: try await api.apple("GET", current).data)
-            for item in page["data"].array {
-                guard let territory = item["relationships"]["territory"]["data"]["id"].string
-                else { continue }
-                held[territory] = item
-            }
-            path = page["links"]["next"].string.flatMap(UploadService.appleNextPagePath)
-        }
 
         // A territory the store does not list is named rather than skipped. A
         // run that reports success and left a country out is the one outcome
@@ -1173,21 +1163,19 @@ extension Runner {
                 unknown.append(item.territory)
                 continue
             }
-            let attributes = current["attributes"]
             var wanted: [String: Any] = [:]
-            if attributes["available"].bool != item.available {
+            if current.available != item.available {
                 wanted["available"] = item.available
             }
-            if let preorder = item.preOrderEnabled,
-               attributes["preOrderEnabled"].bool != preorder {
+            if let preorder = item.preOrderEnabled, current.preOrderEnabled != preorder {
                 wanted["preOrderEnabled"] = preorder
             }
-            if let date = item.releaseDate, attributes["releaseDate"].string != date {
+            if let date = item.releaseDate, current.releaseDate != date {
                 wanted["releaseDate"] = date
             }
-            guard !wanted.isEmpty, let id = current["id"].string else { continue }
-            try await api.apple("PATCH", "/v1/territoryAvailabilities/\(id)", body: [
-                "data": ["type": "territoryAvailabilities", "id": id,
+            guard !wanted.isEmpty else { continue }
+            try await api.apple("PATCH", "/v1/territoryAvailabilities/\(current.id)", body: [
+                "data": ["type": "territoryAvailabilities", "id": current.id,
                          "attributes": wanted],
             ])
         }

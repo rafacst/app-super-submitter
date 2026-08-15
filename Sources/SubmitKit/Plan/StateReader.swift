@@ -471,14 +471,15 @@ public struct StateReader: Sendable {
             result.currentPriceAmount = Self.currentPrice(JSON(data: prices.data))
         }
 
-        if let response = try? await api.apple(
-            "GET", "/v1/apps/\(appID)/appAvailabilityV2?include=territoryAvailabilities") {
-            let availabilities = JSON(data: response.data)
-            result.availableInNewTerritories =
-                availabilities["data"]["attributes"]["availableInNewTerritories"].bool
-            let territories = availabilities["data"]["relationships"]["territoryAvailabilities"]
-            result.territoryCount = territories["meta"]["paging"]["total"].int
-            Self.readTerritories(availabilities, into: &result)
+        // The include on the record is one page long, so this read used to
+        // hold the first fifty countries of an app that sells in 175, and the
+        // plan then compared the manifest against a third of the record. The
+        // diagnostics read pages it to the end, and it is the same request.
+        if let availability = try? await StoreDiagnostics(api: api)
+            .appAvailability(appID: appID) {
+            result.availableInNewTerritories = availability.newTerritories
+            result.territoryCount = availability.total
+            result.territoryAvailability = availability.territories
         }
 
         await readAppleMarketing(appID: appID, into: &result)
@@ -495,16 +496,6 @@ public struct StateReader: Sendable {
             item["attributes"]["state"].string
         }.first { ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"].contains($0) }
         return result
-    }
-
-    static func readTerritories(_ availabilities: JSON, into result: inout ActualState.Apple) {
-        for item in availabilities["included"].array
-        where item["type"].string == "territoryAvailabilities" {
-            guard let code = item["relationships"]["territory"]["data"]["id"].string else {
-                continue
-            }
-            result.territoryAvailability[code] = item["attributes"]["available"].bool ?? false
-        }
     }
 
     /// The seven App Store marketing resources.

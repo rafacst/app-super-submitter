@@ -41,6 +41,65 @@ import Testing
         #expect(state.liveAppleTerritoryCount == 3)
     }
 
+    /// The switch shows what the App Store holds while `store.yaml` says
+    /// nothing about it.
+    ///
+    /// It used to show "on" whenever the manifest was silent. On an app whose
+    /// record holds `false` the switch was already wrong when the screen
+    /// opened, and one click then wrote a value that disagreed with a store
+    /// that takes no write for it. The warning that followed had no end inside
+    /// this app.
+    @Test func theNewTerritoriesSwitchFollowsTheStoreUntilTheManifestSpeaks() {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        state.priceCurrency = "USD"
+        state.priceAmount = "0.99"
+        state.updateBasePrice()
+        var apple = ActualState.Apple()
+        apple.availableInNewTerritories = false
+        state.actualState.apple = apple
+
+        #expect(state.appleNewTerritoriesBinding.wrappedValue == false)
+
+        // The manifest wins the moment it has an answer of its own.
+        state.appleNewTerritoriesBinding.wrappedValue = true
+        #expect(state.appleNewTerritoriesBinding.wrappedValue == true)
+
+        // And with neither an answer nor a read, the App Store's own default.
+        let fresh = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        #expect(fresh.appleNewTerritoriesBinding.wrappedValue == true)
+    }
+
+    /// The row's button writes the store's answer into `store.yaml`, which is
+    /// the only way the disagreement ends without leaving the app.
+    @Test func theStoresAnswerCanBeWrittenIntoTheManifest() {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        state.priceCurrency = "USD"
+        state.priceAmount = "0.99"
+        state.updateBasePrice()
+        state.appleNewTerritoriesBinding.wrappedValue = true
+        var apple = ActualState.Apple()
+        apple.availableInNewTerritories = false
+        state.actualState.apple = apple
+
+        #expect(state.canTakeStoreNewTerritories)
+        state.takeStoreNewTerritories()
+
+        #expect(state.manifest.pricing?.appleNewTerritories == false)
+        // Settled, so the button goes away with the warning it settles.
+        #expect(!state.canTakeStoreNewTerritories)
+        #expect(!Validator.findings(Planner.Input(
+            manifest: state.manifest, actual: state.actualState, stores: [.apple]))
+            .contains { $0.id == Validator.newTerritoriesFindingID })
+
+        // With no read there is nothing to take, and the button is not offered.
+        let unread = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                              storeAccount: "test-\(UUID().uuidString)")
+        #expect(!unread.canTakeStoreNewTerritories)
+    }
+
     /// The picker offers what Apple sells in, not what ICU knows about.
     ///
     /// ICU knows 262 regions and the App Store sells in 175. The difference is
@@ -62,10 +121,11 @@ import Testing
         // Two continents, and each says how many of its own are ticked.
         #expect(state.territoryGroups.map(\.name).sorted() == ["Africa", "Americas", "Europe"])
 
-        // A record that came back short is no list at all. Half of Apple's
-        // territories would hide countries the app sells in, and the general
-        // list is the better answer until the read is whole.
-        state.actualState.apple?.territoryCount = 175
+        // Until a read lands there is no store list, and the picker falls back
+        // to the general one. The count no longer decides that: both reads
+        // page the record to the end and a page that fails throws away the
+        // whole answer, so a list that arrives is the whole record.
+        state.actualState.apple?.territoryAvailability = [:]
         #expect(state.storeTerritories.isEmpty)
         #expect(state.territoryGroups.flatMap { $0.territories }.count > 200)
     }
