@@ -1,6 +1,6 @@
 import AppKit
+import Aptabase
 import Foundation
-import PostHog
 import SubmitKit
 import SwiftUI
 import UserNotifications
@@ -216,11 +216,11 @@ extension AppState {
         stepStates = Array(repeating: .pending, count: result.steps.count)
         stepMeta = Array(repeating: "", count: result.steps.count)
         refreshDraftStatuses()
-        PostHogSDK.shared.capture("plan_generated", properties: [
+        Aptabase.shared.trackEvent("plan_generated", with: [
             "store_count": stores.count,
             "step_count": result.steps.count,
-            "is_blocked": result.isBlocked,
-            "is_dry_run": dryRun
+            "is_blocked": result.isBlocked ? 1 : 0,
+            "is_dry_run": dryRun ? 1 : 0
         ])
         planReading = false
     }
@@ -432,10 +432,10 @@ extension AppState {
         guard start > 0 || canApply else { return }
         let previous = runTask
         previous?.cancel()
-        PostHogSDK.shared.capture("submission_run_started", properties: [
+        Aptabase.shared.trackEvent("submission_run_started", with: [
             "start_step": start,
             "step_count": plan.steps.count,
-            "is_dry_run": dryRun
+            "is_dry_run": dryRun ? 1 : 0
         ])
         runFailure = nil
         providerFailure = nil
@@ -517,9 +517,9 @@ extension AppState {
             // A run that stopped mid-upload would otherwise leave a bar frozen
             // at whatever fraction it reached, which reads as work still going.
             DockTile.clear()
-            PostHogSDK.shared.capture("submission_run_failed", properties: [
+            Aptabase.shared.trackEvent("submission_run_failed", with: [
                 "step_index": failure.stepIndex,
-                "is_dry_run": dryRun
+                "is_dry_run": dryRun ? 1 : 0
             ])
         case .providerFailed(let message):
             providerFailure = message
@@ -537,9 +537,9 @@ extension AppState {
         // The icon goes back to being an icon. Left set, the bar would sit at
         // 100% in the Dock until the app quit.
         DockTile.clear()
-        PostHogSDK.shared.capture("submission_run_completed", properties: [
+        Aptabase.shared.trackEvent("submission_run_completed", with: [
             "step_count": runSteps.count,
-            "is_dry_run": dryRun
+            "is_dry_run": dryRun ? 1 : 0
         ])
         refreshDraftStatuses()
         // `applied` has just become true, so the console steps are now the
@@ -879,12 +879,12 @@ extension AppState {
                 statuses[.google] = StoreStatus(store: .google, phase: .inQueue,
                                                 detail: detail(for: .google), checkedAt: Date())
             }
-            PostHogSDK.shared.capture("release_submitted", properties: [
+            Aptabase.shared.trackEvent("release_submitted", with: [
                 "store": store == .apple ? "apple" : "google"
             ])
             startPolling()
         } catch {
-            PostHogSDK.shared.capture("release_submission_failed", properties: [
+            Aptabase.shared.trackEvent("release_submission_failed", with: [
                 "store": store == .apple ? "apple" : "google"
             ])
             releaseError = "\(store == .apple ? "App Store" : "Google Play"): \(error.localizedDescription)"
@@ -977,7 +977,7 @@ extension AppState {
                 appleSubmissionID = nil
             }
             try await client.deleteAppleDraftVersion(versionID: version.id)
-            PostHogSDK.shared.capture("draft_version_deleted")
+            Aptabase.shared.trackEvent("draft_version_deleted")
             // The state this app holds describes a version that is gone, and
             // every tab reads it. The read is the only honest next step.
             await recheck()
@@ -1051,7 +1051,7 @@ extension AppState {
                 statuses[.google] = StoreStatus(store: .google, phase: .draft,
                                                 detail: detail(for: .google), checkedAt: Date())
             }
-            PostHogSDK.shared.capture("release_undone", properties: [
+            Aptabase.shared.trackEvent("release_undone", with: [
                 "store": store == .apple ? "apple" : "google"
             ])
         } catch {

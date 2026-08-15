@@ -8,14 +8,14 @@
 .DS_Store
 .super-submitter/
 
-# The PostHog project token is a real credential, and the names of the
+# The Aptabase app key is a real credential, and the names of the
 # variables around it are nobody's business either. Both files stay local.
 .env
 .env.example
 
-# The same token again, in the form the Xcode build reads: `.env` reaches
+# The same key again, in the form the Xcode build reads: `.env` reaches
 # `swift run` and nothing else, so a bundle needs its own copy. Only the local
-# file is ignored. Analytics.xcconfig itself is tracked and holds no token,
+# file is ignored. Analytics.xcconfig itself is tracked and holds no key,
 # because XcodeGen refuses to generate the project when a file named under
 # `configFiles` is missing, and a clone has to be able to build.
 Supporting/Analytics.local.xcconfig

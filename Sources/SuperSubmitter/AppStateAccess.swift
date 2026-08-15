@@ -1,6 +1,6 @@
 import AppKit
+import Aptabase
 import Foundation
-import PostHog
 import SubmitKit
 
 /// Which gate sent the developer to the Account tab.
@@ -249,7 +249,7 @@ extension AppState {
     @discardableResult
     func requirePaid(_ capability: AccessCapability, _ trigger: PaywallTrigger) -> Bool {
         guard !can(capability) else { return true }
-        PostHogSDK.shared.capture("paywall_gate_hit", properties: [
+        Aptabase.shared.trackEvent("paywall_gate_hit", with: [
             "capability": capability.rawValue,
             "trigger": trigger.rawValue
         ])
@@ -275,7 +275,7 @@ extension AppState {
     /// went on the review that made the tab stand in one window.
     func openPaywall(_ trigger: PaywallTrigger) {
         billingMessage = nil
-        PostHogSDK.shared.capture("paywall_shown", properties: ["trigger": trigger.rawValue])
+        Aptabase.shared.trackEvent("paywall_shown", with: ["trigger": trigger.rawValue])
         selectedTab = .account
         Task { await loadBillingPlans() }
     }
@@ -427,7 +427,7 @@ extension AppState {
                 billingMessage = "The service returned a checkout address this build does not trust."
                 return
             }
-            PostHogSDK.shared.capture("checkout_opened", properties: ["plan": selectedPlan])
+            Aptabase.shared.trackEvent("checkout_opened", with: ["plan": selectedPlan])
             // A browser that refuses the address is the one failure this
             // screen used to swallow: the button worked, nothing opened, and
             // the sheet said nothing. Hand over the address instead.
@@ -486,8 +486,8 @@ extension AppState {
                     billingOperation = .idle
                     billingMessage = nil
                     defaults.removeObject(forKey: checkoutDefaultsKey())
-                    PostHogSDK.shared.capture("checkout_confirmed",
-                                              properties: ["plan": selectedPlan])
+                    Aptabase.shared.trackEvent("checkout_confirmed",
+                                               with: ["plan": selectedPlan])
                     return
                 }
             } catch {
@@ -521,7 +521,7 @@ extension AppState {
             entitlement = try await controller.refresh()
             billingMessage = entitlement.isPaid ? nil : "No paid access was found for this account."
             if entitlement.isPaid {
-                PostHogSDK.shared.capture("entitlement_restored")
+                Aptabase.shared.trackEvent("entitlement_restored")
             }
         } catch {
             billingMessage = (error as? AccessError)?.errorDescription ?? error.localizedDescription

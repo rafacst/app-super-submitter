@@ -10,7 +10,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
-        .package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.59.3"),
+        .package(url: "https://github.com/aptabase/aptabase-swift.git", from: "0.3.11"),
     ],
     targets: [
         // No UI. Every rule in the spec lives here and has a test.
@@ -24,7 +24,7 @@ let package = Package(
             name: "SuperSubmitter",
             dependencies: [
                 "SubmitKit",
-                .product(name: "PostHog", package: "posthog-ios"),
+                .product(name: "Aptabase", package: "aptabase-swift"),
             ],
             resources: [.copy("Resources/AppIcon.png")]
         ),

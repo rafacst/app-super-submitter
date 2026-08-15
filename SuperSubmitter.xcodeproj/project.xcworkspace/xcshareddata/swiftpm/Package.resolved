@@ -1,13 +1,13 @@
 {
-  "originHash" : "b31cb66c7e6c17b1070bec9c8c2e7c4d3925945f50836ca9478845a3d8a5be37",
+  "originHash" : "d2c970b962dc70f6d67da3fe8ab7cf31a1820bb9995b44bb97e504db78c47a8b",
   "pins" : [
     {
-      "identity" : "posthog-ios",
+      "identity" : "aptabase-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/PostHog/posthog-ios.git",
+      "location" : "https://github.com/aptabase/aptabase-swift.git",
       "state" : {
-        "revision" : "1c9b3178746c8102c854c2569047aedcfdec8a0c",
-        "version" : "3.69.0"
+        "revision" : "cfd67fac2a228d448d9d2ac92ffc71589cc3ef00",
+        "version" : "0.3.11"
       }
     },
     {

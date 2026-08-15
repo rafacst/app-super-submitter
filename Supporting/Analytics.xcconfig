@@ -1,5 +1,5 @@
-// Where the Xcode build gets the PostHog project token. Tracked, and holding
-// no token: the real one goes in Analytics.local.xcconfig beside this file,
+// Where the Xcode build gets the Aptabase app key. Tracked, and holding
+// no key: the real one goes in Analytics.local.xcconfig beside this file,
 // which .gitignore names for the same reason it names .env.
 //
 // This file has to exist. XcodeGen validates every path under `configFiles`
@@ -8,13 +8,13 @@
 // workflow with it, before the first build.
 //
 // The empty default is what a clone without a local file gets. The Info.plist
-// then carries an empty SSPostHogProjectToken, PostHogClient reads that as
+// then carries an empty SSAptabaseAppKey, AptabaseClient reads that as
 // missing, and the app measures nothing rather than refusing to start.
 //
 // No URL belongs in an xcconfig. // starts a comment here, so
-// https://us.i.posthog.com would be cut at the scheme. POSTHOG_HOST is public
-// and lives in project.yml, where nothing eats the slashes.
-POSTHOG_PROJECT_TOKEN =
+// https://data.rafacst.me would be cut at the scheme. APTABASE_HOST is
+// public and lives in project.yml, where nothing eats the slashes.
+APTABASE_APP_KEY =
 
 // Last, so the local value wins over the empty default above. The ? is what
 // makes the file optional: a plain #include of a missing file fails the build.
