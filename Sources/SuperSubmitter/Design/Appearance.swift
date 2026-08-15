@@ -95,11 +95,10 @@ struct AppearanceSwitch: View {
             // whatever animation was asked for. The same swap is why it sat
             // flush against the end cap with its shadow over the edge. Seven
             // points of travel leaves the two points of track at the ends that
-            // it already had above and below. `SmallToggle` reads the same.
+            // it already had above and below.
             ZStack {
                 // The off track has to be visible against the band behind it,
-                // which is why this is `controlEdge` and not `sep`. Same
-                // reasoning as `SmallToggle`.
+                // which is why this is `controlEdge` and not `sep`.
                 Capsule().fill(isDark ? Theme.accent : Theme.controlEdge)
                 Circle()
                     .fill(.white)

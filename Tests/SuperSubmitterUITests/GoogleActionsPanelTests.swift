@@ -50,7 +50,7 @@ private func source(_ relativePath: String) throws -> String {
 @Test func everyDirectApplyAsksBeforeItWrites() throws {
     let bar = try source("Sources/SuperSubmitter/Tabs/DirectApplyBar.swift")
 
-    #expect(bar.contains("confirmationDialog(\"Write these to \\(destination)?\""))
+    #expect(bar.contains("confirmationDialog(\"Update drafts in \\(destination)?\""))
     #expect(bar.contains("state.applyDirectly(target)"))
 
     // Three tabs write, and each one goes through that bar rather than

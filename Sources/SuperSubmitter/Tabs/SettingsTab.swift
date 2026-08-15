@@ -101,7 +101,7 @@ struct SettingsTab: View {
             }
 
             Toggle(isOn: $dryRun) {
-                Text("Start a new app with the dry run on")
+                Text("Start each app with Dry Run on")
                 Text("A dry run logs every request and sends none.")
             }
         }

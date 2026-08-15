@@ -3216,40 +3216,25 @@ final class AppState {
             // are reading, so an app read in an earlier session proves itself
             // live here without waiting for the sweep.
             rememberOpenAppLiveState()
-            // And after that line, because the dry run default asks the very
-            // fact it writes. Before it, an app proving itself live off its own
-            // snapshot still opened with the dry run on, once.
             applyDryRunDefault()
         } catch {
             errorMessage = "Could not open \(url.lastPathComponent). \(error.localizedDescription)"
         }
     }
 
-    /// Spec 16.5 and 17: the dry run is on by default **for a new app**.
+    /// Spec 16.5 and 17: the Settings preference decides it, for every app.
     ///
-    /// A published app is not a new app, and what makes it published is a store
-    /// having taken it to customers. This used to ask the disk instead, for a
-    /// `.super-submitter/runs` folder beside the manifest, and that answered a
-    /// different question: a run log says this Mac has run this app through
-    /// Super Submitter, which a fresh clone, a second Mac, and a colleague all
-    /// lack for an app that has been on sale for a year. Every one of them
-    /// opened a live app with the dry run on and the first apply did nothing.
-    ///
-    /// `isAppLive` is the fact itself, kept per app in the defaults and written
-    /// by the reads that ask the stores. It is a `shipped` state and not an
-    /// approved one: an app approved and never released has no customers, so it
-    /// is still a new app here and keeps the safe default. See
-    /// `AppleVersionState.shipped` and `rememberAppLiveness`.
+    /// One rule and no exception. A published app used to open with the dry run
+    /// off, which made the live-write default belong to the one app state where
+    /// a wrong write is read by customers. The preference is the developer's
+    /// standing answer, it defaults to `true`, and a live app is a reason to
+    /// keep that answer rather than to overrule it.
     ///
     /// Only the default. The toggle is the developer's for the rest of the
-    /// session, and turning the dry run back on for a published app is exactly
-    /// what somebody about to change a live listing does first.
+    /// session, and turning the dry run off asks a question first. See
+    /// `RootView` and `isAppLive(appKey:)`, which other features still read.
     private func applyDryRunDefault() {
-        guard isAppLive(appKey: currentAppKey) else {
-            dryRun = defaults.object(forKey: "dryRunByDefault") as? Bool ?? true
-            return
-        }
-        dryRun = false
+        dryRun = defaults.object(forKey: "dryRunByDefault") as? Bool ?? true
     }
 
     /// Settings ▸ Nuclear. Everything the app holds, gone, back to first run.
