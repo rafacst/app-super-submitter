@@ -152,4 +152,24 @@ struct TwoStoreLinkTests {
 
         #expect(!flow.canBuildBothApplePlatforms)
     }
+
+    @Test func bothAppleBuildsStartWithIOSAndQueueMacOS() throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (flow, state) = flow(root)
+        let manifest = try #require(state.manifestURL)
+        var project = link(.macos, root: root, container: "App.xcodeproj", manifest: manifest)
+        project.selection.scheme = "App"
+        flow.project = project
+        flow.run = UploadRun(platform: .macos, linkedProjectID: project.id,
+                             state: .readyToBuild)
+        flow.supportedApplePlatforms = [.ios, .macos]
+
+        flow.buildBothApplePlatforms()
+
+        #expect(flow.run.platform == .ios)
+        #expect(flow.run.state == .building)
+        #expect(flow.queuedApplePlatform == .macos)
+        flow.task?.cancel()
+    }
 }
