@@ -122,4 +122,34 @@ struct TwoStoreLinkTests {
         #expect(row.lowerBound < card.lowerBound)
         #expect(source.contains("Text(\"Google Play\").tag(Store.google)"))
     }
+
+    @Test func aNativeMultiplatformProjectOffersBothAppleBuilds() throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (flow, state) = flow(root)
+        let manifest = try #require(state.manifestURL)
+        var project = link(.ios, root: root, container: "App.xcodeproj", manifest: manifest)
+        project.selection.scheme = "App"
+        flow.project = project
+        flow.run = UploadRun(platform: .ios, linkedProjectID: project.id,
+                             state: .readyToBuild)
+        flow.supportedApplePlatforms = [.ios, .macos]
+
+        #expect(flow.canBuildBothApplePlatforms)
+    }
+
+    @Test func aSinglePlatformProjectOffersOneAppleBuild() throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (flow, state) = flow(root)
+        let manifest = try #require(state.manifestURL)
+        var project = link(.ios, root: root, container: "App.xcodeproj", manifest: manifest)
+        project.selection.scheme = "App"
+        flow.project = project
+        flow.run = UploadRun(platform: .ios, linkedProjectID: project.id,
+                             state: .readyToBuild)
+        flow.supportedApplePlatforms = [.ios]
+
+        #expect(!flow.canBuildBothApplePlatforms)
+    }
 }
