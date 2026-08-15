@@ -140,13 +140,13 @@ struct AvailabilityTab: View {
         Section_("Google Play", tint: Theme.playGreen, anchor: "availability.google",
                  note: "Micros, per currency.") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Play takes the base price beside this and converts it into every currency it sells in. There is no price point to resolve.")
+                Text("Google Play converts the base price for each supported currency.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 Toggle("Convert the base price for every Google region",
                        isOn: state.autoConvertPricesBinding)
                 LabeledField("Countries") {
-                    Text("Every country Play sells in, unless the Play Console says otherwise.")
+                    Text("Manage country exceptions in Play Console.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -180,7 +180,7 @@ struct AvailabilityTab: View {
                 Toggle("Sell in territories the App Store adds later",
                        isOn: state.appleNewTerritoriesBinding)
                     .disabled(!state.canEditTerritories)
-                Text("Apple takes that answer when it first creates the availability record and by no call afterwards. On an app that has ever been on sale, change it in App Store Connect under Pricing and Availability.")
+                Text("Apple accepts this option only when it creates availability. For a live app, change it in App Store Connect.")
                     .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Link("Edit App Store countries ↗",
