@@ -121,7 +121,7 @@ enum FieldIndex {
                          "data safety"]),
 
         // MARK: Media
-        .init(id: "media.video", label: "YouTube URL", tab: .media,
+        .init(id: "media.video", label: "Promotional YouTube URL", tab: .media,
               keywords: ["video", "trailer", "google", "promo"]),
         .init(id: "media.googleGraphics", label: "Google graphics", tab: .media,
               keywords: ["icon", "feature graphic", "512", "1024", "play"]),

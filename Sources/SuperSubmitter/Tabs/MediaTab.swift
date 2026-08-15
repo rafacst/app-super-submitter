@@ -485,10 +485,13 @@ struct MediaTab: View {
         let files = state.resendableLiveMedia(deviceClass: device)
         if !files.isEmpty, state.mediaPaths(deviceClass: device).isEmpty {
             HStack(spacing: 8) {
-                QuietButton(title: "Send these \(files.count) again") {
+                // "Send these again" named a network call this button does not
+                // make. It writes paths into `store.yaml`, and the plan is what
+                // uploads them, later, after the developer has seen the diff.
+                QuietButton(title: "Use these \(files.count) screenshots") {
                     state.resendLiveMedia(deviceClass: device)
                 }
-                Text("Adds the downloaded copies to store.yaml. The App Store serves previews as a stream, so a video cannot go back this way.")
+                Text("Adds the downloaded copies to store.yaml for the next plan. This action sends nothing.")
                     .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 6)
@@ -620,13 +623,20 @@ struct MediaTab: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         StoreLabel(store: .google, size: 11.5)
-                        Text("YouTube URL").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        // The label says what the field takes. The placeholder
+                        // said it too, and a placeholder is gone the moment
+                        // anything is typed.
+                        Text("Promotional YouTube URL")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text2)
                     }
                     TextField("https://youtube.com/watch?v=…",
                               text: state.listingBinding(.googleVideo))
                         .textFieldStyle(.roundedBorder)
-                    Text("Leave blank to omit the video.")
-                        .font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
+                        .accessibilityHint("Enter a YouTube video URL, or leave the field empty.")
+                    Text("Optional. Google Play accepts a YouTube URL, not a local video file.")
+                        .font(Theme.font(size: 11))
+                        .foregroundStyle(Theme.text2)
                 }
                 .storePanel(padding: 14)
             }
