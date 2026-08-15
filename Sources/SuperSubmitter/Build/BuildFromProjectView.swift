@@ -92,10 +92,11 @@ struct BuildFromProjectView: View {
                         projectCard
                         Divider().overlay(Theme.sep)
                         selectionBlock
+                        Divider().overlay(Theme.sep)
+                        preflightCard
                     }
                     .storePanel(horizontal: 15)
                 }
-                preflightCard
                 if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
                     liveRun
                 }
@@ -105,7 +106,6 @@ struct BuildFromProjectView: View {
                 // stays is the run and the preflight, which are not artifacts.
                 if let failure = flow.failure { errorPanel(failure) }
                 if flow.state == .complete { successCard }
-                actionRow
             }
         }
         .frame(maxWidth: 980, alignment: .leading)
@@ -193,7 +193,7 @@ struct BuildFromProjectView: View {
 
     private var projectCard: some View {
         let project = flow.project
-        return VStack(alignment: .leading, spacing: 9) {
+        return HStack(alignment: .top, spacing: 18) {
             HStack(spacing: 10) {
                 Text(project?.platform == .android ? "Gradle" : "Xcode")
                     .font(Theme.font(size: 10.5, weight: .medium))
@@ -204,31 +204,32 @@ struct BuildFromProjectView: View {
                     Text(project?.displayName ?? "").font(Theme.font(size: 13, weight: .semibold))
                     Text(project?.containerURL.lastPathComponent ?? "")
                         .font(Theme.mono(11)).foregroundStyle(Theme.text2)
+                    if let revision = flow.candidate?.sourceRevision {
+                        Text(revision.label).font(Theme.mono(10.5)).foregroundStyle(Theme.text3)
+                    }
                 }
-                Spacer(minLength: 8)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 7) {
                 if let validated = project?.lastValidatedAt {
                     Text("checked \(validated.formatted(date: .omitted, time: .shortened))")
                         .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
-            }
-            if let revision = flow.candidate?.sourceRevision {
-                Text(revision.label).font(Theme.mono(10.5)).foregroundStyle(Theme.text3)
-            }
-            HStack(spacing: 7) {
-                QuietButton(title: "Recheck") { Task { await flow.refreshPreflight() } }
-                QuietButton(title: "Reveal Folder") {
-                    flow.reveal(project?.rootPath ?? "")
+                HStack(spacing: 7) {
+                    QuietButton(title: "Recheck") { Task { await flow.refreshPreflight() } }
+                    QuietButton(title: "Reveal Folder") {
+                        flow.reveal(project?.rootPath ?? "")
+                    }
+                    QuietButton(title: project?.platform == .android
+                                ? "Open in Android Studio" : "Open in Xcode") { flow.openInIDE() }
+                    QuietButton(title: "Change Selection") { flow.linkFolder() }
+                    QuietButton(title: "Unlink") { flow.unlink() }
+                        // The sentence this replaces stood under the row on every
+                        // visit, in the smallest grey the app has, answering a
+                        // question the developer asks once and only about the
+                        // button it belongs to.
+                        .help("Unlink removes this link only. It never deletes the project or its build output.")
                 }
-                QuietButton(title: project?.platform == .android
-                            ? "Open in Android Studio" : "Open in Xcode") { flow.openInIDE() }
-                QuietButton(title: "Change Selection") { flow.linkFolder() }
-                QuietButton(title: "Unlink") { flow.unlink() }
-                    // The sentence this replaces stood under the row on every
-                    // visit, in the smallest grey the app has, answering a
-                    // question the developer asks once and only about the
-                    // button it belongs to.
-                    .help("Unlink removes this link only. It never deletes the project or its build output.")
-                Spacer(minLength: 0)
             }
         }
     }
@@ -429,6 +430,15 @@ struct BuildFromProjectView: View {
                 QuietButton(title: showsChecks ? "Hide checks" : "Show checks") {
                     checksOpen = !showsChecks
                 }
+                if flow.state == .complete || flow.state == .cancelled {
+                    ActionButton(title: flow.project?.platform == .android
+                                 ? "Build a new App Bundle" : "Build a new archive") {
+                        flow.buildAgain()
+                    }
+                }
+                if flow.project?.platform == .android, !flow.state.isActive {
+                    QuietButton(title: "Choose Built AAB") { flow.chooseBuiltBundle() }
+                }
                 // The command belongs to the checks it reads.
                 //
                 // It stood at the foot of the screen, under the live run, the
@@ -539,7 +549,6 @@ struct BuildFromProjectView: View {
                 Text(warning).font(Theme.font(size: 11.5)).foregroundStyle(Theme.yellow)
             }
         }
-        .storePanel(horizontal: 15)
         // The checks are a fold like the log and like every other one.
         .motion(.easeInOut(duration: 0.22), value: showsChecks)
     }
@@ -692,52 +701,6 @@ struct BuildFromProjectView: View {
             "Stopping this run's own processes, then checking what the store already holds."
         default:
             "Nothing is running."
-        }
-    }
-
-    // MARK: - The actions
-
-    private var actionRow: some View {
-        HStack(spacing: 10) {
-            // Build is not here. It sits in the preflight card, at the top of
-            // the screen, beside the checks that decide whether it may run.
-            if flow.state == .needsUploadConfirmation {
-                ActionButton(title: "Upload to the store", enabled: flow.canUpload,
-                             paid: (.storeUpload, .upload)) {
-                    flow.showUploadConfirmation = true
-                }
-                ActionButton(title: "Keep the artifact and stop", kind: .secondary) {
-                    flow.keepArtifact()
-                }
-                // A disabled button with no reason is the worst of both: the
-                // archive is built and nothing on screen says why it cannot
-                // go. The artifact is still keepable, which is the whole point
-                // of saying this here rather than blocking the build.
-                if let held = flow.uploadBlockedByReview {
-                    HStack(spacing: 8) {
-                        StatePill(text: "Held", foreground: Theme.yellow,
-                                  background: Theme.yellowBg)
-                        Text(held).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            // The way back from a finished run. Without it the tab allowed one
-            // build per session: the Build button asks for `readyToBuild`, and
-            // the two states a run ends in are not it.
-            if flow.project != nil, flow.state == .complete || flow.state == .cancelled {
-                ActionButton(title: flow.project?.platform == .android
-                             ? "Build a new App Bundle" : "Build a new archive") {
-                    flow.buildAgain()
-                }
-            }
-            if flow.project?.platform == .android, !flow.state.isActive {
-                QuietButton(title: "Choose Built AAB") { flow.chooseBuiltBundle() }
-            }
-            if flow.candidate != nil, flow.project == nil, flow.state != .complete {
-                QuietButton(title: "Start over") { flow.reset() }
-            }
-            Spacer(minLength: 0)
         }
     }
 
@@ -1013,6 +976,15 @@ struct BuiltArtifactSection: View {
                 }
             }
             HStack(spacing: 7) {
+                if flow.state == .needsUploadConfirmation {
+                    ActionButton(title: "Upload to the store", enabled: flow.canUpload,
+                                 paid: (.storeUpload, .upload)) {
+                        flow.showUploadConfirmation = true
+                    }
+                    ActionButton(title: "Keep the artifact and stop", kind: .secondary) {
+                        flow.keepArtifact()
+                    }
+                }
                 if flow.artifactDeleted {
                     Text("Deleted from this Mac. The record above is what was built.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
@@ -1022,7 +994,19 @@ struct BuiltArtifactSection: View {
                         QuietButton(title: "Delete artifact") { deleting = true }
                     }
                 }
+                if flow.project == nil, flow.state != .complete {
+                    QuietButton(title: "Start over") { flow.reset() }
+                }
                 Spacer(minLength: 0)
+            }
+            if let held = flow.uploadBlockedByReview,
+               flow.state == .needsUploadConfirmation {
+                HStack(spacing: 8) {
+                    StatePill(text: "Held", foreground: Theme.yellow,
+                              background: Theme.yellowBg)
+                    Text(held).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

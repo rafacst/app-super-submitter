@@ -48,6 +48,29 @@ import Testing
     #expect(ExistingAppImportPlan.group([app, duplicate]).first?.candidates.count == 1)
 }
 
+/// A new import writes a new file without a warning. An existing file needs
+/// the user's replacement choice before any store value reaches it.
+@MainActor
+@Test func anImportWarnsOnlyWhenItWillReplaceLocalData() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("import-warning-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)",
+                         buildStorage: BuildStorage(root: root.appendingPathComponent("storage")))
+    let app = ExistingAppCandidate(store: .apple, remoteID: "1", name: "Example",
+                                   identifier: "com.example.app")
+
+    #expect(!state.importWouldReplaceLocalData([app], destination: root))
+    try ManifestFile.save(Manifest(),
+                          to: root.appendingPathComponent(ManifestFile.defaultName))
+    #expect(state.importWouldReplaceLocalData([app], destination: root))
+
+    state.importExistingListing()
+    #expect(state.confirmsListingImportReplacement)
+}
+
 /// The picker draws one block per store, the App Store first, so a mixed
 /// account never interleaves the two.
 @MainActor

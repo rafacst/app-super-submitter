@@ -84,7 +84,7 @@ struct MoneyTab: View {
                         anchor: "money.purchases") {
             VStack(alignment: .leading, spacing: 10) {
                 importCatalogNote
-                productTableHeader
+                if !purchases.isEmpty { productTableHeader }
                 ForEach(Array(purchases.enumerated()), id: \.offset) { index, _ in
                     let id = state.purchaseBinding(index: index, field: .id).wrappedValue
                     VStack(alignment: .leading, spacing: 8) {
@@ -591,7 +591,7 @@ struct MoneyTab: View {
                             }
                         }
                         gracePeriodRow(groupIndex: groupIndex)
-                        productTableHeader
+                        if !group.plans.isEmpty { productTableHeader }
                         ForEach(Array(group.plans.enumerated()), id: \.offset) { planIndex, _ in
                             VStack(alignment: .leading, spacing: 7) {
                                 productRow(id: group.plans[planIndex].id, kind: "Subscription",

@@ -8,6 +8,12 @@ struct ExistingAppImportSheet: View {
     @State private var model = ExistingAppImportModel()
     @State private var appleImporterOpen = false
     @State private var googleImporterOpen = false
+    @State private var pendingImport: ImportDestination?
+
+    private enum ImportDestination {
+        case managed(awaitingProjectFolder: Bool)
+        case folder(URL)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,6 +34,20 @@ struct ExistingAppImportSheet: View {
         }
         .frame(width: 900, height: 720)
         .background(Theme.content)
+        .confirmationDialog("Replace the local data?",
+                            isPresented: Binding(
+                                get: { pendingImport != nil },
+                                set: { if !$0 { pendingImport = nil } }),
+                            titleVisibility: .visible) {
+            Button("Replace with store data", role: .destructive) {
+                guard let pendingImport else { return }
+                self.pendingImport = nil
+                performImport(pendingImport)
+            }
+            Button("Keep the local data", role: .cancel) { pendingImport = nil }
+        } message: {
+            Text("This import will replace the proposed data in an existing store.yaml. Save a draft first if you want another local copy.")
+        }
         // The keys the app already holds. Without this the sheet asked for
         // them on every import, one line under the sentence that promises it
         // asks once.
@@ -381,20 +401,7 @@ struct ExistingAppImportSheet: View {
     /// The managing path. Super Submitter owns the folder, so it asks for
     /// nothing and the import starts on the button.
     private func importManaged() {
-        model.step = .destination
-        model.error = nil
-        Task {
-            do {
-                _ = try await state.importManagedApps(
-                    model.selectedCandidates,
-                    appleCredential: model.appleCredential,
-                    googleCredential: model.googleCredential)
-                model.step = .complete
-            } catch {
-                model.error = error.localizedDescription
-                model.step = .apps
-            }
-        }
+        requestImport(.managed(awaitingProjectFolder: false))
     }
 
     /// Publishing, two or more apps: the same folder-free import as Managing,
@@ -405,34 +412,43 @@ struct ExistingAppImportSheet: View {
     }
 
     private func importPendingFolder() {
-        model.step = .destination
-        model.error = nil
-        Task {
-            do {
-                _ = try await state.importManagedApps(
-                    model.selectedCandidates,
-                    appleCredential: model.appleCredential,
-                    googleCredential: model.googleCredential,
-                    awaitingProjectFolder: true)
-                model.step = .complete
-            } catch {
-                model.error = error.localizedDescription
-                model.step = .apps
-            }
-        }
+        requestImport(.managed(awaitingProjectFolder: true))
     }
 
     private func importSelected(into url: URL) {
+        requestImport(.folder(url))
+    }
+
+    private func requestImport(_ destination: ImportDestination) {
+        let folder: URL? = if case .folder(let url) = destination { url } else { nil }
+        guard !state.importWouldReplaceLocalData(model.selectedCandidates,
+                                                 destination: folder) else {
+            pendingImport = destination
+            return
+        }
+        performImport(destination)
+    }
+
+    private func performImport(_ destination: ImportDestination) {
         model.step = .destination
         model.error = nil
-        let accessed = url.startAccessingSecurityScopedResource()
         Task {
-            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
             do {
-                _ = try await state.importExistingApps(
-                    model.selectedCandidates, destination: url,
-                    appleCredential: model.appleCredential,
-                    googleCredential: model.googleCredential)
+                switch destination {
+                case .managed(let awaitingProjectFolder):
+                    _ = try await state.importManagedApps(
+                        model.selectedCandidates,
+                        appleCredential: model.appleCredential,
+                        googleCredential: model.googleCredential,
+                        awaitingProjectFolder: awaitingProjectFolder)
+                case .folder(let url):
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    _ = try await state.importExistingApps(
+                        model.selectedCandidates, destination: url,
+                        appleCredential: model.appleCredential,
+                        googleCredential: model.googleCredential)
+                }
                 model.step = .complete
             } catch {
                 model.error = error.localizedDescription

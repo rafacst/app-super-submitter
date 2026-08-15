@@ -174,20 +174,43 @@ extension AppState {
                            awaitingProjectFolder: Bool = false) async throws -> [URL] {
         let groups = ExistingAppImportPlan.group(candidates)
         guard !groups.isEmpty else { return [] }
-        let storage = BuildStorage()
         var imported: [URL] = []
 
         // One app at a time, so one folder is one app and the shared import
         // never has to split a parent folder.
         for group in groups {
-            let folder = try storage.managedFolder(name: group.folderName,
-                                                   identifier: group.identifier)
+            let folder = try buildStorage.managedFolder(name: group.folderName,
+                                                        identifier: group.identifier)
             imported += try await importExistingApps(
                 group.candidates, destination: folder,
                 appleCredential: appleCredential, googleCredential: googleCredential,
                 awaitingProjectFolder: awaitingProjectFolder)
         }
         return imported
+    }
+
+    /// Whether this import will write store values into an existing local file.
+    func importWouldReplaceLocalData(_ candidates: [ExistingAppCandidate],
+                                     destination: URL? = nil) -> Bool {
+        let groups = ExistingAppImportPlan.group(candidates)
+        for group in groups {
+            let folder: URL?
+            if let destination {
+                folder = groups.count == 1
+                    ? destination
+                    : availableImportFolder(named: group.folderName, under: destination,
+                                            identifier: group.identifier)
+            } else {
+                folder = try? buildStorage.managedFolder(name: group.folderName,
+                                                         identifier: group.identifier)
+            }
+            guard let folder else { continue }
+            if FileManager.default.fileExists(
+                atPath: folder.appendingPathComponent(ManifestFile.defaultName).path) {
+                return true
+            }
+        }
+        return false
     }
 
     private func availableImportFolder(named name: String, under root: URL,

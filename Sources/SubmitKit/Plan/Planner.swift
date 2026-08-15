@@ -470,7 +470,8 @@ public enum Planner {
     }
 
     private static func appleTestFlightSteps(_ input: Input) -> [PlanStep] {
-        guard let testFlight = input.manifest.release?.apple?.testFlight else { return [] }
+        guard let testFlight = input.manifest.release?.apple?.testFlight,
+              testFlight.platforms?.isEmpty != true else { return [] }
         let actual = input.actual.apple
         let read = actual != nil
         var steps: [PlanStep] = []

@@ -7,6 +7,7 @@ struct BuildTab: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
+        @Bindable var state = state
         VStack(alignment: .leading, spacing: 14) {
             storeIdentitySection
             questionRow
@@ -18,6 +19,16 @@ struct BuildTab: View {
             storeTools
         }
         .frame(maxWidth: 1040, alignment: .leading)
+        .confirmationDialog("Replace the local data?",
+                            isPresented: $state.confirmsListingImportReplacement,
+                            titleVisibility: .visible) {
+            Button("Replace with store data", role: .destructive) {
+                state.importExistingListing(replacingLocalData: true)
+            }
+            Button("Keep the local data", role: .cancel) {}
+        } message: {
+            Text("The fetched store data will replace the proposed data in store.yaml. Save a draft first if you want another local copy.")
+        }
         // The export compliance answer, for an app nobody has asked. See
         // `AppState.defaultEncryptionAnswer`: the tab that asks the question is
         // the tab that fills it in.
@@ -153,7 +164,7 @@ struct BuildTab: View {
                 QuietButton(
                     title: state.listingImportStatus == .connecting
                         ? "Fetching…" : "Fetch the current listings",
-                    action: state.importExistingListing)
+                    action: { state.importExistingListing() })
                     .disabled(state.listingImportStatus == .connecting)
                 switch state.listingImportStatus {
                 case .connected(let message):

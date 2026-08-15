@@ -393,6 +393,7 @@ final class AppState {
     /// sheet was written, and nothing outside that sheet ever asked.
     var remoteGoogleApps: [RemoteStoreApp] = []
     var listingImportStatus: ConnectionStatus = .notConnected
+    var confirmsListingImportReplacement = false
 
     // Tab 2.
     /// Build from Project. upload-spec section 10.
@@ -1378,7 +1379,7 @@ final class AppState {
         updateAppleAppFields()
     }
 
-    func importExistingListing() {
+    func importExistingListing(replacingLocalData: Bool = false) {
         if stores.contains(.apple),
            (applePrivateKeyPEM.isEmpty || appleKeyID.isEmpty || appleIssuerID.isEmpty || appleAppID.isEmpty) {
             listingImportStatus = .failed("Connect App Store and choose an app on Stores first.")
@@ -1386,6 +1387,11 @@ final class AppState {
         }
         if stores.contains(.google), (!hasCredential(for: .google) || googlePackageName.isEmpty) {
             listingImportStatus = .failed("Connect Google Play and enter its package name on Stores first.")
+            return
+        }
+
+        guard replacingLocalData else {
+            confirmsListingImportReplacement = true
             return
         }
 

@@ -384,7 +384,26 @@ public enum StoreValues {
                 : TerritoryGroup(id: group.id, name: group.name, territories: kept)
         }
         let placed = Set(groups.flatMap { $0.territories.map(\.value) })
-        let unplaced = universe.subtracting(placed).sorted()
+        var unplaced: [String] = []
+        for code in universe.subtracting(placed).sorted() {
+            guard let continent = continentID(code) else {
+                unplaced.append(code)
+                continue
+            }
+            let choice = Choice(code, "\(territoryName(code)) (\(code))")
+            if let index = groups.firstIndex(where: { $0.id == continent }) {
+                groups[index] = TerritoryGroup(
+                    id: continent, name: groups[index].name,
+                    territories: (groups[index].territories + [choice])
+                        .sorted { $0.label < $1.label })
+            } else {
+                groups.append(TerritoryGroup(
+                    id: continent,
+                    name: Locale.current.localizedString(forRegionCode: continent) ?? continent,
+                    territories: [choice]))
+            }
+        }
+        groups.sort { $0.name < $1.name }
         guard !unplaced.isEmpty else { return groups }
         groups.append(TerritoryGroup(
             id: "other", name: "Elsewhere",
@@ -400,6 +419,13 @@ public enum StoreValues {
         return Locale.current.localizedString(forRegionCode: short) ?? code
     }
 
+    /// ICU knows some current App Store codes only through an older alias.
+    static func continentID(_ code: String) -> String? {
+        let region = code == "XKS" ? "XK"
+            : Locale(identifier: "und_\(code)").region?.identifier
+        return region.flatMap { Locale.Region($0).continent?.identifier }
+    }
+
     /// Built once. Four codes ICU still answers for are dead states — the
     /// Netherlands Antilles, Serbia and Montenegro, the Soviet Union and
     /// Yugoslavia — and each is a region with no continent, so this drops
@@ -408,8 +434,7 @@ public enum StoreValues {
     static let baseTerritoryGroups: [TerritoryGroup] = {
         var byContinent: [String: [Choice]] = [:]
         for choice in appleTerritories {
-            guard let two = Locale(identifier: "und_\(choice.value)").region?.identifier,
-                  let continent = Locale.Region(two).continent?.identifier else { continue }
+            guard let continent = continentID(choice.value) else { continue }
             byContinent[continent, default: []].append(choice)
         }
         return byContinent

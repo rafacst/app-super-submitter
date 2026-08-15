@@ -114,6 +114,8 @@ import Testing
             encoding: .utf8)
 
         #expect(tab.contains("productTableHeader"))
+        #expect(tab.contains("if !purchases.isEmpty { productTableHeader }"))
+        #expect(tab.contains("if !group.plans.isEmpty { productTableHeader }"))
         #expect(tab.contains("private func productRow"))
         #expect(tab.contains("oneStoreOnlyNote"))
         // The editors survive the table: a row opens onto them.

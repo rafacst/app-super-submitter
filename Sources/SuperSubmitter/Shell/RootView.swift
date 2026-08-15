@@ -1000,12 +1000,10 @@ extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
 }
 
-/// Back the apps up, and say it worked for as long as that is news.
+/// Save a local draft, and say it worked for as long as that is news.
 ///
-/// Not "Save progress". Every field on every tab already writes `store.yaml`
-/// the moment it is edited, so a command named save promised to rescue form
-/// data that was never at risk, and hid the one thing it does: a recovery copy
-/// of every linked app.
+/// Every field on every tab already writes `store.yaml` when it is edited.
+/// This command keeps a separate local copy of every proposed store change.
 ///
 /// The title carries the report rather than an alert, because this is a
 /// command a developer may run twice in a minute before an update and an alert
@@ -1017,12 +1015,12 @@ struct DraftButton: View {
     @State private var tick = 0
 
     var body: some View {
-        QuietButton(title: justSaved ? "Backed up" : "Back Up Apps", glass: true,
+        QuietButton(title: justSaved ? "Draft saved" : "Save draft", glass: true,
                     symbol: justSaved ? "checkmark" : "tray.and.arrow.down", tick: tick) {
             tick += 1
             state.saveDraft()
         }
-        .help("Copy every linked app and its store.yaml to the recovery folder")
+        .help("Save a local copy of every linked app and its proposed store data")
         // The same cancellable timer as SavedChip, and for the same reason:
         // two saves in three seconds must not fight over the title.
         .task(id: state.draftSavedAt) {

@@ -105,6 +105,19 @@ private func testFlightManifest(
         .contains { $0.id.hasPrefix("apple.beta") })
 }
 
+/// An empty platform list keeps the local TestFlight setup for later, but it
+/// sends no build, tester, page, or review row now.
+@Test func noSelectedTestFlightBuildWritesNothing() {
+    let manifest = testFlightManifest(Manifest.Release.TestFlight(
+        platforms: [],
+        groups: [Manifest.Release.TestFlight.Group(name: "QA",
+                                                   testers: ["qa@example.com"])],
+        submitForBetaReview: true))
+
+    #expect(!steps(manifest, appleState { _ in })
+        .contains { $0.id.hasPrefix("apple.beta") || $0.id == "apple.whatToTest" })
+}
+
 @Test func aBetaGroupPayloadParsesItsPublicLink() throws {
     let group = try #require(AppleTestFlightClient.parseGroup(json("""
     {"id":"g1","attributes":{"name":"QA","publicLinkEnabled":true,

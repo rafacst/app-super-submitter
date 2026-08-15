@@ -44,8 +44,8 @@ struct BetaTestingPanelTests {
     }
 
     /// An app with two build trains starts with its primary platform. The
-    /// developer can add the other train or select it alone.
-    @Test func testFlightCanSendIOSMacOSOrBoth() throws {
+    /// developer can select either train, both trains, or no TestFlight build.
+    @Test func testFlightCanSendIOSMacOSBothOrNeither() throws {
         let (state, folder) = try workspace()
         defer { try? FileManager.default.removeItem(at: folder) }
         state.manifest.setAppleApp(
@@ -61,10 +61,12 @@ struct BetaTestingPanelTests {
         state.testFlightPlatformBinding(.ios).wrappedValue = false
         #expect(state.testFlightPlatforms == [.macOS])
 
-        // One platform must stay selected.
         state.testFlightPlatformBinding(.macOS).wrappedValue = false
-        #expect(state.testFlightPlatforms == [.macOS])
-        #expect(state.testFlight?.platforms == [.macOS])
+        #expect(state.testFlightPlatforms.isEmpty)
+        #expect(state.testFlight?.platforms == [])
+        state.flushSave()
+        #expect(try ManifestFile.load(from: folder.appendingPathComponent(
+            ManifestFile.defaultName)).release?.apple?.testFlight?.platforms == [])
     }
 
     /// A switch the manifest says nothing about shows what Apple holds, and

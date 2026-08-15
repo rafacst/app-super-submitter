@@ -19,8 +19,9 @@ extension AppState {
     /// version keeps the first app platform until the developer changes it.
     var testFlightPlatforms: [Manifest.Platform] {
         let supported = testFlightPlatformChoices
-        let selected = testFlight?.platforms?.filter(supported.contains) ?? []
-        if !selected.isEmpty { return selected }
+        if let selected = testFlight?.platforms {
+            return selected.filter(supported.contains)
+        }
         if supported.contains(applePlatform) { return [applePlatform] }
         return supported.first.map { [$0] } ?? [applePlatform]
     }
@@ -40,7 +41,7 @@ extension AppState {
                 var platforms = self.testFlightPlatforms
                 if selected, !platforms.contains(platform) {
                     platforms.append(platform)
-                } else if !selected, platforms.count > 1 {
+                } else if !selected {
                     platforms.removeAll { $0 == platform }
                 }
                 block.platforms = [Manifest.Platform.ios, .macOS].filter(platforms.contains)
