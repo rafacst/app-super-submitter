@@ -104,15 +104,26 @@ struct RootView: View {
                         ToolbarItem(placement: .primaryAction) { AppearanceSwitch() }
                     }
                     if state.manifestURL != nil {
-                        ToolbarItem(placement: .primaryAction) {
-                            // The shortcut is in the tooltip, so the button
-                            // teaches its own replacement.
-                            Button { state.showFieldSearch = true } label: {
-                                Image(systemName: "magnifyingglass")
-                            }
-                            .accessibilityLabel("Find a field")
-                            .help("Find a field  ⌘F")
+                        // Field search is the route to a named field in an app
+                        // that has several hundred of them, so it keeps its
+                        // place when the title bar runs out of room. The
+                        // priority is an Xcode 27 and macOS 27 API and both
+                        // gates carry their own half: `#if compiler` stops an
+                        // older Xcode parsing the symbol, `#available` stops an
+                        // older Mac resolving it. Every branch draws the same
+                        // item, which is why it is written once.
+                        //
+                        // No overflow menu. The bar holds two commands and
+                        // neither is expendable.
+                        #if compiler(>=6.4)
+                        if #available(macOS 27.0, *) {
+                            fieldSearchItem.visibilityPriority(.high)
+                        } else {
+                            fieldSearchItem
                         }
+                        #else
+                        fieldSearchItem
+                        #endif
                     }
                 }
                 // The proxy icon. `store.yaml` is a real file that the app
@@ -211,6 +222,21 @@ struct RootView: View {
                     .padding(.top, 110)
             }
             .transition(.opacity)
+        }
+    }
+
+    /// The title-bar button that opens the palette above.
+    ///
+    /// One definition, three branches in `.toolbar`. See the gates there.
+    private var fieldSearchItem: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            // The shortcut is in the tooltip, so the button teaches its own
+            // replacement.
+            Button { state.showFieldSearch = true } label: {
+                Image(systemName: "magnifyingglass")
+            }
+            .accessibilityLabel("Find a field")
+            .help("Find a field  ⌘F")
         }
     }
 
@@ -969,7 +995,12 @@ extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
 }
 
-/// Save progress, and say it saved for as long as that is news.
+/// Back the apps up, and say it worked for as long as that is news.
+///
+/// Not "Save progress". Every field on every tab already writes `store.yaml`
+/// the moment it is edited, so a command named save promised to rescue form
+/// data that was never at risk, and hid the one thing it does: a recovery copy
+/// of every linked app.
 ///
 /// The title carries the report rather than an alert, because this is a
 /// command a developer may run twice in a minute before an update and an alert
@@ -981,12 +1012,12 @@ struct DraftButton: View {
     @State private var tick = 0
 
     var body: some View {
-        QuietButton(title: justSaved ? "Saved" : "Save progress", glass: true,
+        QuietButton(title: justSaved ? "Backed up" : "Back Up Apps", glass: true,
                     symbol: justSaved ? "checkmark" : "tray.and.arrow.down", tick: tick) {
             tick += 1
             state.saveDraft()
         }
-        .help("Copy every linked app and its store.yaml where an update cannot reach them")
+        .help("Copy every linked app and its store.yaml to the recovery folder")
         // The same cancellable timer as SavedChip, and for the same reason:
         // two saves in three seconds must not fight over the title.
         .task(id: state.draftSavedAt) {

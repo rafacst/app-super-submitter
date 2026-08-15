@@ -24,21 +24,29 @@ struct AppTagsPanel: View {
         Section_("App Store tags", icon: "tag", tint: Theme.green,
                  anchor: "details.appTags") {
             VStack(alignment: .leading, spacing: 9) {
-                VStack(alignment: .leading, spacing: 5) {
+                // Who owns a tag and what a hide undoes was said three times,
+                // once per paragraph, above a list that is usually five rows
+                // long. It is said once now, and the rule keeps its own line
+                // behind a disclosure.
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Apple's own labels for what this app is. They are not keywords and not a category.")
-                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        Text("Show or hide the tags that Apple assigned to this app.")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text2)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 12)
                         QuietButton(title: busy ? "Fetching…" : "Fetch the tags") { load() }
                             .disabled(busy || state.appleActionAppID == nil)
                     }
-                    Text("Apple writes them, App Store Connect holds them, and store.yaml never carries them. Apple describes a tag as a label that groups the app and decides which App Store territories feature it, so a wrong one costs the app the places it would be shown.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("You cannot add a tag and nothing deletes one. The single control Apple publishes is whether a tag appears on the product page, and it goes both ways: taking one off is undone by putting it back.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
-                        .fixedSize(horizontal: false, vertical: true)
+
+                    DisclosureGroup("How App Store tags work") {
+                        Text("Apple creates the tags. The API only changes visibleInAppStore. Hiding a tag is reversible, and store.yaml does not store it.")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 4)
+                    }
+                    .font(Theme.font(size: 11.5))
                 }
 
                 if let error { ErrorLine(text: error) }

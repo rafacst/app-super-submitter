@@ -334,23 +334,29 @@ private struct GroupHeader: View {
                     .padding(.trailing, 6)
                     .padding(.bottom, 7)
             }
-            Text(title)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-                // Through `withMotion`, so the rows slide rather than vanish.
-                // `Section(isExpanded:)` animates the fold when its own
-                // disclosure control drives it, and this binding is set from a
-                // tap gesture, which carries no animation of its own.
-                .onTapGesture {
-                    withMotion(reduceMotion, .easeInOut(duration: 0.22)) { isOpen.toggle() }
-                }
-                // The strip the system draws its own disclosure control in
-                // stays clear. Covering it would let one click reach both
-                // targets and toggle the group twice, which breaks the one way
-                // in that worked.
-                .padding(.trailing, 28)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityValue(isOpen ? "Open" : "Closed")
+            // A `Button` and not a tap gesture on a `Text`. The gesture took the
+            // pointer and nothing else: no key, no focus ring, no pressed state,
+            // and a button trait added by hand that VoiceOver could read but not
+            // operate. The button carries all four itself.
+            //
+            // Through `withMotion`, so the rows slide rather than vanish.
+            // `Section(isExpanded:)` animates the fold when its own disclosure
+            // control drives it, and this binding is set from here, which
+            // carries no animation of its own.
+            Button {
+                withMotion(reduceMotion, .easeInOut(duration: 0.22)) { isOpen.toggle() }
+            } label: {
+                Text(title)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            // The strip the system draws its own disclosure control in stays
+            // clear. Covering it would let one click reach both targets and
+            // toggle the group twice, which breaks the one way in that worked.
+            .padding(.trailing, 28)
+            .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+            .accessibilityHint(isOpen ? "Collapses this section." : "Expands this section.")
         }
     }
 }
@@ -758,14 +764,16 @@ struct ModeSwitch: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        Picker("Job", selection: Binding(get: { state.mode },
-                                         set: { state.mode = $0 })) {
+        // The label is drawn and not hidden. Two words with nothing above them
+        // read as a filter over the rows below, which is what a developer took
+        // them for; the label says they choose the job the sidebar is showing.
+        Picker("Task", selection: Binding(get: { state.mode },
+                                          set: { state.mode = $0 })) {
             ForEach(Mode.allCases) { mode in
                 Text(mode.title).tag(mode)
             }
         }
         .pickerStyle(.segmented)
-        .labelsHidden()
-        .accessibilityLabel("What you are doing")
+        .accessibilityHint("Choose the app workflow shown in the sidebar.")
     }
 }
