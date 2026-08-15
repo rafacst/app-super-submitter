@@ -10,6 +10,14 @@ struct LinkedAppRecord: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     var manifestPath: String
+    /// True until the developer links a real project folder in the Build
+    /// tab. Set only by a Publishing import of two or more apps, which
+    /// writes `store.yaml` into Super Submitter's own folder rather than
+    /// asking for a folder per app up front; linking a project later moves
+    /// it into that folder. See `BuildFlow.relocateManifestIfPending`.
+    ///
+    /// Optional, so a record written before this field existed still decodes.
+    var awaitingProjectFolder: Bool?
 }
 
 enum ConnectionStatus: Equatable {
@@ -57,17 +65,10 @@ struct CatalogPriceInput {
 
 enum MediaInputError: LocalizedError {
     case tooMany(limit: Int)
-    /// The App Store counts one screen size at a time, so the refusal names the
-    /// size. "At most 10 for this device size" was said over a Phone bucket
-    /// holding four screen sizes, and it left the developer counting tiles that
-    /// the store counts in four separate places.
-    case tooManyForSize(displayType: String, limit: Int)
 
     var errorDescription: String? {
         switch self {
         case .tooMany(let limit): "You can add at most \(limit) files to this device size."
-        case .tooManyForSize(let displayType, let limit):
-            "The App Store takes at most \(limit) screenshots of \(displayType). Remove one of that size, or add a picture of another size."
         }
     }
 }
@@ -183,10 +184,6 @@ final class AppState {
             // `flushSave` drains both and costs nothing when nothing waits, so
             // this adds no write to a plain tab switch and no timer anywhere.
             flushSave()
-            // A tab is this app's screen, and the SDK has no screen-view call
-            // of its own: an event is the only unit it sends.
-            Aptabase.shared.trackEvent("screen_view",
-                                       with: ["screen": selectedTab.title, "mode": mode.rawValue])
             // Picking a tab answers the entry screen: you asked for the two
             // doors and then chose a third thing instead. Without this,
             // pressing "Add app" and changing your mind left the flag set, and
@@ -195,11 +192,60 @@ final class AppState {
             // A tab names its own mode. Anything that jumps to one, such as
             // the import landing on Build, switches the shell rather than
             // showing a tab the sidebar hides.
-            guard !selectedTab.modes.contains(mode),
-                  let owner = selectedTab.modes.first else { return }
-            mode = owner
+            if !selectedTab.modes.contains(mode), let owner = selectedTab.modes.first {
+                mode = owner
+            }
+            // Last of the four, and that ordering is the point. This used to
+            // be the second line of the observer, which reported the mode the
+            // tab was leaving rather than the one it lands in: clicking a
+            // Managing tab from a Publishing one filed the visit under
+            // Publishing every time. The two lines above settle both the
+            // entry screen and the mode, so reporting after them describes
+            // the screen the developer is now looking at.
+            trackScreen()
         }
     }
+
+    /// The screen the developer is looking at, which is not always the tab:
+    /// the entry screen draws over the content column and leaves the tab
+    /// selection standing behind it.
+    var currentScreenName: String {
+        showsEntryScreen ? "Entry screen" : selectedTab.title
+    }
+
+    /// Reports the screen that is on the window now.
+    ///
+    /// A tab is this app's screen, and the SDK has no screen-view call of its
+    /// own: an event is the only unit it sends, so the screen is a property
+    /// on one.
+    ///
+    /// The shell calls this once at launch, which the observer above cannot
+    /// do for it. Swift runs no property observer for a value set inside
+    /// `init`, and the restore at the foot of this file's initialiser is what
+    /// sets the tab a session opens on. So every session reported its *second*
+    /// screen first and its first not at all, and a developer who opened the
+    /// app to look at one thing and then closed it counted as no screen.
+    func trackScreen() {
+        Aptabase.shared.trackEvent("screen_view",
+                                   with: ["screen": currentScreenName, "mode": mode.rawValue])
+    }
+
+    /// A full-screen overlay is a screen too, and none of them is a tab.
+    ///
+    /// Onboarding is the first thing a new developer sees, the entry screen is
+    /// where a session with no app begins, and the import sheet is the whole
+    /// of the Managing door. Counting tabs alone measured none of the three.
+    ///
+    /// The utility sheets stay out of this on purpose. About, the ⌘F palette,
+    /// Add locale and the blockers panel are controls *over* a screen rather
+    /// than screens, and reporting them would bury the tab they were opened
+    /// from under the panel that covered it for four seconds.
+    private func trackOverlay(_ name: String, shown: Bool, was: Bool) {
+        guard shown, !was else { return }
+        Aptabase.shared.trackEvent("screen_view",
+                                   with: ["screen": name, "mode": mode.rawValue])
+    }
+
     var selectedAppIndex = 0
 
     /// What is stopping the release. The header band opens it from any tab,
@@ -210,14 +256,20 @@ final class AppState {
     /// the foot of the sidebar and under the app menu, the two places a Mac
     /// user looks for it.
     var showAbout = false
-    var showOnboarding = false
-    var showExistingAppImport = false
+    var showOnboarding = false {
+        didSet { trackOverlay("Onboarding", shown: showOnboarding, was: oldValue) }
+    }
+    var showExistingAppImport = false {
+        didSet { trackOverlay("Update existing apps", shown: showExistingAppImport, was: oldValue) }
+    }
     /// Shows the entry screen over an app that is already open.
     ///
     /// "Add app" used to open a folder picker, which answers one of the three
     /// doors before the developer has chosen a door. Any app that opens clears
     /// this, so nothing has to remember to put it back.
-    var showEntryScreen = false
+    var showEntryScreen = false {
+        didSet { trackOverlay("Entry screen", shown: showEntryScreen, was: oldValue) }
+    }
     /// The index of the app the user asked to remove. It holds the choice
     /// while the confirmation is open.
     var appPendingRemoval: Int?
@@ -994,7 +1046,7 @@ final class AppState {
     }
 
     /// Both doors end here: read the file, add it once, and select it.
-    func link(manifestAt url: URL) {
+    func link(manifestAt url: URL, awaitingProjectFolder: Bool = false) {
         do {
             let loaded = try ManifestFile.load(from: url)
             if let index = linkedApps.firstIndex(where: { $0.manifestPath == url.path }) {
@@ -1014,7 +1066,8 @@ final class AppState {
             let record = LinkedAppRecord(
                 id: UUID(),
                 name: displayName,
-                manifestPath: url.path)
+                manifestPath: url.path,
+                awaitingProjectFolder: awaitingProjectFolder)
             linkedApps.append(record)
             persistLinkedApps()
             activateLinkedApp(at: linkedApps.count - 1)
@@ -1760,8 +1813,7 @@ final class AppState {
             do {
                 let existing = mediaPaths(deviceClass: deviceClass)
                 let arriving = urls.map(manifestPath(for:))
-                try checkMediaLimits(existing: existing, arriving: arriving,
-                                     deviceClass: deviceClass)
+                try checkMediaLimits(existing: existing, arriving: arriving)
                 var paths: [String] = []
                 for url in urls {
                     let accessed = url.startAccessingSecurityScopedResource()
@@ -1783,31 +1835,21 @@ final class AppState {
     /// How many pictures one device size may still take, by the rule each store
     /// actually counts by.
     ///
-    /// Apple takes 10 per **display type** and Google takes 8 per device class.
-    /// `Validator.media` already applies exactly this, and this is the door that
-    /// rule stands behind: the two are the same call now, so they cannot drift
-    /// apart a second time.
+    /// Google takes 8 per device class, and refuses the whole drop rather than
+    /// the overflow: a developer moving screenshots between locales adds and
+    /// removes in whichever order is convenient, and a size that is briefly over
+    /// on the way to being under is not a mistake to block.
     ///
-    /// They had. This counted the whole bucket against Apple's per-size limit,
-    /// and the Phone bucket is the one that holds several sizes: an app shipping
-    /// a 6.9 inch set and a 6.5 inch set has up to twenty phone files and every
-    /// one of them is legal. So "Send these 15 again" refused all fifteen and
-    /// named a limit the App Store does not have. The iPad went through the same
-    /// door untouched, because an iPad app usually ships one size.
-    private func checkMediaLimits(existing: [String], arriving: [String],
-                                  deviceClass: Manifest.DeviceClass) throws {
-        if stores.contains(.google), existing.count + arriving.count > 8 {
-            throw MediaInputError.tooMany(limit: 8)
-        }
-        guard stores.contains(.apple) else { return }
-        let counts = Validator.appleDisplayTypeCounts(existing + arriving,
-                                                      root: manifestRoot,
-                                                      deviceClass: deviceClass)
-        // Sorted, so a bucket that overflows twice over always names the same
-        // size rather than whichever one the dictionary offered that day.
-        guard let over = counts.sorted(by: { $0.key < $1.key })
-            .first(where: { $0.value > 10 }) else { return }
-        throw MediaInputError.tooManyForSize(displayType: over.key, limit: 10)
+    /// Apple's 10-per-**display type** limit is not checked here on purpose. A
+    /// developer replacing a set drops the new pictures before deleting the old
+    /// ones, which is over the limit for as long as both sit here, and this used
+    /// to refuse that drop outright: the fix was deleting four first, uploading
+    /// blind, and hoping the new four were the right four. `Validator.media`
+    /// enforces the real limit before anything reaches Apple, which is the door
+    /// that actually has to hold: this one only has to let the developer work.
+    private func checkMediaLimits(existing: [String], arriving: [String]) throws {
+        guard stores.contains(.google), existing.count + arriving.count > 8 else { return }
+        throw MediaInputError.tooMany(limit: 8)
     }
 
     func moveMedia(_ path: String, by offset: Int, deviceClass: Manifest.DeviceClass,

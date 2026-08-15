@@ -5,7 +5,8 @@ import SubmitKit
 extension AppState {
     func importExistingApps(_ candidates: [ExistingAppCandidate], destination: URL,
                             appleCredential: AppleCredential?,
-                            googleCredential: GoogleServiceAccount?) async throws -> [URL] {
+                            googleCredential: GoogleServiceAccount?,
+                            awaitingProjectFolder: Bool = false) async throws -> [URL] {
         let groups = ExistingAppImportPlan.group(candidates)
         guard !groups.isEmpty else { return [] }
         let client = StoreConnectionClient()
@@ -94,7 +95,7 @@ extension AppState {
             snapshot.save(toRoot: folder)
             // `link` activates the app, which clears the read state, so the
             // snapshot of the app that stays open is set after it.
-            link(manifestAt: manifestURL)
+            link(manifestAt: manifestURL, awaitingProjectFolder: awaitingProjectFolder)
             storeSnapshot = snapshot
             if let appleCredential {
                 try KeychainCredentials.save(appleCredential, kind: .apple,
@@ -155,16 +156,22 @@ extension AppState {
         return importedURLs
     }
 
-    /// The managing import. It asks the user for no folder.
+    /// Asks the user for no folder. Two callers share it: a Managing import,
+    /// which never builds and so never needs a project folder, and a
+    /// Publishing import of two or more apps, which defers that question
+    /// instead of asking it once per app.
     ///
-    /// A publishing import writes `store.yaml` beside the source, because the
-    /// developer keeps it in their repository. A manager has no repository in
-    /// play: the app is built and it is out there. Super Submitter keeps the
-    /// workspace in its own Application Support directory instead, one folder
-    /// per app, and the rest of the import is the same.
+    /// A publishing import of one app writes `store.yaml` beside the source,
+    /// because the developer keeps it in their repository. A manager has no
+    /// repository in play: the app is built and it is out there. Both land
+    /// here instead, in Super Submitter's own Application Support directory,
+    /// one folder per app; `awaitingProjectFolder` is what tells the
+    /// Publishing case apart, so linking a project later moves it out. See
+    /// `BuildFlow.relocateManifestIfPending`.
     func importManagedApps(_ candidates: [ExistingAppCandidate],
                            appleCredential: AppleCredential?,
-                           googleCredential: GoogleServiceAccount?) async throws -> [URL] {
+                           googleCredential: GoogleServiceAccount?,
+                           awaitingProjectFolder: Bool = false) async throws -> [URL] {
         let groups = ExistingAppImportPlan.group(candidates)
         guard !groups.isEmpty else { return [] }
         let storage = BuildStorage()
@@ -177,7 +184,8 @@ extension AppState {
                                                    identifier: group.identifier)
             imported += try await importExistingApps(
                 group.candidates, destination: folder,
-                appleCredential: appleCredential, googleCredential: googleCredential)
+                appleCredential: appleCredential, googleCredential: googleCredential,
+                awaitingProjectFolder: awaitingProjectFolder)
         }
         return imported
     }
