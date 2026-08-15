@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.3 (327) - 2026-08-15
+
+### The dry run
+
+- The dry run is on for every app that opens, published or not. A published app used to open with it off, which gave the live-write default to the one app state where a wrong write is read by customers.
+- The Settings preference decides it for every app, and it still starts on. An app that has shipped is a reason to keep that answer rather than to overrule it.
+- The switch on the Summary toolbar is the Mac's own switch, so it takes the keyboard, the focus ring, and the VoiceOver state and hint that a drawn one never had.
+- Turning the dry run off still asks first.
+
+### What the buttons say
+
+- The apply is called Update Drafts, and Preview Requests while the dry run is on. Apply never said whether the press wrote a draft, sent a review, or reached customers.
+- The question in front of a write names the drafts it updates, and keeps its write count, its upload count, its destination, and the line that says nothing reaches a customer.
+- The one-button write on a Managing tab says it updates drafts, in the button and in the question.
+- The warning strip says what Update Drafts sends, and carries a button instead of a line of underlined text.
+- Save progress is called Back Up Apps. Every field already writes store.yaml as it is typed, so a command named save promised to rescue form data that was never at risk.
+
+### Shell and layout
+
+- A sidebar group heading is a button. It opened and closed from the pointer alone, wearing a button trait that VoiceOver could read and not operate.
+- The Publish and Manage selector carries its Task label, so it reads as the choice it is rather than as a filter over the rows under it.
+- Field search keeps its place in the title bar when the bar runs out of room, on macOS 27 and later.
+- The backdrop behind the field palette and each screenshot in the Store page carousel are buttons. The carousel had no keyboard route to a preview and no name to read.
+
+### Listing, details and media
+
+- The Search keywords and App Store tags panels lead with one line and keep the API rule behind a disclosure. Both stood three paragraphs in front of the list they are about.
+- The command that reuses imported live screenshots is called Use these screenshots, and it says it sends nothing. It writes paths into store.yaml, and the plan is what uploads them.
+- The Google video field asks for a promotional YouTube URL and says that a local video file is not one. Apple previews still take video files.
+- The Availability helper text is shorter, and keeps every limit it stated.
+
 ## 1.2 (303) - 2026-08-13
 
 ### Build
