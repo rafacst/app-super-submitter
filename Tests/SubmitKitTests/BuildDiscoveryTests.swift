@@ -246,6 +246,20 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
     #expect(plist?["signingStyle"] as? String == "automatic")
 }
 
+@Test func appleBuildSettingsFindBothNativePlatforms() {
+    var settings = AppleBuildSettings()
+    settings.values["SUPPORTED_PLATFORMS"] = "macosx iphoneos iphonesimulator"
+
+    #expect(settings.supportedApplePlatforms == [.ios, .macos])
+}
+
+@Test func appleBuildSettingsDoNotMistakeTheSimulatorForASecondPlatform() {
+    var settings = AppleBuildSettings()
+    settings.values["SUPPORTED_PLATFORMS"] = "iphoneos iphonesimulator"
+
+    #expect(settings.supportedApplePlatforms == [.ios])
+}
+
 @Test func onlyAnUnfinishedRunIsResumedAfterARelaunch() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
