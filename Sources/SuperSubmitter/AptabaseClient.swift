@@ -3,6 +3,14 @@ import Aptabase
 
 enum AptabaseClient {
     static func setup() {
+        // A screenshot or demo run drives the app through a dozen screens on
+        // purpose, and every one of them used to report as a real session.
+        // The isolation the rest of ScreenshotMode gives the defaults and the
+        // Keychain has to reach the analytics too, and never starting the SDK
+        // is the whole of it: `Aptabase.shared.trackEvent` does nothing until
+        // `initialize` runs, so this one line covers every call site in the
+        // app rather than a guard at each of them.
+        guard !ScreenshotMode.isActive else { return }
         guard let appKey = value("SSAptabaseAppKey", "APTABASE_APP_KEY") else {
             missingConfiguration("APTABASE_APP_KEY")
             return

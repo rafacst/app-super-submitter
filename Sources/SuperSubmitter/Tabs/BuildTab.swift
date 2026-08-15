@@ -32,21 +32,24 @@ struct BuildTab: View {
     /// The two questions this tab asks before there is a package: where the
     /// build comes from, and what Apple is owed about it.
     ///
-    /// One row of two boxes of one height. The source switch was a bare
-    /// segmented control floating over the top of the tab with nothing to say
-    /// what it switched, and the answer to it changes everything below.
+    /// One box holding both, divided by a rule. They were two boxes side by
+    /// side, each with its own border, its own head and two lines of radio
+    /// buttons in a card the width of half the window: two borders drawn around
+    /// four short answers, with more empty card than content in either. Related
+    /// choices belong in one group with a separator between them, and a group
+    /// costs one edge and not two.
     private var questionRow: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             buildSource
-                .frame(minWidth: 0, maxWidth: .infinity,
-                       maxHeight: .infinity, alignment: .top)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
             if state.stores.contains(.apple) {
+                Divider().overlay(Theme.sep)
                 exportCompliance
-                    .frame(minWidth: 0, maxWidth: .infinity,
-                           maxHeight: .infinity, alignment: .top)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+        .storePanel(padding: 12, horizontal: 14)
     }
 
     /// Two ways to get a build: run the project, or import a package that
@@ -71,8 +74,7 @@ struct BuildTab: View {
             .labelsHidden()
             .font(Theme.font(size: 12))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .storePanel(padding: 10, horizontal: 13)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     /// Apple's export compliance answer, on the tab that makes the build that
@@ -114,13 +116,11 @@ struct BuildTab: View {
             // of the way of every app that does not.
             if state.encryptionAnswer == true { ExportCompliance() }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .storePanel(padding: 10, horizontal: 13,
-                    border: unanswered ? Theme.red.opacity(0.3) : Theme.sep)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .fieldAnchor("build.encryption")
     }
 
-    /// The head both boxes wear: a glyph, the question, and who asks it.
+    /// The head both questions wear: a glyph, the question, and who asks it.
     private func panelHead(_ icon: String, tint: Color, title: String,
                            detail: String) -> some View {
         HStack(spacing: 9) {

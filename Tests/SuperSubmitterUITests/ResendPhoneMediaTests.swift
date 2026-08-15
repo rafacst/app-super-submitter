@@ -78,20 +78,33 @@ private func openApp(_ sizes: [(Int, Int)]) throws -> (state: AppState, files: [
     #expect(state.mediaPaths(deviceClass: .phone).count == 12)
 }
 
-/// The limit still bites where the App Store applies it.
+/// The picker takes it anyway. Replacing a set means dropping the new
+/// pictures before deleting the old ones, which is over the limit for as
+/// long as both sit here, and refusing the drop meant deleting blind first.
 @MainActor
-@Test func elevenOfOneIPhoneSizeIsStillRefused() throws {
+@Test func elevenOfOneIPhoneSizeIsAcceptedLocally() throws {
     let (state, files, folder) = try openApp(Array(repeating: (1320, 2868), count: 11))
     defer { try? FileManager.default.removeItem(at: folder) }
 
     state.addMediaFiles(files, deviceClass: .phone)
 
-    let error = try #require(state.mediaError)
-    // It names the set, because the bucket holds several and the developer is
-    // being asked to remove one of a particular one. The 6.9 inch pictures are
-    // counted under 6.7, which is the set Apple puts them in.
-    #expect(error.contains("APP_IPHONE_67"))
-    #expect(state.mediaPaths(deviceClass: .phone).isEmpty)
+    #expect(state.mediaError == nil)
+    #expect(state.mediaPaths(deviceClass: .phone).count == 11)
+}
+
+/// The picker no longer refuses eleven of one size, but the count
+/// `Validator.media` acts on before an apply still sees the overflow: the
+/// safety net moved to where it actually has to hold, it did not disappear.
+@MainActor
+@Test func theCountValidatorActsOnStillSeesTheOverflow() throws {
+    let (state, files, folder) = try openApp(Array(repeating: (1320, 2868), count: 11))
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    state.addMediaFiles(files, deviceClass: .phone)
+    let counts = Validator.appleDisplayTypeCounts(
+        state.mediaPaths(deviceClass: .phone), root: folder, deviceClass: .phone)
+
+    #expect(counts["APP_IPHONE_67"] == 11)
 }
 
 /// The iPad path, which worked before and has to keep working.

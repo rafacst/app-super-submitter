@@ -40,6 +40,12 @@ struct SuperSubmitterApp: App {
                         ScreenshotMode.placeWindow()
                         return
                     }
+                    // The screen this session opens on. `selectedTab` reports
+                    // its own changes, and a launch is not one: the restore
+                    // sets it inside `init`, where Swift runs no observer.
+                    // Before the onboarding line below, so the two arrive in
+                    // the order the developer sees them.
+                    state.trackScreen()
                     state.configureAccess()
                     // The keys are already in the Keychain. This is the app
                     // asking the stores about them, rather than the developer

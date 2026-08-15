@@ -264,11 +264,23 @@ struct ExistingAppImportSheet: View {
             } else if model.step == .apps {
                 // Managing needs no folder. There is no repository to sit
                 // beside, so Super Submitter keeps the workspace itself.
-                Button(state.mode == .managing
+                //
+                // Publishing normally asks once per app, immediately, because
+                // that folder is where `store.yaml` and the project both live.
+                // Several apps at once is a different question: picking one
+                // folder now, per app, before any of them has a project to
+                // build, is five prompts for a decision that only matters once
+                // a developer opens that app's Build tab. So it waits: Super
+                // Submitter keeps the workspace itself, the same as Managing,
+                // and linking a project later moves `store.yaml` into it. See
+                // `BuildFlow.relocateManifestIfPending`.
+                Button(state.mode == .managing || deferFolderChoice
                        ? "Bring in \(model.selection.count) apps"
                        : (model.selectedGroupName == nil
                           ? "Choose the folder for these apps…" : "Choose the app folder…")) {
-                    if state.mode == .managing { importManaged() } else { chooseFolder() }
+                    if state.mode == .managing { importManaged() }
+                    else if deferFolderChoice { importPendingFolder() }
+                    else { chooseFolder() }
                 }
                 .buttonStyle(.borderedProminent).tint(Theme.teal)
                 .disabled(model.selection.count == 0)
@@ -377,6 +389,31 @@ struct ExistingAppImportSheet: View {
                     model.selectedCandidates,
                     appleCredential: model.appleCredential,
                     googleCredential: model.googleCredential)
+                model.step = .complete
+            } catch {
+                model.error = error.localizedDescription
+                model.step = .apps
+            }
+        }
+    }
+
+    /// Publishing, two or more apps: the same folder-free import as Managing,
+    /// but marked so the Build tab still asks for a project once, the first
+    /// time this app builds.
+    private var deferFolderChoice: Bool {
+        state.mode == .publishing && model.selectedGroupCount > 1
+    }
+
+    private func importPendingFolder() {
+        model.step = .destination
+        model.error = nil
+        Task {
+            do {
+                _ = try await state.importManagedApps(
+                    model.selectedCandidates,
+                    appleCredential: model.appleCredential,
+                    googleCredential: model.googleCredential,
+                    awaitingProjectFolder: true)
                 model.step = .complete
             } catch {
                 model.error = error.localizedDescription

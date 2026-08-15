@@ -348,6 +348,11 @@ final class BuildFlow {
         // it sat on the preflight card of a linked project as a permanent
         // yellow line about a list nobody is reading any more.
         warnings = []
+        // Before `context` is read below: a deferred import left `store.yaml`
+        // in Super Submitter's own folder, and this is the first time the
+        // developer has pointed at a real one. See
+        // `relocateManifestIfPending`.
+        relocateManifestIfPending(to: root)
         let platform: BuildPlatform = container.kind == .gradle ? .android : .ios
         var project = LinkedSourceProject(
             platform: platform, rootPath: root.path,
@@ -363,6 +368,51 @@ final class BuildFlow {
         run.linkedProjectID = project.id
         persistProject()
         await refreshPreflight()
+    }
+
+    /// Moves `store.yaml`, its downloaded media, and its store snapshot out
+    /// of Super Submitter's own folder and into the project root just
+    /// linked.
+    ///
+    /// A Publishing import of one app already writes `store.yaml` where the
+    /// project lives. A Publishing import of several apps defers that
+    /// question and writes into `BuildStorage.managed` instead, the same as
+    /// a Managing import; `awaitingProjectFolder` marks the difference. This
+    /// is the moment that deferred promise is kept, so the developer's
+    /// `store.yaml` ends up exactly where a single-app import would have put
+    /// it, just later.
+    ///
+    /// Silent and automatic: linking a project is already the developer's
+    /// own deliberate act, and asking a second question about a promise this
+    /// app already made would be asking twice for one answer.
+    private func relocateManifestIfPending(to root: URL) {
+        guard let app, app.isOpenApp(owner),
+              let index = app.linkedApps.firstIndex(where: { $0.id == owner }),
+              app.linkedApps[index].awaitingProjectFolder == true,
+              let oldRoot = app.manifestURL?.deletingLastPathComponent()
+        else { return }
+        let newManifestURL = root.appendingPathComponent(ManifestFile.defaultName)
+        // A folder that already holds a `store.yaml` is not empty ground to
+        // move into: leave the deferred copy where it is rather than
+        // overwrite whatever is already there.
+        guard !FileManager.default.fileExists(atPath: newManifestURL.path) else { return }
+        do {
+            let items = try FileManager.default.contentsOfDirectory(
+                at: oldRoot, includingPropertiesForKeys: nil)
+            for item in items {
+                let destination = root.appendingPathComponent(item.lastPathComponent)
+                guard !FileManager.default.fileExists(atPath: destination.path) else { continue }
+                try FileManager.default.moveItem(at: item, to: destination)
+            }
+            try? FileManager.default.removeItem(at: oldRoot)
+            app.linkedApps[index].manifestPath = newManifestURL.path
+            app.linkedApps[index].awaitingProjectFolder = false
+            app.persistLinkedApps()
+            app.manifestURL = newManifestURL
+        } catch {
+            app.errorMessage = "This app's store.yaml could not move into the linked "
+                + "folder. \(error.localizedDescription)"
+        }
     }
 
     /// Forgets the link. It removes the record and touches no file the

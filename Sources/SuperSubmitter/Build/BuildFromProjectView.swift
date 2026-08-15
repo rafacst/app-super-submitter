@@ -13,13 +13,68 @@ struct BuildFromProjectView: View {
     /// One dialog for two buttons. The artifact card and the success card both
     /// offer the delete, and the file they mean is the same one.
     @State private var deleting = false
+    /// The developer's own answer about the preflight list, and nil until they
+    /// give one. See `showsChecks` for what decides it meanwhile.
+    @State private var checksOpen: Bool?
+    /// The same, for the artifact's own rows. See `showsArtifactDetails`.
+    @State private var artifactOpen: Bool?
 
     private var flow: BuildFlow { state.buildFlow }
 
+    /// Whether the twelve read-only rows are on screen.
+    ///
+    /// Shut while every check is ready, which is the ordinary state of a
+    /// project that has been linked once and builds every day. Open by itself
+    /// the moment a row is not, because a card that hides the reason a build
+    /// cannot start is worse than one that shows twelve rows nobody reads.
+    private var showsChecks: Bool { checksOpen ?? !preflightIsQuiet }
+
+    /// Whether the artifact's rows are on screen.
+    ///
+    /// Open at the one moment they are the point: the archive exists, the
+    /// upload is waiting for an answer, and these rows are what the developer
+    /// checks it against. Shut once the run is over.
+    private var showsArtifactDetails: Bool {
+        artifactOpen ?? (flow.state == .needsUploadConfirmation)
+    }
+
+    /// Nothing on the preflight card needs reading.
+    private var preflightIsQuiet: Bool {
+        flow.blockingReason == nil
+            && !preflightRows(flow.snapshot).contains { $0.2 == .blocked || $0.2 == .warning }
+    }
+
+    /// The one line that stands for the checks while they are folded away.
+    ///
+    /// It answers what the list answers together: whether this build may run,
+    /// and what it will build. The rows themselves are twelve values a
+    /// developer reads once, when one of them is wrong.
+    private var preflightSummary: (text: String, status: PreflightRow.Status) {
+        guard flow.state != .preflight else {
+            return ("Reading the toolchain, the signing, and the store…", .unknown)
+        }
+        let rows = preflightRows(flow.snapshot)
+        let what = [flow.snapshot.scheme ?? flow.snapshot.variantTask,
+                    flow.snapshot.marketingVersion.map { version in
+                        flow.snapshot.buildVersion.map { "\(version) (\($0))" } ?? version
+                    }]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let blocked = rows.filter { $0.2 == .blocked }.count
+        let warnings = rows.filter { $0.2 == .warning }.count
+        if blocked > 0 || flow.blockingReason != nil {
+            return ("\(max(blocked, 1)) of \(rows.count) checks blocked", .blocked)
+        }
+        if warnings > 0 {
+            return ("\(warnings) of \(rows.count) checks to settle", .warning)
+        }
+        return (what.isEmpty ? "\(rows.count) checks ready"
+                             : "\(rows.count) checks ready · \(what)", .ready)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            storeRow
             if flow.project == nil, flow.candidate == nil, flow.failure == nil {
+                storeRow
                 if !flow.containers.isEmpty, flow.state == .needsSelection {
                     containerChooser
                 } else {
@@ -27,7 +82,13 @@ struct BuildFromProjectView: View {
                 }
             } else {
                 if flow.project != nil {
-                    projectCard
+                    // One box: what is linked, and every choice about what it
+                    // builds. They were two cards standing on top of each
+                    // other, one holding a name and five buttons and the other
+                    // holding two pickers, and a choice a developer makes
+                    // before pressing Build had no more claim to a border of
+                    // its own than the folder it is made about.
+                    //
                     // What the build is for. One app id ships iOS and macOS
                     // and the two are not in step, so the platform is a
                     // choice on every apple project and not a fact of the
@@ -35,7 +96,12 @@ struct BuildFromProjectView: View {
                     // the link had guessed, which is iOS for every Xcode
                     // project, and the scheme, the Gradle variant and the JDK
                     // had no control either.
-                    selectionRow
+                    VStack(alignment: .leading, spacing: 11) {
+                        projectCard
+                        Divider().overlay(Theme.sep)
+                        selectionRow
+                    }
+                    .storePanel(horizontal: 15)
                 }
                 preflightCard
                 if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
@@ -168,12 +234,14 @@ struct BuildFromProjectView: View {
                             ? "Open in Android Studio" : "Open in Xcode") { flow.openInIDE() }
                 QuietButton(title: "Change Selection") { flow.linkFolder() }
                 QuietButton(title: "Unlink") { flow.unlink() }
+                    // The sentence this replaces stood under the row on every
+                    // visit, in the smallest grey the app has, answering a
+                    // question the developer asks once and only about the
+                    // button it belongs to.
+                    .help("Unlink removes this link only. It never deletes the project or its build output.")
                 Spacer(minLength: 0)
             }
-            Text("Unlink removes this link only. It never deletes the project or its build output.")
-                .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
         }
-        .storePanel(horizontal: 15)
     }
 
     private var containerChooser: some View {
@@ -242,6 +310,7 @@ struct BuildFromProjectView: View {
 
     private var selectionRow: some View {
         VStack(alignment: .leading, spacing: 9) {
+            storeRow
             if flow.project?.platform != .android {
                 HStack(spacing: 9) {
                     Text("Platform").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
@@ -273,8 +342,39 @@ struct BuildFromProjectView: View {
                             selected: flow.project?.selection.javaHome) { flow.chooseJDK($0) }
                 }
             }
+            buildOptions
         }
-        .storePanel(horizontal: 15)
+    }
+
+    /// The two answers the developer gives about the build itself, beside the
+    /// pickers that say what is built.
+    ///
+    /// They stood at the foot of the preflight card, under twelve rows of
+    /// read-only checks, which is a card of facts with two decisions buried in
+    /// it. A check is something the app read; these are things the developer
+    /// chooses, and every other choice on this tab is now in this box.
+    @ViewBuilder
+    private var buildOptions: some View {
+        if flow.project?.platform != .android {
+            // upload-spec 8.6. The sentence stays: this is the one control on
+            // the tab that lets a build change something at Apple, and consent
+            // asked without saying what it permits is not consent.
+            Toggle(isOn: Bindable(flow).allowProvisioningUpdates) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Let Xcode update the provisioning")
+                        .font(Theme.font(size: 12))
+                    Text("Xcode may contact Apple and create or change an App ID, a certificate, or a profile.")
+                        .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.checkbox)
+            Toggle(isOn: Bindable(flow).alwaysReviewArtifact) {
+                Text("Always review the built artifact before upload")
+                    .font(Theme.font(size: 12))
+            }
+            .toggleStyle(.checkbox)
+        }
     }
 
     private func chooser(_ label: String, options: [String], selected: String?,
@@ -310,11 +410,24 @@ struct BuildFromProjectView: View {
 
     private var preflightCard: some View {
         let snapshot = flow.snapshot
+        let summary = preflightSummary
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 9) {
                 Text("Preflight").font(Theme.font(size: 12.5, weight: .semibold))
+                Circle().fill(summary.status.color).frame(width: 6, height: 6)
+                    .accessibilityLabel(summary.status.label)
+                Text(summary.text)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 8)
                 if flow.state == .preflight { Spinner() }
+                // The checks are what the app read, and a developer reads them
+                // when something is wrong. Twelve rows of green were the top
+                // half of this screen on every visit, and they pushed the one
+                // button that starts the work down with them.
+                QuietButton(title: showsChecks ? "Hide checks" : "Show checks") {
+                    checksOpen = !showsChecks
+                }
                 // The command belongs to the checks it reads.
                 //
                 // It stood at the foot of the screen, under the live run, the
@@ -339,29 +452,12 @@ struct BuildFromProjectView: View {
                     }
                 }
             }
-            .padding(.bottom, 9)
+            .padding(.bottom, showsChecks ? 9 : 0)
 
-            twoColumns(preflightRows(snapshot)) { label, value, status in
-                PreflightRow(label: label, value: value, status: status)
-            }
-
-            if flow.project?.platform != .android {
-                Divider().padding(.vertical, 7)
-                Toggle(isOn: Bindable(flow).allowProvisioningUpdates) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Let Xcode update the provisioning")
-                            .font(Theme.font(size: 12))
-                        Text("Off by default. With it on, Xcode may contact Apple and create or change an App ID, a certificate, or a profile.")
-                            .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            if showsChecks {
+                twoColumns(preflightRows(snapshot)) { label, value, status in
+                    PreflightRow(label: label, value: value, status: status)
                 }
-                .toggleStyle(.checkbox)
-                Toggle(isOn: Bindable(flow).alwaysReviewArtifact) {
-                    Text("Always review the built artifact before upload")
-                        .font(Theme.font(size: 12))
-                }
-                .toggleStyle(.checkbox)
             }
 
             if let override = flow.buildNumberOverride {
@@ -443,6 +539,8 @@ struct BuildFromProjectView: View {
             }
         }
         .storePanel(horizontal: 15)
+        // The checks are a fold like the log and like every other one.
+        .motion(.easeInOut(duration: 0.22), value: showsChecks)
     }
 
     private func preflightRows(_ snapshot: PreflightSnapshot)
@@ -600,8 +698,14 @@ struct BuildFromProjectView: View {
 
     private func artifactCard(_ candidate: BuildCandidate) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack {
+            HStack(spacing: 9) {
                 Text("The built artifact").font(Theme.font(size: 12.5, weight: .semibold))
+                // What the file is, in the words the confirmation will repeat.
+                // The ten rows under it are the path, the hash, and the
+                // certificate: answers to questions asked once.
+                Text("\(candidate.marketingVersion) (\(candidate.buildVersion)) · \(candidate.sizeText)")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .lineLimit(1)
                 Spacer(minLength: 8)
                 StatePill(text: candidate.signingSummary.verified == true
                           ? "Signature verified" : "Signature not verified",
@@ -609,16 +713,21 @@ struct BuildFromProjectView: View {
                               ? Theme.green : Theme.red,
                           background: candidate.signingSummary.verified == true
                               ? Theme.greenBg : Theme.redBg)
-            }
-            twoColumns(artifactRows(candidate)) { label, value in
-                HStack(spacing: 12) {
-                    Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .frame(width: 96, alignment: .leading)
-                    Text(value).font(Theme.mono(11.5)).textSelection(.enabled)
-                        .lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 0)
+                QuietButton(title: showsArtifactDetails ? "Hide details" : "Show details") {
+                    artifactOpen = !showsArtifactDetails
                 }
-                .padding(.vertical, 2)
+            }
+            if showsArtifactDetails {
+                twoColumns(artifactRows(candidate)) { label, value in
+                    HStack(spacing: 12) {
+                        Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                            .frame(width: 96, alignment: .leading)
+                        Text(value).font(Theme.mono(11.5)).textSelection(.enabled)
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 2)
+                }
             }
             ForEach(candidate.mismatches) { mismatch in
                 HStack(alignment: .top, spacing: 9) {
@@ -645,6 +754,7 @@ struct BuildFromProjectView: View {
             }
         }
         .storePanel(horizontal: 15)
+        .motion(.easeInOut(duration: 0.22), value: showsArtifactDetails)
     }
 
     private func artifactRows(_ candidate: BuildCandidate) -> [(String, String)] {
@@ -939,7 +1049,7 @@ struct BuildFromProjectView: View {
 // MARK: - The small parts
 
 struct PreflightRow: View {
-    enum Status { case ready, warning, unknown, blocked
+    enum Status: Equatable { case ready, warning, unknown, blocked
 
         var color: Color {
             switch self {
@@ -964,8 +1074,17 @@ struct PreflightRow: View {
     let value: String
     let status: Status
 
+    /// The dot leads the row.
+    ///
+    /// It followed the value, against the far edge of the column, so a row of
+    /// three words put its own status six hundred points away from itself and
+    /// the eye crossed an empty half of the card to read a colour. Leading, the
+    /// dots are one column the length of the list, which is what a column of
+    /// states is for, and the gap they were holding open is gone.
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 9) {
+            Circle().fill(status.color).frame(width: 6, height: 6).padding(.top, 5)
+                .accessibilityLabel(status.label)
             Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .frame(width: 96, alignment: .leading)
             Text(value)
@@ -974,9 +1093,6 @@ struct PreflightRow: View {
                 .foregroundStyle(status == .blocked ? Theme.red : Theme.text)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Circle().fill(status.color).frame(width: 6, height: 6).padding(.top, 5)
-                .accessibilityLabel(status.label)
         }
         .padding(.vertical, 3)
     }

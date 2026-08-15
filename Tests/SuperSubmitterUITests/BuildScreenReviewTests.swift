@@ -149,6 +149,116 @@ private func buildReviewState() -> AppState {
     #expect(row.contains("Keep the artifact and stop"))
 }
 
+// MARK: - What the app read folds away
+
+/// Twelve rows of green were the top half of this screen on every visit.
+///
+/// They are what the app read, not what the developer decides, and a value that
+/// is right is read once. The card says how many checks are ready in one line,
+/// opens the list itself the moment one is blocked or warns, and keeps the
+/// button that starts the work up on the header beside it.
+@Test func thePreflightChecksFoldBehindOneLine() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let card = try #require(view.range(of: "private var preflightCard"))
+    let rows = try #require(view.range(of: "private func preflightRows"))
+    let preflight = String(view[card.lowerBound..<rows.lowerBound])
+
+    #expect(preflight.contains("if showsChecks"))
+    #expect(preflight.contains("Show checks"))
+    #expect(preflight.contains("summary.text"))
+    // A shut fold may never hide a reason. Everything the developer has to act
+    // on stays on the card whatever the list is doing.
+    #expect(preflight.contains("flow.blockingReason"))
+    #expect(preflight.contains("flow.buildNumberOverride"))
+    #expect(preflight.contains("flow.versionFromManifest"))
+    // And the list opens itself rather than waiting to be asked.
+    #expect(view.contains("checksOpen ?? !preflightIsQuiet"))
+    #expect(view.contains("$0.2 == .blocked || $0.2 == .warning"))
+}
+
+/// The artifact's ten rows are the path, the hash, and the certificate. They
+/// are the point at exactly one moment: the archive exists and the upload is
+/// waiting for an answer, which is what "always review the built artifact"
+/// means. They are open there and folded everywhere else.
+@Test func theArtifactRowsOpenWhenTheyAreTheReview() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+
+    #expect(view.contains("artifactOpen ?? (flow.state == .needsUploadConfirmation)"))
+    #expect(view.contains("if showsArtifactDetails"))
+    #expect(view.contains("Show details"))
+    // A mismatch is not a detail. It stays out of the fold, as the blocking
+    // rows do on the card above.
+    let card = try #require(view.range(of: "private func artifactCard"))
+    let rows = try #require(view.range(of: "private func artifactRows"))
+    #expect(String(view[card.lowerBound..<rows.lowerBound])
+        .contains("ForEach(candidate.mismatches)"))
+}
+
+/// A row of three words put its own status against the far edge of the column,
+/// six hundred points away, and the eye crossed an empty half of the card to
+/// read a colour.
+@Test func theCheckStatusLeadsItsOwnRow() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let start = try #require(view.range(of: "struct PreflightRow"))
+    let end = try #require(view.range(of: "struct ConfirmationSheet"))
+    let row = String(view[start.lowerBound..<end.lowerBound])
+    let circle = try #require(row.range(of: "Circle().fill(status.color)"))
+    let label = try #require(row.range(of: "Text(label)"))
+
+    #expect(circle.lowerBound < label.lowerBound)
+    #expect(!row.contains("Spacer(minLength: 8)"))
+}
+
+// MARK: - One box for the choices
+
+/// The two questions this tab asks before there is a package were two cards
+/// side by side, each with its own border around two lines of radio buttons:
+/// two edges drawn around four short answers, and more empty card than content
+/// in either. Related choices are one group with a rule between them.
+@Test func theTwoQuestionsShareOneBox() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let row = try #require(build.range(of: "private var questionRow"))
+    let source = try #require(build.range(of: "private var buildSource"))
+    let head = try #require(build.range(of: "private func panelHead"))
+    let questionRow = String(build[row.lowerBound..<source.lowerBound])
+    let halves = String(build[source.lowerBound..<head.lowerBound])
+
+    #expect(questionRow.contains(".storePanel("))
+    #expect(questionRow.contains("Divider()"))
+    #expect(!halves.contains(".storePanel("))
+}
+
+/// Every choice about the build in one box: the folder that is linked, the
+/// store, the platform, the scheme, and the two answers that used to sit at the
+/// foot of a card of read-only checks.
+@Test func theProjectAndItsChoicesShareOneBox() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let body = try #require(view.range(of: "var body: some View"))
+    let columns = try #require(view.range(of: "private func twoColumns"))
+    let layout = String(view[body.lowerBound..<columns.lowerBound])
+    let card = try #require(view.range(of: "private var projectCard"))
+    let chooser = try #require(view.range(of: "private var containerChooser"))
+    let project = String(view[card.lowerBound..<chooser.lowerBound])
+    let preflight = try #require(view.range(of: "private var preflightCard"))
+    let preflightRows = try #require(view.range(of: "private func preflightRows"))
+    let checks = String(view[preflight.lowerBound..<preflightRows.lowerBound])
+
+    // One panel around the two halves, and neither draws a second one inside it.
+    #expect(layout.contains("projectCard"))
+    #expect(layout.contains("selectionRow"))
+    #expect(layout.contains(".storePanel(horizontal: 15)"))
+    #expect(!project.contains(".storePanel("))
+    // The build's own two answers are choices and not checks, so they moved to
+    // the box that holds every other choice.
+    #expect(view.contains("private var buildOptions"))
+    #expect(!checks.contains("allowProvisioningUpdates"))
+    #expect(!checks.contains("alwaysReviewArtifact"))
+    // The sentence that stood under the buttons on every visit answers a
+    // question about one button, so it belongs to that button.
+    #expect(!project.contains("Text(\"Unlink removes this link only"))
+    #expect(project.contains(".help(\"Unlink removes this link only"))
+}
+
 // MARK: - The two flows
 
 /// A field that only a first submission uses is noise on an update, and the
