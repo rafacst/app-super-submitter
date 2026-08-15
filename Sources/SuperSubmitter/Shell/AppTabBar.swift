@@ -21,27 +21,24 @@ struct AppTabBar: View {
         // off the side and the bar keeps its height.
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    // One box of segments, which is the tab view the Mac uses
-                    // for switching what the window is showing. The tabs were
-                    // loose buttons on the band: the selected one drew a card
-                    // and the others drew nothing at all, so a window with one
-                    // app showed a single floating chip and no control.
-                    HStack(spacing: 2) {
-                        ForEach(Array(state.appRows.enumerated()),
-                                id: \.element.id) { index, app in
-                            AppTab(index: index, app: app)
-                                .id(app.id)
-                        }
-                        addButton
+                // Bottom-aligned, and that is the whole shape of a tab strip:
+                // the tabs stand on the strip's own bottom edge, and the
+                // chosen one carries on into the screen below it.
+                //
+                // They were segments inside one sunken pill before, which is
+                // the control the Mac uses for choosing a mode of one screen
+                // and not for choosing which document the window is showing.
+                // It read as a squeezed segmented control, because it was one.
+                HStack(alignment: .bottom, spacing: 0) {
+                    ForEach(Array(state.appRows.enumerated()),
+                            id: \.element.id) { index, app in
+                        AppTab(index: index, app: app)
+                            .id(app.id)
                     }
-                    .padding(2)
-                    .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+                    addButton
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 6)
+                .frame(maxHeight: .infinity, alignment: .bottom)
             }
             .scrollIndicators(.never)
             // An app opened from anywhere else — the entry screen, an import,
@@ -56,9 +53,20 @@ struct AppTabBar: View {
         }
         .frame(maxWidth: .infinity, minHeight: Theme.headerHeight,
                maxHeight: Theme.headerHeight, alignment: .leading)
-        .background(Theme.content)
+        // The strip the tabs stand in, and the rule that ends it. Both are
+        // behind the tabs, so the chosen tab covers the rule where it sits and
+        // its fill runs into the screen below with no seam.
+        .background(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                Theme.sunken
+                Rectangle().fill(Theme.sep).frame(height: Theme.hairline)
+            }
+        }
     }
 
+    /// Not a tab. It opens the entry screen rather than choosing an app, so it
+    /// keeps the shape of a button: standing in the strip beside the tabs, and
+    /// never carrying the surface of the screen the way a chosen tab does.
     private var addButton: some View {
         Button { state.showEntryScreen = true } label: {
             Label("Add app", systemImage: "plus")
@@ -68,15 +76,42 @@ struct AppTabBar: View {
                 .padding(.vertical, 4)
                 .background {
                     if state.showsEntryScreen {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Theme.raised)
-                            .shadow(color: .black.opacity(0.18), radius: 1.5, y: 0.5)
+                        RoundedRectangle(cornerRadius: 6).fill(Theme.raised)
                     }
                 }
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .padding(.leading, 6)
+        .padding(.bottom, 7)
         .accessibilityAddTraits(state.showsEntryScreen ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// One tab of the strip: rounded across the top, and a shoulder at each bottom
+/// corner that curves out into the surface beside it instead of stopping at a
+/// vertical edge. It is what makes a row of these read as tabs rather than as
+/// a row of cards.
+private struct TabShape: Shape {
+    var radius: CGFloat = 8
+    var shoulder: CGFloat = 7
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + shoulder, y: rect.maxY - shoulder),
+                          control: CGPoint(x: rect.minX + shoulder, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + shoulder, y: rect.minY + radius))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + shoulder + radius, y: rect.minY),
+                          control: CGPoint(x: rect.minX + shoulder, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - shoulder - radius, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX - shoulder, y: rect.minY + radius),
+                          control: CGPoint(x: rect.maxX - shoulder, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - shoulder, y: rect.maxY - shoulder))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY),
+                          control: CGPoint(x: rect.maxX - shoulder, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -97,9 +132,21 @@ private struct AppTab: View {
     @Environment(AppState.self) private var state
     let index: Int
     let app: AppSummary
+    @State private var hovering = false
 
     private var selected: Bool {
         index == state.selectedAppIndex && !state.showsEntryScreen
+    }
+
+    /// The chosen tab is the screen below it, carried up into the strip. The
+    /// rest are recessed, and hovering one lifts it towards the front.
+    ///
+    /// `Theme.content` and not the header's own fill. The header follows the
+    /// scroll and the entry screen draws no header at all, and the tab cannot
+    /// chase either: `content` is what both of those rest on.
+    private var fill: Color {
+        if selected { return Theme.content }
+        return hovering ? Theme.raised : Theme.sunken
     }
 
     var body: some View {
@@ -117,21 +164,35 @@ private struct AppTab: View {
                     .lineLimit(1)
                 if state.isBuilding(appID: app.id) { BuildingDot() }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            // The shoulders take seven points at each end, so the words start
+            // where the flat top starts and not on the curve.
+            .padding(.horizontal, 15)
+            .padding(.vertical, 5)
+            .frame(maxHeight: .infinity)
             .background {
-                // The raised segment inside the box, the way the system draws
-                // the chosen one: one step lighter than the track, with the
-                // shadow that lifts it. The others are the track itself.
-                if selected {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Theme.raised)
-                        .shadow(color: .black.opacity(0.18), radius: 1.5, y: 0.5)
+                let shape = TabShape()
+                ZStack {
+                    shape.fill(fill)
+                    shape.stroke(selected ? Theme.sep : Theme.sep2,
+                                 lineWidth: Theme.hairline)
                 }
+                // The chosen tab and the screen under it are one surface. This
+                // covers the shape's own bottom edge and the strip's rule with
+                // the tab's fill, which is the join a tab strip is for.
+                .overlay(alignment: .bottom) {
+                    if selected {
+                        Rectangle().fill(fill).frame(height: 1.5)
+                    }
+                }
+                // The unchosen ones stand a little lower, behind the chosen
+                // one rather than beside it.
+                .padding(.top, selected ? 3 : 6)
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .motion(.easeOut(duration: 0.12), value: hovering)
         // The name truncates at 180 points. A tab bar of five apps whose names
         // all start "My Company " is five identical tabs otherwise.
         .frame(maxWidth: 180)

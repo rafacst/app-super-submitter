@@ -10,14 +10,13 @@ struct BuildFromProjectView: View {
     /// The failure panel's own fold, open when the panel appears. See
     /// `errorPanel`.
     @State private var diagnosticsOpen = true
-    /// One dialog for two buttons. The artifact card and the success card both
-    /// offer the delete, and the file they mean is the same one.
+    /// The success card's delete. The artifact section carries the same
+    /// question against the same file, and both ask it with
+    /// `deleteArtifactConfirmation`.
     @State private var deleting = false
     /// The developer's own answer about the preflight list, and nil until they
     /// give one. See `showsChecks` for what decides it meanwhile.
     @State private var checksOpen: Bool?
-    /// The same, for the artifact's own rows. See `showsArtifactDetails`.
-    @State private var artifactOpen: Bool?
 
     private var flow: BuildFlow { state.buildFlow }
 
@@ -28,15 +27,6 @@ struct BuildFromProjectView: View {
     /// the moment a row is not, because a card that hides the reason a build
     /// cannot start is worse than one that shows twelve rows nobody reads.
     private var showsChecks: Bool { checksOpen ?? !preflightIsQuiet }
-
-    /// Whether the artifact's rows are on screen.
-    ///
-    /// Open at the one moment they are the point: the archive exists, the
-    /// upload is waiting for an answer, and these rows are what the developer
-    /// checks it against. Shut once the run is over.
-    private var showsArtifactDetails: Bool {
-        artifactOpen ?? (flow.state == .needsUploadConfirmation)
-    }
 
     /// Nothing on the preflight card needs reading.
     private var preflightIsQuiet: Bool {
@@ -97,9 +87,11 @@ struct BuildFromProjectView: View {
                     // project, and the scheme, the Gradle variant and the JDK
                     // had no control either.
                     VStack(alignment: .leading, spacing: 11) {
+                        Text("Project")
+                            .font(Theme.font(size: 13.5, weight: .semibold))
                         projectCard
                         Divider().overlay(Theme.sep)
-                        selectionRow
+                        selectionBlock
                     }
                     .storePanel(horizontal: 15)
                 }
@@ -107,7 +99,10 @@ struct BuildFromProjectView: View {
                 if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
                     liveRun
                 }
-                if let candidate = flow.candidate { artifactCard(candidate) }
+                // The artifact is not here. It is a section of the Artifacts
+                // box below, with the package a developer supplies and the
+                // builds the store already holds: one question, one box. What
+                // stays is the run and the preflight, which are not artifacts.
                 if let failure = flow.failure { errorPanel(failure) }
                 if flow.state == .complete { successCard }
                 actionRow
@@ -121,13 +116,7 @@ struct BuildFromProjectView: View {
         .sheet(isPresented: Bindable(flow).showBuildConfirmation) { buildConfirmation }
         .sheet(isPresented: Bindable(flow).showBuildBothConfirmation) { buildBothConfirmation }
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
-        .confirmationDialog("Delete the built artifact?", isPresented: $deleting,
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { flow.deleteArtifact() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The archive Super Submitter built is removed from this Mac. Your project is untouched, and a build the store has already accepted stays where it is. Building again makes a new one.")
-        }
+        .deleteArtifactConfirmation($deleting, flow: flow)
     }
 
     /// A card's rows, in two columns.
@@ -292,36 +281,51 @@ struct BuildFromProjectView: View {
     @ViewBuilder
     private var storeRow: some View {
         if state.stores.count > 1 {
-            HStack(spacing: 9) {
-                Text("Store").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
-                    .frame(width: 92, alignment: .leading)
+            selectionRow("Store") {
                 Picker("", selection: Binding(
                     get: { flow.platform.store },
                     set: { flow.choosePlatform($0 == .google ? .android : .ios) })) {
                     Text("App Store").tag(Store.apple)
                     Text("Google Play").tag(Store.google)
                 }
-                .labelsHidden().pickerStyle(.segmented).frame(width: 240)
+                .labelsHidden().pickerStyle(.segmented)
                 .disabled(flow.isBusy)
-                Spacer(minLength: 0)
             }
         }
     }
 
-    private var selectionRow: some View {
+    /// One row of the block: a label column and a control column, and both are
+    /// the same width on every row.
+    ///
+    /// Each row used to size its own control — a segmented picker of 240 for
+    /// Store, one of 170 for Platform, a 340 point menu for Scheme — so no two
+    /// of them started or ended on the same x. Three rows of one block, in
+    /// three widths, is what looked broken.
+    private func selectionRow<Control: View>(
+        _ label: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack(spacing: 9) {
+            Text(label).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
+                .frame(width: Self.labelWidth, alignment: .leading)
+            control()
+                .frame(width: Self.controlWidth, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private static let labelWidth: CGFloat = 92
+    private static let controlWidth: CGFloat = 340
+
+    private var selectionBlock: some View {
         VStack(alignment: .leading, spacing: 9) {
             storeRow
             if flow.project?.platform != .android {
-                HStack(spacing: 9) {
-                    Text("Platform").font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
-                        .frame(width: 92, alignment: .leading)
+                selectionRow("Platform") {
                     Picker("", selection: Binding(get: { flow.platform },
                                                   set: { flow.choosePlatform($0) })) {
                         Text("iOS").tag(BuildPlatform.ios)
                         Text("macOS").tag(BuildPlatform.macos)
                     }
-                    .labelsHidden().pickerStyle(.segmented).frame(width: 170)
-                    Spacer(minLength: 0)
+                    .labelsHidden().pickerStyle(.segmented)
                 }
                 if let info = flow.containerInfo {
                     chooser("Scheme", options: info.schemes,
@@ -379,9 +383,7 @@ struct BuildFromProjectView: View {
 
     private func chooser(_ label: String, options: [String], selected: String?,
                          choose: @escaping (String) -> Void) -> some View {
-        HStack(spacing: 9) {
-            Text(label).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
-                .frame(width: 92, alignment: .leading)
+        selectionRow(label) {
             Menu {
                 ForEach(options, id: \.self) { option in
                     Button(option) { choose(option) }
@@ -396,13 +398,12 @@ struct BuildFromProjectView: View {
                     Text("▾").font(Theme.font(size: 9)).foregroundStyle(Theme.text3)
                 }
                 .padding(.horizontal, 9).padding(.vertical, 5)
-                .frame(width: 340)
+                .frame(maxWidth: .infinity)
                 .background(Theme.field, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
             }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-            Spacer(minLength: 0)
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         }
     }
 
@@ -694,89 +695,6 @@ struct BuildFromProjectView: View {
         }
     }
 
-    // MARK: - The artifact
-
-    private func artifactCard(_ candidate: BuildCandidate) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 9) {
-                Text("The built artifact").font(Theme.font(size: 12.5, weight: .semibold))
-                // What the file is, in the words the confirmation will repeat.
-                // The ten rows under it are the path, the hash, and the
-                // certificate: answers to questions asked once.
-                Text("\(candidate.marketingVersion) (\(candidate.buildVersion)) · \(candidate.sizeText)")
-                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                StatePill(text: candidate.signingSummary.verified == true
-                          ? "Signature verified" : "Signature not verified",
-                          foreground: candidate.signingSummary.verified == true
-                              ? Theme.green : Theme.red,
-                          background: candidate.signingSummary.verified == true
-                              ? Theme.greenBg : Theme.redBg)
-                QuietButton(title: showsArtifactDetails ? "Hide details" : "Show details") {
-                    artifactOpen = !showsArtifactDetails
-                }
-            }
-            if showsArtifactDetails {
-                twoColumns(artifactRows(candidate)) { label, value in
-                    HStack(spacing: 12) {
-                        Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                            .frame(width: 96, alignment: .leading)
-                        Text(value).font(Theme.mono(11.5)).textSelection(.enabled)
-                            .lineLimit(1).truncationMode(.middle)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 2)
-                }
-            }
-            ForEach(candidate.mismatches) { mismatch in
-                HStack(alignment: .top, spacing: 9) {
-                    StatePill(text: mismatch.blocksUpload ? "Blocked" : "Changed",
-                              foreground: mismatch.blocksUpload ? Theme.red : Theme.yellow,
-                              background: mismatch.blocksUpload ? Theme.redBg : Theme.yellowBg)
-                    Text("\(mismatch.field): the preflight said \(mismatch.expected) and the artifact holds \(mismatch.actual).")
-                        .font(Theme.font(size: 11.5))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-            }
-            HStack(spacing: 7) {
-                if flow.artifactDeleted {
-                    Text("Deleted from this Mac. The record above is what was built.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                } else {
-                    QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
-                    if flow.artifactIsDeletable {
-                        QuietButton(title: "Delete artifact") { deleting = true }
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        }
-        .storePanel(horizontal: 15)
-        .motion(.easeInOut(duration: 0.22), value: showsArtifactDetails)
-    }
-
-    private func artifactRows(_ candidate: BuildCandidate) -> [(String, String)] {
-        var rows: [(String, String)] = [
-            ("Product", candidate.productName),
-            ("Identifier", candidate.productIdentifier),
-            ("Version", candidate.marketingVersion),
-            (candidate.platform == .android ? "Version code" : "Build", candidate.buildVersion),
-            ("Size", candidate.sizeText),
-            ("SHA-256", candidate.sha256.isEmpty ? "Not read" : candidate.sha256),
-            ("Path", candidate.artifactPath),
-        ]
-        if let subject = candidate.signingSummary.certificateSubject {
-            rows.append(("Certificate", subject))
-        }
-        if let team = candidate.signingSummary.team { rows.append(("Team", team)) }
-        if let identity = candidate.signingSummary.identity {
-            rows.append(("Identity", identity))
-        }
-        return rows
-    }
-
     // MARK: - The actions
 
     private var actionRow: some View {
@@ -1043,6 +961,135 @@ struct BuildFromProjectView: View {
             parts.append("The Google edit \(edit) is recorded; an uncommitted edit is invisible and expires by itself.")
         }
         return parts.joined(separator: " ")
+    }
+}
+
+/// The artifact this Mac produced, without a panel of its own.
+struct BuiltArtifactSection: View {
+    @Environment(AppState.self) private var state
+    @State private var detailsOpen: Bool?
+    @State private var deleting = false
+
+    private var flow: BuildFlow { state.buildFlow }
+
+    private var showsDetails: Bool {
+        detailsOpen ?? (flow.state == .needsUploadConfirmation)
+    }
+
+    var body: some View {
+        if let candidate = flow.candidate { card(candidate) }
+    }
+
+    private func card(_ candidate: BuildCandidate) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 9) {
+                Text("Built on this Mac").font(Theme.font(size: 12.5, weight: .semibold))
+                Text("\(candidate.marketingVersion) (\(candidate.buildVersion)) · \(candidate.sizeText)")
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                StatePill(text: candidate.signingSummary.verified == true
+                          ? "Signature verified" : "Signature not verified",
+                          foreground: candidate.signingSummary.verified == true
+                              ? Theme.green : Theme.red,
+                          background: candidate.signingSummary.verified == true
+                              ? Theme.greenBg : Theme.redBg)
+                QuietButton(title: showsDetails ? "Hide details" : "Show details") {
+                    detailsOpen = !showsDetails
+                }
+            }
+            if showsDetails {
+                ArtifactRows(rows: Self.rows(candidate))
+            }
+            ForEach(candidate.mismatches) { mismatch in
+                HStack(alignment: .top, spacing: 9) {
+                    StatePill(text: mismatch.blocksUpload ? "Blocked" : "Changed",
+                              foreground: mismatch.blocksUpload ? Theme.red : Theme.yellow,
+                              background: mismatch.blocksUpload ? Theme.redBg : Theme.yellowBg)
+                    Text("\(mismatch.field): the preflight said \(mismatch.expected) and the artifact holds \(mismatch.actual).")
+                        .font(Theme.font(size: 11.5))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+            }
+            HStack(spacing: 7) {
+                if flow.artifactDeleted {
+                    Text("Deleted from this Mac. The record above is what was built.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                } else {
+                    QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
+                    if flow.artifactIsDeletable {
+                        QuietButton(title: "Delete artifact") { deleting = true }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .motion(.easeInOut(duration: 0.22), value: showsDetails)
+        .deleteArtifactConfirmation($deleting, flow: flow)
+    }
+
+    static func rows(_ candidate: BuildCandidate) -> [(String, String)] {
+        var rows: [(String, String)] = [
+            ("Product", candidate.productName),
+            ("Identifier", candidate.productIdentifier),
+            ("Version", candidate.marketingVersion),
+            (candidate.platform == .android ? "Version code" : "Build", candidate.buildVersion),
+            ("Size", candidate.sizeText),
+            ("SHA-256", candidate.sha256.isEmpty ? "Not read" : candidate.sha256),
+            ("Path", candidate.artifactPath),
+        ]
+        if let subject = candidate.signingSummary.certificateSubject {
+            rows.append(("Certificate", subject))
+        }
+        if let team = candidate.signingSummary.team { rows.append(("Team", team)) }
+        if let identity = candidate.signingSummary.identity {
+            rows.append(("Identity", identity))
+        }
+        return rows
+    }
+}
+
+private struct ArtifactRows: View {
+    let rows: [(String, String)]
+
+    var body: some View {
+        let half = (rows.count + 1) / 2
+        HStack(alignment: .top, spacing: 22) {
+            column(Array(rows.prefix(half)))
+            column(Array(rows.dropFirst(half)))
+        }
+    }
+
+    private func column(_ rows: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 12) {
+                    Text(row.0).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        .frame(width: 96, alignment: .leading)
+                    Text(row.1).font(Theme.mono(11.5)).textSelection(.enabled)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension View {
+    /// Both delete buttons ask one question about the same file.
+    func deleteArtifactConfirmation(_ isPresented: Binding<Bool>,
+                                    flow: BuildFlow) -> some View {
+        confirmationDialog("Delete the built artifact?", isPresented: isPresented,
+                           titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { flow.deleteArtifact() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The archive Super Submitter built is removed from this Mac. Your project is untouched, and a build the store has already accepted stays where it is. Building again makes a new one.")
+        }
     }
 }
 

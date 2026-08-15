@@ -117,7 +117,7 @@ private func buildReviewState() -> AppState {
     #expect(!view.contains("ViewThatFits(in: .horizontal)"))
     #expect(view.contains("private func twoColumns"))
     #expect(view.contains("twoColumns(preflightRows(snapshot))"))
-    #expect(view.contains("twoColumns(artifactRows(candidate))"))
+    #expect(view.contains("ArtifactRows(rows: Self.rows(candidate))"))
 
     // The wrap itself: a preflight value takes the height its text needs.
     let start = try #require(view.range(of: "struct PreflightRow"))
@@ -183,13 +183,13 @@ private func buildReviewState() -> AppState {
 @Test func theArtifactRowsOpenWhenTheyAreTheReview() throws {
     let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
 
-    #expect(view.contains("artifactOpen ?? (flow.state == .needsUploadConfirmation)"))
-    #expect(view.contains("if showsArtifactDetails"))
+    #expect(view.contains("detailsOpen ?? (flow.state == .needsUploadConfirmation)"))
+    #expect(view.contains("if showsDetails"))
     #expect(view.contains("Show details"))
     // A mismatch is not a detail. It stays out of the fold, as the blocking
     // rows do on the card above.
-    let card = try #require(view.range(of: "private func artifactCard"))
-    let rows = try #require(view.range(of: "private func artifactRows"))
+    let card = try #require(view.range(of: "private func card"))
+    let rows = try #require(view.range(of: "static func rows"))
     #expect(String(view[card.lowerBound..<rows.lowerBound])
         .contains("ForEach(candidate.mismatches)"))
 }
@@ -245,9 +245,10 @@ private func buildReviewState() -> AppState {
 
     // One panel around the two halves, and neither draws a second one inside it.
     #expect(layout.contains("projectCard"))
-    #expect(layout.contains("selectionRow"))
+    #expect(layout.contains("selectionBlock"))
     #expect(layout.contains(".storePanel(horizontal: 15)"))
     #expect(!project.contains(".storePanel("))
+    #expect(layout.contains("Text(\"Project\")"))
     // The build's own two answers are choices and not checks, so they moved to
     // the box that holds every other choice.
     #expect(view.contains("private var buildOptions"))
@@ -257,6 +258,46 @@ private func buildReviewState() -> AppState {
     // question about one button, so it belongs to that button.
     #expect(!project.contains("Text(\"Unlink removes this link only"))
     #expect(project.contains(".help(\"Unlink removes this link only"))
+}
+
+/// The local artifact and the App Store copy have one panel and one title.
+@Test func theArtifactsShareOneBox() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let apple = try buildReviewSource("Sources/SuperSubmitter/Tabs/AppleBuildsPanel.swift")
+    let project = try buildReviewSource(
+        "Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let start = try #require(build.range(of: "private var artifactsPanel"))
+    let end = try #require(build.range(of: "private var storeBuildColumns"))
+    let panel = String(build[start.lowerBound..<end.lowerBound])
+    let builtStart = try #require(project.range(of: "struct BuiltArtifactSection"))
+    let builtEnd = try #require(project.range(of: "private struct ArtifactRows"))
+    let built = String(project[builtStart.lowerBound..<builtEnd.lowerBound])
+
+    #expect(panel.contains("Text(\"Artifacts\")"))
+    #expect(panel.contains("BuiltArtifactSection()"))
+    #expect(panel.contains("importSection"))
+    #expect(panel.contains("AppleBuildsPanel()"))
+    #expect(panel.contains("Divider()"))
+    #expect(panel.contains(".storePanel("))
+    #expect(!apple.contains(".storePanel("))
+    #expect(!built.contains(".storePanel("))
+}
+
+/// Every project choice uses one label column and one control column.
+@Test func theProjectChoiceRowsUseOneWidth() throws {
+    let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
+    let row = try #require(view.range(of: "private func selectionRow<"))
+    let block = try #require(view.range(of: "private var selectionBlock"))
+    let helper = String(view[row.lowerBound..<block.lowerBound])
+    let chooser = try #require(view.range(of: "private func chooser("))
+    let preflight = try #require(view.range(of: "// MARK: - 10.3"))
+    let menus = String(view[chooser.lowerBound..<preflight.lowerBound])
+
+    #expect(helper.contains("Self.labelWidth"))
+    #expect(helper.contains("Self.controlWidth"))
+    #expect(menus.contains("selectionRow(label)"))
+    #expect(!view.contains(".frame(width: 240)"))
+    #expect(!view.contains(".frame(width: 170)"))
 }
 
 // MARK: - The two flows
@@ -509,7 +550,7 @@ private func buildReviewState() -> AppState {
     let body = try #require(view.range(of: "var body: some View"))
     let end = try #require(view.range(of: "private func twoColumns"))
 
-    #expect(String(view[body.lowerBound..<end.lowerBound]).contains("selectionRow"))
+    #expect(String(view[body.lowerBound..<end.lowerBound]).contains("selectionBlock"))
     #expect(view.contains("flow.choosePlatform($0)"))
     #expect(view.contains("Text(\"macOS\").tag(BuildPlatform.macos)"))
 }

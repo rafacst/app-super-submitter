@@ -12,14 +12,9 @@ struct BuildTab: View {
             questionRow
             if state.showBuildFromProject {
                 BuildFromProjectView()
-            } else {
-                importSection
             }
-            // Neither source above: the binary is in the store already. It
-            // stands under both of them because it answers the same question
-            // and it is the answer for an app whose build reached Apple by
-            // Xcode, Transporter, or Xcode Cloud.
-            if state.stores.contains(.apple) { AppleBuildsPanel() }
+            artifactsPanel
+            if !state.showBuildFromProject, state.stores.contains(.google) { googleOptions }
             storeTools
         }
         .frame(maxWidth: 1040, alignment: .leading)
@@ -433,6 +428,28 @@ struct BuildTab: View {
         }
     }
 
+    /// The local package and the store copy answer one question, so one edge
+    /// holds them. The source choice above decides which local section appears.
+    private var artifactsPanel: some View {
+        let hasBuiltArtifact = state.buildFlow.candidate != nil
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("Artifacts")
+                .font(Theme.font(size: 13.5, weight: .semibold))
+            if state.showBuildFromProject {
+                if hasBuiltArtifact { BuiltArtifactSection() }
+            } else {
+                importSection
+            }
+            if state.stores.contains(.apple) {
+                if !state.showBuildFromProject || hasBuiltArtifact {
+                    Divider().overlay(Theme.sep)
+                }
+                AppleBuildsPanel()
+            }
+        }
+        .storePanel(padding: 14, horizontal: 15)
+    }
+
     private var storeBuildColumns: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
@@ -441,6 +458,9 @@ struct BuildTab: View {
                         .frame(minWidth: 0, maxWidth: .infinity,
                                maxHeight: .infinity, alignment: .top)
                 }
+                if state.stores.contains(.apple), state.stores.contains(.google) {
+                    Divider().overlay(Theme.sep)
+                }
                 if state.stores.contains(.google) {
                     googleBuildCard
                         .frame(minWidth: 0, maxWidth: .infinity,
@@ -448,10 +468,6 @@ struct BuildTab: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            // TestFlight stood in the column beside this one and is a tab of
-            // its own now. Nothing takes its place: the Android options fill
-            // the width they were sharing.
-            if state.stores.contains(.google) { googleOptions }
         }
     }
 
@@ -474,7 +490,6 @@ struct BuildTab: View {
                 accept: state.importPackages)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .storePanel(padding: 14, horizontal: 15)
     }
 
     private var googleBuildCard: some View {
@@ -492,7 +507,6 @@ struct BuildTab: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .storePanel(padding: 14, horizontal: 15)
     }
 
     private func storeBuildHeader(_ store: Store, title: String,
