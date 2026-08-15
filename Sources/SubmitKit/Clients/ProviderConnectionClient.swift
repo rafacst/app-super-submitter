@@ -30,9 +30,9 @@ public struct ProviderConnectionClient: Sendable {
 }
 
 public struct AdaptyCLIClient: Sendable {
-    private let runner: any CommandRunning
+    private let runner: ProcessRunner
 
-    public init(runner: any CommandRunning = ProcessRunner()) { self.runner = runner }
+    public init(runner: ProcessRunner = ProcessRunner()) { self.runner = runner }
 
     public func status() throws -> String {
         let lookup = try runner.run("/usr/bin/which", ["adapty"])

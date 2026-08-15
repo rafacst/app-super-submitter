@@ -5,7 +5,6 @@ public struct AppleToolchain: Sendable, Equatable {
     public var developerDirectory: String = ""
     public var xcodeVersion: String = ""
     public var buildVersion: String = ""
-    public var sdks: [String] = []
     /// Present when the toolchain cannot build. Discovery stops here.
     public var failure: BuildFailure?
 
@@ -61,11 +60,9 @@ public struct ArchiveInfo: Sendable, Equatable {
     public var platform: BuildPlatform = .ios
     public var minimumOS: String?
     public var applicationPath = ""
-    public var creationDate: Date?
     public var signingIdentity: String?
     public var team: String?
     public var profileName: String?
-    public var dSYMs: [String] = []
     public var size: Int64 = 0
     public var eligibleApplications: [String] = []
     public var signatureVerified: Bool?
@@ -138,10 +135,6 @@ public struct AppleBuildService: Sendable {
             return result
         }
 
-        let sdks = try? await run(Self.xcrun, ["xcodebuild", "-showsdks", "-json"],
-                                  phase: "List the SDKs")
-        result.sdks = JSON(data: Data((sdks?.standardOutput ?? "[]").utf8)).array
-            .compactMap { $0["canonicalName"].string }
         return result
     }
 
@@ -353,7 +346,6 @@ public struct AppleBuildService: Sendable {
 
         var info = ArchiveInfo()
         info.platform = platform
-        info.creationDate = plist["CreationDate"] as? Date
         let properties = plist["ApplicationProperties"] as? [String: Any] ?? [:]
         info.applicationPath = properties["ApplicationPath"] as? String ?? ""
         info.bundleIdentifier = properties["CFBundleIdentifier"] as? String ?? ""
@@ -398,8 +390,6 @@ public struct AppleBuildService: Sendable {
                 .lastPathComponent]
         }
 
-        info.dSYMs = ((try? FileManager.default.contentsOfDirectory(
-            atPath: archive.appendingPathComponent("dSYMs").path)) ?? [])
         info.size = Self.size(of: archive)
 
         // A non-mutating signature diagnostic. The Xcode export step is the

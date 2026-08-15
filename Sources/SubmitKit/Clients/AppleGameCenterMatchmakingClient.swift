@@ -446,18 +446,11 @@ public struct AppleGameCenterMatchmakingClient: Sendable {
         public var id: String
         public var name: String
         public var playerCount: Int
-        public var minPlayers: Int?
-        public var maxPlayers: Int?
-        public var secondsInQueue: Int?
 
-        public init(id: String, name: String, playerCount: Int, minPlayers: Int? = nil,
-                    maxPlayers: Int? = nil, secondsInQueue: Int? = nil) {
+        public init(id: String, name: String, playerCount: Int) {
             self.id = id
             self.name = name
             self.playerCount = playerCount
-            self.minPlayers = minPlayers
-            self.maxPlayers = maxPlayers
-            self.secondsInQueue = secondsInQueue
         }
     }
 
@@ -481,13 +474,10 @@ public struct AppleGameCenterMatchmakingClient: Sendable {
     /// call and Apple stores none of them.
     public func test(ruleSetID: String, requests: [TestRequest]) async throws -> [TestMatch] {
         let included = requests.map { request -> [String: Any] in
-            var attributes: [String: Any] = [
+            let attributes: [String: Any] = [
                 "requestName": request.name,
                 "playerCount": request.playerCount,
             ]
-            if let minPlayers = request.minPlayers { attributes["minPlayers"] = minPlayers }
-            if let maxPlayers = request.maxPlayers { attributes["maxPlayers"] = maxPlayers }
-            if let seconds = request.secondsInQueue { attributes["secondsInQueue"] = seconds }
             return [
                 "type": "gameCenterMatchmakingTestRequests",
                 "id": request.id,
