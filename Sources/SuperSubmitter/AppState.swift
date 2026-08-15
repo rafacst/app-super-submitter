@@ -561,7 +561,17 @@ final class AppState {
     var runDone = false
     var runProgress = 0.0
     var runDetail = ""
+    /// The last 500 calls, as the box draws them. Cut to the width of the box.
     var logLines: [String] = []
+    /// Every call of the run, whole, for the pasteboard. See `logText`.
+    ///
+    /// The build log has held this pair since it froze the window, and the run
+    /// log kept only the capped half, so a long run could not be copied whole.
+    /// One line per API call and not per line of compiler output, so both
+    /// halves are published and the pair costs one more append per call.
+    var logFullLines: [String] = []
+    /// The `.jsonl` this run appends to, for the button that reveals it.
+    var logFileURL: URL?
     var logOpen = false
     var applied = false
     var runFailure: RunFailure?
@@ -3359,7 +3369,7 @@ final class AppState {
         runDone = false
         runProgress = 0
         runDetail = ""
-        logLines = []
+        clearRunLog()
         applied = false
         runFailure = nil
         providerFailure = nil

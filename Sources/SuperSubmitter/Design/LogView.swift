@@ -30,6 +30,14 @@ struct LogView: View {
     /// What the box draws. The rest of the log stays in memory and reaches the
     /// pasteboard, so nothing here loses a line.
     var tail = 400
+    /// What "Copy the log" hands over, when that is not what the box draws.
+    ///
+    /// The run log draws a line cut to the width of this box and keeps a whole
+    /// one beside it, so the copy used to inherit a truncation that exists for
+    /// a layout: a path reached the ticket as `/v2/appAvailabi…`.
+    var copyText: String?
+    /// The file the run appends every call to, where there is one.
+    var file: URL?
 
     /// The rows, oldest of the visible ones first, with the position each one
     /// holds in the whole log. The index is the identity: a build prints the
@@ -42,15 +50,26 @@ struct LogView: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 5) {
             box
-            // The box draws the tail and says so, so the offer has to be
-            // keepable. This hands over every line the run still holds.
-            Button("Copy the log") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(lines.joined(separator: "\n"),
-                                               forType: .string)
+            HStack(spacing: 8) {
+                // The run writes every call to a file as it goes, and no
+                // button in the app opened the folder it is in.
+                if let file {
+                    Button("Show the log file") {
+                        NSWorkspace.shared.activateFileViewerSelecting([file])
+                    }
+                    .controlSize(.small)
+                    .help(file.path)
+                }
+                // The box draws the tail and says so, so the offer has to be
+                // keepable. This hands over every line the run still holds.
+                Button("Copy the log") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        copyText ?? lines.joined(separator: "\n"), forType: .string)
+                }
+                .controlSize(.small)
+                .disabled(lines.isEmpty)
             }
-            .controlSize(.small)
-            .disabled(lines.isEmpty)
         }
     }
 

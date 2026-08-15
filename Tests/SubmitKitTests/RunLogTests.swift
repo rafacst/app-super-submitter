@@ -62,6 +62,37 @@ private func temporaryRoot() throws -> URL {
     #expect(line.contains("dry"))
 }
 
+/// What the copy hands over, against what the box draws.
+///
+/// The button under the run log used to copy the display lines, which are cut
+/// at 39 characters to fit a box, so a path arrived in a ticket as
+/// `/v2/appAvailabilities/6790568884/territ…` and the query string had been
+/// dropped before that.
+@Test func theCopiedLineHoldsTheWholePathTheQueryAndTheFailure() {
+    let call = APICall(
+        system: "apple", method: "GET",
+        path: "/v2/appAvailabilities/6790568884/territoryAvailabilities"
+            + "?limit=200&include=territory",
+        status: 409, durationMs: 412, requestId: "9f0c-4a",
+        error: "The attribute 'hasAccessToAllBuilds' can not be included in an 'UPDATE' operation.")
+    let date = Date()
+
+    let full = call.fullLine(at: date)
+    #expect(full.contains("/v2/appAvailabilities/6790568884/territoryAvailabilities"))
+    #expect(full.contains("?limit=200&include=territory"))
+    #expect(full.contains("409"))
+    #expect(full.contains("412ms"))
+    #expect(full.contains("9f0c-4a"))
+    #expect(full.contains("hasAccessToAllBuilds"))
+    #expect(!full.contains("…"))
+
+    // The box keeps its own line, cut to the width it has.
+    #expect(call.line(at: date).contains("…"))
+}
+
+// A run of more than 500 calls copies every one of them. The cap is the app's,
+// not the kit's, so that one is `RunLogCopyTests` in the UI tests.
+
 @Test func aRunLogUsesOwnerOnlyPermissions() async throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }

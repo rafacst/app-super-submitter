@@ -108,6 +108,9 @@ struct PlanTab: View {
     @State private var askingDelete = false
     /// The second. Nothing is sent until this one is answered.
     @State private var confirmingDelete = false
+    /// Whether the delete also expires the build the version holds. Off by
+    /// default: expiring one takes it off TestFlight and every tester loses it.
+    @State private var expiringBuild = false
     /// Shut by default. See acknowledgedSummary.
     @State private var showingAcknowledged = false
     /// The systems whose rows are open. Empty, so every column arrives shut.
@@ -151,13 +154,28 @@ struct PlanTab: View {
     private var deleteDraftPanel: some View {
         if let version = state.deletableAppleVersion {
             let busy = state.releasing == .apple
+            let build = state.deletableAppleBuildID
             HStack(alignment: .firstTextBaseline, spacing: 11) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Delete the \(state.applePlatform.shortName) draft version \(version.number)")
                         .font(Theme.font(size: 12.5, weight: .semibold))
-                    Text("Removes the version from App Store Connect with its listing, its screenshots and its build. Nothing brings it back, and the version the customers have is untouched.")
+                    // The build was said to go with the version, and it does
+                    // not. The delete removes the version, its localizations,
+                    // its media and the attachment; the binary stays in App
+                    // Store Connect and stays in TestFlight.
+                    Text("Removes the version from App Store Connect with its listing, its screenshots and its previews. The uploaded build is detached and stays in App Store Connect and in TestFlight. Nothing brings the version back, and the version the customers have is untouched.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
+                    // Only where there is an attached build to expire. Apple
+                    // offers no call that removes a binary, so this says
+                    // expire and never delete.
+                    if build != nil {
+                        Toggle("Expire the build in App Store Connect as well",
+                               isOn: $expiringBuild)
+                            .font(Theme.font(size: 11.5))
+                            .disabled(state.releasing != nil || state.isRunning)
+                            .padding(.top, 3)
+                    }
                 }
                 Spacer(minLength: 8)
                 // The call is with Apple and the sheet is gone the moment it is
@@ -186,16 +204,21 @@ struct PlanTab: View {
                 Button("Continue") { confirmingDelete = true }
                 Button("Keep it", role: .cancel) {}
             } message: {
-                Text("The listing, the screenshots, the previews and the attached build go with it. An open review submission is cancelled first.")
+                Text("The listing, the screenshots and the previews go with it. The build is detached and stays in App Store Connect. An open review submission is cancelled first.")
             }
             .confirmationDialog("This cannot be undone. Delete \(version.number)?",
                                 isPresented: $confirmingDelete) {
                 Button("Delete \(version.number)", role: .destructive) {
-                    Task { await state.deleteAppleDraftVersion() }
+                    Task { await state.deleteAppleDraftVersion(
+                        expiringBuild: expiringBuild && build != nil) }
                 }
                 Button("Keep it", role: .cancel) {}
             } message: {
-                Text("Super Submitter reads the store again afterwards, and says so if App Store Connect still holds the version.")
+                // The testers are the part nobody expects. An expired build
+                // leaves TestFlight, and everybody testing it loses it.
+                Text(expiringBuild && build != nil
+                     ? "The build is expired as well. It leaves TestFlight and every tester loses it. Super Submitter reads the store again afterwards, and says so if App Store Connect still holds the version."
+                     : "Super Submitter reads the store again afterwards, and says so if App Store Connect still holds the version.")
             }
         }
     }

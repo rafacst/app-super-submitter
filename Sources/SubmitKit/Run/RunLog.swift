@@ -28,11 +28,20 @@ public struct APICall: Sendable, Codable, Equatable {
         self.dryRun = dryRun
     }
 
+    /// The path as it was called, query string and all.
+    ///
+    /// The query used to be cut off here, so `?include=`, `?limit=` and every
+    /// filter were absent from the screen, from the pasteboard and from the
+    /// file. Those are the diagnostic half of a route: the bug where a run
+    /// asked for no `include=territory` was invisible in its own log.
+    ///
+    /// `Redactor` masks a named secret in it, the same guard `sanitizedError`
+    /// has. Nothing else about a request is recorded: no token, no header, no
+    /// body.
     private static func sanitizedPath(_ path: String) -> String {
-        let withoutFragment = path.split(separator: "#", maxSplits: 1,
-                                         omittingEmptySubsequences: false)[0]
-        return String(withoutFragment.split(separator: "?", maxSplits: 1,
-                                            omittingEmptySubsequences: false)[0])
+        let withoutFragment = String(path.split(separator: "#", maxSplits: 1,
+                                                omittingEmptySubsequences: false)[0])
+        return Redactor().redact(withoutFragment)
     }
 
     private static func sanitizedError(_ error: String) -> String {
@@ -47,14 +56,39 @@ public struct APICall: Sendable, Codable, Equatable {
     }
 
     /// The line that tab 8 shows, and the shape the mockup asked for.
+    ///
+    /// It is cut to the width of a box, so it is the wrong line to keep. Use
+    /// `fullLine(at:)` for the pasteboard: the copy used to hand over these
+    /// display lines, and a path arrived in the ticket as
+    /// `/v2/appAvailabilities/6790568884/territ…`.
     public func line(at date: Date) -> String {
         let time = APICall.clock.string(from: date)
         let method = method.padding(toLength: max(5, method.count), withPad: " ", startingAt: 0)
         let path = self.path.count > 40
             ? String(self.path.prefix(39)) + "…"
             : self.path.padding(toLength: 40, withPad: " ", startingAt: 0)
-        let result = dryRun ? "dry" : (error != nil ? "ERR" : "\(status ?? 0)")
-        return "\(time)  \(method) \(path) \(result.leftPadded(to: 4))  \(durationMs)ms"
+        return "\(time)  \(method) \(path) \(outcome.leftPadded(to: 4))  \(durationMs)ms"
+    }
+
+    /// The whole call, for the pasteboard and for a ticket. Nothing is cut.
+    ///
+    /// The status and the error both, which is where this parts from the box
+    /// line: a refusal is a number and a sentence, and the box has room for
+    /// one of them. A call that failed before an answer has no number and
+    /// says `ERR` in its place.
+    public func fullLine(at date: Date) -> String {
+        let result = dryRun ? "dry" : (status.map(String.init) ?? "ERR")
+        var line = "\(APICall.clock.string(from: date))  \(method) \(path)"
+            + "  \(result)  \(durationMs)ms"
+        if let requestId, !requestId.isEmpty { line += "  request \(requestId)" }
+        // Last, because it is the one part that runs to a paragraph.
+        if let error, !error.isEmpty { line += "  \(error)" }
+        return line
+    }
+
+    /// `200`, `ERR`, or `dry` for a call the dry run never made.
+    private var outcome: String {
+        dryRun ? "dry" : (error != nil ? "ERR" : "\(status ?? 0)")
     }
 
     // `DateFormatter` is documented thread-safe for formatting once it is

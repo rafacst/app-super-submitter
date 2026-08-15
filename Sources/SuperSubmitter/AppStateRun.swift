@@ -186,7 +186,7 @@ extension AppState {
         runDone = false
         runProgress = 0
         runDetail = ""
-        logLines = []
+        clearRunLog()
         // The failure belonged to the run this plan replaces. Its step index
         // points into the old step list, so the panel named no step at all and
         // Retry from the failed step would have started at whatever now sits
@@ -422,7 +422,27 @@ extension AppState {
 
     var runSteps: [PlanStep] { plan?.steps ?? [] }
 
-    var logText: String { logLines.joined(separator: "\n") }
+    /// Every call the run made, whole, for the pasteboard. `logLines` is what
+    /// the box drew: the last 500, each cut to the width of the box.
+    var logText: String { logFullLines.joined(separator: "\n") }
+
+    func clearRunLog() {
+        logLines = []
+        logFullLines = []
+        logFileURL = nil
+    }
+
+    /// One call, in both shapes: the line the box draws and the line the
+    /// pasteboard takes.
+    ///
+    /// The cap is on the drawn half alone. It used to be on the only half
+    /// there was, so a run of a large plan could not be copied whole: the
+    /// first calls of it, which is where a failure usually starts, were gone.
+    func record(_ call: APICall, at date: Date) {
+        logFullLines.append(call.fullLine(at: date))
+        logLines.append(call.line(at: date))
+        if logLines.count > 500 { logLines.removeFirst(logLines.count - 500) }
+    }
 
     func startRun(from start: Int = 0) {
         guard let plan, !plan.steps.isEmpty else { return }
@@ -482,6 +502,7 @@ extension AppState {
             credentials: credentials, dryRun: dryRun, access: access,
             emit: { event in events.continuation.yield(event) })
         self.runner = runner
+        self.logFileURL = runner.logFileURL
         eventTask = Task { @MainActor [weak self] in
             for await event in events.stream { self?.handle(event) }
         }
@@ -508,9 +529,8 @@ extension AppState {
             // bar that flashed on every step would be an animation about
             // nothing. `DockTile` drops repeats within the same whole percent.
             if runSteps[safe: index]?.isUpload == true { DockTile.progress(fraction) }
-        case .log(let line):
-            logLines.append(line)
-            if logLines.count > 500 { logLines.removeFirst(logLines.count - 500) }
+        case .log(let call, let date):
+            record(call, at: date)
         case .failure(let failure):
             runFailure = failure
             runIndex = failure.stepIndex
@@ -947,6 +967,17 @@ extension AppState {
         return (id, apple.versionString ?? manifest.versionName(for: .apple) ?? "this version")
     }
 
+    /// The build the draft holds, which the delete detaches and leaves behind.
+    ///
+    /// `attachedBuildId` and not `buildIdForVersion`. The second one is a
+    /// build App Store Connect processed that no version holds, so deleting
+    /// the version does not touch it, and expiring it would take a build off
+    /// TestFlight that the developer never attached to anything.
+    var deletableAppleBuildID: String? {
+        guard deletableAppleVersion != nil else { return nil }
+        return actualState.apple?.attachedBuildId
+    }
+
     /// Deletes the draft version in App Store Connect.
     ///
     /// It closes the review submission first when one is open, because Apple
@@ -964,11 +995,14 @@ extension AppState {
     /// back, the version stayed in App Store Connect, and nothing on the screen
     /// said why. The check below covers the other half, where Apple answers
     /// without an error and keeps the version anyway.
-    func deleteAppleDraftVersion() async {
+    func deleteAppleDraftVersion(expiringBuild: Bool = false) async {
         guard releasing == nil, !isRunning, let version = deletableAppleVersion else { return }
         guard requirePaid(.storeRelease, .release) else { return }
         releasing = .apple
         releaseError = nil
+        // Before the delete. The delete detaches the build, so an id read
+        // afterwards is gone and the expire would have nothing to name.
+        let buildID = expiringBuild ? deletableAppleBuildID : nil
         let client = ReleaseClient(api: readOnlyAPI(), access: access)
         do {
             if let appID = manifest.apps.apple?.appId, !appID.isEmpty,
@@ -978,6 +1012,17 @@ extension AppState {
             }
             try await client.deleteAppleDraftVersion(versionID: version.id)
             Aptabase.shared.trackEvent("draft_version_deleted")
+            // Its own outcome. The version is already gone by now, so a failure
+            // here is not a failure to delete and must not read as one.
+            if let buildID {
+                do {
+                    try await client.expireAppleBuild(buildID: buildID)
+                } catch {
+                    releaseError = "The draft version was deleted. The build was not expired: "
+                        + "\(error.localizedDescription) Expire it in App Store Connect under "
+                        + "TestFlight."
+                }
+            }
             // The state this app holds describes a version that is gone, and
             // every tab reads it. The read is the only honest next step.
             await recheck()

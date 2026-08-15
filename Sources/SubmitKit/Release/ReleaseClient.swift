@@ -345,6 +345,24 @@ public struct ReleaseClient: Sendable {
         try await api.apple("DELETE", "/v1/appStoreVersions/\(versionID)")
     }
 
+    /// Expires one build in App Store Connect.
+    ///
+    /// This is the whole of what Apple offers. There is no
+    /// `DELETE /v1/builds/{id}` and no call that takes the binary off App
+    /// Store Connect, so the button that offers it says expire and never says
+    /// delete: the record stays, and the file behind it stays with Apple.
+    ///
+    /// An expired build leaves TestFlight. Every tester loses it, which is why
+    /// this is a separate answer from deleting the version and not part of it.
+    ///
+    /// Behind the release gate, beside the delete it follows.
+    public func expireAppleBuild(buildID: String) async throws {
+        try await access.authorize(.storeRelease)
+        try await api.apple("PATCH", "/v1/builds/\(buildID)", body: [
+            "data": ["type": "builds", "id": buildID, "attributes": ["expired": true]],
+        ])
+    }
+
     /// The recovery, and its limit: this works only before the review starts.
     public func cancelAppleSubmission(id: String) async throws {
         try await access.authorize(.storeRelease)
