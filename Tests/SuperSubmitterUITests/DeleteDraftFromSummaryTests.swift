@@ -71,7 +71,7 @@ import Testing
         let run = try source("Sources/SuperSubmitter/Tabs/RunSection.swift")
 
         #expect(tab.contains("deleteDraftPanel"))
-        #expect(tab.contains("await state.deleteAppleDraftVersion()"))
+        #expect(tab.contains("await state.deleteAppleDraftVersion("))
         #expect(!run.contains("deleteAppleDraftVersion"))
         // One printer for the store's answer, and one only. Two panels reading
         // the same field printed the same sentence twice.
@@ -95,6 +95,48 @@ import Testing
         // And the panel says the call is with Apple while it is.
         #expect(tab.contains("let busy = state.releasing == .apple"))
         #expect(tab.contains("if busy {"))
+    }
+
+    /// The checkbox appears for an attached build and for nothing else.
+    ///
+    /// `buildIdForVersion` is a build App Store Connect processed that no
+    /// version holds. The delete does not touch it, and expiring it would take
+    /// a build off TestFlight that the developer never attached to anything.
+    @Test func onlyAnAttachedBuildCanBeExpired() throws {
+        let (state, folder) = try workspace()
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        #expect(state.deletableAppleBuildID == nil)
+
+        state.actualState.apple?.buildIdForVersion = "build-unattached"
+        #expect(state.deletableAppleBuildID == nil)
+
+        state.actualState.apple?.attachedBuildId = "build-9"
+        #expect(state.deletableAppleBuildID == "build-9")
+
+        // No draft to delete, nothing to expire beside it.
+        state.actualState.apple?.versionState = "IN_REVIEW"
+        #expect(state.deletableAppleBuildID == nil)
+    }
+
+    /// The id is read before the delete. The delete detaches the build, so an
+    /// id read after it is gone and the expire would name nothing.
+    @Test func theBuildIdIsReadBeforeTheVersionGoes() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let run = try String(
+            contentsOf: root.appendingPathComponent("Sources/SuperSubmitter/AppStateRun.swift"),
+            encoding: .utf8)
+        let start = try #require(run.range(of: "func deleteAppleDraftVersion(expiringBuild"))
+        let body = String(run[start.lowerBound...])
+        let read = try #require(body.range(of: "deletableAppleBuildID"))
+        let delete = try #require(body.range(of: "client.deleteAppleDraftVersion"))
+
+        #expect(read.lowerBound < delete.lowerBound)
+        // And the two outcomes are reported apart: a build that would not
+        // expire is not a version that would not delete.
+        #expect(body.contains("The draft version was deleted. The build was not expired"))
     }
 
     /// A read is the developer asking what the store holds now, so an error

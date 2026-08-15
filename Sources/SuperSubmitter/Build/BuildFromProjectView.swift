@@ -667,7 +667,7 @@ struct BuildFromProjectView: View {
                 }
             }
 
-            if flow.logOpen { LogView(lines: flow.logLines) }
+            if flow.logOpen { LogView(lines: flow.logLines, copyText: flow.logText) }
         }
         .storePanel(horizontal: 15)
         // The log is a fold like every other one, including when a failure

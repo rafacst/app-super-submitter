@@ -27,7 +27,10 @@ public struct RunFailure: Sendable, Equatable {
 public enum RunEvent: Sendable {
     case step(index: Int, state: StepState, meta: String)
     case progress(index: Int, fraction: Double, detail: String)
-    case log(String)
+    /// One API call, and the moment it ended. The call and not a line: the box
+    /// draws a line cut to its width and the pasteboard takes the whole one,
+    /// and a single formatted string cannot be both.
+    case log(APICall, at: Date)
     case failure(RunFailure)
     /// Spec 11.2. A provider failure never holds a store draft.
     case providerFailed(String)
@@ -51,6 +54,11 @@ public actor Runner {
 
     private let emit: @Sendable (RunEvent) -> Void
     private let log: RunLog?
+
+    /// The file every call of this run is appended to. The app reveals it in
+    /// the Finder, which is the only way anybody reaches it: the folder is
+    /// `.super-submitter/runs`, and nothing opened it before.
+    public nonisolated var logFileURL: URL? { log?.url }
 
     // What this run created. The undo needs it, and so does the next step.
     var appleVersionID: String?
@@ -106,7 +114,7 @@ public actor Runner {
         self.log = runLog
         let sink: CallRecorder = { call in
             let now = Date()
-            emit(.log(call.line(at: now)))
+            emit(.log(call, at: now))
             await runLog?.append(call, at: now)
         }
         self.api = StoreAPI(credentials: credentials, record: sink, session: session)

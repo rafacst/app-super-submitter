@@ -270,7 +270,8 @@ struct RunSection: View {
                     Text(state.logOpen ? "▼" : "▶").font(Theme.font(size: 8)).foregroundStyle(Theme.text2)
                     Text("Log").font(Theme.font(size: 12))
                     Spacer(minLength: 0)
-                    Text("\(state.logLines.count) calls")
+                    // Every call, not the 500 the box keeps.
+                    Text("\(state.logFullLines.count) calls")
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 .padding(.horizontal, 14)
@@ -285,7 +286,9 @@ struct RunSection: View {
             // never froze, but a run of a large plan still laid out every call
             // to draw the last ten.
             if state.logOpen {
-                LogView(lines: state.logLines).padding(.horizontal, 5)
+                LogView(lines: state.logLines, copyText: state.logText,
+                        file: state.logFileURL)
+                    .padding(.horizontal, 5)
                     .padding(.bottom, 5)
             }
         }

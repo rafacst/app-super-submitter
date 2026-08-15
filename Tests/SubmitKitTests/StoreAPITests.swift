@@ -180,15 +180,26 @@ private func base64URLDecoded(_ value: String) -> Data? {
     #expect(body.filter { $0 == "&" }.count == 1)
 }
 
-@Test func apiCallLogsDropQueriesAndRedactBoundedErrors() {
+/// The query stays on the record, and a named secret in it does not.
+///
+/// It used to be cut off before anything saw it, so `?include=`, `?limit=` and
+/// every filter were absent from the screen, the pasteboard and the file. The
+/// bug that cost a developer an apply was a paged read that asked for no
+/// `include=territory`, and its own log could not have shown it.
+@Test func apiCallLogsKeepTheQueryMaskItsSecretsAndBoundTheError() {
     let token = "SUPERSECRETVALUE12345"
     let call = APICall(system: "apple", method: "GET",
-                       path: "/v1/apps?cursor=\(token)",
+                       path: "/v2/appAvailabilities/679/territoryAvailabilities"
+                            + "?limit=200&include=territory",
                        error: "Authorization: Bearer \(token) " + String(repeating: "x", count: 8_000))
 
-    #expect(call.path == "/v1/apps")
+    #expect(call.path.hasSuffix("?limit=200&include=territory"))
     #expect(call.error?.contains(token) != true)
     #expect((call.error?.utf8.count ?? 0) <= 2_048)
+
+    // `Redactor` guards the query the same way it guards the error text.
+    let signed = APICall(system: "apple", method: "GET", path: "/v1/apps?api_key=\(token)")
+    #expect(!signed.path.contains(token))
 }
 
 /// A shared 401 explanation cannot name Apple's issuer id while reporting a
