@@ -183,8 +183,9 @@ private func buildReviewState() -> AppState {
 @Test func theArtifactRowsOpenWhenTheyAreTheReview() throws {
     let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
 
-    #expect(view.contains("detailsOpen ?? (flow.state == .needsUploadConfirmation)"))
-    #expect(view.contains("if showsDetails"))
+    #expect(view.contains("detailsOpen[candidate.id]"))
+    #expect(view.contains("flow.state == .needsUploadConfirmation"))
+    #expect(view.contains("if showsDetails(candidate)"))
     #expect(view.contains("Show details"))
     // A mismatch is not a detail. It stays out of the fold, as the blocking
     // rows do on the card above.

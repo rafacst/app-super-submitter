@@ -152,6 +152,13 @@ final class BuildFlow {
 
     var snapshot = PreflightSnapshot()
     var candidate: BuildCandidate?
+    /// Earlier artifacts from a multi-platform build. `candidate` remains the
+    /// artifact selected for upload, so the existing upload flow stays single-file.
+    var otherCandidates: [BuildCandidate] = []
+    @ObservationIgnored var appleArchiveInfos: [UUID: ArchiveInfo] = [:]
+    var settledCandidateIDs: Set<UUID> = []
+    var deletedCandidateIDs: Set<UUID> = []
+    var supportedApplePlatforms: [BuildPlatform] = []
     /// What the log box draws. It is written by `flushLog`, ten times a second
     /// at most, and never once per line: a build prints hundreds a second, and
     /// an observed write per line is what froze the window.
@@ -171,7 +178,14 @@ final class BuildFlow {
     /// developer deleted it from the artifact card. The candidate stays: it is
     /// the record of what was built, and the success card, the Summary hand-off
     /// and the sidebar all read it.
-    var artifactDeleted = false
+    var artifactDeleted: Bool {
+        get { candidate.map { deletedCandidateIDs.contains($0.id) } ?? false }
+        set {
+            guard let id = candidate?.id else { return }
+            if newValue { deletedCandidateIDs.insert(id) }
+            else { deletedCandidateIDs.remove(id) }
+        }
+    }
     var uploadProgress = 0.0
     var blocking: String?
     var warnings: [String] = []
@@ -190,6 +204,7 @@ final class BuildFlow {
     /// The one press that builds both stores has its own question, because it
     /// names two projects and runs the scripts of each.
     var showBuildBothConfirmation = false
+    var showBuildBothApplePlatformsConfirmation = false
     var showUploadConfirmation = false
 
     /// `app` is already weak and optional, so the initialiser says so too. It
@@ -705,6 +720,18 @@ final class BuildFlow {
         snapshot.provisioningProfile = settings.provisioningProfile
         snapshot.sdk = settings.sdkRoot
         snapshot.signingReady = settings.team?.isEmpty == false
+        supportedApplePlatforms = [run.platform]
+        let other = run.platform == .ios ? BuildPlatform.macos : .ios
+        if settings.supportedApplePlatforms.count == 2,
+           let otherSettings = try? await service.settings(
+               container: project.containerURL, kind: project.containerKind, scheme: scheme,
+               configuration: configuration, platform: other,
+               buildNumber: buildNumberOverride,
+               marketingVersion: marketingVersionOverride),
+           let identifier = settings.bundleIdentifier,
+           otherSettings.bundleIdentifier == identifier {
+            supportedApplePlatforms = [.ios, .macos]
+        }
         self.project?.productIdentifier = settings.bundleIdentifier
 
         // The manifest is a constraint, never a command to edit the project.
@@ -972,7 +999,7 @@ final class BuildFlow {
     ///
     /// The setter throws away the store snapshot and the plan, which is right:
     /// both describe the other train.
-    private func adoptAppleTrain() {
+    func adoptAppleTrain() {
         guard let app, run.platform.store == .apple, context.manifest.apps.apple != nil else {
             return
         }
@@ -997,6 +1024,7 @@ final class BuildFlow {
         containers = []
         containerInfo = nil
         variants = []
+        supportedApplePlatforms = []
         snapshot = PreflightSnapshot()
         candidate = nil
         blocking = nil
@@ -1022,6 +1050,44 @@ final class BuildFlow {
     /// The store whose build follows this one, when the developer asked for
     /// both. Nil during an ordinary single build, which is every other build.
     var queuedStore: Store?
+
+    /// The second native Apple archive from one multi-platform project.
+    var queuedApplePlatform: BuildPlatform?
+
+    var canBuildBothApplePlatforms: Bool {
+        project?.platform.store == .apple
+            && Set(supportedApplePlatforms) == Set([.ios, .macos])
+            && canBuild
+    }
+
+    var builtCandidates: [BuildCandidate] {
+        otherCandidates + (candidate.map { [$0] } ?? [])
+    }
+
+    /// Builds the selected platform first, then the other native Apple platform.
+    func buildBothApplePlatforms() {
+        guard canBuildBothApplePlatforms else { return }
+        showBuildBothApplePlatformsConfirmation = false
+        queuedApplePlatform = run.platform == .ios ? .macos : .ios
+        startBuild()
+    }
+
+    /// Starts the second Apple archive after the first archive passes inspection.
+    func startQueuedAppleBuild() async {
+        guard let next = queuedApplePlatform else { return }
+        queuedApplePlatform = nil
+        guard failure == nil, blocking == nil,
+              candidate?.blockingMismatches.isEmpty == true else { return }
+        if let candidate, !otherCandidates.contains(where: { $0.id == candidate.id }) {
+            otherCandidates.append(candidate)
+        }
+        run.platform = next
+        project?.platform = next
+        adoptAppleTrain()
+        await refreshPreflight()
+        guard canBuild else { return }
+        startBuild()
+    }
 
     /// Builds both stores' artifacts, one after the other.
     ///

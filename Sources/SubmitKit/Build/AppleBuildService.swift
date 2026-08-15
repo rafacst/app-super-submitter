@@ -40,6 +40,18 @@ public struct AppleBuildSettings: Sendable, Equatable {
     public var provisioningProfile: String? { self["PROVISIONING_PROFILE_SPECIFIER"] }
     public var sdkRoot: String? { self["SDKROOT"] }
 
+    /// The native Apple destinations that the selected application target supports.
+    public var supportedApplePlatforms: [BuildPlatform] {
+        let values = Set((self["SUPPORTED_PLATFORMS"] ?? "").split(separator: " ").map(String.init))
+        return [.ios, .macos].filter { platform in
+            switch platform {
+            case .ios: values.contains("iphoneos")
+            case .macos: values.contains("macosx")
+            case .android: false
+            }
+        }
+    }
+
     /// The keys that upload-spec 8.4 requires the preflight to read.
     public static let required = [
         "PRODUCT_NAME", "PRODUCT_BUNDLE_IDENTIFIER", "MARKETING_VERSION",
