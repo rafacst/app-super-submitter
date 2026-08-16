@@ -190,6 +190,35 @@ struct DraftTests {
         #expect(shell.contains("Saved remotely"))
     }
 
+    @Test func aRemoteSaveOpensACompleteTemporaryTab() {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        state.selectedTab = .details
+
+        state.beginRemoteSave(.listing)
+
+        #expect(state.selectedTab == .remoteSave)
+        #expect(state.remoteSaveVisible)
+        #expect(Destination.rows(in: .send, hasApp: true, remoteSaveVisible: true)
+            .map(\.title) == ["Summary", "Release", "Remote save"])
+
+        state.recordRemoteSave(
+            APICall(system: "apple", method: "PATCH", path: "/v1/localizations/1",
+                    status: 200, durationMs: 18),
+            at: Date(timeIntervalSince1970: 0))
+
+        #expect(state.remoteSaveLoggedCalls == 1)
+        #expect(state.remoteSaveLogLines.first?.contains("PATCH") == true)
+
+        state.selectedTab = .details
+
+        #expect(!state.remoteSaveVisible)
+        #expect(state.remoteSaveLogLines.isEmpty)
+        #expect(!Destination.rows(in: .send, hasApp: true,
+                                  remoteSaveVisible: state.remoteSaveVisible)
+            .contains { $0.tab == .remoteSave })
+    }
+
     @Test func aRecoveryAddsNoAppTwice() throws {
         let (state, _, folder) = try workspace(name: "six")
         defer { try? FileManager.default.removeItem(at: folder) }
