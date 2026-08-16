@@ -8,14 +8,19 @@ struct BuildTab: View {
 
     var body: some View {
         @Bindable var state = state
-        VStack(alignment: .leading, spacing: 14) {
-            storeIdentitySection
-            questionRow
+        VStack(alignment: .leading, spacing: 16) {
+            buildPath
             if state.showBuildFromProject {
                 BuildFromProjectView()
+            } else {
+                uploadWorkspace
+                if state.buildFlow.state.isActive || state.buildFlow.candidate != nil
+                    || state.buildFlow.failure != nil {
+                    BuildFromProjectView()
+                }
             }
-            artifactsPanel
-            if !state.showBuildFromProject, state.stores.contains(.google) { googleOptions }
+            buildSetup
+            storeBuilds
             storeTools
         }
         .frame(maxWidth: 1040, alignment: .leading)
@@ -35,52 +40,28 @@ struct BuildTab: View {
         .task { state.defaultEncryptionAnswer() }
     }
 
-    /// The two questions this tab asks before there is a package: where the
-    /// build comes from, and what Apple is owed about it.
-    ///
-    /// One box holding both, divided by a rule. They were two boxes side by
-    /// side, each with its own border, its own head and two lines of radio
-    /// buttons in a card the width of half the window: two borders drawn around
-    /// four short answers, with more empty card than content in either. Related
-    /// choices belong in one group with a separator between them, and a group
-    /// costs one edge and not two.
-    private var questionRow: some View {
-        HStack(alignment: .top, spacing: 16) {
-            buildSource
-                .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
-            if state.stores.contains(.apple) {
-                Divider().overlay(Theme.sep)
-                exportCompliance
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
+    /// The one decision that changes the workflow below it.
+    private var buildPath: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Add a build")
+                    .font(Theme.cardTitle)
+                Text("Create one from a project, or upload a package you already have.")
+                    .font(Theme.caption)
+                    .foregroundStyle(Theme.text2)
             }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .storePanel(padding: 12, horizontal: 14)
-    }
-
-    /// Two ways to get a build: run the project, or import a package that
-    /// something else produced. Both feed the same inspection and the same
-    /// upload confirmation. upload-spec 10.1 and 13.3.
-    private var buildSource: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            panelHead("shippingbox.fill", tint: Theme.accent, title: "Build source",
-                      detail: "Where the package comes from")
-            // A radio group, which is what the Mac uses for two or three
-            // exclusive choices whose labels have to be read. A segmented
-            // control is for switching a view; this one decides what the whole
-            // tab below it does, and the option that is not chosen was drawn in
-            // the same box as the one that is.
+            Spacer(minLength: 16)
             Picker("Build source", selection: Binding(
                 get: { state.showBuildFromProject },
                 set: { state.showBuildFromProject = $0 })) {
-                Text("Build from project").tag(true)
-                Text("Import a package").tag(false)
+                Text("Create a build").tag(true)
+                Text("Upload a build").tag(false)
             }
-            .pickerStyle(.radioGroup)
+            .pickerStyle(.segmented)
             .labelsHidden()
-            .font(Theme.font(size: 12))
+            .frame(width: 310)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .storePanel(padding: 12, horizontal: 15)
     }
 
     /// Apple's export compliance answer, on the tab that makes the build that
@@ -141,6 +122,36 @@ struct BuildTab: View {
         }
     }
 
+    private var buildSetupNeedsAttention: Bool {
+        if state.stores.contains(.apple),
+           state.appleBundleID.isEmpty || state.appleAppID.isEmpty
+            || state.encryptionAnswer == nil {
+            return true
+        }
+        if state.stores.contains(.google), state.googlePackageName.isEmpty {
+            return true
+        }
+        return state.stores.contains {
+            state.manifest.versionName(for: $0)?.isEmpty != false
+        }
+    }
+
+    /// Store-owned values stay close, but they do not compete with the normal
+    /// build path after the app has a complete setup.
+    private var buildSetup: some View {
+        Section_("Build setup", icon: "slider.horizontal.3",
+                 folds: true, startsOpen: buildSetupNeedsAttention,
+                 note: "Store identifiers, release versions, and export compliance") {
+            VStack(alignment: .leading, spacing: 14) {
+                storeIdentitySection
+                if state.stores.contains(.apple) {
+                    Divider().overlay(Theme.sep)
+                    exportCompliance
+                }
+            }
+        }
+    }
+
     private var storeIdentitySection: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("This app in the stores")
@@ -178,7 +189,6 @@ struct BuildTab: View {
             }
             .font(Theme.font(size: 11.5))
         }
-        .storePanel(padding: 14, horizontal: 15)
     }
 
     /// The store owns these three, and this tab shows them.
@@ -423,8 +433,15 @@ struct BuildTab: View {
             .monospacedDigit()
     }
 
-    private var importSection: some View {
+    private var uploadWorkspace: some View {
         VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Upload a package")
+                    .font(Theme.cardTitle)
+                Text("Choose a store package. Super Submitter checks it before any upload.")
+                    .font(Theme.caption)
+                    .foregroundStyle(Theme.text2)
+            }
             storeBuildColumns
             if !state.packages.isEmpty {
                 packageCards
@@ -435,27 +452,6 @@ struct BuildTab: View {
                 if let mismatch = versionMismatch {
                     versionWarning(mismatch)
                 }
-            }
-        }
-    }
-
-    /// The local package and the store copy answer one question, so one edge
-    /// holds them. The source choice above decides which local section appears.
-    private var artifactsPanel: some View {
-        let hasBuiltArtifact = state.buildFlow.candidate != nil
-        return VStack(alignment: .leading, spacing: 14) {
-            Text("Artifacts")
-                .font(Theme.font(size: 13.5, weight: .semibold))
-            if state.showBuildFromProject {
-                if hasBuiltArtifact { BuiltArtifactSection() }
-            } else {
-                importSection
-            }
-            if state.stores.contains(.apple) {
-                if !state.showBuildFromProject || hasBuiltArtifact {
-                    Divider().overlay(Theme.sep)
-                }
-                AppleBuildsPanel()
             }
         }
         .storePanel(padding: 14, horizontal: 15)
@@ -539,6 +535,19 @@ struct BuildTab: View {
         }
     }
 
+    private var storeBuilds: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if state.stores.contains(.apple) {
+                Section_("App Store builds", icon: "apple.logo", tint: Theme.appleMark,
+                         folds: true, startsOpen: false,
+                         note: "Builds that App Store Connect already holds") {
+                    AppleBuildsPanel()
+                }
+            }
+            if state.stores.contains(.google) { googleOptions }
+        }
+    }
+
     private var storeTools: some View {
         Section_("Store tooling", icon: "wrench.and.screwdriver.fill",
                  tint: Theme.purple, folds: true, startsOpen: false,
@@ -574,7 +583,6 @@ struct BuildTab: View {
             HStack(spacing: 9) {
                 ForEach(sortedPackages, id: \.kind) { package in
                     QuietButton(title: "Inspect and upload \(package.url.lastPathComponent)") {
-                        state.showBuildFromProject = true
                         state.buildFlow.adoptImported(package.url)
                     }
                 }

@@ -37,7 +37,7 @@ extension BuildFlow {
         if let blocking { return blocking }
         guard let app, run.platform != .android, context.stores.contains(.apple),
               app.encryptionAnswer == nil else { return nil }
-        return "Answer the export compliance question above. Apple asks it once per build and refuses the submission without it."
+        return "Answer the export compliance question in Build setup. Apple asks it once per build and refuses the submission without it."
     }
 
     /// The exact language of upload-spec 10.5. No "Are you sure?".

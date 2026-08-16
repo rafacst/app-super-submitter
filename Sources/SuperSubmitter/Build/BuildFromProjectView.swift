@@ -63,7 +63,8 @@ struct BuildFromProjectView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if flow.project == nil, flow.candidate == nil, flow.failure == nil {
+            if flow.project == nil, flow.candidate == nil, flow.failure == nil,
+               !flow.state.isActive {
                 storeRow
                 if !flow.containers.isEmpty, flow.state == .needsSelection {
                     containerChooser
@@ -71,39 +72,11 @@ struct BuildFromProjectView: View {
                     linkCard
                 }
             } else {
-                if flow.project != nil {
-                    // One box: what is linked, and every choice about what it
-                    // builds. They were two cards standing on top of each
-                    // other, one holding a name and five buttons and the other
-                    // holding two pickers, and a choice a developer makes
-                    // before pressing Build had no more claim to a border of
-                    // its own than the folder it is made about.
-                    //
-                    // What the build is for. One app id ships iOS and macOS
-                    // and the two are not in step, so the platform is a
-                    // choice on every apple project and not a fact of the
-                    // container. Without this row the flow archived whatever
-                    // the link had guessed, which is iOS for every Xcode
-                    // project, and the scheme, the Gradle variant and the JDK
-                    // had no control either.
-                    VStack(alignment: .leading, spacing: 11) {
-                        Text("Project")
-                            .font(Theme.font(size: 13.5, weight: .semibold))
-                        projectCard
-                        Divider().overlay(Theme.sep)
-                        selectionBlock
-                        Divider().overlay(Theme.sep)
-                        preflightCard
-                    }
-                    .storePanel(horizontal: 15)
-                }
-                if flow.state.isActive || flow.candidate != nil || flow.failure != nil {
+                if flow.project != nil { projectWorkspace }
+                if flow.state.isActive || flow.failure != nil {
                     liveRun
                 }
-                // The artifact is not here. It is a section of the Artifacts
-                // box below, with the package a developer supplies and the
-                // builds the store already holds: one question, one box. What
-                // stays is the run and the preflight, which are not artifacts.
+                if !flow.builtCandidates.isEmpty { builtArtifactCard }
                 if let failure = flow.failure { errorPanel(failure) }
                 if flow.state == .complete { successCard }
             }
@@ -120,6 +93,37 @@ struct BuildFromProjectView: View {
         }
         .sheet(isPresented: Bindable(flow).showUploadConfirmation) { uploadConfirmation }
         .deleteArtifactConfirmation($deleting, flow: flow)
+    }
+
+    /// The normal path stays on one surface. Project details remain available
+    /// without standing between the developer and the build action.
+    private var projectWorkspace: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                IconChip(symbol: "hammer.fill", tint: Theme.accent, size: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create a build").font(Theme.cardTitle)
+                    Text("Check the project, create the artifact, then choose whether to upload it.")
+                        .font(Theme.caption).foregroundStyle(Theme.text2)
+                }
+            }
+            projectSummary
+            Fold("Build settings", startsOpen: flow.project?.selection.isComplete != true) {
+                selectionBlock
+                    .padding(.top, 8)
+            }
+            Divider().overlay(Theme.sep)
+            preflightCard
+        }
+        .storePanel(horizontal: 15)
+    }
+
+    private var builtArtifactCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Ready to upload").font(Theme.cardTitle)
+            BuiltArtifactSection()
+        }
+        .storePanel(horizontal: 15)
     }
 
     /// A card's rows, in two columns.
@@ -194,7 +198,7 @@ struct BuildFromProjectView: View {
 
     // MARK: - 10.2 The project card
 
-    private var projectCard: some View {
+    private var projectSummary: some View {
         let project = flow.project
         return HStack(alignment: .top, spacing: 18) {
             HStack(spacing: 10) {
@@ -213,27 +217,30 @@ struct BuildFromProjectView: View {
                 }
             }
             Spacer(minLength: 12)
-            VStack(alignment: .trailing, spacing: 7) {
+            HStack(spacing: 7) {
                 if let validated = project?.lastValidatedAt {
-                    Text("checked \(validated.formatted(date: .omitted, time: .shortened))")
+                    Text("Checked \(validated.formatted(date: .omitted, time: .shortened))")
                         .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
-                HStack(spacing: 7) {
-                    QuietButton(title: "Recheck") { Task { await flow.refreshPreflight() } }
-                    QuietButton(title: "Reveal Folder") {
+                QuietButton(title: "Recheck") { Task { await flow.refreshPreflight() } }
+                Menu {
+                    Button("Reveal Folder") {
                         flow.reveal(project?.rootPath ?? "")
                     }
-                    QuietButton(title: project?.platform == .android
-                                ? "Open in Android Studio" : "Open in Xcode") { flow.openInIDE() }
-                    QuietButton(title: "Change Selection") { flow.linkFolder() }
-                    QuietButton(title: "Unlink") { flow.unlink() }
-                        // The sentence this replaces stood under the row on every
-                        // visit, in the smallest grey the app has, answering a
-                        // question the developer asks once and only about the
-                        // button it belongs to.
-                        .help("Unlink removes this link only. It never deletes the project or its build output.")
+                    Button(project?.platform == .android
+                           ? "Open in Android Studio" : "Open in Xcode") {
+                        flow.openInIDE()
+                    }
+                    Button("Change Selection") { flow.linkFolder() }
+                    Divider()
+                    Button("Unlink") { flow.unlink() }
+                } label: {
+                    Label("Project actions", systemImage: "ellipsis.circle")
                 }
-            }
+                .menuStyle(.button)
+                .controlSize(.small)
+                .help("Reveal, open, change, or unlink this project.")
+                }
         }
     }
 
@@ -518,13 +525,13 @@ struct BuildFromProjectView: View {
                         // Only where the build takes the number from the
                         // command line. Gradle does not, so on Android the row
                         // says the two numbers and the developer settles it on
-                        // the tab above or in the project.
+                        // Build setup or in the project.
                         if flow.canBuildTheManifestVersion {
                             QuietButton(title: "Build version \(wanted) instead") {
                                 flow.useManifestVersion()
                             }
                         } else {
-                            Text("Change the Google Play version above, or the version in the project.")
+                            Text("Change the Google Play version in Build setup, or change the project version.")
                                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -599,7 +606,7 @@ struct BuildFromProjectView: View {
         add("Identifier", snapshot.productIdentifier, key: "productIdentifier")
         // Yellow, and it names the other number. Green beside a version the
         // upload is going to refuse is the app agreeing with itself and not
-        // with the developer, who has the release version on screen above.
+        // with the developer, who has the release version in Build setup.
         if let wanted = flow.versionFromManifest {
             rows.append(("Version",
                          "\(snapshot.marketingVersion ?? "Not read") · store.yaml names \(wanted)",
@@ -707,6 +714,8 @@ struct BuildFromProjectView: View {
             "The store is processing the upload. This can outlive the app, and it resumes later."
         case .cancelling:
             "Stopping this run's own processes, then checking what the store already holds."
+        case .failed:
+            "The run stopped. Review the error and the log below."
         default:
             "Nothing is running."
         }
