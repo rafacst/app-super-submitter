@@ -62,6 +62,48 @@ import Testing
 
         #expect(state.logLines.isEmpty)
         #expect(state.logText.isEmpty)
+        #expect(state.loggedCalls == 0)
         #expect(state.logFileURL == nil)
+    }
+
+    /// The copy has a cap now, and it stops growing at it.
+    ///
+    /// `logText` joins the whole array, and the log box reads it as an
+    /// argument, so an uncapped array made a run pay for its own length on
+    /// every redraw of a panel that is on screen for the length of the run.
+    @Test func theCopyStopsGrowingAtTheCap() {
+        let state = state()
+        let date = Date()
+        let over = AppState.logLimit + 300
+
+        for index in 1...over { state.record(call(index), at: date) }
+
+        #expect(state.logFullLines.count == AppState.logLimit)
+        // The tail is kept, so the calls around a failure at the end are there.
+        #expect(state.logFullLines.last?.contains("page=\(over)") == true)
+    }
+
+    /// A truncated copy says it is one. A tail pasted into a ticket as though
+    /// it were the whole run hides every call before it.
+    @Test func aTruncatedCopySaysWhatIsMissingAndWhereToFindIt() {
+        let state = state()
+        let date = Date()
+        let over = AppState.logLimit + 300
+
+        for index in 1...over { state.record(call(index), at: date) }
+
+        #expect(state.loggedCalls == over)
+        #expect(state.logText.hasPrefix("300 earlier calls are not in this copy."))
+        #expect(state.logText.contains("log file"))
+    }
+
+    /// And a run that stays under the cap says nothing, because nothing is
+    /// missing. The 640 call run above copies whole and unannotated.
+    @Test func aWholeCopyCarriesNoNotice() {
+        let state = state()
+        for index in 1...640 { state.record(call(index), at: Date()) }
+
+        #expect(!state.logText.contains("earlier calls"))
+        #expect(state.logText.split(separator: "\n").count == 640)
     }
 }

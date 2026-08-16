@@ -270,8 +270,10 @@ struct RunSection: View {
                     Text(state.logOpen ? "▼" : "▶").font(Theme.font(size: 8)).foregroundStyle(Theme.text2)
                     Text("Log").font(Theme.font(size: 12))
                     Spacer(minLength: 0)
-                    // Every call, not the 500 the box keeps.
-                    Text("\(state.logFullLines.count) calls")
+                    // Every call, not the 500 the box keeps and not the 5,000
+                    // the copy keeps. A run that outgrows either still made
+                    // the calls, and this is the only place that says how many.
+                    Text("\(state.loggedCalls) calls")
                         .font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                 }
                 .padding(.horizontal, 14)

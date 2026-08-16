@@ -422,24 +422,56 @@ extension AppState {
 
     var runSteps: [PlanStep] { plan?.steps ?? [] }
 
-    /// Every call the run made, whole, for the pasteboard. `logLines` is what
-    /// the box drew: the last 500, each cut to the width of the box.
-    var logText: String { logFullLines.joined(separator: "\n") }
+    /// The most calls the run holds for the pasteboard.
+    ///
+    /// It used to hold every one, with no limit at all. A run log is one line
+    /// per API call rather than per line of compiler output, so it grows slowly
+    /// and the array was never the complaint: `logText` joins the whole of it,
+    /// and it is read as an argument to the log box, so a panel that is on
+    /// screen rejoins every call the run has ever made on every redraw. The
+    /// cost of a long run was charged to every frame of it.
+    ///
+    /// Ten times what the box draws, and the same number the build log keeps.
+    static let logLimit = 5_000
+
+    /// Every call the run made, whole, for the pasteboard, up to the cap.
+    /// `logLines` is what the box drew: the last 500, each cut to the width of
+    /// the box.
+    ///
+    /// A copy that is missing its first calls says so. The whole run is on
+    /// disk either way — `RunLog` appends every call to
+    /// `.super-submitter/runs`, and the box carries the button that reveals
+    /// it — and a tail pasted into a ticket as if it were the run is how a
+    /// failure in the first minute gets read as one that never happened.
+    var logText: String {
+        let text = logFullLines.joined(separator: "\n")
+        let dropped = loggedCalls - logFullLines.count
+        guard dropped > 0 else { return text }
+        return "\(dropped) earlier calls are not in this copy. "
+            + "The whole run is in the log file.\n" + text
+    }
 
     func clearRunLog() {
         logLines = []
         logFullLines = []
+        loggedCalls = 0
         logFileURL = nil
     }
 
     /// One call, in both shapes: the line the box draws and the line the
     /// pasteboard takes.
     ///
-    /// The cap is on the drawn half alone. It used to be on the only half
-    /// there was, so a run of a large plan could not be copied whole: the
-    /// first calls of it, which is where a failure usually starts, were gone.
+    /// Both halves are capped, and the pasteboard's half at ten times the
+    /// box's. It used to be the box's cap alone, and before that the box's cap
+    /// was the only one there was, so a run of a large plan could not be copied
+    /// whole: the first calls of it, which is where a failure usually starts,
+    /// were gone by the time anybody pressed Copy.
     func record(_ call: APICall, at date: Date) {
+        loggedCalls += 1
         logFullLines.append(call.fullLine(at: date))
+        if logFullLines.count > Self.logLimit {
+            logFullLines.removeFirst(logFullLines.count - Self.logLimit)
+        }
         logLines.append(call.line(at: date))
         if logLines.count > 500 { logLines.removeFirst(logLines.count - 500) }
     }

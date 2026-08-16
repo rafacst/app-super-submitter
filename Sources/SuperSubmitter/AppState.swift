@@ -564,13 +564,19 @@ final class AppState {
     var runDetail = ""
     /// The last 500 calls, as the box draws them. Cut to the width of the box.
     var logLines: [String] = []
-    /// Every call of the run, whole, for the pasteboard. See `logText`.
+    /// The last `logLimit` calls of the run, whole, for the pasteboard. See
+    /// `logText`.
     ///
     /// The build log has held this pair since it froze the window, and the run
     /// log kept only the capped half, so a long run could not be copied whole.
     /// One line per API call and not per line of compiler output, so both
     /// halves are published and the pair costs one more append per call.
     var logFullLines: [String] = []
+    /// How many calls this run has made, which is not `logFullLines.count`
+    /// once a run passes the cap. The panel counts calls and the copy says how
+    /// many of them it left behind, and both need the number that kept
+    /// climbing after the array stopped.
+    var loggedCalls = 0
     /// The `.jsonl` this run appends to, for the button that reveals it.
     var logFileURL: URL?
     var logOpen = false
