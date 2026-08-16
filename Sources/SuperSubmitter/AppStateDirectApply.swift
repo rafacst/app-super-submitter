@@ -237,9 +237,7 @@ extension AppState {
     }
 
     private func rows(for target: DirectApplyTarget, in plan: PlanResult) -> [PlanStep] {
-        var owned = plan.steps.filter { step in
-            target.prefixes.contains { step.id.hasPrefix($0) }
-        }
+        var owned = plan.steps.filter { target.owns($0.id) }
         // The App Store takes no change to a listing customers are reading, so
         // the Manage side counts none of its rows. Offering them made a button
         // whose only outcome was a refusal, and it counted the next version's
@@ -322,7 +320,8 @@ enum DirectApplyTarget: Equatable {
         case .build:
             ["apple.version", "apple.build", "apple.attachBuild", "apple.encryption",
              "google.bundle", "google.apk", "google.externalApk", "google.deobfuscation.",
-             "google.expansion.", "google.deviceTierConfig"]
+             "google.expansion.", "google.deviceTierConfig", "google.createTrack.",
+             "google.track."]
         case .listing:
             ["apple.info.", "apple.locale.", "apple.categories", "apple.eula",
              "apple.accessibility", "google.listing.", "google.details"]
@@ -361,6 +360,11 @@ enum DirectApplyTarget: Equatable {
         case .gameCenter:
             ["apple.gameCenter."]
         }
+    }
+
+    func owns(_ id: String) -> Bool {
+        if self == .build, id == "apple.versionAttributes" { return false }
+        return prefixes.contains { id.hasPrefix($0) }
     }
 
     var noun: String {
