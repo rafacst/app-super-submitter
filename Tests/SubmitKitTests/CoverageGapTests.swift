@@ -75,6 +75,22 @@ import Testing
         .appendingPathComponent("SuperSubmitter.entitlements").path))
 }
 
+/// XcodeGen owns the project, but developers open the generated project. A new
+/// Swift file must reach that project before the checked-in build can compile.
+@Test func nativeAppProjectIncludesEverySwiftSource() throws {
+    let project = try source("SuperSubmitter.xcodeproj/project.pbxproj")
+    let sourceRoot = repositoryRoot.appendingPathComponent("Sources/SuperSubmitter")
+    let files = FileManager.default.enumerator(
+        at: sourceRoot, includingPropertiesForKeys: nil)?
+        .compactMap { $0 as? URL }
+        .filter { $0.pathExtension == "swift" } ?? []
+    let missing = files.map(\.lastPathComponent).filter {
+        !project.contains("path = \($0);")
+    }
+
+    #expect(missing.isEmpty, "Run xcodegen generate. Missing: \(missing.joined(separator: ", "))")
+}
+
 @Test func legacyGoogleCategoryIsDroppedWhenTheManifestIsSaved() throws {
     let decoded = try ManifestFile.decode("""
     version: 1
