@@ -32,6 +32,8 @@ extension AppState {
             let manifestURL = folder.appendingPathComponent(ManifestFile.defaultName)
             var importedManifest = (try? ManifestFile.load(from: manifestURL)) ?? Manifest()
             importedManifest.removeImportedMedia()
+            importedManifest.removeEmptyStorePlaceholders(
+                except: Set(group.candidates.map(\.store)))
             // What each store holds today. The editing tabs show it beside the
             // value the developer is about to write, before any store read.
             var snapshot = StoreSnapshot()
@@ -512,6 +514,20 @@ extension AppState {
 }
 
 extension Manifest {
+    /// An empty store block is an unfinished local choice, not an imported app.
+    /// Keep every configured store, including one outside this import.
+    mutating func removeEmptyStorePlaceholders(except selected: Set<Store>) {
+        if !selected.contains(.apple), let apple = apps.apple,
+           apple.appId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           apple.bundleId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            apps.apple = nil
+        }
+        if !selected.contains(.google),
+           apps.google?.packageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            apps.google = nil
+        }
+    }
+
     /// Old imports put observed store assets in the desired manifest. Drop
     /// those paths while keeping user-selected media untouched.
     @MainActor mutating func removeImportedMedia() {
