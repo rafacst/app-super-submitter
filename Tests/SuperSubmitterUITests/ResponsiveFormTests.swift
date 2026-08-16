@@ -25,6 +25,8 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
 
 @Test func theBuildRedesignKeepsEveryExistingStoreAction() throws {
     let build = try responsiveFormSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let project = try responsiveFormSource(
+        "Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
 
     for marker in ["This app in the stores", "App Store takes", "Google Play takes",
                    "StoreDiagnosticsPanel()", "XcodeCloudPanel()",
@@ -35,6 +37,23 @@ private func responsiveFormSource(_ relativePath: String) throws -> String {
     #expect(build.contains("BuildFromProjectView()"))
     #expect(build.contains("AndroidArtifactsSection()"))
     #expect(build.contains("GoogleTracksSection()"))
+
+    for marker in ["state.importExistingListing()", "state.chooseBuildFiles",
+                   "state.importPackages", "state.buildFlow.adoptImported",
+                   "state.updateAppleAppFields()", "state.updateGoogleAppFields()",
+                   "state.chooseRemoteAppleApp(app)", "state.chooseRemoteGoogleApp(app)"] {
+        #expect(build.contains(marker), "Build lost \(marker)")
+    }
+    for marker in ["flow.linkFolder()", "flow.refreshPreflight()", "flow.openInIDE()",
+                   "flow.choosePlatform", "flow.chooseScheme", "flow.chooseVariant",
+                   "flow.chooseJDK", "flow.chooseBuiltBundle()", "flow.buildAgain()",
+                   "flow.buildBothStores()", "flow.buildBothApplePlatforms()",
+                   "flow.startBuild()", "flow.startUpload()", "flow.cancel()",
+                   "flow.stopWaiting()", "flow.resumeChecking()", "flow.retryCleanup()",
+                   "flow.retry()", "flow.keepArtifact()", "flow.selectBuiltCandidate",
+                   "flow.deleteArtifact()", "flow.copyDiagnostics()", "flow.reset()"] {
+        #expect(project.contains(marker), "Project build lost \(marker)")
+    }
 }
 
 /// Everything a tester meets is on one tab, and none of it is left behind on
