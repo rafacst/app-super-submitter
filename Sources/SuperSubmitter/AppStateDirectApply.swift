@@ -95,6 +95,7 @@ extension AppState {
             } else {
                 directApplyState = .done
                 directApplyMessage = "\(written) TestFlight \(written == 1 ? "row" : "rows") written."
+                remoteSavedAt = Date()
                 invalidatePlan()
             }
         }
@@ -132,6 +133,48 @@ extension AppState {
         directApplyState == .failed && directApplyTarget == target
     }
 
+    /// Reads the stores first, then writes only the rows owned by one tab.
+    func saveRemotely(_ target: DirectApplyTarget) {
+        guard directApplyState != .running, !planReading, !showsRun || runDone else { return }
+        guard requirePaid(.storeWrite, target.trigger) else { return }
+        flushSave()
+
+        if target == .testFlight {
+            Task {
+                let prepared = await prepareTestFlightSend()
+                guard !prepared.flatMap(\.steps).isEmpty else {
+                    directApplyTarget = target
+                    directApplyState = .idle
+                    directApplyMessage = "Nothing to write. The store already holds it."
+                    remoteSavedAt = Date()
+                    return
+                }
+                applyTestFlight(prepared)
+            }
+            return
+        }
+
+        directApplyTarget = target
+        directApplyState = .running
+        directApplyMessage = "Reading the stores…"
+        let generation = stateGeneration
+        Task {
+            await readStores()
+            guard generation == stateGeneration else {
+                directApplyState = .failed
+                directApplyMessage = "The tab changed during the store read. Save it again."
+                return
+            }
+            guard planReadFailures.isEmpty else {
+                directApplyState = .failed
+                directApplyMessage = planReadFailures.first ?? "The stores could not be read."
+                return
+            }
+            directApplyState = .idle
+            applyDirectly(target)
+        }
+    }
+
     /// Writes the rows of one tab, and nothing else.
     ///
     /// A failure names the row that failed and stops there, the same rule the
@@ -153,6 +196,7 @@ extension AppState {
             guard !only.steps.isEmpty else {
                 directApplyState = .idle
                 directApplyMessage = "Nothing to write. The stores already hold it."
+                remoteSavedAt = Date()
                 return
             }
 
@@ -175,6 +219,7 @@ extension AppState {
             } else {
                 directApplyState = .done
                 directApplyMessage = "\(only.steps.count) \(target.noun) written."
+                remoteSavedAt = Date()
                 // The plan compared against a state that is now stale, so the
                 // next read is the honest one.
                 invalidatePlan()
@@ -264,23 +309,37 @@ extension AppState {
     }
 }
 
-/// The Managing tabs that write on one button.
+/// The rows that one editing tab can write without a release.
 enum DirectApplyTarget: Equatable {
-    case listing, media, marketing, testFlight, gameCenter
+    case build, listing, media, availability, money, marketing, reviewInfo,
+         testFlight, gameCenter
 
     /// The plan rows the tab owns, named by id prefix. They are the same ids
     /// the Summary tab draws, so a row can never mean one thing here and
     /// another there.
     var prefixes: [String] {
         switch self {
+        case .build:
+            ["apple.version", "apple.build", "apple.attachBuild", "apple.encryption",
+             "google.bundle", "google.apk", "google.externalApk", "google.deobfuscation.",
+             "google.expansion.", "google.deviceTierConfig"]
         case .listing:
-            ["apple.info.", "apple.locale.", "google.listing.", "google.details"]
+            ["apple.info.", "apple.locale.", "apple.categories", "apple.eula",
+             "apple.accessibility", "google.listing.", "google.details"]
         case .media:
             ["apple.media.", "apple.preview.", "google.media."]
+        case .availability:
+            ["apple.appPrice", "apple.availability"]
+        case .money:
+            ["apple.purchases", "apple.purchaseOfferCodes.", "apple.subscriptions",
+             "apple.subscriptionOffers", "apple.gracePeriod", "google.products",
+             "google.oneTime", "google.purchaseOptionState.", "google.basePlanState.",
+             "google.subscription", "google.migratePrices.", "provider."]
         case .marketing:
             ["apple.customProductPages", "apple.experiments", "apple.events",
-             "apple.eula", "apple.routingCoverage", "apple.nomination",
-             "apple.accessibility", "apple.appClip"]
+             "apple.routingCoverage", "apple.nomination", "apple.appClip"]
+        case .reviewInfo:
+            ["apple.reviewDetails", "apple.ageRating", "google.dataSafety", "google.details"]
         // The whole beta, in plan order: the upload and its compliance answer,
         // then the groups, the testers, the build each group receives, the
         // notes, the page, the licence, the review contact, and the queue.
@@ -306,9 +365,13 @@ enum DirectApplyTarget: Equatable {
 
     var noun: String {
         switch self {
+        case .build: "build rows"
         case .listing: "listing fields"
         case .media: "media sets"
+        case .availability: "availability rows"
+        case .money: "monetization rows"
         case .marketing: "marketing resources"
+        case .reviewInfo: "review rows"
         case .testFlight: "TestFlight rows"
         case .gameCenter: "Game Center rows"
         }
@@ -318,7 +381,8 @@ enum DirectApplyTarget: Equatable {
     /// the same paywall line as the plan does.
     var trigger: PaywallTrigger {
         switch self {
-        case .listing, .media, .testFlight, .gameCenter: .apply
+        case .build, .listing, .media, .availability, .money, .reviewInfo,
+             .testFlight, .gameCenter: .apply
         case .marketing: .marketing
         }
     }
@@ -326,7 +390,7 @@ enum DirectApplyTarget: Equatable {
     /// Where the write lands, for the button and the confirmation. The
     /// marketing resources are the App Store alone.
     func destination(_ stores: Set<Store>) -> String {
-        if self == .marketing { return "the App Store" }
+        if self == .marketing || self == .availability { return "the App Store" }
         if self == .testFlight { return "TestFlight" }
         if self == .gameCenter { return "Game Center" }
         let named = [Store.apple, .google].filter(stores.contains).map(\.storeName)

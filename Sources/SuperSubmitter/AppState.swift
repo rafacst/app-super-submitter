@@ -155,6 +155,8 @@ final class AppState {
     /// When the app last wrote a local draft. The header button reports it,
     /// and Settings re-reads the folder whenever it changes. See `Draft`.
     var draftSavedAt: Date?
+    /// When one tab last wrote its draft rows to a store.
+    var remoteSavedAt: Date?
 
     // Navigation.
     /// Publishing or Managing. It is one choice for the app, not one per app,
