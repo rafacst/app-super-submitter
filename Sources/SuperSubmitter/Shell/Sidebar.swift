@@ -93,7 +93,9 @@ struct Sidebar: View {
                 // the heading is the control that folds it.
                 let sections = SidebarSection.allCases.filter { $0.mode == state.mode }
                 ForEach(sections) { section in
-                    let rows = Destination.rows(in: section, hasApp: !state.hasNoOpenApp)
+                    let rows = Destination.rows(
+                        in: section, hasApp: !state.hasNoOpenApp,
+                        remoteSaveVisible: state.remoteSaveVisible)
                     if !rows.isEmpty {
                         Section(isExpanded: isOpen(section)) {
                             ForEach(rows) { DestinationRow(destination: $0) }

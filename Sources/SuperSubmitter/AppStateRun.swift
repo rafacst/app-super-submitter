@@ -74,8 +74,8 @@ extension AppState {
 
     /// A `StoreAPI` that writes no run log. The plan and the status poll use
     /// it; only a run opens a log file.
-    func readOnlyAPI() -> StoreAPI {
-        StoreAPI(credentials: credentials, record: { _ in })
+    func readOnlyAPI(record: @escaping CallRecorder = { _ in }) -> StoreAPI {
+        StoreAPI(credentials: credentials, record: record)
     }
 
     /// The reads that answer a question and change nothing: the generated
@@ -141,7 +141,7 @@ extension AppState {
     }
 
     /// Reads every store, then diffs. Spec section 7.2. This writes nothing.
-    func readStores() async {
+    func readStores(record: @escaping CallRecorder = { _ in }) async {
         guard !planReading, !showsRun || runDone else { return }
         let generation = stateGeneration
         planReading = true
@@ -157,7 +157,7 @@ extension AppState {
         let provider = self.provider
         let root = manifestRoot
         let packages = self.packages
-        let api = readOnlyAPI()
+        let api = readOnlyAPI(record: record)
 
         let actual = await StateReader(api: api).read(manifest: manifest, stores: stores,
                                                       provider: provider)

@@ -38,6 +38,7 @@ struct TabContent: View {
         case .reviewInfo: ReviewInfoTab()
         case .plan: PlanTab()
         case .release: ReleaseTab()
+        case .remoteSave: RemoteSaveTab()
         case .liveApp: LiveAppTab()
         case .account: AccountTab()
         case .settings: SettingsTab()
