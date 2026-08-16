@@ -971,7 +971,6 @@ struct BuiltArtifactSection: View {
 
     private func card(_ candidate: BuildCandidate) -> some View {
         let isSelected = flow.candidate?.id == candidate.id
-        let isDeleted = flow.deletedCandidateIDs.contains(candidate.id)
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 9) {
                 Text("Built on this Mac · \(candidate.platform.label)")
@@ -1014,13 +1013,12 @@ struct BuiltArtifactSection: View {
                         flow.keepArtifact()
                     }
                 }
-                if !isSelected, !flow.state.isActive,
-                   !flow.settledCandidateIDs.contains(candidate.id), !isDeleted {
+                if !isSelected, !flow.state.isActive, !candidate.settled, !candidate.deleted {
                     QuietButton(title: "Prepare this archive for upload") {
                         flow.selectBuiltCandidate(candidate)
                     }
                 }
-                if isDeleted {
+                if candidate.deleted {
                     Text("Deleted from this Mac. The record above is what was built.")
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 } else {
