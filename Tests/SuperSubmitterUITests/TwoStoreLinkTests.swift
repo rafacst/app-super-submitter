@@ -173,6 +173,64 @@ struct TwoStoreLinkTests {
         flow.task?.cancel()
     }
 
+    /// One scheme slot serves both Apple platforms. A scheme read for iOS
+    /// alone is not the scheme for macOS, and Xcode answers that with a
+    /// destination error four checks into the preflight.
+    @Test func switchingApplePlatformAsksForTheSchemeFirst() throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (flow, state) = flow(root)
+        let manifest = try #require(state.manifestURL)
+        var project = link(.ios, root: root, container: "App.xcodeproj", manifest: manifest)
+        project.selection.scheme = "AppiOS"
+        flow.project = project
+        flow.supportsBothApplePlatforms = false
+
+        flow.choosePlatform(.macos)
+
+        #expect(flow.project?.selection.scheme == nil)
+        flow.task?.cancel()
+    }
+
+    /// And the question is asked before the checks, from the list the last
+    /// read already made: no toolchain, no package graph, no Xcode at all.
+    @Test func anOpenSchemeStopsThePreflightBeforeItReadsAnything() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (flow, state) = flow(root)
+        let manifest = try #require(state.manifestURL)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("App.xcodeproj"), withIntermediateDirectories: true)
+        let project = link(.ios, root: root, container: "App.xcodeproj", manifest: manifest)
+        flow.project = project
+        flow.run = UploadRun(platform: .ios, linkedProjectID: project.id, state: .readyToBuild)
+        flow.containerInfo = XcodeContainerInfo(schemes: ["AppiOS", "AppmacOS"])
+
+        await flow.refreshPreflight()
+
+        #expect(flow.state == .needsSelection)
+        #expect(flow.snapshot.scheme == nil)
+        #expect(flow.snapshot.toolchain == nil)
+    }
+
+    /// The scheme that names both platforms is the one the dual build uses.
+    /// It survives the switch, or that build asks a question per platform.
+    @Test func aSchemeThatBuildsBothPlatformsSurvivesTheSwitch() throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (flow, state) = flow(root)
+        let manifest = try #require(state.manifestURL)
+        var project = link(.ios, root: root, container: "App.xcodeproj", manifest: manifest)
+        project.selection.scheme = "App"
+        flow.project = project
+        flow.supportsBothApplePlatforms = true
+
+        flow.choosePlatform(.macos)
+
+        #expect(flow.project?.selection.scheme == "App")
+        flow.task?.cancel()
+    }
+
     @Test func eitherAppleArchiveCanBecomeTheUploadChoice() {
         let flow = BuildFlow(app: nil)
         let ios = BuildCandidate(
