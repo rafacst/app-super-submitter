@@ -146,6 +146,35 @@ struct DraftTests {
         #expect(!band[button.upperBound..<padding.lowerBound].contains("HeaderCluster"))
     }
 
+    @Test func eachEditableTabHasItsRemoteDraftTarget() {
+        let targets: [(Tab, DirectApplyTarget)] = [
+            (.build, .build), (.betaTesting, .testFlight), (.details, .listing),
+            (.media, .media), (.gaming, .gameCenter), (.availability, .availability),
+            (.money, .money), (.marketing, .marketing), (.reviewInfo, .reviewInfo),
+        ]
+        for (tab, target) in targets {
+            #expect(tab.remoteSaveTarget == target, "\(tab) has no remote draft target.")
+        }
+        for tab in [Tab.stores, .storePage, .plan, .release, .liveApp, .account, .settings] {
+            #expect(tab.remoteSaveTarget == nil, "\(tab) must use its own store action.")
+        }
+    }
+
+    @Test func theSaveCommandOffersLocalAndRemoteDestinations() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let shell = try String(
+            contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/RootView.swift"),
+            encoding: .utf8)
+
+        #expect(shell.contains("Picker(\"Save destination\""))
+        #expect(shell.contains("Text(\"Local\").tag(SaveDestination.local)"))
+        #expect(shell.contains("Text(\"Remote\").tag(SaveDestination.remote)"))
+        #expect(shell.contains("state.saveRemotely(target)"))
+        #expect(shell.contains("Saved locally"))
+        #expect(shell.contains("Saved remotely"))
+    }
+
     @Test func aRecoveryAddsNoAppTwice() throws {
         let (state, _, folder) = try workspace(name: "six")
         defer { try? FileManager.default.removeItem(at: folder) }
