@@ -450,7 +450,8 @@ private func buildReviewState() -> AppState {
 
     let flow = BuildFlow(app: state, owner: state.openAppID)
     flow.run.platform = .ios
-    #expect(flow.blockingReason != nil)
+    let reason = try #require(flow.blockingReason)
+    #expect(reason.contains("Build setup"))
 
     state.setEncryptionAnswer(false)
     #expect(flow.blockingReason == nil)

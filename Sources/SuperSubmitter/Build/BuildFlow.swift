@@ -810,7 +810,7 @@ final class BuildFlow {
         snapshot.productName = identity.appName
         // The project's own id first. This row says what the build will
         // produce, and the manifest says where it is going: a package name
-        // typed on the tab above cannot make Gradle build that package.
+        // typed in Build setup cannot make Gradle build that package.
         snapshot.productIdentifier = identity.applicationID
             ?? context.googlePackageName
         // No override is read here. `buildBundle` runs the variant task and
@@ -832,7 +832,7 @@ final class BuildFlow {
             // one, and the developer had to go and find in Android Studio the
             // value this card had just read.
             snapshot.remoteConflict = androidIdentity.applicationID.map {
-                "No Google Play package is on the tab above, so no conflict check ran. This project builds \($0)."
+                "No Google Play package is in Build setup, so no conflict check ran. This project builds \($0)."
             } ?? "No Google Play package is connected, so no conflict check ran."
             return
         }
@@ -927,7 +927,7 @@ final class BuildFlow {
     /// so the app can build the number the manifest names without touching the
     /// project. A plain Gradle build takes no such property, so on Android the
     /// row says the two numbers and the developer settles it: either the store
-    /// field on the tab above, or the project.
+    /// field in Build setup, or the project.
     var canBuildTheManifestVersion: Bool { run.platform != .android }
 
     /// Build the version `store.yaml` names.
