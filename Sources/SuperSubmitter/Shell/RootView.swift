@@ -736,7 +736,9 @@ private struct ContentHeader: View {
             // navigation column, which gave a status the weight of a
             // destination and told you at every moment about a moment that had
             // passed.
-            if state.selectedTab != .stores { SavedChip() }
+            if state.selectedTab != .stores, state.selectedTab.showsDraftControls {
+                SavedChip()
+            }
 
             let shape = HeaderShape(tab: state.selectedTab, busy: state.rechecking,
                                     readFailed: state.planError != nil,
@@ -851,7 +853,7 @@ private struct ContentHeader: View {
                     if let app = state.currentApp {
                         AppStatusChip(mark: state.appMark(appKey: app.key))
                     }
-                    DraftButton()
+                    if state.selectedTab.showsDraftControls { DraftButton() }
                 }
             }
         }

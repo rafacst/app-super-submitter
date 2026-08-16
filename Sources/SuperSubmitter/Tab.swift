@@ -124,11 +124,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .stores: "Stores"
-        // The same screen from two sources, and one name for both: the
-        // publisher sees the page their draft will make, the manager sees the
-        // page the store is serving now. "Preview" would promise the manager a
-        // mockup of what they have already shipped.
-        case .storePage: "Store page"
+        // The same preview from two sources: the publisher sees the proposed
+        // page, and the manager sees the page that the store serves now.
+        case .storePage: "Preview store"
         case .build: "Build"
         case .betaTesting: "Beta testing"
         case .details: "Details"
@@ -330,6 +328,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         default: nil
         }
     }
+
+    /// The store preview is read-only, so it has no local or remote save control.
+    var showsDraftControls: Bool { self != .storePage }
 
     /// Whether the sidebar draws a row for the tab.
     ///
