@@ -133,7 +133,7 @@ struct TwoStoreLinkTests {
         flow.project = project
         flow.run = UploadRun(platform: .ios, linkedProjectID: project.id,
                              state: .readyToBuild)
-        flow.supportedApplePlatforms = [.ios, .macos]
+        flow.supportsBothApplePlatforms = true
 
         #expect(flow.canBuildBothApplePlatforms)
     }
@@ -148,7 +148,7 @@ struct TwoStoreLinkTests {
         flow.project = project
         flow.run = UploadRun(platform: .ios, linkedProjectID: project.id,
                              state: .readyToBuild)
-        flow.supportedApplePlatforms = [.ios]
+        flow.supportsBothApplePlatforms = false
 
         #expect(!flow.canBuildBothApplePlatforms)
     }
@@ -163,7 +163,7 @@ struct TwoStoreLinkTests {
         flow.project = project
         flow.run = UploadRun(platform: .macos, linkedProjectID: project.id,
                              state: .readyToBuild)
-        flow.supportedApplePlatforms = [.ios, .macos]
+        flow.supportsBothApplePlatforms = true
 
         flow.buildBothApplePlatforms()
 

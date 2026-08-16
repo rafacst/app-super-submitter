@@ -142,6 +142,15 @@ public struct BuildCandidate: Sendable, Equatable, Identifiable {
     /// `store.yaml`. A build script can change a version, so a difference
     /// always means something.
     public var mismatches: [Mismatch]
+    /// The file is no longer on this Mac, because the developer deleted it from
+    /// the card. The candidate stays: it is the record of what was built.
+    public var deleted = false
+    /// The artifact reached its end, uploaded or kept on purpose, so nothing
+    /// offers to prepare it for upload again.
+    public var settled = false
+    /// What the archive holds. The export reads it to name a distribution
+    /// bundle when more than one application is eligible. Apple only.
+    public var archiveInfo: ArchiveInfo?
 
     public init(id: UUID = UUID(), platform: BuildPlatform, productName: String,
                 productIdentifier: String, marketingVersion: String, buildVersion: String,

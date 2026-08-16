@@ -265,7 +265,7 @@ extension BuildFlow {
                                       verificationDetail: info.signatureDetail),
                 preflightSnapshot: snapshot)
             appleArchiveInfo = info
-            appleArchiveInfos[candidate.id] = info
+            candidate.archiveInfo = info
         case .android:
             guard let toolchain = androidToolchain else {
                 throw BuildFailure(category: .toolchainUnavailable,
@@ -522,26 +522,27 @@ extension BuildFlow {
         guard !state.isActive, candidate?.id != selected.id,
               let index = otherCandidates.firstIndex(where: { $0.id == selected.id })
         else { return }
-        let previous = candidate
-        otherCandidates.remove(at: index)
-        if let previous { otherCandidates.append(previous) }
-        candidate = selected
-        snapshot = selected.preflightSnapshot ?? PreflightSnapshot()
-        appleArchiveInfo = appleArchiveInfos[selected.id]
-        project?.platform = selected.platform
+        // The stored element, never the copy the card drew with: only that one
+        // carries what happened to the archive since.
+        let picked = otherCandidates.remove(at: index)
+        if let previous = candidate { otherCandidates.append(previous) }
+        candidate = picked
+        snapshot = picked.preflightSnapshot ?? PreflightSnapshot()
+        appleArchiveInfo = picked.archiveInfo
+        project?.platform = picked.platform
         adoptAppleTrain()
         blocking = nil
         nextFreeBuildNumber = nil
         failure = nil
         artifactOnly = false
         successLink = nil
-        run = UploadRun(platform: selected.platform, linkedProjectID: project?.id,
+        run = UploadRun(platform: picked.platform, linkedProjectID: project?.id,
                         state: .needsUploadConfirmation)
-        run.candidateIdentity = selected.logicalIdentity
+        run.candidateIdentity = picked.logicalIdentity
         try? storage.save(run)
         task = Task { [weak self] in
             guard let self else { return }
-            await recheckRemote(for: selected)
+            await recheckRemote(for: picked)
         }
     }
 
@@ -607,7 +608,7 @@ extension BuildFlow {
                     processingLabel = nil
                     successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
                     run.move(to: .complete)
-                    settledCandidateIDs.insert(candidate.id)
+                    self.candidate?.settled = true
                     storeGainedABuild()
                     Aptabase.shared.trackEvent("artifact_upload_completed", with: [
                         "platform": "apple"
@@ -685,7 +686,7 @@ extension BuildFlow {
         run.cleanupState = .complete
         successLink = "https://play.google.com/console"
         run.move(to: .complete)
-        settledCandidateIDs.insert(candidate.id)
+        self.candidate?.settled = true
         storeGainedABuild()
         Aptabase.shared.trackEvent("artifact_upload_completed", with: [
             "platform": "android"
@@ -817,7 +818,7 @@ extension BuildFlow {
     }
 
     func keepArtifact() {
-        if let candidate { settledCandidateIDs.insert(candidate.id) }
+        candidate?.settled = true
         artifactOnly = true
         successLink = nil
         run.move(to: .complete)
@@ -847,10 +848,7 @@ extension BuildFlow {
         run = UploadRun(platform: run.platform, linkedProjectID: project.id)
         candidate = nil
         otherCandidates = []
-        appleArchiveInfos = [:]
-        settledCandidateIDs = []
-        deletedCandidateIDs = []
-        supportedApplePlatforms = []
+        supportsBothApplePlatforms = false
         appleArchiveInfo = nil
         clearLog()
         failure = nil
@@ -858,7 +856,6 @@ extension BuildFlow {
         processingLabel = nil
         successLink = nil
         artifactOnly = false
-        artifactDeleted = false
         uploadProgress = 0
         startedAt = nil
         task = Task { [weak self] in await self?.refreshPreflight() }
@@ -878,10 +875,7 @@ extension BuildFlow {
         snapshot = PreflightSnapshot()
         candidate = nil
         otherCandidates = []
-        appleArchiveInfos = [:]
-        settledCandidateIDs = []
-        deletedCandidateIDs = []
-        supportedApplePlatforms = []
+        supportsBothApplePlatforms = false
         appleArchiveInfo = nil
         clearLog()
         failure = nil
@@ -890,7 +884,6 @@ extension BuildFlow {
         processingLabel = nil
         successLink = nil
         artifactOnly = false
-        artifactDeleted = false
         uploadProgress = 0
         // A queue outlives nothing. A second build that fires after the first
         // was reset, cancelled, or failed is a build nobody asked for.

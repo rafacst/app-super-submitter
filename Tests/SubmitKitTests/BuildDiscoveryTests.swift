@@ -250,14 +250,14 @@ private func makeFile(_ url: URL, executable: Bool = false) throws {
     var settings = AppleBuildSettings()
     settings.values["SUPPORTED_PLATFORMS"] = "macosx iphoneos iphonesimulator"
 
-    #expect(settings.supportedApplePlatforms == [.ios, .macos])
+    #expect(settings.supportsBothApplePlatforms)
 }
 
 @Test func appleBuildSettingsDoNotMistakeTheSimulatorForASecondPlatform() {
     var settings = AppleBuildSettings()
     settings.values["SUPPORTED_PLATFORMS"] = "iphoneos iphonesimulator"
 
-    #expect(settings.supportedApplePlatforms == [.ios])
+    #expect(!settings.supportsBothApplePlatforms)
 }
 
 @Test func onlyAnUnfinishedRunIsResumedAfterARelaunch() throws {
