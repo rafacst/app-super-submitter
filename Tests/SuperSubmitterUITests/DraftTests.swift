@@ -160,6 +160,11 @@ struct DraftTests {
         }
     }
 
+    @Test func theStorePreviewHasNoSaveControls() {
+        #expect(!Tab.storePage.showsDraftControls)
+        #expect(Tab.allCases.filter { !$0.showsDraftControls } == [.storePage])
+    }
+
     @Test func theBuildRemoteSaveWritesBuildDraftRowsOnly() {
         for id in ["apple.version", "apple.buildCompliance", "google.bundle",
                    "google.track.production"] {

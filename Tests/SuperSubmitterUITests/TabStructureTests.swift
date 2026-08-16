@@ -23,7 +23,7 @@ import Testing
 /// existed yet.
 @Test func workflowTabsKeepTheirSafetyOrder() {
     #expect(Tab.tabs(in: .publishing).map(\.title) == [
-        "Stores", "Store page", "Build", "Beta testing", "Details", "Media",
+        "Stores", "Preview store", "Build", "Beta testing", "Details", "Media",
         "Gaming", "Availability", "Monetization", "Review info", "Summary",
         "Release", "Account", "Settings",
     ])
@@ -50,12 +50,12 @@ import Testing
     // Availability precedes Monetization: what the app costs and where it
     // sells is one question, and what it sells inside itself is the next one.
     #expect(Destination.rows(in: .publish, hasApp: true).map(\.title)
-        == ["Store page", "Build", "Beta testing", "Details", "Media", "Gaming",
+        == ["Preview store", "Build", "Beta testing", "Details", "Media", "Gaming",
             "Availability", "Monetization", "Review info"])
     #expect(Destination.rows(in: .send, hasApp: true).map(\.title)
         == ["Summary", "Release"])
     #expect(Destination.rows(in: .manage, hasApp: true).map(\.title)
-        == ["Store page", "Live listing", "Live media", "Marketing", "Live app"])
+        == ["Preview store", "Live listing", "Live media", "Marketing", "Live app"])
 
     // Publish and Send are the manifest against the stores: everything that
     // only edits `store.yaml`, then the two screens that talk to a store.
@@ -125,7 +125,7 @@ import Testing
         == [.stores, .account, .settings, .storePage, .details, .media])
     #expect(publishing.union(managing) == Set(Tab.allCases))
     #expect(Tab.tabs(in: .managing).map { $0.title(in: .managing) }
-        == ["Stores", "Store page", "Live listing", "Live media", "Marketing",
+        == ["Stores", "Preview store", "Live listing", "Live media", "Marketing",
             "Live app", "Account", "Settings"])
     // Nothing that builds, tests, plans, writes, or releases reaches a manager.
     #expect(managing.isDisjoint(with: [.build, .betaTesting, .availability, .money,
