@@ -617,6 +617,18 @@ private func buildReviewState() -> AppState {
     #expect(!preflightText.contains("Nothing is running"))
 }
 
+/// Recheck must capture the current manifest and credentials before preflight
+/// makes the context immutable for the active operation.
+@Test func recheckUsesTheCurrentAppContext() throws {
+    let flow = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFlow.swift")
+    let start = try #require(flow.range(of: "func refreshPreflight() async"))
+    let remainder = flow[start.lowerBound...]
+    let hold = try #require(remainder.range(of: "holdContext()"))
+    let busy = try #require(remainder.range(of: "run.moveToPreflight()"))
+
+    #expect(hold.lowerBound < busy.lowerBound)
+}
+
 /// The choice has to outlive the launch. `loadSavedProject` restores the
 /// platform from the saved link, so an answer that stopped at the run came
 /// back as iOS the next morning.
