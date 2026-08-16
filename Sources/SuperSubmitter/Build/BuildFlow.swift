@@ -650,6 +650,16 @@ final class BuildFlow {
         snapshot = PreflightSnapshot()
         snapshot.containerPath = project.containerPath
 
+        // The scheme comes before the checks. The last read already listed the
+        // container, so when the scheme is open and the list holds more than
+        // one, the question is asked at once: no toolchain read, no package
+        // graph, and no card of Checking… rows that ends in a question anyway.
+        if project.platform.store == .apple, project.selection.scheme == nil,
+           (containerInfo?.schemes.count ?? 0) > 1 {
+            run.move(to: .needsSelection)
+            return
+        }
+
         do {
             switch project.platform {
             case .ios, .macos: try await applePreflight(project)
@@ -957,6 +967,14 @@ final class BuildFlow {
             guard adoptLink(for: platform.store) else { return }
         } else {
             project?.platform = platform
+            // One scheme slot serves both Apple platforms, and a project that
+            // ships on both usually has a scheme for each. Unless the scheme's
+            // own settings named both, the new platform needs its own: the
+            // preflight would otherwise read the settings of a scheme Xcode has
+            // no destination for, and answer a question with an error.
+            if platform.store == .apple, !supportsBothApplePlatforms {
+                project?.selection.scheme = nil
+            }
         }
         adoptAppleTrain()
         restartPreflight()
