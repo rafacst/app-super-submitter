@@ -48,6 +48,24 @@ import Testing
     #expect(ExistingAppImportPlan.group([app, duplicate]).first?.candidates.count == 1)
 }
 
+/// An import keeps configured stores, but an empty store the developer did
+/// not import is only a stale setup choice. Keeping it made an Apple-only app
+/// show a blank Google Play package and a fake 1.0 version.
+@Test func anImportDropsOnlyEmptyUnselectedStorePlaceholders() {
+    var manifest = Manifest()
+    manifest.setAppleApp(appID: "123", bundleID: "com.example.app")
+    manifest.setGoogleApp(packageName: "")
+
+    manifest.removeEmptyStorePlaceholders(except: [.apple])
+
+    #expect(manifest.apps.apple != nil)
+    #expect(manifest.apps.google == nil)
+
+    manifest.setGoogleApp(packageName: "com.example.app")
+    manifest.removeEmptyStorePlaceholders(except: [.apple])
+    #expect(manifest.apps.google?.packageName == "com.example.app")
+}
+
 /// A new import writes a new file without a warning. An existing file needs
 /// the user's replacement choice before any store value reaches it.
 @MainActor
