@@ -633,6 +633,9 @@ final class BuildFlow {
                 recovery: "Press Link Project Folder and locate it again."))
             return
         }
+        // Capture current identifiers and credentials before preflight makes
+        // the context immutable for the active operation.
+        holdContext()
         // Not `move(to: .preflight)`. A finished run, a link restored from
         // disk, and a fresh launch all sit in a state that cannot reach the
         // preflight in one move, and `move` refuses those in silence: the
