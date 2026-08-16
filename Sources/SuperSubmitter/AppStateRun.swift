@@ -145,6 +145,7 @@ extension AppState {
         guard !planReading, !showsRun || runDone else { return }
         let generation = stateGeneration
         planReading = true
+        defer { planReading = false }
         planReadFailures = []
         // A read is the developer asking what the store holds now. An error
         // about a call that is already over does not survive that question, and
@@ -222,7 +223,6 @@ extension AppState {
             "is_blocked": result.isBlocked ? 1 : 0,
             "is_dry_run": dryRun ? 1 : 0
         ])
-        planReading = false
     }
 
     // MARK: - The build storage. upload-spec section 11.

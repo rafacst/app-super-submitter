@@ -315,6 +315,22 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// The store draft rows owned by this editing tab.
+    var remoteSaveTarget: DirectApplyTarget? {
+        switch self {
+        case .build: .build
+        case .betaTesting: .testFlight
+        case .details: .listing
+        case .media: .media
+        case .gaming: .gameCenter
+        case .availability: .availability
+        case .money: .money
+        case .marketing: .marketing
+        case .reviewInfo: .reviewInfo
+        default: nil
+        }
+    }
+
     /// Whether the sidebar draws a row for the tab.
     ///
     /// All of them. The store page was the one exception, because the app list

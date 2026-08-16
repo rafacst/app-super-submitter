@@ -1000,10 +1000,15 @@ extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
 }
 
-/// Save a local draft, and say it worked for as long as that is news.
+private enum SaveDestination: String, CaseIterable, Identifiable {
+    case local, remote
+    var id: Self { self }
+}
+
+/// Save a local draft or write this tab's draft rows to its store.
 ///
 /// Every field on every tab already writes `store.yaml` when it is edited.
-/// This command keeps a separate local copy of every proposed store change.
+/// Local keeps a separate copy. Remote reads the stores and writes this tab.
 ///
 /// The title carries the report rather than an alert, because this is a
 /// command a developer may run twice in a minute before an update and an alert
@@ -1011,26 +1016,85 @@ extension View {
 /// beside the folder and the restore.
 struct DraftButton: View {
     @Environment(AppState.self) private var state
-    @State private var justSaved = false
+    @State private var destination = SaveDestination.local
+    @State private var localSaved = false
+    @State private var remoteSaved = false
+    @State private var confirmingRemote = false
     @State private var tick = 0
 
     var body: some View {
-        QuietButton(title: justSaved ? "Draft saved" : "Save draft", glass: true,
-                    symbol: justSaved ? "checkmark" : "tray.and.arrow.down", tick: tick) {
-            tick += 1
-            state.saveDraft()
+        HStack(spacing: 6) {
+            Picker("Save destination", selection: $destination) {
+                Text("Local").tag(SaveDestination.local)
+                Text("Remote").tag(SaveDestination.remote)
+                    .disabled(state.selectedTab.remoteSaveTarget == nil)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 124)
+
+            QuietButton(title: saved ? savedTitle : "Save draft", glass: true,
+                        symbol: saved ? "checkmark" : symbol, tick: tick) {
+                tick += 1
+                if destination == .local {
+                    state.saveDraft()
+                } else if state.selectedTab.remoteSaveTarget != nil {
+                    confirmingRemote = true
+                }
+            }
+            .disabled(destination == .remote && state.selectedTab.remoteSaveTarget == nil)
         }
-        .help("Save a local copy of every linked app and its proposed store data")
+        .help(help)
+        .confirmationDialog("Save this tab remotely?", isPresented: $confirmingRemote) {
+            if let target = state.selectedTab.remoteSaveTarget {
+                Button("Save to \(target.destination(state.directApplyStores(for: target)))") {
+                    state.saveRemotely(target)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Super Submitter reads the stores first, then writes the draft rows from this tab.")
+        }
         // The same cancellable timer as SavedChip, and for the same reason:
         // two saves in three seconds must not fight over the title.
         .task(id: state.draftSavedAt) {
             guard state.draftSavedAt != nil else { return }
-            justSaved = true
+            localSaved = true
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
-            justSaved = false
+            localSaved = false
         }
-        .motion(.smooth(duration: 0.2), value: justSaved)
+        .task(id: state.remoteSavedAt) {
+            guard state.remoteSavedAt != nil else { return }
+            remoteSaved = true
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            remoteSaved = false
+        }
+        .motion(.smooth(duration: 0.2), value: saved)
+    }
+
+    private var saved: Bool {
+        destination == .local ? localSaved : remoteSaved
+    }
+
+    private var savedTitle: String {
+        destination == .local ? "Saved locally" : "Saved remotely"
+    }
+
+    private var symbol: String {
+        destination == .local ? "tray.and.arrow.down" : "icloud.and.arrow.up"
+    }
+
+    private var help: String {
+        if destination == .local {
+            return "Save a local copy of every linked app and its proposed store data"
+        }
+        guard let target = state.selectedTab.remoteSaveTarget else {
+            return "This tab has no draft rows to write to a store"
+        }
+        return "Write this tab's draft rows to \(target.destination(state.directApplyStores(for: target)))"
     }
 }
 
@@ -1053,8 +1117,13 @@ struct SavedChip: View {
     @State private var recentlySaved = false
 
     private var line: String {
-        guard let date = state.lastSavedAt else { return "Saved" }
-        return "Saved \(date.formatted(date: .omitted, time: .shortened))"
+        guard let date = latestDate else { return "Saved locally" }
+        let place = state.remoteSavedAt == date ? "remotely" : "locally"
+        return "Saved \(place) \(date.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private var latestDate: Date? {
+        [state.lastSavedAt, state.draftSavedAt, state.remoteSavedAt].compactMap { $0 }.max()
     }
 
     var body: some View {
@@ -1087,8 +1156,8 @@ struct SavedChip: View {
         // sidebar, the header and the tab are all being built for the first
         // time, and the whole window animated in behind a tick nobody was
         // looking at.
-        .task(id: state.lastSavedAt) {
-            guard state.lastSavedAt != nil else { return }
+        .task(id: [state.lastSavedAt, state.draftSavedAt, state.remoteSavedAt]) {
+            guard latestDate != nil else { return }
             recentlySaved = true
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
