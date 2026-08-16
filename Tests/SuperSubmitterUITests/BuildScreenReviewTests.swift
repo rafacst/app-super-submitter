@@ -210,80 +210,77 @@ private func buildReviewState() -> AppState {
     #expect(!row.contains("Spacer(minLength: 8)"))
 }
 
-// MARK: - One box for the choices
+// MARK: - One clear build path
 
-/// The two questions this tab asks before there is a package were two cards
-/// side by side, each with its own border around two lines of radio buttons:
-/// two edges drawn around four short answers, and more empty card than content
-/// in either. Related choices are one group with a rule between them.
-@Test func theTwoQuestionsShareOneBox() throws {
+/// The first control answers the user's main question: create a build or
+/// upload one that already exists. Setup stays below the selected workflow.
+@Test func theBuildPathIsTheOnlyAlwaysVisibleChoice() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
-    let row = try #require(build.range(of: "private var questionRow"))
-    let source = try #require(build.range(of: "private var buildSource"))
-    let head = try #require(build.range(of: "private func panelHead"))
-    let questionRow = String(build[row.lowerBound..<source.lowerBound])
-    let halves = String(build[source.lowerBound..<head.lowerBound])
+    let body = try #require(build.range(of: "var body: some View"))
+    let source = try #require(build.range(of: "private var buildPath"))
+    let setup = try #require(build.range(of: "private var buildSetup"))
+    let layout = String(build[body.lowerBound..<source.lowerBound])
 
-    #expect(questionRow.contains(".storePanel("))
-    #expect(questionRow.contains("Divider()"))
-    #expect(!halves.contains(".storePanel("))
+    #expect(layout.contains("buildPath"))
+    #expect(layout.contains("BuildFromProjectView()"))
+    #expect(layout.contains("uploadWorkspace"))
+    #expect(layout.contains("buildSetup"))
+    #expect(build.contains("Create a build"))
+    #expect(build.contains("Upload a build"))
+    #expect(source.lowerBound < setup.lowerBound)
 }
 
-/// Every choice about the build in one box: the folder that is linked, the
-/// store, the platform, the scheme, and the two answers that used to sit at the
-/// foot of a card of read-only checks.
-@Test func theProjectAndItsChoicesShareOneBox() throws {
+/// Store identifiers, versions, and compliance remain available without
+/// competing with the primary build action on each normal visit.
+@Test func buildSetupUsesProgressiveDisclosure() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let setup = try #require(build.range(of: "private var buildSetup"))
+    let identity = try #require(build.range(of: "private var storeIdentitySection"))
+    let section = String(build[setup.lowerBound..<identity.lowerBound])
+
+    #expect(section.contains("Section_(\"Build setup\""))
+    #expect(section.contains("folds: true"))
+    #expect(section.contains("startsOpen: buildSetupNeedsAttention"))
+    #expect(section.contains("storeIdentitySection"))
+    #expect(section.contains("exportCompliance"))
+}
+
+/// The project summary keeps the normal path short. The less common project
+/// controls stay in one fold and keep every existing action.
+@Test func theProjectSettingsFoldAwayUntilNeeded() throws {
     let view = try buildReviewSource("Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
     let body = try #require(view.range(of: "var body: some View"))
     let columns = try #require(view.range(of: "private func twoColumns"))
     let layout = String(view[body.lowerBound..<columns.lowerBound])
-    let card = try #require(view.range(of: "private var projectCard"))
+    let card = try #require(view.range(of: "private var projectSummary"))
     let chooser = try #require(view.range(of: "private var containerChooser"))
     let project = String(view[card.lowerBound..<chooser.lowerBound])
-    let preflight = try #require(view.range(of: "private var preflightCard"))
-    let preflightRows = try #require(view.range(of: "private func preflightRows"))
-    let checks = String(view[preflight.lowerBound..<preflightRows.lowerBound])
 
-    // One panel around the two halves, and neither draws a second one inside it.
-    #expect(layout.contains("projectCard"))
-    #expect(layout.contains("selectionBlock"))
-    #expect(layout.contains("preflightCard"))
+    #expect(layout.contains("projectWorkspace"))
+    #expect(view.contains("Fold(\"Build settings\""))
+    #expect(view.contains("selectionBlock"))
     #expect(layout.contains(".storePanel(horizontal: 15)"))
     #expect(!project.contains(".storePanel("))
-    #expect(layout.contains("Text(\"Project\")"))
-    #expect(!checks.contains(".storePanel("))
-    // The build's own two answers are choices and not checks, so they moved to
-    // the box that holds every other choice.
-    #expect(view.contains("private var buildOptions"))
-    #expect(!checks.contains("allowProvisioningUpdates"))
-    #expect(!checks.contains("alwaysReviewArtifact"))
-    // The sentence that stood under the buttons on every visit answers a
-    // question about one button, so it belongs to that button.
-    #expect(!project.contains("Text(\"Unlink removes this link only"))
-    #expect(project.contains(".help(\"Unlink removes this link only"))
+    for action in ["flow.refreshPreflight()", "flow.openInIDE()", "flow.linkFolder()",
+                   "flow.unlink()", "flow.reveal("] {
+        #expect(project.contains(action), "Project settings lost \(action)")
+    }
+    #expect(project.contains("Menu"))
 }
 
-/// The local artifact and the App Store copy have one panel and one title.
-@Test func theArtifactsShareOneBox() throws {
+/// A built or imported artifact stays in the primary workflow. The user does
+/// not need to find another panel before the upload action appears.
+@Test func thePrimaryWorkflowOwnsTheArtifact() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
-    let apple = try buildReviewSource("Sources/SuperSubmitter/Tabs/AppleBuildsPanel.swift")
     let project = try buildReviewSource(
         "Sources/SuperSubmitter/Build/BuildFromProjectView.swift")
-    let start = try #require(build.range(of: "private var artifactsPanel"))
-    let end = try #require(build.range(of: "private var storeBuildColumns"))
-    let panel = String(build[start.lowerBound..<end.lowerBound])
-    let builtStart = try #require(project.range(of: "struct BuiltArtifactSection"))
-    let builtEnd = try #require(project.range(of: "private struct ArtifactRows"))
-    let built = String(project[builtStart.lowerBound..<builtEnd.lowerBound])
 
-    #expect(panel.contains("Text(\"Artifacts\")"))
-    #expect(panel.contains("BuiltArtifactSection()"))
-    #expect(panel.contains("importSection"))
-    #expect(panel.contains("AppleBuildsPanel()"))
-    #expect(panel.contains("Divider()"))
-    #expect(panel.contains(".storePanel("))
-    #expect(!apple.contains(".storePanel("))
-    #expect(!built.contains(".storePanel("))
+    let body = try #require(project.range(of: "var body: some View"))
+    let columns = try #require(project.range(of: "private func twoColumns"))
+    let layout = String(project[body.lowerBound..<columns.lowerBound])
+    #expect(layout.contains("BuiltArtifactSection()"))
+    #expect(build.contains("private var uploadWorkspace"))
+    #expect(!build.contains("private var artifactsPanel"))
 }
 
 /// Every project choice uses one label column and one control column.
@@ -503,15 +500,15 @@ private func buildReviewState() -> AppState {
     #expect(project.contains("flow.blockingReason"))
 }
 
-/// Two exclusive answers whose labels have to be read are a radio group on the
-/// Mac. A segmented control is for switching a view, and both of these decide
-/// what the tab does rather than which part of it shows.
-@Test func theTwoBuildQuestionsAreRadioGroups() throws {
+/// The source control switches the workflow below it, so it uses segments.
+/// Apple's export question stays a radio group because it records an answer.
+@Test func theBuildPathSwitchesViewsAndComplianceRecordsAnAnswer() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
 
-    #expect(build.contains("Build from project"))
-    #expect(!build.contains(".pickerStyle(.segmented)"))
-    #expect(build.components(separatedBy: ".pickerStyle(.radioGroup)").count == 3)
+    #expect(build.contains("Create a build"))
+    #expect(build.contains("Upload a build"))
+    #expect(build.contains(".pickerStyle(.segmented)"))
+    #expect(build.components(separatedBy: ".pickerStyle(.radioGroup)").count == 2)
 }
 
 /// The tab opens on the two answers that fit almost every app: this Mac has
