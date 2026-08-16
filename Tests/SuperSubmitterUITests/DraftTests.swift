@@ -160,6 +160,16 @@ struct DraftTests {
         }
     }
 
+    @Test func theBuildRemoteSaveWritesBuildDraftRowsOnly() {
+        for id in ["apple.version", "apple.buildCompliance", "google.bundle",
+                   "google.track.production"] {
+            #expect(DirectApplyTarget.build.owns(id), "The Build tab lost \(id).")
+        }
+        for id in ["apple.versionAttributes", "apple.phased", "apple.endPreOrder"] {
+            #expect(!DirectApplyTarget.build.owns(id), "The Build tab must not write \(id).")
+        }
+    }
+
     @Test func theSaveCommandOffersLocalAndRemoteDestinations() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
