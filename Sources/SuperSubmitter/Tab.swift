@@ -88,6 +88,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     case reviewInfo
     case plan
     case release
+    /// A remote draft write. The sidebar adds this tab only for the active save.
+    case remoteSave
     // Managing. One tab that reads a live app and acts on it one button at
     // a time. It was three, and the three together held six sentences and
     // five buttons: three destinations for one question.
@@ -100,6 +102,13 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     // four sections across the top: a second navigation system, inside a
     // panel, over the first one. A screen of this size is a screen.
     case settings
+
+    /// The permanent tabs. The remote save tab exists only for one active save.
+    static let allCases: [Tab] = [
+        .stores, .storePage, .build, .betaTesting, .details, .media, .gaming,
+        .availability, .money, .marketing, .reviewInfo, .plan, .release,
+        .liveApp, .account, .settings,
+    ]
 
     var id: Int { rawValue }
 
@@ -138,6 +147,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .reviewInfo: "Review info"
         case .plan: "Summary"
         case .release: "Release"
+        case .remoteSave: "Remote save"
         case .liveApp: "Live app"
         case .account: "Account"
         case .settings: "Settings"
@@ -149,7 +159,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         switch self {
         case .stores: [.publishing, .managing]
         case .build, .betaTesting, .gaming, .availability, .money, .reviewInfo,
-             .plan, .release: [.publishing]
+             .plan, .release, .remoteSave: [.publishing]
         // What the listing says and what it shows are the two things a
         // manager changes most, and Managing had nowhere to show them: an
         // imported app filled these tabs and the mode that imported it could
@@ -198,6 +208,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         // before you send it and not a message. It was `text.bubble`.
         case .plan: "checklist"
         case .release: "airplane"
+        case .remoteSave: "arrow.up.doc"
         case .liveApp: "waveform.path.ecg.rectangle"
         case .account: "person.crop.circle"
         case .settings: "gearshape"
@@ -239,6 +250,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         case .reviewInfo: "Give the reviewer the contact, the demo account and the notes"
         case .plan: "Check every change before it reaches a store"
         case .release: "Send the version to review and release it to customers"
+        case .remoteSave: "Show the progress and the calls for this remote draft save"
         case .liveApp: "Follow the ratings, the crashes and the sales of the live app"
         case .account: "Manage the account, the plan and the payment"
         case .settings: "Set how Super Submitter works on this Mac"
@@ -278,7 +290,7 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
              .details, .media, .gaming, .availability, .money, .marketing,
              .reviewInfo: .edits
         case .plan: .reads
-        case .release, .liveApp: .releases
+        case .release, .remoteSave, .liveApp: .releases
         }
     }
 
@@ -329,8 +341,8 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// The store preview is read-only, so it has no local or remote save control.
-    var showsDraftControls: Bool { self != .storePage }
+    /// Read-only and activity tabs have no local or remote save control.
+    var showsDraftControls: Bool { self != .storePage && self != .remoteSave }
 
     /// Whether the sidebar draws a row for the tab.
     ///
@@ -428,14 +440,16 @@ struct Destination: Hashable, Identifiable {
     /// foot of the column holds all three. Stores was listed under Publish and
     /// again under Manage, which is the same screen twice in a column whose
     /// selection can only be standing on one of them.
-    static func rows(in section: SidebarSection, hasApp: Bool) -> [Destination] {
+    static func rows(in section: SidebarSection, hasApp: Bool,
+                     remoteSaveVisible: Bool = false) -> [Destination] {
         guard hasApp else { return [] }
         let mode: Mode = section == .manage ? .managing : .publishing
-        let tabs = switch section {
+        var tabs = switch section {
         case .publish: Tab.tabs(in: .publishing).filter { $0.zone == .edits }
         case .send: Tab.tabs(in: .publishing).filter { $0.zone != .edits }
         case .manage: Tab.tabs(in: .managing)
         }
+        if section == .send, remoteSaveVisible { tabs.append(.remoteSave) }
         return tabs
             .filter { !$0.standsAlone && $0.isListed }
             .map { Destination(tab: $0, mode: mode) }

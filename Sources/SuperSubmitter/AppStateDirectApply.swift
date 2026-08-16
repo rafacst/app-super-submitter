@@ -28,9 +28,98 @@ struct TestFlightSendPlan: Sendable {
 @MainActor
 extension AppState {
 
+    var remoteSaveProgress: Double? {
+        guard !remoteSaveStepStates.isEmpty else { return nil }
+        let completed = remoteSaveStepStates.filter {
+            $0 == .done || $0 == .failed || $0 == .skipped
+        }.count
+        return Double(completed) / Double(remoteSaveStepStates.count)
+    }
+
+    var remoteSaveLogText: String { remoteSaveLogFullLines.joined(separator: "\n") }
+
+    /// Starts one temporary activity tab for the remote save.
+    func beginRemoteSave(_ target: DirectApplyTarget) {
+        remoteSaveContinuation?.finish()
+        remoteSaveEventTask?.cancel()
+        remoteSaveSourceTitle = selectedTab.title(in: mode)
+        remoteSaveVisible = true
+        remoteSaveSteps = []
+        remoteSaveStepStates = []
+        remoteSaveDetail = "Preparing the remote save…"
+        remoteSaveLogLines = []
+        remoteSaveLogFullLines = []
+        remoteSaveLoggedCalls = 0
+        directApplyTarget = target
+
+        let events = AsyncStream<RunEvent>.makeStream()
+        remoteSaveContinuation = events.continuation
+        remoteSaveEventTask = Task { @MainActor [weak self] in
+            for await event in events.stream { self?.handleRemoteSave(event) }
+        }
+        mode = .publishing
+        selectedTab = .remoteSave
+    }
+
+    /// Removes the activity tab and its temporary data.
+    func clearRemoteSave() {
+        remoteSaveVisible = false
+        remoteSaveSteps = []
+        remoteSaveStepStates = []
+        remoteSaveDetail = ""
+        remoteSaveLogLines = []
+        remoteSaveLogFullLines = []
+        remoteSaveLoggedCalls = 0
+        remoteSaveContinuation?.finish()
+        remoteSaveContinuation = nil
+        remoteSaveEventTask?.cancel()
+        remoteSaveEventTask = nil
+    }
+
+    /// Records one sanitized store call in the temporary log.
+    func recordRemoteSave(_ call: APICall, at date: Date = Date()) {
+        guard remoteSaveVisible else { return }
+        remoteSaveLoggedCalls += 1
+        remoteSaveLogLines.append(call.line(at: date))
+        remoteSaveLogFullLines.append(call.fullLine(at: date))
+        if remoteSaveLogLines.count > 500 {
+            remoteSaveLogLines.removeFirst(remoteSaveLogLines.count - 500)
+        }
+        if remoteSaveLogFullLines.count > Self.logLimit {
+            remoteSaveLogFullLines.removeFirst(remoteSaveLogFullLines.count - Self.logLimit)
+        }
+    }
+
+    private func remoteSaveRecorder() -> CallRecorder {
+        { [weak self] call in await self?.recordRemoteSave(call) }
+    }
+
+    private func handleRemoteSave(_ event: RunEvent) {
+        guard remoteSaveVisible else { return }
+        switch event {
+        case .step(let index, let state, _):
+            guard remoteSaveStepStates.indices.contains(index) else { return }
+            remoteSaveStepStates[index] = state
+            if state == .running {
+                remoteSaveDetail = remoteSaveSteps[index].title
+            }
+        case .progress(_, _, let detail):
+            remoteSaveDetail = detail
+        case .log(let call, let date):
+            recordRemoteSave(call, at: date)
+        case .failure(let failure):
+            remoteSaveDetail = failure.message
+        case .providerFailed(let message):
+            remoteSaveDetail = message
+        case .finished:
+            break
+        }
+    }
+
     /// Reads and plans each selected build train. TestFlight groups belong to
     /// the app, so only the first plan carries their shared rows.
-    func prepareTestFlightSend() async -> [TestFlightSendPlan] {
+    func prepareTestFlightSend(record: @escaping CallRecorder = { _ in }) async
+        -> [TestFlightSendPlan] {
         guard !planReading else { return [] }
         let generation = stateGeneration
         planReading = true
@@ -41,7 +130,7 @@ extension AppState {
             let includesSharedRows = plans.isEmpty
             let plan = await testFlightSendPlan(
                 platform: platform, generation: generation,
-                includesSharedRows: includesSharedRows)
+                includesSharedRows: includesSharedRows, record: record)
             plans.append(plan)
         }
         guard generation == stateGeneration else { return [] }
@@ -71,18 +160,24 @@ extension AppState {
             for (index, saved) in prepared.enumerated() {
                 let current = index == 0 ? saved : await testFlightSendPlan(
                     platform: saved.platform, generation: generation,
-                    includesSharedRows: false)
+                    includesSharedRows: false, record: remoteSaveRecorder())
                 guard !current.steps.isEmpty else { continue }
 
                 var only = PlanResult()
                 only.steps = current.steps
+                let continuation = remoteSaveContinuation
                 let runner = Runner(
                     plan: only, manifest: current.manifest, actual: current.actual,
                     root: manifestRoot, credentials: credentials, dryRun: false,
                     access: access, emit: { event in
+                        continuation?.yield(event)
                         if case .failure(let failure) = event { box.record(failure.message) }
                         if case .providerFailed(let message) = event { box.record(message) }
                     })
+                if remoteSaveVisible {
+                    remoteSaveSteps = current.steps
+                    remoteSaveStepStates = Array(repeating: .pending, count: current.steps.count)
+                }
                 await runner.run()
                 if box.message != nil { break }
                 written += current.steps.count
@@ -92,12 +187,16 @@ extension AppState {
             if let failure = box.message {
                 directApplyState = .failed
                 directApplyMessage = failure
+                remoteSaveDetail = failure
             } else {
                 directApplyState = .done
                 directApplyMessage = "\(written) TestFlight \(written == 1 ? "row" : "rows") written."
+                remoteSaveDetail = directApplyMessage
                 remoteSavedAt = Date()
                 invalidatePlan()
             }
+            remoteSaveContinuation?.finish()
+            remoteSaveContinuation = nil
         }
     }
 
@@ -138,15 +237,19 @@ extension AppState {
         guard directApplyState != .running, !planReading, !showsRun || runDone else { return }
         guard requirePaid(.storeWrite, target.trigger) else { return }
         flushSave()
+        beginRemoteSave(target)
 
         if target == .testFlight {
             Task {
-                let prepared = await prepareTestFlightSend()
+                let prepared = await prepareTestFlightSend(record: remoteSaveRecorder())
                 guard !prepared.flatMap(\.steps).isEmpty else {
                     directApplyTarget = target
                     directApplyState = .idle
                     directApplyMessage = "Nothing to write. The store already holds it."
+                    remoteSaveDetail = directApplyMessage
                     remoteSavedAt = Date()
+                    remoteSaveContinuation?.finish()
+                    remoteSaveContinuation = nil
                     return
                 }
                 applyTestFlight(prepared)
@@ -159,15 +262,17 @@ extension AppState {
         directApplyMessage = "Reading the stores…"
         let generation = stateGeneration
         Task {
-            await readStores()
+            await readStores(record: remoteSaveRecorder())
             guard generation == stateGeneration else {
                 directApplyState = .failed
                 directApplyMessage = "The tab changed during the store read. Save it again."
+                remoteSaveDetail = directApplyMessage
                 return
             }
             guard planReadFailures.isEmpty else {
                 directApplyState = .failed
                 directApplyMessage = planReadFailures.first ?? "The stores could not be read."
+                remoteSaveDetail = directApplyMessage
                 return
             }
             directApplyState = .idle
@@ -196,17 +301,27 @@ extension AppState {
             guard !only.steps.isEmpty else {
                 directApplyState = .idle
                 directApplyMessage = "Nothing to write. The stores already hold it."
+                remoteSaveDetail = directApplyMessage
                 remoteSavedAt = Date()
+                remoteSaveContinuation?.finish()
+                remoteSaveContinuation = nil
                 return
+            }
+
+            if remoteSaveVisible {
+                remoteSaveSteps = only.steps
+                remoteSaveStepStates = Array(repeating: .pending, count: only.steps.count)
             }
 
             // The runner reports through a stream, and this apply needs one
             // answer: did every row land. A box collects the first failure.
             let box = FailureBox()
+            let continuation = remoteSaveContinuation
             let runner = Runner(
                 plan: only, manifest: manifest, actual: actualState, root: manifestRoot,
                 credentials: credentials, dryRun: false, access: access,
                 emit: { event in
+                    continuation?.yield(event)
                     if case .failure(let failure) = event { box.record(failure.message) }
                     if case .providerFailed(let message) = event { box.record(message) }
                 })
@@ -216,14 +331,18 @@ extension AppState {
             if let failure = box.message {
                 directApplyState = .failed
                 directApplyMessage = failure
+                remoteSaveDetail = failure
             } else {
                 directApplyState = .done
                 directApplyMessage = "\(only.steps.count) \(target.noun) written."
+                remoteSaveDetail = directApplyMessage
                 remoteSavedAt = Date()
                 // The plan compared against a state that is now stale, so the
                 // next read is the honest one.
                 invalidatePlan()
             }
+            continuation?.finish()
+            if remoteSaveContinuation != nil { remoteSaveContinuation = nil }
         }
     }
 
@@ -258,7 +377,7 @@ extension AppState {
 
     private func testFlightSendPlan(
         platform: Manifest.Platform, generation: Int,
-        includesSharedRows: Bool) async -> TestFlightSendPlan {
+        includesSharedRows: Bool, record: @escaping CallRecorder) async -> TestFlightSendPlan {
         var platformManifest = manifest
         if let apple = platformManifest.apps.apple {
             var platforms = apple.platforms.filter { $0 != platform }
@@ -266,7 +385,7 @@ extension AppState {
             platformManifest.setAppleApp(
                 appID: apple.appId, bundleID: apple.bundleId, platforms: platforms)
         }
-        let actual = await StateReader(api: readOnlyAPI()).read(
+        let actual = await StateReader(api: readOnlyAPI(record: record)).read(
             manifest: platformManifest, stores: [.apple], provider: .none)
         let result = Planner.plan(Planner.Input(
             manifest: platformManifest, actual: actual, stores: [.apple],

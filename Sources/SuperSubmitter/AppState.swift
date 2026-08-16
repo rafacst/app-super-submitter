@@ -176,6 +176,7 @@ final class AppState {
     var selectedTab: Tab = .stores {
         didSet {
             guard selectedTab != oldValue else { return }
+            if oldValue == .remoteSave { clearRemoteSave() }
             // Leaving a tab is a write boundary, the same as switching app,
             // resigning active, quitting and Command-S. The autosave coalesces
             // for 250 ms, so the last thing typed before a tab was clicked was
@@ -475,6 +476,18 @@ final class AppState {
     var directApplyState: MarketingApplyState = .idle
     var directApplyMessage = ""
     var directApplyTarget: DirectApplyTarget?
+    var remoteSaveVisible = false
+    var remoteSaveSourceTitle = ""
+    var remoteSaveSteps: [PlanStep] = []
+    var remoteSaveStepStates: [StepState] = []
+    var remoteSaveDetail = ""
+    var remoteSaveLogLines: [String] = []
+    var remoteSaveLogFullLines: [String] = []
+    var remoteSaveLoggedCalls = 0
+    @ObservationIgnored
+    var remoteSaveContinuation: AsyncStream<RunEvent>.Continuation?
+    @ObservationIgnored
+    var remoteSaveEventTask: Task<Void, Never>?
     /// The plan the button counts its rows from. `stateGeneration` covers the
     /// store read and the manifest covers the edits, so the pair is the whole
     /// input of a plan. See `directPlan()`.
