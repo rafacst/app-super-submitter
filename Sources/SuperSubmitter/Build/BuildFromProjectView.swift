@@ -510,6 +510,39 @@ struct BuildFromProjectView: View {
                         flow.useProjectVersion()
                     }
                 }
+            } else if let live = flow.versionAlreadyLive, let next = flow.versionAboveLive {
+                // Before the disagreement below, because this one outranks it:
+                // two numbers that agree on a version already on sale are still
+                // a refused upload, and that case shows no disagreement at all.
+                //
+                // The offer to build the manifest's own number is gone here.
+                // Customers are reading that number, Apple takes no version
+                // that does not climb, and the old card spent a whole archive
+                // to be told so.
+                Divider().padding(.vertical, 7)
+                HStack(alignment: .top, spacing: 9) {
+                    StatePill(text: "Version", foreground: Theme.yellow,
+                              background: Theme.yellowBg)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Version \(live) is on the App Store now. The App Store refuses an upload that does not climb past it, so this run has to carry a higher number.")
+                            .font(Theme.font(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if flow.canBuildTheManifestVersion {
+                            // Writes both: the release version store.yaml
+                            // names, and the number this archive carries. Either
+                            // alone leaves the two disagreeing, which is the
+                            // other way this same upload gets refused.
+                            QuietButton(title: "Release \(next) and build it") {
+                                flow.useVersionAboveLive()
+                            }
+                        } else {
+                            Text("Set a version above \(live) in Build setup, or in the project.")
+                                .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
             } else if let wanted = flow.versionFromManifest {
                 Divider().padding(.vertical, 7)
                 HStack(alignment: .top, spacing: 9) {

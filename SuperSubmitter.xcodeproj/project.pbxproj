@@ -96,6 +96,7 @@
 		3C2563BCA6B5232C98C44490 /* DisplayTypeRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3991BCE17C8474603E45F5BC /* DisplayTypeRoundTripTests.swift */; };
 		3D5340111B57CD2CADDE092B /* StoreAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE48EB35019BAEE0BE9A646 /* StoreAPI.swift */; };
 		3DE9015765DD9F13ED6B96E7 /* SigningIdentitiesPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97EFE644B997062A23FCEFB /* SigningIdentitiesPanel.swift */; };
+		3EEAE7957A1122E9FDC5EB92 /* LiveVersionSuggestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A2F40C41B19D88AF33623D /* LiveVersionSuggestionTests.swift */; };
 		400A6F5920629C95F4A34A1B /* AppleKeyIDTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E21F4F8E9681197F6ACE94 /* AppleKeyIDTests.swift */; };
 		40EDB5EFF8ED904D22484675 /* AppAvailabilityReadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC43D4E00712A21F03A6FF94 /* AppAvailabilityReadTests.swift */; };
 		41CB1EE794CDAB45A3C8EE36 /* StoreDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391257D4800C5167DF63F1FB /* StoreDiagnostics.swift */; };
@@ -724,6 +725,7 @@
 		CFFF1088B761BD08BFC5EE1C /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
 		D03E9A4B8DD795385F622A8C /* LiveAppHead.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAppHead.swift; sourceTree = "<group>"; };
 		D13E0662DA10F7885A1CAA99 /* UndoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoTests.swift; sourceTree = "<group>"; };
+		D1A2F40C41B19D88AF33623D /* LiveVersionSuggestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveVersionSuggestionTests.swift; sourceTree = "<group>"; };
 		D2E666062418BDAA89C5E014 /* AppStateAppleReads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateAppleReads.swift; sourceTree = "<group>"; };
 		D34C53995256A0169EF4BE6E /* GameCenterWriteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterWriteTests.swift; sourceTree = "<group>"; };
 		D4C78C917EF9566E8530586A /* FieldIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldIndex.swift; sourceTree = "<group>"; };
@@ -962,6 +964,7 @@
 				7D2FA18A1AB7F6C118CFE053 /* ListingResourcesMoveTests.swift */,
 				F2F7F98D039E2A0594237F01 /* LiveListingLockTests.swift */,
 				9A857D8B120C3CE035F8F324 /* LivePreviewTests.swift */,
+				D1A2F40C41B19D88AF33623D /* LiveVersionSuggestionTests.swift */,
 				CD69FF7C34654971A7B9C06A /* ManageListsLiveAppsTests.swift */,
 				EA8D27AE556ADD5A95669DD1 /* MarketingScreenReviewTests.swift */,
 				628DBE9B4E941E4B8AE20112 /* MediaPathTests.swift */,
@@ -1950,6 +1953,7 @@
 				06FFDF286643DC2929FF83D5 /* ListingResourcesMoveTests.swift in Sources */,
 				9C4DE339A7F92698687A313E /* LiveListingLockTests.swift in Sources */,
 				0D09174E0C931F71BC5C4CD9 /* LivePreviewTests.swift in Sources */,
+				3EEAE7957A1122E9FDC5EB92 /* LiveVersionSuggestionTests.swift in Sources */,
 				CA07286A5B30FD2A76C52077 /* ManageListsLiveAppsTests.swift in Sources */,
 				00CBB662796D6FBF096CD4DA /* MarketingScreenReviewTests.swift in Sources */,
 				14C16F6FD94257B24FACED7C /* MediaPathTests.swift in Sources */,

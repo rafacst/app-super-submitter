@@ -50,6 +50,13 @@ struct BuildContext {
     /// An actor built from the credentials of that moment, so a key changed on
     /// another tab cannot re-sign a send already under way.
     var api: StoreAPI
+    /// What the App Store shows customers, once a read has said so.
+    ///
+    /// It comes off the plan's read and not off the preflight's own conflict
+    /// check, which asks about build numbers and never about the version on
+    /// sale. So it is known even on the card in the screenshot that found this,
+    /// where the preflight's check had failed outright.
+    var liveAppleVersion: String?
 
     var manifestRoot: URL? { manifestURL?.deletingLastPathComponent() }
     var appleAppID: String? { manifest.apps.apple?.appId }
@@ -67,6 +74,7 @@ struct BuildContext {
             $0.privateKeyPEM.isEmpty ? nil : $0
         }
         api = app.readOnlyAPI()
+        liveAppleVersion = app.liveAppleVersion
     }
 
     /// An app that is not there, for a flow built without one. Every field is
@@ -929,6 +937,66 @@ final class BuildFlow {
     /// row says the two numbers and the developer settles it: either the store
     /// field in Build setup, or the project.
     var canBuildTheManifestVersion: Bool { run.platform != .android }
+
+    /// The version this run would put on the App Store.
+    ///
+    /// `store.yaml` decides it, because that is the number the release is
+    /// created as, and the archive has to carry the same one or the upload is
+    /// refused for the mismatch. The project's own number is the answer only
+    /// while the manifest names none.
+    private var versionForTheStore: String? {
+        if let named = context.manifest.versionName(for: .apple), !named.isEmpty {
+            return named
+        }
+        return snapshot.marketingVersion
+    }
+
+    /// The live version, when the number above does not climb past it.
+    ///
+    /// The App Store takes no version that does not climb, so building one at
+    /// or below the live version spends a whole archive on a refusal. The card
+    /// offered exactly that: "Build version 1.6 instead", over an app whose
+    /// customers were already reading 1.6.
+    ///
+    /// It judges the number that would ship and not the disagreement, so it
+    /// catches the quieter half of the same bug: a project and a `store.yaml`
+    /// that agree on a version the store will still refuse show no
+    /// disagreement at all, and used to reach the upload before anything said
+    /// so.
+    ///
+    /// Nil when that number is safe, which is the usual state, and nil when no
+    /// read has said what is live: an unknown live version judges nothing, and
+    /// the card keeps the offer it always had.
+    ///
+    /// Apple only. Google Play numbers by version code and takes a repeated
+    /// name, and this flow cannot set an Android version anyway.
+    var versionAlreadyLive: String? {
+        guard run.platform.store == .apple,
+              let shipping = versionForTheStore, !shipping.isEmpty,
+              let live = context.liveAppleVersion, !live.isEmpty,
+              !Validator.isVersion(shipping, above: live) else { return nil }
+        return live
+    }
+
+    /// What that offer becomes: the smallest number above the live one.
+    var versionAboveLive: String? {
+        versionAlreadyLive.flatMap(Validator.nextVersion(above:))
+    }
+
+    /// Takes the safe number for the release and for this build at once.
+    ///
+    /// Both, because either alone leaves the pair disagreeing and the upload
+    /// refused: `store.yaml` names the version the store is told to expect, and
+    /// the override is what the archive carries. The button that offered the
+    /// manifest's own number needed no such write, which is why this is not
+    /// `useManifestVersion`.
+    func useVersionAboveLive() {
+        guard let version = versionAboveLive else { return }
+        app?.setAppleReleaseVersion(version)
+        project?.selection.marketingVersionOverride = version
+        persistProject()
+        restartPreflight()
+    }
 
     /// Build the version `store.yaml` names.
     ///
