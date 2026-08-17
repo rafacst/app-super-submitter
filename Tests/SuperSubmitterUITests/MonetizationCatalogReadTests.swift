@@ -241,6 +241,25 @@ private final class MoneyStubProtocol: URLProtocol, @unchecked Sendable {
         #expect(state.actualState.apple?.catalog["com.example.tip"]?.state == "APPROVED")
     }
 
+    /// An app switch clears the catalog, so it must also clear the mark that
+    /// stopped the tab from asking for that catalog again.
+    @Test func switchingAppsLetsMonetizationReadAgain() async throws {
+        URLProtocol.registerClass(MoneyStubProtocol.self)
+        defer { URLProtocol.unregisterClass(MoneyStubProtocol.self) }
+        MoneyStubProtocol.configure(liveCatalog)
+        let state = try state()
+
+        await state.loadStoreMonetization()
+        #expect(state.actualState.apple?.catalogRead == true)
+
+        state.resetRunState()
+        #expect(state.actualState.apple == nil)
+        await state.loadStoreMonetization()
+
+        #expect(state.actualState.apple?.catalogRead == true)
+        #expect(state.actualState.apple?.catalog["com.example.tip"]?.state == "APPROVED")
+    }
+
     /// The read fills what `store.yaml` leaves blank and never lands on top of
     /// what the developer wrote.
     @Test func theReadNeverOverwritesTheDevelopersOwnText() async throws {
