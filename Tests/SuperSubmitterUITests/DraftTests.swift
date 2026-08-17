@@ -175,6 +175,89 @@ struct DraftTests {
         }
     }
 
+    private func remoteSaveState(apple: Bool = true) -> AppState {
+        let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                             storeAccount: "test-\(UUID().uuidString)")
+        if apple {
+            state.manifest.setAppleApp(appID: "1", bundleID: "com.example.app")
+        } else {
+            state.manifest.setGoogleApp(packageName: "com.example.app")
+        }
+        return state
+    }
+
+    private func actual(versionID: String? = nil) -> ActualState {
+        var apple = ActualState.Apple()
+        apple.versionId = versionID
+        var actual = ActualState()
+        actual.apple = apple
+        return actual
+    }
+
+    @Test func aNonBuildSaveNeedsAnAppStoreDraft() {
+        let state = remoteSaveState()
+
+        #expect(state.remoteSaveRequirement(
+            for: .listing, actual: actual(), hasLocalBuild: false) == .needsAppStoreDraft)
+    }
+
+    @Test func aLocalBuildOffersOneCombinedSave() {
+        let state = remoteSaveState()
+
+        #expect(state.remoteSaveRequirement(
+            for: .listing, actual: actual(), hasLocalBuild: true) == .uploadBuildAndSaveDraft)
+    }
+
+    @Test func aDraftOrTheBuildTabNeedsNoExtraAction() {
+        let state = remoteSaveState()
+
+        #expect(state.remoteSaveRequirement(
+            for: .media, actual: actual(versionID: "draft-1"),
+            hasLocalBuild: false) == .ready)
+        #expect(state.remoteSaveRequirement(
+            for: .build, actual: actual(), hasLocalBuild: false) == .ready)
+    }
+
+    @Test func aGoogleOnlySaveNeedsNoAppStoreDraft() {
+        let state = remoteSaveState(apple: false)
+
+        #expect(state.remoteSaveRequirement(
+            for: .listing, actual: ActualState(), hasLocalBuild: false) == .ready)
+    }
+
+    @Test func aCombinedSaveKeepsOnlyTheBuildAndCurrentTabRows() {
+        let state = remoteSaveState()
+        var plan = PlanResult()
+        func step(_ id: String, operation: PlanOperation) -> PlanStep {
+            PlanStep(id: id, system: .apple, kind: .change, summary: id, title: id,
+                     requests: [], operation: operation)
+        }
+        plan.steps = [
+            step("apple.version", operation: .appleEnsureVersion("2.0")),
+            step("apple.locale.en-US", operation: .appleVersionLocale("en-US")),
+            step("apple.build", operation: .appleBuildUpload(path: "App.ipa", bytes: 1)),
+            step("apple.purchases", operation: .applePurchases),
+        ]
+
+        #expect(state.remoteSaveRows(for: .listing, in: plan).map(\.id)
+            == ["apple.locale.en-US"])
+        #expect(state.remoteSaveRows(
+            for: .listing, in: plan, includeAppleBuild: true).map(\.id)
+            == ["apple.version", "apple.locale.en-US", "apple.build"])
+    }
+
+    @Test func theRemoteSaveLogStartsCollapsed() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appending(path: "Sources/SuperSubmitter/Tabs/RemoteSaveTab.swift"),
+            encoding: .utf8)
+
+        #expect(source.contains("@State private var showsLog = false"))
+        #expect(source.contains("DisclosureGroup"))
+        #expect(source.contains("if showsLog"))
+    }
+
     @Test func theSaveCommandOffersLocalAndRemoteDestinations() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
