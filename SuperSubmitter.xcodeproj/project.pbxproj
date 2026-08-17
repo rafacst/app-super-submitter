@@ -283,6 +283,7 @@
 		BFCE5FC2D25C810F88C234E3 /* GoogleApply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E56FEDD63B145E32689CC5 /* GoogleApply.swift */; };
 		C0033432DF46E4A5BB285FBC /* StateReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4609C1C1DC4FF0D6E8A6FA /* StateReader.swift */; };
 		C1172D668E95B0823DB45BDA /* FieldSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0733B4B07D6706F0C49920E0 /* FieldSearchSheet.swift */; };
+		C19E582739608CDB9A374087 /* ReadScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04EF321E0259E71AC24E933F /* ReadScopeTests.swift */; };
 		C1B8B10E0793D180FD48C3AA /* SupabaseOAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B2BA4DCFD44CCD30A7BCF45 /* SupabaseOAuthTests.swift */; };
 		C1F59B28E0F0920AD38350DB /* ProviderConnectionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F54480749BF84668C7766C7E /* ProviderConnectionClient.swift */; };
 		C42F6AA99CA752D296540F0B /* ScreenReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31E4A5A943151F4C034F904 /* ScreenReportTests.swift */; };
@@ -436,6 +437,7 @@
 		03DF7F0BA1F921F7488130E7 /* KeywordPlatformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeywordPlatformTests.swift; sourceTree = "<group>"; };
 		041F7F4AB25F8958647863BA /* ReviewInfoTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewInfoTab.swift; sourceTree = "<group>"; };
 		04CF5A2F1272104249898E56 /* RunLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunLogTests.swift; sourceTree = "<group>"; };
+		04EF321E0259E71AC24E933F /* ReadScopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadScopeTests.swift; sourceTree = "<group>"; };
 		05DAD049B48F2F0FED6A0328 /* SupabaseAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuth.swift; sourceTree = "<group>"; };
 		065E15DF6AFE7DCA28B9E994 /* BuildFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildFlow.swift; sourceTree = "<group>"; };
 		06D91072D75E576ECF31AACC /* ProviderApply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderApply.swift; sourceTree = "<group>"; };
@@ -1118,6 +1120,7 @@
 				54D8576A89F9578A2DA413B5 /* PlannerTests.swift */,
 				EEB122699517E677F09744AA /* PricePointPagingTests.swift */,
 				157C66C68A124365FC98C9F5 /* ReadBackTests.swift */,
+				04EF321E0259E71AC24E933F /* ReadScopeTests.swift */,
 				1F000E34291F48D1BDA5A72E /* RemoteSafetyTests.swift */,
 				700B1A30221EB7BBCF563443 /* ReportTableTests.swift */,
 				04CF5A2F1272104249898E56 /* RunLogTests.swift */,
@@ -1667,6 +1670,7 @@
 				1EE99FE798E4B23C662567B0 /* PlannerTests.swift in Sources */,
 				E9A23F946E6AED3EC4D87113 /* PricePointPagingTests.swift in Sources */,
 				CA3A815E6C174DD0ABE630C5 /* ReadBackTests.swift in Sources */,
+				C19E582739608CDB9A374087 /* ReadScopeTests.swift in Sources */,
 				7E56642B8A4955C0DF5C91C2 /* RemoteSafetyTests.swift in Sources */,
 				236930412C0CD229094D9B96 /* ReportTableTests.swift in Sources */,
 				B0782B86CCCD9D6E3D6B4AE7 /* RunLogTests.swift in Sources */,
