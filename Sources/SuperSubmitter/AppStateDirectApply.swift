@@ -262,22 +262,53 @@ extension AppState {
         directApplyMessage = "Reading the stores…"
         let generation = stateGeneration
         Task {
-            await readStores(record: remoteSaveRecorder())
+            let prepared = await remoteSaveRead(for: target, record: remoteSaveRecorder())
             guard generation == stateGeneration else {
                 directApplyState = .failed
                 directApplyMessage = "The tab changed during the store read. Save it again."
                 remoteSaveDetail = directApplyMessage
                 return
             }
-            guard planReadFailures.isEmpty else {
+            guard prepared.failures.isEmpty else {
                 directApplyState = .failed
-                directApplyMessage = planReadFailures.first ?? "The stores could not be read."
+                directApplyMessage = prepared.failures.first ?? "The stores could not be read."
                 remoteSaveDetail = directApplyMessage
                 return
             }
             directApplyState = .idle
-            applyDirectly(target)
+            applyDirectly(target, using: prepared)
         }
+    }
+
+    /// Reads the one area this tab writes, and plans its rows against it.
+    ///
+    /// It is deliberately not `readStores`. That read is the plan's read: it
+    /// publishes `actualState`, the store snapshot, the console checklist and
+    /// the dock badge, so every tab in the app draws what it returned. An area
+    /// of it left unread would blank the "what the store holds" column
+    /// everywhere, so a narrowed read cannot be that one. This keeps its answer
+    /// to itself, and the save is the only thing planned from it.
+    ///
+    /// The same shape `prepareTestFlightSend` already uses.
+    private func remoteSaveRead(for target: DirectApplyTarget,
+                                record: @escaping CallRecorder) async
+        -> (actual: ActualState, steps: [PlanStep], failures: [String]) {
+        guard !planReading else { return (ActualState(), [], []) }
+        planReading = true
+        defer { planReading = false }
+
+        let areas = target.readAreas
+        let actual = await StateReader(api: readOnlyAPI(record: record)).read(
+            manifest: manifest, stores: stores,
+            // The provider mirrors the catalog, so a tab that does not read one
+            // has nothing to compare the other against.
+            provider: areas.contains(.catalog) ? provider : .none,
+            areas: areas)
+        let result = Planner.plan(Planner.Input(
+            manifest: manifest, actual: actual, stores: stores,
+            root: manifestRoot, packages: packages))
+        return (actual, rows(for: target, in: result),
+                actual.failures + result.readFailures)
     }
 
     /// Writes the rows of one tab, and nothing else.
@@ -285,7 +316,10 @@ extension AppState {
     /// A failure names the row that failed and stops there, the same rule the
     /// full run follows. The read afterwards refreshes the comparison, so a
     /// second press writes only what is still missing.
-    func applyDirectly(_ target: DirectApplyTarget) {
+    func applyDirectly(
+        _ target: DirectApplyTarget,
+        using prepared: (actual: ActualState, steps: [PlanStep], failures: [String])? = nil
+    ) {
         guard directApplyState != .running else { return }
         // These rows land in a store, so they are a store write like any
         // other. Reading and editing them stays free.
@@ -294,10 +328,36 @@ extension AppState {
         directApplyState = .running
         directApplyMessage = ""
         let generation = stateGeneration
+        // The read that planned these rows, where there was one. It knows only
+        // this tab's area of the store, and the rows below are this tab's, so
+        // the pair match. `actualState` is the plan's, read in full, and it is
+        // what an apply that did its own planning still uses.
+        let actual = prepared?.actual ?? actualState
 
         Task {
             var only = PlanResult()
-            only.steps = rows(for: target)
+            only.steps = prepared?.steps ?? rows(for: target)
+            // Nothing this tab does not own reaches a store.
+            //
+            // The read above knows one area of the app, so the planner it fed
+            // saw no purchase, no product page and no Game Center object, and a
+            // planner that sees none of a thing plans to create it. Those rows
+            // are not this tab's and `rows(for:in:)` drops them, and this is the
+            // second lock on the same door: a prefix list that stops matching
+            // the planner's ids fails the save here rather than writing a row
+            // out of an area nobody read.
+            let foreign = only.steps.filter {
+                !target.owns($0.id) && !Self.googleLifecycleIDs.contains($0.id)
+            }
+            guard foreign.isEmpty else {
+                directApplyState = .failed
+                directApplyMessage = "This save planned a row it does not own "
+                    + "(\(foreign.map(\.id).joined(separator: ", "))). Nothing was written."
+                remoteSaveDetail = directApplyMessage
+                remoteSaveContinuation?.finish()
+                remoteSaveContinuation = nil
+                return
+            }
             guard !only.steps.isEmpty else {
                 directApplyState = .idle
                 directApplyMessage = "Nothing to write. The stores already hold it."
@@ -318,7 +378,7 @@ extension AppState {
             let box = FailureBox()
             let continuation = remoteSaveContinuation
             let runner = Runner(
-                plan: only, manifest: manifest, actual: actualState, root: manifestRoot,
+                plan: only, manifest: manifest, actual: actual, root: manifestRoot,
                 credentials: credentials, dryRun: false, access: access,
                 emit: { event in
                     continuation?.yield(event)
@@ -370,10 +430,16 @@ extension AppState {
             owned.removeAll { $0.id.hasPrefix("apple.") }
         }
         guard owned.contains(where: { $0.id.hasPrefix("google.") }) else { return owned }
-        let lifecycle = Set(["google.openEdit", "google.validate", "google.commit"])
         let ownedIDs = Set(owned.map(\.id))
-        return plan.steps.filter { lifecycle.contains($0.id) || ownedIDs.contains($0.id) }
+        return plan.steps.filter {
+            Self.googleLifecycleIDs.contains($0.id) || ownedIDs.contains($0.id)
+        }
     }
+
+    /// The three rows that wrap every Google write. No tab owns them, and any
+    /// tab that writes to Google needs all three.
+    static let googleLifecycleIDs = Set(["google.openEdit", "google.validate",
+                                         "google.commit"])
 
     private func testFlightSendPlan(
         platform: Manifest.Platform, generation: Int,
@@ -484,6 +550,31 @@ enum DirectApplyTarget: Equatable {
     func owns(_ id: String) -> Bool {
         if self == .build, id == "apple.versionAttributes" { return false }
         return prefixes.contains { id.hasPrefix($0) }
+    }
+
+    /// What a save of this tab has to read before it writes.
+    ///
+    /// A save compares one tab against the store and writes the rows that
+    /// differ, so it reads that tab's area and no other. Saving a description
+    /// used to read the whole app: every in-app purchase, every subscription
+    /// and its group, the price ladder, the marketing resources, TestFlight and
+    /// the Game Center configuration. Forty requests to build a comparison that
+    /// only the listing rows were ever taken from.
+    ///
+    /// The plan needs the app, its version, its localizations, its categories
+    /// and its build for any diff at all, and `StateReader` reads those at all
+    /// times. These are the blocks on top.
+    var readAreas: StateReader.Areas {
+        switch self {
+        // The version, the build and the tracks are all read anyway.
+        case .build, .listing, .media, .reviewInfo: []
+        case .availability: .pricing
+        // A price on a product is compared against the ladder Apple sells at.
+        case .money: [.catalog, .pricing]
+        case .marketing: .marketing
+        case .testFlight: .testFlight
+        case .gameCenter: .gameCenter
+        }
     }
 
     var noun: String {

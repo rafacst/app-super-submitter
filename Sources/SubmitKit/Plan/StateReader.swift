@@ -8,12 +8,46 @@ import Foundation
 public struct StateReader: Sendable {
     private let api: StoreAPI
 
+    /// Which parts of a store this read asks about.
+    ///
+    /// A plan compares every field of an app, so it reads every area and the
+    /// default here is all of them. A save of one tab writes the rows of that
+    /// tab alone, and reading the rest is forty requests to build a comparison
+    /// nothing looks at: saving a description asked App Store Connect for every
+    /// in-app purchase, every subscription, every group, and the Game Center
+    /// configuration.
+    ///
+    /// The areas below are the optional blocks. What is left is read at all
+    /// times, because no diff of anything is possible without it: the app, its
+    /// version, the localizations, the categories, and the build.
+    ///
+    /// ponytail: an option set over the blocks that already existed. The reader
+    /// was already written in separable pieces; this names them.
+    public struct Areas: OptionSet, Sendable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+
+        /// The in-app purchases, the subscriptions, their groups, the grace
+        /// period, and whichever provider mirrors them.
+        public static let catalog = Areas(rawValue: 1 << 0)
+        /// The price points, the price on sale, and the territories.
+        public static let pricing = Areas(rawValue: 1 << 1)
+        /// Custom product pages, experiments, events, and the App Clip.
+        public static let marketing = Areas(rawValue: 1 << 2)
+        public static let testFlight = Areas(rawValue: 1 << 3)
+        public static let gameCenter = Areas(rawValue: 1 << 4)
+
+        public static let all: Areas = [.catalog, .pricing, .marketing,
+                                        .testFlight, .gameCenter]
+    }
+
     public init(api: StoreAPI) {
         self.api = api
     }
 
     public func read(manifest: Manifest, stores: Set<Store>,
-                     provider: Manifest.Provider) async -> ActualState {
+                     provider: Manifest.Provider,
+                     areas: Areas = .all) async -> ActualState {
         var state = ActualState()
         state.readAt = Date()
 
@@ -29,7 +63,8 @@ public struct StateReader: Sendable {
                     subscriptionIds: (manifest.subscriptions ?? [])
                         .flatMap { $0.plans.map(\.id) },
                     groupNames: (manifest.subscriptions ?? [])
-                        .map { $0.groupName ?? $0.groupId })
+                        .map { $0.groupName ?? $0.groupId },
+                    areas: areas)
             } catch { state.failures.append("App Store: \(error.localizedDescription)") }
         }
         if stores.contains(.google), let google = manifest.apps.google,
@@ -40,12 +75,14 @@ public struct StateReader: Sendable {
                     track: manifest.googlePrimaryTrack,
                     oneTimeProductIds: (manifest.purchases ?? []).map(\.id),
                     subscriptionProductIds: (manifest.subscriptions ?? [])
-                        .flatMap { $0.plans.map(\.id) })
+                        .flatMap { $0.plans.map(\.id) },
+                    areas: areas)
             } catch {
                 state.failures.append("Google Play: \(error.localizedDescription)")
             }
         }
-        if provider != .none {
+        // The provider mirrors the catalog, so it is read when the catalog is.
+        if provider != .none, areas.contains(.catalog) {
             do { state.provider = try await readProvider(manifest: manifest, provider: provider) }
             catch { state.failures.append("Provider: \(error.localizedDescription)") }
         }
@@ -71,7 +108,8 @@ public struct StateReader: Sendable {
                           buildNumber: String? = nil,
                           purchaseIds: [String] = [],
                           subscriptionIds: [String] = [],
-                          groupNames: [String] = []) async throws -> ActualState.Apple {
+                          groupNames: [String] = [],
+                          areas: Areas = .all) async throws -> ActualState.Apple {
         var result = ActualState.Apple()
 
         // The categories are relationships, and App Store Connect fills the
@@ -390,31 +428,36 @@ public struct StateReader: Sendable {
 
         // The catalog. The ids come off the two list reads, and the detail
         // comes off one read per named product, the same shape as Google.
-        let catalog = AppleCatalogClient(api: api)
-        let purchases = try await catalog.purchases(appID: appID, productIds: purchaseIds)
-        result.purchaseIds = Set(purchases.keys)
-        result.catalog = purchases
+        if areas.contains(.catalog) {
+            let catalog = AppleCatalogClient(api: api)
+            let purchases = try await catalog.purchases(appID: appID, productIds: purchaseIds)
+            result.purchaseIds = Set(purchases.keys)
+            result.catalog = purchases
 
-        let subscriptions = try await catalog.subscriptions(appID: appID,
-                                                            productIds: subscriptionIds,
-                                                            groupNames: groupNames)
-        result.subscriptionIds = Set(subscriptions.products.keys)
-        result.catalog.merge(subscriptions.products) { _, new in new }
-        result.subscriptionGroupNames = subscriptions.groups.names
-        result.subscriptionGroupLocales = subscriptions.groups.locales
-        // Both list reads answered, so an id missing from the catalog is one
-        // Apple does not hold rather than one nobody has asked about. Either
-        // read above throws instead of returning empty, so reaching this line
-        // is the proof.
-        result.catalogRead = true
+            let subscriptions = try await catalog.subscriptions(appID: appID,
+                                                                productIds: subscriptionIds,
+                                                                groupNames: groupNames)
+            result.subscriptionIds = Set(subscriptions.products.keys)
+            result.catalog.merge(subscriptions.products) { _, new in new }
+            result.subscriptionGroupNames = subscriptions.groups.names
+            result.subscriptionGroupLocales = subscriptions.groups.locales
+            // Both list reads answered, so an id missing from the catalog is one
+            // Apple does not hold rather than one nobody has asked about. Either
+            // read above throws instead of returning empty, so reaching this line
+            // is the proof.
+            //
+            // It stays false when the catalog was not asked about, which is the
+            // honest answer: nothing here knows what Apple holds.
+            result.catalogRead = true
 
-        // The grace period is one resource on the app. Apple answers 404 when
-        // the app has none, which is a state and not a failure.
-        if let response = try? await api.apple(
-            "GET", "/v1/apps/\(appID)/subscriptionGracePeriod") {
-            let attributes = JSON(data: response.data)["data"]["attributes"]
-            result.gracePeriodOptIn = attributes["optIn"].bool
-            result.gracePeriodDays = Self.gracePeriodDays(attributes["duration"].string)
+            // The grace period is one resource on the app. Apple answers 404 when
+            // the app has none, which is a state and not a failure.
+            if let response = try? await api.apple(
+                "GET", "/v1/apps/\(appID)/subscriptionGracePeriod") {
+                let attributes = JSON(data: response.data)["data"]["attributes"]
+                result.gracePeriodOptIn = attributes["optIn"].bool
+                result.gracePeriodDays = Self.gracePeriodDays(attributes["duration"].string)
+            }
         }
 
         // Apple sells at a price point, never at the amount you asked for.
@@ -431,8 +474,8 @@ public struct StateReader: Sendable {
         // list, and the field that asks for the first price was the one field
         // that could not offer the prices Apple sells at.
         let territory = basePrice?.territory ?? "USA"
-        if let points = try? await ApplePricePoints.app(api, appID: appID,
-                                                        territory: territory) {
+        if areas.contains(.pricing), let points = try? await ApplePricePoints.app(
+            api, appID: appID, territory: territory) {
             let amounts = points.map(\.amount)
             result.pricePoints = Set(amounts).sorted()
             // The ladder is this territory's money. The field that offers it
@@ -460,7 +503,8 @@ public struct StateReader: Sendable {
         //
         // `manualPrices` takes the territory filter and carries the point back
         // in the same response, so the fix is one request and no second hop.
-        if let response = try? await api.apple(
+        if areas.contains(.pricing),
+           let response = try? await api.apple(
             "GET", "/v1/apps/\(appID)/appPriceSchedule"),
            let scheduleID = JSON(data: response.data)["data"]["id"].string,
            let prices = try? await api.apple(
@@ -475,21 +519,33 @@ public struct StateReader: Sendable {
         // hold the first fifty countries of an app that sells in 175, and the
         // plan then compared the manifest against a third of the record. The
         // diagnostics read pages it to the end, and it is the same request.
-        if let availability = try? await StoreDiagnostics(api: api)
+        if areas.contains(.pricing),
+           let availability = try? await StoreDiagnostics(api: api)
             .appAvailability(appID: appID) {
             result.availableInNewTerritories = availability.newTerritories
             result.territoryCount = availability.total
             result.territoryAvailability = availability.territories
         }
 
-        await readAppleMarketing(appID: appID, into: &result)
-        await readAppleTestFlight(appID: appID, into: &result)
-        await readAppleGameCenter(appID: appID, into: &result)
+        if areas.contains(.marketing) {
+            await readAppleMarketing(appID: appID, into: &result)
+        }
+        if areas.contains(.testFlight) {
+            await readAppleTestFlight(appID: appID, into: &result)
+        }
+        if areas.contains(.gameCenter) {
+            await readAppleGameCenter(appID: appID, into: &result)
+        }
         // The pages that are not this version's own. An app with none of them
         // pays one request for the answer, and every request under it is
         // optional, so nothing here can cost the read.
-        result.productPages = await AppleProductPages(api: api).read(appID: appID)
+        if areas.contains(.marketing) {
+            result.productPages = await AppleProductPages(api: api).read(appID: appID)
+        }
 
+        // Whether the app is in review, which is read at all times: the App
+        // Store refuses a write to a version that is in a queue, whichever tab
+        // the write came from.
         let submissions = JSON(data: try await api.apple(
             "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
         result.openReviewSubmission = submissions["data"].array.compactMap { item in
@@ -848,7 +904,8 @@ public struct StateReader: Sendable {
     ///   - subscriptionProductIds: the same, for the subscription plans.
     public func readGoogle(packageName: String, track: String,
                            oneTimeProductIds: [String] = [],
-                           subscriptionProductIds: [String] = [])
+                           subscriptionProductIds: [String] = [],
+                           areas: Areas = .all)
         async throws -> ActualState.Google {
         let base = "/androidpublisher/v3/applications/\(Self.escape(packageName))"
         let edit = JSON(data: try await api.google("POST", "\(base)/edits", body: [:]).data)
@@ -920,20 +977,22 @@ public struct StateReader: Sendable {
             result.highestVersionCode = result.tracks[track]?.versionCodes.max()
                 ?? result.tracks.values.flatMap(\.versionCodes).max()
 
-            let oneTime = JSON(data: try await api.google(
-                "GET", "\(base)/oneTimeProducts?pageSize=100").data)
-            result.oneTimeProductIds = Set(oneTime["oneTimeProducts"].array
-                .compactMap { $0["productId"].string })
-            let subscriptions = JSON(data: try await api.google(
-                "GET", "\(base)/subscriptions?pageSize=100").data)
-            result.subscriptionIds = Set(subscriptions["subscriptions"].array
-                .compactMap { $0["productId"].string })
+            if areas.contains(.catalog) {
+                let oneTime = JSON(data: try await api.google(
+                    "GET", "\(base)/oneTimeProducts?pageSize=100").data)
+                result.oneTimeProductIds = Set(oneTime["oneTimeProducts"].array
+                    .compactMap { $0["productId"].string })
+                let subscriptions = JSON(data: try await api.google(
+                    "GET", "\(base)/subscriptions?pageSize=100").data)
+                result.subscriptionIds = Set(subscriptions["subscriptions"].array
+                    .compactMap { $0["productId"].string })
 
-            result.catalog = await readGoogleCatalog(
-                packageName: packageName,
-                oneTimeProductIds: oneTimeProductIds.filter(result.oneTimeProductIds.contains),
-                subscriptionProductIds: subscriptionProductIds
-                    .filter(result.subscriptionIds.contains))
+                result.catalog = await readGoogleCatalog(
+                    packageName: packageName,
+                    oneTimeProductIds: oneTimeProductIds.filter(result.oneTimeProductIds.contains),
+                    subscriptionProductIds: subscriptionProductIds
+                        .filter(result.subscriptionIds.contains))
+            }
 
             _ = try? await api.google("DELETE", editBase)
             return result
