@@ -7,7 +7,7 @@ import Testing
     @Test func everyAppTabOffersOneStoreFetch() {
         let appTabs = Tab.allCases.filter { !$0.standsAlone && $0 != .remoteSave }
 
-        #expect(appTabs.allSatisfy(\.canFetchFromStore))
+        #expect(appTabs.allSatisfy { $0.canFetchFromStore })
         #expect(!Tab.stores.canFetchFromStore)
         #expect(!Tab.account.canFetchFromStore)
         #expect(!Tab.settings.canFetchFromStore)

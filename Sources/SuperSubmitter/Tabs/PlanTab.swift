@@ -358,7 +358,7 @@ struct PlanTab: View {
             // made this safe to change: every edit calls `invalidatePlan`, so
             // a plan on screen was always read after the last edit. What it
             // can lag is the store itself, so the read time sits on the
-            // screen and "Read the stores again" is in the header.
+            // screen and "Fetch from store" is in the header.
             guard !state.planReading, !state.stores.isEmpty, state.plan == nil
             else { return }
             await state.readStores()

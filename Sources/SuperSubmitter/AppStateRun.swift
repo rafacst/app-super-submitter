@@ -225,6 +225,17 @@ extension AppState {
         ])
     }
 
+    /// Replaces the selected tab's last remote values with one complete store read.
+    func fetchSelectedTabFromStore() async {
+        let tab = selectedTab
+        guard tab.canFetchFromStore, fetchingStoreTab == nil, !planReading else { return }
+        fetchingStoreTab = tab
+        defer {
+            if fetchingStoreTab == tab { fetchingStoreTab = nil }
+        }
+        await readStores()
+    }
+
     // MARK: - The build storage. upload-spec section 11.
 
     var buildStorageSummary: String {

@@ -556,6 +556,10 @@ final class AppState {
     /// not disable a run that never calls it.
     var storePlans: [Store: PlanResult] = [:]
     var planReading = false
+    /// The app tab whose store values are being replaced by a fresh read.
+    var fetchingStoreTab: Tab?
+
+    var isFetchingSelectedTab: Bool { fetchingStoreTab == selectedTab }
     /// The stores that refused the read, one entry each.
     ///
     /// A list and not one joined string. Three stores failing put three
@@ -3370,6 +3374,8 @@ final class AppState {
         plan = nil
         storePlans = [:]
         actualState = ActualState()
+        moneyReadApps.removeAll()
+        fetchingStoreTab = nil
         consoleRows = []
         consoleMarks = []
         planReadFailures = []
