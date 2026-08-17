@@ -9,6 +9,12 @@ struct TestFlightSendPlan: Sendable {
     let generation: Int
 }
 
+enum RemoteSaveRequirement: Equatable {
+    case ready
+    case needsAppStoreDraft
+    case uploadBuildAndSaveDraft
+}
+
 /// The direct write that the Managing mode uses.
 ///
 /// Publishing writes through the plan: read the stores, show a diff, then
@@ -232,37 +238,49 @@ extension AppState {
         directApplyState == .failed && directApplyTarget == target
     }
 
+    func remoteSaveRequirement(for target: DirectApplyTarget, actual: ActualState,
+                               hasLocalBuild: Bool) -> RemoteSaveRequirement {
+        guard target != .build, stores.contains(.apple),
+              actual.apple?.versionId == nil else { return .ready }
+        return hasLocalBuild ? .uploadBuildAndSaveDraft : .needsAppStoreDraft
+    }
+
+    private static let buildAndDraftOffer = "No App Store draft is available. "
+        + "Super Submitter found a local build. Upload the build and save this tab as a draft?"
+
+    var remoteSaveOffersBuildUpload: Bool {
+        remoteSaveVisible && directApplyMessage == Self.buildAndDraftOffer
+    }
+
+    var remoteSaveUploadsBuild: Bool {
+        remoteSaveVisible && directApplyMessage == "Uploading the build…"
+    }
+
+    func uploadBuildAndSaveDraft() {
+        guard let target = directApplyTarget else { return }
+        saveRemotely(target, includeAppleBuild: true)
+    }
+
     /// Reads the stores first, then writes only the rows owned by one tab.
     func saveRemotely(_ target: DirectApplyTarget) {
+        saveRemotely(target, includeAppleBuild: false)
+    }
+
+    private func saveRemotely(_ target: DirectApplyTarget, includeAppleBuild: Bool,
+                              didUploadBuild: Bool = false) {
         guard directApplyState != .running, !planReading, !showsRun || runDone else { return }
         guard requirePaid(.storeWrite, target.trigger) else { return }
         flushSave()
         beginRemoteSave(target)
-
-        if target == .testFlight {
-            Task {
-                let prepared = await prepareTestFlightSend(record: remoteSaveRecorder())
-                guard !prepared.flatMap(\.steps).isEmpty else {
-                    directApplyTarget = target
-                    directApplyState = .idle
-                    directApplyMessage = "Nothing to write. The store already holds it."
-                    remoteSaveDetail = directApplyMessage
-                    remoteSavedAt = Date()
-                    remoteSaveContinuation?.finish()
-                    remoteSaveContinuation = nil
-                    return
-                }
-                applyTestFlight(prepared)
-            }
-            return
-        }
 
         directApplyTarget = target
         directApplyState = .running
         directApplyMessage = "Reading the stores…"
         let generation = stateGeneration
         Task {
-            let prepared = await remoteSaveRead(for: target, record: remoteSaveRecorder())
+            let prepared = await remoteSaveRead(
+                for: target, includeAppleBuild: includeAppleBuild,
+                record: remoteSaveRecorder())
             guard generation == stateGeneration else {
                 directApplyState = .failed
                 directApplyMessage = "The tab changed during the store read. Save it again."
@@ -275,9 +293,61 @@ extension AppState {
                 remoteSaveDetail = directApplyMessage
                 return
             }
+            switch remoteSaveRequirement(
+                for: target, actual: prepared.actual,
+                hasLocalBuild: prepared.hasLocalBuild) {
+            case .ready:
+                break
+            case .needsAppStoreDraft:
+                guard didUploadBuild else {
+                    stopRemoteSave("No App Store draft is available. Create a draft in App "
+                        + "Store Connect, or create a build in Super Submitter and upload it.")
+                    return
+                }
+            case .uploadBuildAndSaveDraft:
+                guard includeAppleBuild else {
+                    stopRemoteSave(Self.buildAndDraftOffer)
+                    return
+                }
+                guard prepared.hasPlannedAppleBuild else {
+                    uploadLocalBuildThenSave(target)
+                    return
+                }
+            }
+            if target == .testFlight, !includeAppleBuild {
+                directApplyState = .idle
+                saveTestFlightRemotely()
+                return
+            }
             directApplyState = .idle
-            applyDirectly(target, using: prepared)
+            applyDirectly(target, using: (
+                actual: prepared.actual, steps: prepared.steps,
+                failures: prepared.failures), includesAppleBuild: includeAppleBuild)
         }
+    }
+
+    private func saveTestFlightRemotely() {
+        Task {
+            let prepared = await prepareTestFlightSend(record: remoteSaveRecorder())
+            guard !prepared.flatMap(\.steps).isEmpty else {
+                directApplyState = .idle
+                directApplyMessage = "Nothing to write. The store already holds it."
+                remoteSaveDetail = directApplyMessage
+                remoteSavedAt = Date()
+                remoteSaveContinuation?.finish()
+                remoteSaveContinuation = nil
+                return
+            }
+            applyTestFlight(prepared)
+        }
+    }
+
+    private func stopRemoteSave(_ message: String) {
+        directApplyState = .failed
+        directApplyMessage = message
+        remoteSaveDetail = message
+        remoteSaveContinuation?.finish()
+        remoteSaveContinuation = nil
     }
 
     /// Reads the one area this tab writes, and plans its rows against it.
@@ -291,9 +361,11 @@ extension AppState {
     ///
     /// The same shape `prepareTestFlightSend` already uses.
     private func remoteSaveRead(for target: DirectApplyTarget,
+                                includeAppleBuild: Bool,
                                 record: @escaping CallRecorder) async
-        -> (actual: ActualState, steps: [PlanStep], failures: [String]) {
-        guard !planReading else { return (ActualState(), [], []) }
+        -> (actual: ActualState, steps: [PlanStep], failures: [String],
+            hasLocalBuild: Bool, hasPlannedAppleBuild: Bool) {
+        guard !planReading else { return (ActualState(), [], [], false, false) }
         planReading = true
         defer { planReading = false }
 
@@ -307,8 +379,75 @@ extension AppState {
         let result = Planner.plan(Planner.Input(
             manifest: manifest, actual: actual, stores: stores,
             root: manifestRoot, packages: packages))
-        return (actual, rows(for: target, in: result),
-                actual.failures + result.readFailures)
+        let hasPlannedAppleBuild = result.steps.contains {
+            $0.system == .apple && $0.id == "apple.build"
+        }
+        return (actual,
+                remoteSaveRows(for: target, in: result,
+                               includeAppleBuild: includeAppleBuild),
+                actual.failures + result.readFailures,
+                hasPlannedAppleBuild || hasLocalAppleBuild,
+                hasPlannedAppleBuild)
+    }
+
+    private var hasLocalAppleBuild: Bool {
+        let flow = buildFlow
+        guard let candidate = flow.candidate,
+              candidate.platform != .android,
+              candidate.artifactURL.pathExtension.lowercased() == "xcarchive",
+              !candidate.deleted,
+              FileManager.default.fileExists(atPath: candidate.artifactPath),
+              !flow.state.isActive,
+              candidate.blockingMismatches.isEmpty,
+              flow.blocking == nil,
+              flow.uploadBlockedByReview == nil else { return false }
+        return flow.state == .needsUploadConfirmation
+            || (flow.state == .complete && flow.artifactOnly)
+            || (flow.state == .failed && flow.uploadStatus == .failed)
+    }
+
+    private func uploadLocalBuildThenSave(_ target: DirectApplyTarget) {
+        let flow = buildFlow
+        guard hasLocalAppleBuild, let candidate = flow.candidate else {
+            stopRemoteSave("The local build is no longer available. Create or import a build, "
+                + "then save this tab again.")
+            return
+        }
+        if flow.state == .complete, flow.artifactOnly {
+            flow.run = UploadRun(platform: candidate.platform,
+                                 linkedProjectID: flow.project?.id,
+                                 state: .needsUploadConfirmation)
+            flow.run.candidateIdentity = candidate.logicalIdentity
+            flow.candidate?.settled = false
+            flow.artifactOnly = false
+        } else if flow.state == .failed {
+            flow.run.move(to: .needsUploadConfirmation)
+        }
+        guard flow.state == .needsUploadConfirmation, flow.canUpload else {
+            stopRemoteSave("The local build cannot be uploaded. Open the Build tab for details.")
+            return
+        }
+
+        directApplyState = .running
+        directApplyMessage = "Uploading the build…"
+        remoteSaveDetail = directApplyMessage
+        flow.task = nil
+        flow.startUpload()
+        guard let upload = flow.task else {
+            stopRemoteSave("The build upload did not start.")
+            return
+        }
+        Task {
+            await upload.value
+            guard flow.state == .complete, flow.uploadStatus == .succeeded else {
+                stopRemoteSave(flow.failure?.message
+                    ?? "The build did not reach App Store Connect.")
+                return
+            }
+            adoptBuiltArtifact(from: flow)
+            directApplyState = .idle
+            saveRemotely(target, includeAppleBuild: true, didUploadBuild: true)
+        }
     }
 
     /// Writes the rows of one tab, and nothing else.
@@ -318,7 +457,8 @@ extension AppState {
     /// second press writes only what is still missing.
     func applyDirectly(
         _ target: DirectApplyTarget,
-        using prepared: (actual: ActualState, steps: [PlanStep], failures: [String])? = nil
+        using prepared: (actual: ActualState, steps: [PlanStep], failures: [String])? = nil,
+        includesAppleBuild: Bool = false
     ) {
         guard directApplyState != .running else { return }
         // These rows land in a store, so they are a store write like any
@@ -347,7 +487,10 @@ extension AppState {
             // the planner's ids fails the save here rather than writing a row
             // out of an area nobody read.
             let foreign = only.steps.filter {
-                !target.owns($0.id) && !Self.googleLifecycleIDs.contains($0.id)
+                !target.owns($0.id)
+                    && !(includesAppleBuild && $0.system == .apple
+                         && DirectApplyTarget.build.owns($0.id))
+                    && !Self.googleLifecycleIDs.contains($0.id)
             }
             guard foreign.isEmpty else {
                 directApplyState = .failed
@@ -412,11 +555,18 @@ extension AppState {
     /// lifecycle rows join whenever a Google row does. Without them the run
     /// would write a listing into an edit that was never opened.
     private func rows(for target: DirectApplyTarget) -> [PlanStep] {
-        rows(for: target, in: directPlan())
+        remoteSaveRows(for: target, in: directPlan())
     }
 
-    private func rows(for target: DirectApplyTarget, in plan: PlanResult) -> [PlanStep] {
+    func remoteSaveRows(for target: DirectApplyTarget, in plan: PlanResult,
+                        includeAppleBuild: Bool = false) -> [PlanStep] {
         var owned = plan.steps.filter { target.owns($0.id) }
+        if includeAppleBuild {
+            let ownedIDs = Set(owned.map(\.id)).union(plan.steps.compactMap { step in
+                step.system == .apple && DirectApplyTarget.build.owns(step.id) ? step.id : nil
+            })
+            owned = plan.steps.filter { ownedIDs.contains($0.id) }
+        }
         // The App Store takes no change to a listing customers are reading, so
         // the Manage side counts none of its rows. Offering them made a button
         // whose only outcome was a refusal, and it counted the next version's
@@ -456,7 +606,7 @@ extension AppState {
         let result = Planner.plan(Planner.Input(
             manifest: platformManifest, actual: actual, stores: [.apple],
             root: manifestRoot, packages: packages))
-        var steps = rows(for: .testFlight, in: result)
+        var steps = remoteSaveRows(for: .testFlight, in: result)
         if !includesSharedRows {
             steps.removeAll { !Self.isBuildSpecificTestFlightStep($0) }
         }
