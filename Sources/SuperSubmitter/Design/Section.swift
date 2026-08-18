@@ -123,15 +123,33 @@ struct Fold<Content: View>: View {
         self.content = content()
     }
 
+    private var isOpen: Bool { open ?? startsOpen }
+
     var body: some View {
         DisclosureGroup(isExpanded: Binding(
-            get: { open ?? startsOpen },
+            get: { isOpen },
             set: { open = $0 })) {
             content
         } label: {
+            // The words, and not the chevron alone.
+            //
+            // A `DisclosureGroup` on this platform gives its label no part in
+            // the click: the triangle opened the fold and "Build settings"
+            // beside it did nothing, on a row that reads as one control and is
+            // the width of the card. Every other fold in the app is a
+            // `Section_`, whose whole header is a button, so the two folds on
+            // one screen behaved differently and the one that ignored the
+            // pointer was the one with the narrower target.
+            //
+            // The shape is what makes the gap between the word and the right
+            // edge clickable too. Without it the target is the glyphs.
             Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+                .onTapGesture { open = !isOpen }
+                .accessibilityAddTraits(.isButton)
         }
-        .motion(.easeInOut(duration: 0.22), value: open ?? startsOpen)
+        .motion(.easeInOut(duration: 0.22), value: isOpen)
     }
 }
 
