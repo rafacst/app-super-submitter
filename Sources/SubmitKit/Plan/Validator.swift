@@ -1811,6 +1811,28 @@ public enum Validator {
         return false
     }
 
+    /// The smallest version this app will ever offer above one already on sale.
+    ///
+    /// The patch component and never the last one. `1.6` incremented at its own
+    /// last component is `1.7`, which is a minor release: the app was proposing
+    /// a feature number for what is usually a fix, and a developer who took the
+    /// offer had to correct it by hand. Padding first makes `1.6` answer
+    /// `1.6.1`, and `1.6.1` answer `1.6.2`.
+    ///
+    /// Apple reads one to three integers, so a fourth component is dropped
+    /// rather than carried: `1.6.1.3` answers `1.6.2`, which is above it.
+    ///
+    /// `// ponytail: pad to three, bump the third. The comparison above is what
+    /// // decides whether an offer is needed at all.`
+    public static func nextVersion(above live: String) -> String? {
+        var parts = live.split(separator: ".").map { Int($0) ?? 0 }
+        guard !parts.isEmpty else { return nil }
+        while parts.count < 3 { parts.append(0) }
+        parts = Array(parts.prefix(3))
+        parts[2] += 1
+        return parts.map(String.init).joined(separator: ".")
+    }
+
     /// The locales that the App Store lists. Used only to warn, never to block.
     private static let appleLocales: Set<String> = [
         "ar-SA", "ca", "cs", "da", "de-DE", "el", "en-AU", "en-CA", "en-GB", "en-US",

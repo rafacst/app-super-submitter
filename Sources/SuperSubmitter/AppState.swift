@@ -1650,14 +1650,25 @@ final class AppState {
     var liveAppleVersion: String? { actualState.apple?.liveVersionString }
 
     /// The smallest number that clears the one on sale. Apple refuses a
-    /// version that does not climb, and the last component is the one a fix
-    /// usually moves.
+    /// version that does not climb, and the patch component is the one a fix
+    /// usually moves. See `Validator.nextVersion(above:)`.
     var nextAppleVersion: String? {
-        guard let live = liveAppleVersion else { return nil }
-        var parts = live.split(separator: ".").map { Int($0) ?? 0 }
-        guard !parts.isEmpty else { return nil }
-        parts[parts.count - 1] += 1
-        return parts.map(String.init).joined(separator: ".")
+        liveAppleVersion.flatMap(Validator.nextVersion(above:))
+    }
+
+    /// Gives the App Store a release version, and leaves Google's alone.
+    ///
+    /// Through the shared key while one number covers both stores, so an app
+    /// that releases to the two together keeps doing so and the checkbox on the
+    /// Build tab still reads as ticked. Splitting them here would answer "are
+    /// these the same release?" on the developer's behalf.
+    func setAppleReleaseVersion(_ version: String) {
+        if sharesOneVersion {
+            manifest.setReleaseVersionName(version)
+        } else {
+            manifest.setReleaseVersionName(version, for: .apple)
+        }
+        saveManifestReportingErrors()
     }
 
     // MARK: - Listing details
