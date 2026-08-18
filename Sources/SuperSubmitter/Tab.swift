@@ -344,6 +344,9 @@ enum Tab: Int, CaseIterable, Identifiable, Hashable {
     /// Read-only and activity tabs have no local or remote save control.
     var showsDraftControls: Bool { self != .storePage && self != .remoteSave }
 
+    /// App tabs can replace their last store read from one shared command.
+    var canFetchFromStore: Bool { !standsAlone && self != .remoteSave }
+
     /// Whether the sidebar draws a row for the tab.
     ///
     /// All of them. The store page was the one exception, because the app list

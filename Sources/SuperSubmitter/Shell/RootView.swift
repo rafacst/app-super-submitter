@@ -378,6 +378,7 @@ private struct ContentArea: View {
             ScrollView {
                 TabContent(tab: state.selectedTab)
                     .padding(20)
+                    .disabled(state.isFetchingSelectedTab)
                     // `minWidth: 0`, and it is the whole of a window bug.
                     //
                     // A tab reports the width it cannot go under, a scroll view
@@ -684,14 +685,15 @@ private struct ContentHeader: View {
     /// that the next apply stops being a rehearsal and starts writing to two
     /// live stores.
     @State private var armingLiveWrites = false
+    @State private var confirmingStoreFetch = false
     /// Raised on each press of a header command, so its glyph bounces once.
     ///
     /// Three counters and not one. Two commands sit in the same cluster on the
     /// Release tab, and a shared counter would bounce both glyphs every time
     /// either was pressed.
-    @State private var readTick = 0
     @State private var recheckTick = 0
     @State private var copyTick = 0
+    @State private var fetchTick = 0
 
     var body: some View {
         @Bindable var state = state
@@ -740,7 +742,8 @@ private struct ContentHeader: View {
                 SavedChip()
             }
 
-            let shape = HeaderShape(tab: state.selectedTab, busy: state.rechecking,
+            let shape = HeaderShape(tab: state.selectedTab,
+                                    busy: state.rechecking || state.isFetchingSelectedTab,
                                     readFailed: state.planError != nil,
                                     pendingRelease: state.hasPendingRelease,
                                     locales: state.locales.count)
@@ -749,6 +752,23 @@ private struct ContentHeader: View {
             // now. Both belong to the window and not to the tab, and one of
             // them has to survive the entry screen, where this band is not
             // drawn at all. See `RootView.toolbar`.
+
+            if state.manifestURL != nil, state.selectedTab.canFetchFromStore {
+                HeaderCluster(morphOn: shape) {
+                    if state.isFetchingSelectedTab {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                            .frame(width: 112)
+                            .accessibilityLabel("Fetch from store")
+                    } else {
+                        QuietButton(title: "Fetch from store", glass: true,
+                                    symbol: "arrow.down.circle", tick: fetchTick) {
+                            confirmingStoreFetch = true
+                        }
+                        .disabled(state.fetchingStoreTab != nil)
+                    }
+                }
+            }
 
             // What is stopping the release, from whichever screen the question
             // occurred to you. It draws nothing while nothing is stopping it,
@@ -759,7 +779,9 @@ private struct ContentHeader: View {
 
             if state.manifestURL != nil { switch state.selectedTab {
             case .details:
-                HeaderCluster(morphOn: shape) { LocalePicker() }
+                HeaderCluster(morphOn: shape) {
+                    LocalePicker().disabled(state.isFetchingSelectedTab)
+                }
                 HeaderCluster(morphOn: shape) {
                     Button { detailsInspectorOpen.toggle() } label: {
                         Image(systemName: "sidebar.trailing")
@@ -775,27 +797,8 @@ private struct ContentHeader: View {
                     .help("Show or hide what each store receives")
                 }
             case .media:
-                LocalePicker()
+                LocalePicker().disabled(state.isFetchingSelectedTab)
             case .plan:
-                // Two clusters, not one row of five things. Reading the stores
-                // and arming a write are different jobs, and the gap between
-                // the groups says so faster than the labels do.
-                // Gone while the read has failed. The failure card carries its
-                // own "Read again" next to the message that explains it, and
-                // two buttons for one action, one of them 900 points from the
-                // problem, is a choice the developer should not have to make.
-                if state.planError == nil {
-                    HeaderCluster(morphOn: shape) {
-                        // No spinner here. The tab body already says "Reading
-                        // both stores" beside one, and two spinners for one
-                        // read read as two reads.
-                        QuietButton(title: "Read the stores again", glass: true,
-                                    symbol: "arrow.clockwise", tick: readTick) {
-                            readTick += 1
-                            Task { await state.readStores() }
-                        }
-                    }
-                }
                 HeaderCluster(morphOn: shape) {
                     // Turning the dry run off is the moment an apply becomes a
                     // store write, so that is where the paywall belongs, and
@@ -853,7 +856,9 @@ private struct ContentHeader: View {
                     if let app = state.currentApp {
                         AppStatusChip(mark: state.appMark(appKey: app.key))
                     }
-                    if state.selectedTab.showsDraftControls { DraftButton() }
+                    if state.selectedTab.showsDraftControls {
+                        DraftButton().disabled(state.isFetchingSelectedTab)
+                    }
                 }
             }
         }
@@ -868,6 +873,17 @@ private struct ContentHeader: View {
             Button("Keep the dry run on", role: .cancel) {}
         } message: {
             Text("The next apply writes drafts to \(state.storeListText) instead of logging them. It writes drafts only: nothing reaches review until you send it on the Release tab.")
+        }
+        .confirmationDialog("Fetch this tab from the store?",
+                            isPresented: $confirmingStoreFetch,
+                            titleVisibility: .visible) {
+            Button("Fetch from store", role: .destructive) {
+                fetchTick += 1
+                Task { await state.fetchSelectedTabFromStore() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Everything not saved in this tab will be overwritten.")
         }
         // Below macOS 26 the band is the page at rest, and separates itself
         // only while there is something above the fold. On 26 the material
