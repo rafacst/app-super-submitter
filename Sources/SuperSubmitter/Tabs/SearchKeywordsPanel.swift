@@ -115,16 +115,7 @@ struct SearchKeywordsPanel: View {
             HStack(spacing: 9) {
                 Text("Apple keeps a pool for each platform. This reads")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                Picker("Platform", selection: Binding(
-                    get: { state.applePlatform },
-                    set: { state.applePlatform = $0 })) {
-                    ForEach(state.appleplatformChoices, id: \.self) {
-                        Text($0.shortName).tag($0)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 200)
+                ApplePlatformPicker(width: 200)
                 Spacer(minLength: 0)
             }
             .padding(.top, 2)

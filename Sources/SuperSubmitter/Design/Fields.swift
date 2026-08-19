@@ -417,3 +417,29 @@ struct FieldRow<Content: View>: View {
         HStack(alignment: .bottom, spacing: spacing) { content }
     }
 }
+
+/// Which Apple version train every read on the screen means.
+///
+/// A universal app keeps a version, a listing, and a set of screenshots per
+/// platform, and this says which one. Two screens drew it, and the two drifted
+/// apart in width alone.
+///
+/// The caller still tests `appleplatformChoices.count > 1`, because each of
+/// them wraps the picker in different chrome: one puts a sentence beside it,
+/// the other a caption under it. Only the control itself is shared.
+struct ApplePlatformPicker: View {
+    @Environment(AppState.self) private var state
+    var width: CGFloat
+
+    var body: some View {
+        @Bindable var state = state
+        return Picker("Platform", selection: $state.applePlatform) {
+            ForEach(state.appleplatformChoices, id: \.self) {
+                Text($0.shortName).tag($0)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: width)
+    }
+}

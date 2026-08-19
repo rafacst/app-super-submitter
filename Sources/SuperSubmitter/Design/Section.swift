@@ -176,3 +176,44 @@ private extension View {
         }
     }
 }
+
+// MARK: - The disclosure glyph
+
+/// The triangle on a row that opens. Six panels drew it by hand, and the
+/// three lines that make it drifted between them.
+///
+/// It is not a `Fold`. A `Fold` owns a title and its own state; these rows
+/// carry a pill, a count, and a button of their own beside the glyph, and the
+/// caller owns the open set because one row's state lives in a set of ids.
+struct DisclosureChevron: View {
+    let isOpen: Bool
+
+    var body: some View {
+        Image(systemName: isOpen ? "chevron.down" : "chevron.right")
+            .font(Theme.font(size: 9, weight: .semibold))
+            .foregroundStyle(Theme.text3)
+    }
+}
+
+/// The same glyph as its own tap target, for a row whose header is not one
+/// button.
+///
+/// The 14 point frame and the shape are what make it hittable: the glyph is 9
+/// points of line art, and without them the target is the strokes.
+struct DisclosureButton: View {
+    let isOpen: Bool
+    /// Said in full, because "Expand" alone does not say what opens. The
+    /// caller words it, since only the caller knows what is inside.
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            DisclosureChevron(isOpen: isOpen)
+                .frame(width: 14, height: 14)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}

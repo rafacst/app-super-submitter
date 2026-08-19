@@ -136,15 +136,6 @@ public enum KeychainCredentials {
     /// the "allow access" dialog and blocks on it.
     nonisolated(unsafe) public static var service = "com.rafacst.SuperSubmitter.credentials"
 
-    /// Points the vault at a service of its own, and drops anything already
-    /// read. Call it before the first credential read of the process.
-    public static func useIsolatedService(_ name: String) {
-        lock.withLock {
-            service = name
-            cache = nil
-        }
-    }
-
     /// Whether the vault is a dictionary in this process rather than an item
     /// in the Keychain.
     ///

@@ -149,7 +149,7 @@ public struct AppleActionsClient: Sendable {
                 id: id, text: text,
                 locale: item["attributes"]["locale"].string,
                 platform: item["attributes"]["platform"].string,
-                createdDate: item["attributes"]["createdDate"].string.flatMap(Self.date))
+                createdDate: Date.iso8601(item["attributes"]["createdDate"].string))
         }
     }
 
@@ -348,20 +348,11 @@ public struct AppleActionsClient: Sendable {
         review.text = attributes["body"].string
         review.starRating = attributes["rating"].int
         review.territory = attributes["territory"].string
-        review.lastModified = attributes["createdDate"].string.flatMap(Self.date)
+        review.lastModified = Date.iso8601(attributes["createdDate"].string)
         if let responseID = item["relationships"]["response"]["data"]["id"].string {
             review.responseId = responseID
             review.developerReply = responses[responseID]?.body
         }
         return review
-    }
-
-    /// App Store Connect stamps a review in ISO 8601, with or without the
-    /// fractional seconds.
-    static func date(_ text: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return withFraction.date(from: text)
-            ?? ISO8601DateFormatter().date(from: text)
     }
 }

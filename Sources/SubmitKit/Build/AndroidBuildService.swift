@@ -80,7 +80,6 @@ public struct BundleInfo: Sendable, Equatable {
 /// never asks for a keystore password, and never answers a prompt.
 public struct AndroidBuildService: Sendable {
     static let javaHomeTool = URL(fileURLWithPath: "/usr/libexec/java_home")
-    static let usrBinEnvJava = "/usr/bin/java"
 
     private let runner: any ToolRunning
     private let storage: BuildStorage

@@ -349,17 +349,6 @@ extension AppState {
         return isSafeImportDestination(destination, root: root) ? destination : nil
     }
 
-    /// Where the version's own page keeps one screen size of one locale.
-    /// `resendLiveMedia` reads it, so it holds the version page and nothing
-    /// else: `pages/` sits beside it, not inside it.
-    static func importedMediaFolder(root: URL, store: Store, locale: String,
-                                    displayType: String) -> URL {
-        [store.rawValue, safeComponent(locale), safeComponent(displayType)]
-            .reduce(root.appendingPathComponent(importFolder)) {
-                $0.appendingPathComponent($1)
-            }.standardizedFileURL
-    }
-
     private func download(_ asset: ImportedStoreAsset, to destination: URL,
                           root: URL) async throws {
         guard asset.url.scheme?.lowercased() == "https" else {

@@ -303,14 +303,4 @@ public extension Manifest {
         }
         return []
     }
-
-    /// The base plan id that a plan writes. Google needs a non-empty value.
-    func googleBasePlanId(productId: String) -> String? {
-        for group in subscriptions ?? [] {
-            if let plan = group.plans.first(where: { $0.id == productId }) {
-                return plan.basePlanId ?? "default"
-            }
-        }
-        return nil
-    }
 }

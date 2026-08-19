@@ -1,5 +1,5 @@
+import Foundation
 import SubmitKit
-import SwiftUI
 
 /// Static instructional copy. It describes behavior but supplies no example
 /// app, credential, package, price, product, or manifest value.
@@ -51,36 +51,12 @@ enum OnboardingContent {
 enum StoreHealth {
     case matched, changed, blocked
 
-    var mark: String {
-        switch self {
-        case .matched: "✓"
-        case .changed: "!"
-        case .blocked: "✕"
-        }
-    }
-
     /// The glyph in words. A screen reader cannot say "✕".
     var label: String {
         switch self {
         case .matched: "in sync"
         case .changed: "has changes"
         case .blocked: "blocked"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .matched: Theme.green
-        case .changed: Theme.yellow
-        case .blocked: Theme.red
-        }
-    }
-
-    var background: Color {
-        switch self {
-        case .matched: Theme.greenBg
-        case .changed: Theme.yellowBg
-        case .blocked: Theme.redBg
         }
     }
 }

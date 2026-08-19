@@ -42,7 +42,8 @@ struct BuildTab: View {
 
     /// The one decision that changes the workflow below it.
     private var buildPath: some View {
-        HStack(spacing: 16) {
+        @Bindable var state = state
+        return HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Add a build")
                     .font(Theme.cardTitle)
@@ -51,9 +52,7 @@ struct BuildTab: View {
                     .foregroundStyle(Theme.text2)
             }
             Spacer(minLength: 16)
-            Picker("Build source", selection: Binding(
-                get: { state.showBuildFromProject },
-                set: { state.showBuildFromProject = $0 })) {
+            Picker("Build source", selection: $state.showBuildFromProject) {
                 Text("Create a build").tag(true)
                 Text("Upload a build").tag(false)
             }

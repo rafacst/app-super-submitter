@@ -136,7 +136,7 @@ enum LicensingJSON {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { source in
             let text = try source.singleValueContainer().decode(String.self)
-            guard let date = iso8601.date(from: text) ?? iso8601Plain.date(from: text) else {
+            guard let date = Date.iso8601(text) else {
                 throw DecodingError.dataCorrupted(DecodingError.Context(
                     codingPath: source.codingPath,
                     debugDescription: "The date \(text) is not an ISO 8601 timestamp."))
@@ -156,14 +156,9 @@ enum LicensingJSON {
     }
 
     /// A fresh formatter per call. `ISO8601DateFormatter` is not `Sendable`,
-    /// and a document is decoded a handful of times per session, so a shared
-    /// one would buy nothing and cost a lock.
-    private static var iso8601: ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }
-
+    /// and a document is encoded a handful of times per session, so a shared
+    /// one would buy nothing and cost a lock. Writing is always the plain
+    /// shape; reading takes both, through `Date.iso8601`.
     private static var iso8601Plain: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]

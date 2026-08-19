@@ -192,7 +192,7 @@ public struct AppleWebhooksClient: Sendable {
         return Delivery(
             id: id,
             state: attributes["deliveryState"].string,
-            createdDate: attributes["createdDate"].string.flatMap(AppleActionsClient.date),
+            createdDate: Date.iso8601(attributes["createdDate"].string),
             errorMessage: attributes["errorMessage"].string,
             responseStatus: attributes["response"]["httpStatusCode"].int
                 ?? attributes["response"]["statusCode"].int,

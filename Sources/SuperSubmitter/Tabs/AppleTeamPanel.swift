@@ -92,17 +92,11 @@ struct AppleTeamPanel: View {
         let open = expanded.contains(member.id)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 9) {
-                Button {
+                DisclosureButton(isOpen: open,
+                                 label: open ? "Collapse \(member.email)"
+                                             : "Expand \(member.email)") {
                     if open { expanded.remove(member.id) } else { expanded.insert(member.id) }
-                } label: {
-                    Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(Theme.font(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.text3)
-                        .frame(width: 14, height: 14)
-                        .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(open ? "Collapse \(member.email)" : "Expand \(member.email)")
 
                 Text(member.email).font(Theme.font(size: 12, weight: .medium))
                     .textSelection(.enabled)

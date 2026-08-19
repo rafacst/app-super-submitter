@@ -80,15 +80,9 @@ struct WebhooksPanel: View {
         let expanded = open.contains(hook.id)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
-                Button { toggle(hook) } label: {
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                        .font(Theme.font(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.text3)
-                        .frame(width: 14, height: 14)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(expanded ? "Collapse the deliveries" : "Show the deliveries")
+                DisclosureButton(isOpen: expanded,
+                                 label: expanded ? "Collapse the deliveries"
+                                                 : "Show the deliveries") { toggle(hook) }
 
                 Text(hook.name).font(Theme.font(size: 12, weight: .medium))
                 if !hook.enabled {
