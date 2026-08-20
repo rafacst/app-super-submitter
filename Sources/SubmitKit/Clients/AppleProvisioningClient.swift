@@ -264,7 +264,7 @@ public struct AppleProvisioningClient: Sendable {
                         ?? attributes["name"].string ?? id,
                     detail: attributes["serialNumber"].string,
                     platform: attributes["platform"].string,
-                    expiresAt: Self.date(attributes["expirationDate"].string),
+                    expiresAt: Date.iso8601(attributes["expirationDate"].string),
                     state: Self.title(attributes["certificateType"].string ?? ""))
     }
 
@@ -285,7 +285,7 @@ public struct AppleProvisioningClient: Sendable {
                     name: attributes["name"].string ?? id,
                     detail: Self.title(attributes["profileType"].string ?? ""),
                     platform: attributes["platform"].string,
-                    expiresAt: Self.date(attributes["expirationDate"].string),
+                    expiresAt: Date.iso8601(attributes["expirationDate"].string),
                     state: attributes["profileState"].string)
     }
 
@@ -304,12 +304,4 @@ public struct AppleProvisioningClient: Sendable {
     }
 
     static func title(_ identifier: String) -> String { AppleWords.title(identifier) }
-
-    static func date(_ text: String?) -> Date? {
-        guard let text else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: text)
-            ?? ISO8601DateFormatter().date(from: text)
-    }
 }

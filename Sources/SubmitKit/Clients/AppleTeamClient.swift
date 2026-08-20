@@ -206,7 +206,6 @@ public struct AppleTeamClient: Sendable {
             visibleApps: item["relationships"]["visibleApps"]["data"].array
                 .compactMap { $0["id"].string },
             pending: pending,
-            expirationDate: attributes["expirationDate"].string
-                .flatMap(AppleActionsClient.date))
+            expirationDate: Date.iso8601(attributes["expirationDate"].string))
     }
 }

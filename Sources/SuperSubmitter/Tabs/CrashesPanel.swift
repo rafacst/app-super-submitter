@@ -76,15 +76,9 @@ struct CrashesPanel: View {
         let expanded = open.contains(signature.id)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
-                Button { toggle(signature) } label: {
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                        .font(Theme.font(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.text3)
-                        .frame(width: 14, height: 14)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(expanded ? "Collapse the call stacks" : "Show the call stacks")
+                DisclosureButton(isOpen: expanded,
+                                 label: expanded ? "Collapse the call stacks"
+                                                 : "Show the call stacks") { toggle(signature) }
 
                 if let kind = signature.diagnosticType {
                     StatePill(text: AppleWords.title(kind).uppercased(),

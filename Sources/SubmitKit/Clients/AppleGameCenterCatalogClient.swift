@@ -103,12 +103,6 @@ public struct AppleGameCenterCatalogClient: Sendable {
             }
         }
 
-        /// Whether the family links to other objects, and what the link means.
-        /// A set holds leaderboards; nothing else reads a link on this pass.
-        var membersRelationship: String? {
-            self == .leaderboardSet ? "gameCenterLeaderboards" : nil
-        }
-
         /// Where an image of this family lives.
         ///
         /// v2 for the three families that have a v2, v1 for the two that were

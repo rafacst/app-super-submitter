@@ -60,7 +60,11 @@ import Testing
         let panel = try source("Sources/SuperSubmitter/Tabs/SearchKeywordsPanel.swift")
 
         #expect(panel.contains("state.appleplatformChoices.count > 1"))
-        #expect(panel.contains("set: { state.applePlatform = $0 }"))
+        // The control is shared with the identifiers panel, but the panel is
+        // what places it: the picker is here, not a rail away.
+        #expect(panel.contains("ApplePlatformPicker("))
+        #expect(try source("Sources/SuperSubmitter/Design/Fields.swift")
+            .contains("selection: $state.applePlatform"))
         // A list read for one platform must not survive a switch to the other.
         #expect(panel.contains(".onChange(of: state.applePlatform)"))
         // And the read itself names the platform, or Apple refuses it.

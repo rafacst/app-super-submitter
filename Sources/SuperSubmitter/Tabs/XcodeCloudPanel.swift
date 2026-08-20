@@ -85,15 +85,9 @@ struct XcodeCloudPanel: View {
         let open = openRuns.contains(run.id)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Button { toggle(run) } label: {
-                    Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(Theme.font(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.text3)
-                        .frame(width: 14, height: 14)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(open ? "Collapse the run" : "Show what the run did")
+                DisclosureButton(isOpen: open,
+                                 label: open ? "Collapse the run"
+                                             : "Show what the run did") { toggle(run) }
 
                 Text("#\(run.number.map(String.init) ?? "?")")
                     .font(Theme.mono(10)).foregroundStyle(Theme.text3)

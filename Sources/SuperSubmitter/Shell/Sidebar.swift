@@ -680,26 +680,6 @@ struct AppIconBadge: View {
     }
 }
 
-/// One store, and how that store stands.
-///
-/// The logo says which store, and the tinted panel behind it says how the
-/// store stands. The glyph that used to sit beside the logo said the same
-/// thing a second time, and an exclamation mark under an app name reads as a
-/// fault even when the state is "there are edits to send".
-struct HealthChip: View {
-    let store: Store
-    let health: StoreHealth
-
-    var body: some View {
-        StoreMark(store: store, size: 9)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2.5)
-            .background(health.background, in: RoundedRectangle(cornerRadius: 4))
-            .accessibilityElement()
-            .accessibilityLabel("\(store.storeName) \(health.label)")
-    }
-}
-
 /// The counts on a sidebar row: what blocks the apply, then what does not.
 ///
 /// Two pills and not one number. The errors come first because they are the

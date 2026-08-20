@@ -267,14 +267,22 @@ public actor SupabaseAuth {
             throw SupabaseAuthError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            let error = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
+            let error = try? Self.decoder.decode(AuthErrorResponse.self, from: data)
             throw SupabaseAuthError.service(error?.displayMessage
                                             ?? "The account service answered with status \(http.statusCode).")
         }
-        guard let result = try? JSONDecoder().decode(AuthResponse.self, from: data) else {
+        guard let result = try? Self.decoder.decode(AuthResponse.self, from: data) else {
             throw SupabaseAuthError.invalidResponse
         }
         return result
+    }
+
+    /// Supabase spells every field in snake case, so the decoder converts
+    /// rather than each field naming itself a second time.
+    private static var decoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
     }
 }
 
@@ -284,13 +292,6 @@ private struct AuthResponse: Decodable {
     let refreshToken: String?
     let expiresIn: Int?
     let user: User?
-
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case refreshToken = "refresh_token"
-        case expiresIn = "expires_in"
-        case user
-    }
 }
 
 private struct AuthErrorResponse: Decodable {
@@ -298,11 +299,6 @@ private struct AuthErrorResponse: Decodable {
     let msg: String?
     let errorDescription: String?
     let error: String?
-
-    enum CodingKeys: String, CodingKey {
-        case message, msg, error
-        case errorDescription = "error_description"
-    }
 
     var displayMessage: String? { message ?? msg ?? errorDescription ?? error }
 }

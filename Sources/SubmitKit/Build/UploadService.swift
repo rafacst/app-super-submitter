@@ -155,8 +155,6 @@ public struct UploadService: Sendable {
     public func appleBuildChoices(appID: String,
                                   platform: BuildPlatform) async throws -> [RemoteBuild] {
         let wanted = platform == .macos ? "MAC_OS" : "IOS"
-        let uploaded = ISO8601DateFormatter()
-        uploaded.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var result: [RemoteBuild] = []
         for page in try await appleBuildPages(appID: appID) {
             // The trains of this page name the marketing version of every
@@ -176,8 +174,7 @@ public struct UploadService: Sendable {
                     processed: attributes["processingState"].string == "VALID",
                     state: attributes["processingState"].string ?? "PROCESSING",
                     expired: attributes["expired"].bool == true,
-                    uploaded: date.flatMap { uploaded.date(from: $0) }
-                        ?? date.flatMap { ISO8601DateFormatter().date(from: $0) },
+                    uploaded: Date.iso8601(date),
                     versionState: build["relationships"]["appStoreVersion"]["data"]["id"]
                         .string.flatMap { versionStates[$0] }))
             }

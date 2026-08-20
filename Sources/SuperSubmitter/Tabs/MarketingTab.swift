@@ -107,9 +107,7 @@ struct MarketingTab: View {
                 Spacer(minLength: 8)
                 StatePill(text: standing.text, foreground: standing.colour,
                           background: standing.background)
-                Image(systemName: openPages.contains(index) ? "chevron.down" : "chevron.right")
-                    .font(Theme.font(size: 9, weight: .semibold))
-                    .foregroundStyle(Theme.text3)
+                DisclosureChevron(isOpen: openPages.contains(index))
             }
             .contentShape(.rect)
         }
@@ -260,10 +258,7 @@ struct MarketingTab: View {
                     StatePill(text: day.map { "\(standing.text) · \($0)" } ?? standing.text,
                               foreground: standing.colour, background: standing.background)
                     Spacer(minLength: 8)
-                    Image(systemName: openExperiments.contains(index)
-                          ? "chevron.down" : "chevron.right")
-                        .font(Theme.font(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.text3)
+                    DisclosureChevron(isOpen: openExperiments.contains(index))
                 }
                 .contentShape(.rect)
             }

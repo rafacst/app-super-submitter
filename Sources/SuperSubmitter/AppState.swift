@@ -3120,8 +3120,6 @@ final class AppState {
         plan.map(\.isBlocked) ?? (listingErrorCount > 0)
     }
 
-    var hasProvider: Bool { provider != .none }
-
     private var listingErrorCount: Int {
         manifest.listingErrorCount(for: stores)
     }

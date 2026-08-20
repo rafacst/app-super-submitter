@@ -35,7 +35,7 @@ public enum GoogleOAuth {
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
             throw Error.randomness
         }
-        return Data(bytes).base64URLEncodedString()
+        return Base64URL.encode(Data(bytes))
     }
 
     public static func authorizationURL(clientID: String, redirectURI: String,
@@ -84,7 +84,7 @@ public enum GoogleOAuth {
         ])
         let (data, response) = try await session.data(for: request)
         try requireSuccess(response, data: data)
-        let token = try JSONDecoder().decode(Token.self, from: data)
+        let token = try GoogleToken.decode(data)
         guard let refresh = token.refreshToken, !refresh.isEmpty else {
             throw Error.missingRefreshToken
         }
@@ -94,7 +94,7 @@ public enum GoogleOAuth {
     }
 
     private static func challenge(for verifier: String) -> String {
-        Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncodedString()
+        Base64URL.encode(Data(SHA256.hash(data: Data(verifier.utf8))))
     }
 
     private static func requireSuccess(_ response: URLResponse, data: Data) throws {
@@ -106,24 +106,25 @@ public enum GoogleOAuth {
         }
     }
 
-    private struct Token: Decodable {
-        let accessToken: String
-        let refreshToken: String?
-        let expiresIn: Int?
-
-        enum CodingKeys: String, CodingKey {
-            case accessToken = "access_token"
-            case refreshToken = "refresh_token"
-            case expiresIn = "expires_in"
-        }
-    }
 }
 
-private extension Data {
-    func base64URLEncodedString() -> String {
-        base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
+/// What Google's token endpoint answers, wherever the app asks it.
+///
+/// One shape, three askers: the OAuth sign-in, the per-call refresh in
+/// `StoreAPI`, and the connection test. Each used to declare its own struct
+/// naming whichever fields it happened to read. A refresh token only comes
+/// back on the first exchange, and an expiry is not always sent, so both stay
+/// optional and the caller decides whether it needs them.
+struct GoogleToken: Decodable {
+    let accessToken: String
+    let refreshToken: String?
+    let expiresIn: Int?
+
+    /// Google spells these `access_token` and the rest in snake case, so the
+    /// decoder converts rather than each field naming itself twice.
+    static func decode(_ data: Data) throws -> GoogleToken {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(GoogleToken.self, from: data)
     }
 }

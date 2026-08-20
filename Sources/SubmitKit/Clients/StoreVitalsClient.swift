@@ -697,7 +697,7 @@ public struct StoreVitalsClient: Sendable {
     /// shape App Store Connect does, so this reads it with the same parser.
     static func time(_ node: JSON) -> String? {
         guard let text = node.string, !text.isEmpty else { return nil }
-        guard let date = AppleActionsClient.date(text) else { return text }
+        guard let date = Date.iso8601(text) else { return text }
         return date.formatted(date: .abbreviated, time: .shortened)
     }
 

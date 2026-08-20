@@ -161,8 +161,6 @@ enum Theme {
     static let body = Theme.font(size: 12.5)
     static let caption = Theme.font(size: 11.5)
 
-    // The window itself.
-    static let windowRadius: CGFloat = 11
     /// Tall enough for one line of `screenSubtitle` and a row of 24 point
     /// controls.
     ///
@@ -385,18 +383,6 @@ extension View {
         modifier(SoftScrollEdge())
     }
 
-    /// A floating surface that is not a form: a palette, a popover, a
-    /// heads-up panel.
-    ///
-    /// Deliberately not applied to the sheets that hold dense fields. Glass
-    /// under body copy is a legibility regression, which is the rule the panel
-    /// and the band already follow. A command palette is the case the material
-    /// was made for: a small thing over the top of the work, whose whole job
-    /// is to feel like it is hovering there rather than replacing the screen.
-    func floatingSurface(cornerRadius: CGFloat = 14) -> some View {
-        modifier(FloatingSurface(cornerRadius: cornerRadius))
-    }
-
     /// The file this window edits, for the title-bar proxy icon.
     ///
     /// `navigationDocument` takes a `URL` and not an optional, and the app has
@@ -440,18 +426,6 @@ extension View {
     func motion<V: Equatable>(_ animation: Animation?, value: V) -> some View {
         modifier(Motion(animation: animation, value: value))
     }
-
-    /// The same, for a transition on an insertion or a removal.
-    ///
-    /// A transition needs the animation to reach it through the transaction
-    /// that inserts the view, so this pairs the two rather than leaving a
-    /// caller to remember both halves.
-    func motionTransition<V: Equatable>(_ transition: AnyTransition,
-                                        _ animation: Animation,
-                                        value: V) -> some View {
-        modifier(MotionTransition(transition: transition,
-                                  animation: animation, value: value))
-    }
 }
 
 // MARK: - Reduce Motion
@@ -482,24 +456,6 @@ private struct Motion<V: Equatable>: ViewModifier {
 func withMotion(_ reduceMotion: Bool, _ animation: Animation,
                 _ body: () -> Void) {
     withAnimation(reduceMotion ? nil : animation, body)
-}
-
-/// A transition that becomes a plain fade under Reduce Motion.
-///
-/// A fade and not nothing. The report's rule is that large movement and
-/// simulated depth become opacity, and that the feedback survives: a row that
-/// appears with no mark at all is a row the reader never saw arrive.
-private struct MotionTransition<V: Equatable>: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let transition: AnyTransition
-    let animation: Animation
-    let value: V
-
-    func body(content: Content) -> some View {
-        content
-            .transition(reduceMotion ? .opacity : transition)
-            .animation(reduceMotion ? .easeOut(duration: 0.15) : animation, value: value)
-    }
 }
 
 // MARK: - The floating materials
@@ -572,27 +528,6 @@ private struct SoftScrollEdge: ViewModifier {
             content.scrollEdgeEffectStyle(.soft, for: .top)
         } else {
             content
-        }
-    }
-}
-
-private struct FloatingSurface: ViewModifier {
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .background {
-                    // Clear, so the glass below is what shows through. A fill
-                    // here would be a second surface under the material and
-                    // the refraction would have nothing to refract.
-                    Color.clear.glassEffect(.regular,
-                                            in: .rect(cornerRadius: cornerRadius))
-                }
-        } else {
-            content
-                .background(Theme.content)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         }
     }
 }
@@ -809,37 +744,4 @@ struct AnyButtonStyle: PrimitiveButtonStyle {
     }
 
     func makeBody(configuration: Configuration) -> some View { make(configuration) }
-}
-
-/// The one prominent action on a screen: the apply on Summary.
-///
-/// Prominent glass on macOS 26, the filled accent rectangle this app shipped
-/// below it. Deliberately not red. It writes a draft, a draft is reversible,
-/// and red belongs to the Release tab alone.
-struct ProminentButton: View {
-    let title: String
-    var enabled = true
-    let action: () -> Void
-
-    var body: some View {
-        if #available(macOS 26.0, *) {
-            Button(action: action) {
-                Text(title).font(Theme.font(size: 14, weight: .semibold))
-            }
-            .buttonStyle(.glassProminent)
-            .controlSize(.large)
-            .tint(Theme.accent)
-        } else {
-            Button(action: action) {
-                Text(title)
-                    .font(Theme.font(size: 14, weight: .semibold))
-                    .foregroundStyle(enabled ? Theme.accentText : Theme.text3)
-                    .padding(.horizontal, 26)
-                    .padding(.vertical, 11)
-                    .background(enabled ? Theme.accent : Theme.sep2,
-                                in: RoundedRectangle(cornerRadius: 9))
-            }
-            .buttonStyle(.plain)
-        }
-    }
 }

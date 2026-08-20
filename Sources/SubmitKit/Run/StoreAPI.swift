@@ -366,7 +366,7 @@ public actor StoreAPI {
             ])
             let result = try await perform(request, system: .google, path: "/token",
                                            retryOverride: true)
-            let payload = try JSONDecoder().decode(GoogleToken.self, from: result.data)
+            let payload = try GoogleToken.decode(result.data)
             googleToken = (payload.accessToken,
                            Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3_600)))
             return payload.accessToken
@@ -394,7 +394,7 @@ public actor StoreAPI {
         ])
         let result = try await perform(request, system: .google, path: "/token",
                                        retryOverride: true)
-        let payload = try JSONDecoder().decode(GoogleToken.self, from: result.data)
+        let payload = try GoogleToken.decode(result.data)
         if scope != Self.reportingScope {
             googleToken = (payload.accessToken,
                            Date().addingTimeInterval(TimeInterval(payload.expiresIn ?? 3_600)))
@@ -428,16 +428,6 @@ public actor StoreAPI {
             result[parts[0].trimmingCharacters(in: .whitespaces)] = number
         }
         return result
-    }
-}
-
-private struct GoogleToken: Decodable {
-    let accessToken: String
-    let expiresIn: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case expiresIn = "expires_in"
     }
 }
 

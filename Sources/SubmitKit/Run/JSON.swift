@@ -48,3 +48,22 @@ public struct JSON: @unchecked Sendable {
         }
     }
 }
+
+public extension Date {
+    /// A store timestamp, with or without the fractional seconds.
+    ///
+    /// Apple stamps both shapes into the same field and the licensing service
+    /// does the same, so every reader has to take both. Four readers each
+    /// carried their own pair of formatters before this one.
+    ///
+    /// A fresh formatter per call. `ISO8601DateFormatter` is not `Sendable`,
+    /// and these are read a handful of times per session, so a shared one
+    /// would buy nothing and cost a lock. A bare `ISO8601DateFormatter`
+    /// already means `.withInternetDateTime`, which is the plain shape.
+    static func iso8601(_ text: String?) -> Date? {
+        guard let text else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+    }
+}

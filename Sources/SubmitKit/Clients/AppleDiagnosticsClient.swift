@@ -279,8 +279,7 @@ public struct AppleDiagnosticsClient: Sendable {
         feedback.osVersion = attributes["osVersion"].string
         feedback.appVersion = attributes["appVersionString"].string
             ?? attributes["buildBundleId"].string
-        feedback.createdDate = attributes["createdDate"].string
-            .flatMap(AppleActionsClient.date)
+        feedback.createdDate = Date.iso8601(attributes["createdDate"].string)
         feedback.testerEmail = attributes["email"].string
             ?? item["relationships"]["tester"]["data"]["id"].string.flatMap { testers[$0] }
         feedback.screenshots = attributes["screenshots"].array

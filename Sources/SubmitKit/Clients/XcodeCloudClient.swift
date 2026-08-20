@@ -361,6 +361,6 @@ public struct XcodeCloudClient: Sendable {
             number: attributes["number"].int,
             executionProgress: attributes["executionProgress"].string,
             completionStatus: attributes["completionStatus"].string,
-            startedAt: attributes["startedDate"].string.flatMap(AppleActionsClient.date))
+            startedAt: Date.iso8601(attributes["startedDate"].string))
     }
 }

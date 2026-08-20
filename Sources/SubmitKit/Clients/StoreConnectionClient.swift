@@ -417,7 +417,7 @@ public struct StoreConnectionClient: Sendable {
         ])
         let (data, response) = try await session.data(for: request)
         try Self.requireSuccess(response, data: data)
-        return try JSONDecoder().decode(GoogleTokenResponse.self, from: data).accessToken
+        return try GoogleToken.decode(data).accessToken
     }
 
     private func appleGET(_ url: URL, token: String) async throws -> Data {
@@ -434,13 +434,6 @@ public struct StoreConnectionClient: Sendable {
 
     private static func appleURL(_ path: String) throws -> URL {
         guard let url = URL(string: "https://api.appstoreconnect.apple.com\(path)") else {
-            throw ConnectionError.invalidResponse
-        }
-        return url
-    }
-
-    private static func googleURL(_ path: String) throws -> URL {
-        guard let url = URL(string: "https://androidpublisher.googleapis.com\(path)") else {
             throw ConnectionError.invalidResponse
         }
         return url
@@ -574,7 +567,7 @@ enum AppleJWT {
             throw ConnectionError.invalidPrivateKey
         }
         let signature = try key.signature(for: Data(signingInput.utf8))
-        return "\(signingInput).\(signature.rawRepresentation.base64URL)"
+        return "\(signingInput).\(Base64URL.encode(signature.rawRepresentation))"
     }
 }
 
@@ -629,7 +622,7 @@ enum GoogleJWT {
             &signError) as Data? else {
             throw ConnectionError.signingFailed(signError?.takeRetainedValue().localizedDescription ?? "Unknown signing error.")
         }
-        return "\(signingInput).\(signature.base64URL)"
+        return "\(signingInput).\(Base64URL.encode(signature))"
     }
 }
 
@@ -638,7 +631,7 @@ private enum JWT {
         let options: JSONSerialization.WritingOptions = [.sortedKeys, .withoutEscapingSlashes]
         let headerData = try JSONSerialization.data(withJSONObject: header, options: options)
         let payloadData = try JSONSerialization.data(withJSONObject: payload, options: options)
-        return "\(headerData.base64URL).\(payloadData.base64URL)"
+        return "\(Base64URL.encode(headerData)).\(Base64URL.encode(payloadData))"
     }
 }
 
@@ -738,14 +731,6 @@ struct AppleIncluded: Decodable {
 
 struct AppleLinks: Decodable { let next: String? }
 
-private struct GoogleTokenResponse: Decodable {
-    let accessToken: String
-
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-    }
-}
-
 private struct GoogleAppsResponse: Decodable {
     struct App: Decodable {
         let packageName: String
@@ -770,14 +755,5 @@ enum APIError {
         }
         if let error = object["error"] as? String { return error }
         return String(data: data, encoding: .utf8)
-    }
-}
-
-extension Data {
-    var base64URL: String {
-        base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
     }
 }
