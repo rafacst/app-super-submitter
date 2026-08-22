@@ -182,6 +182,7 @@
 		72651D48B62B78D062A788B7 /* ReviewRetrievalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FCB36609BF9517FCABD75B3 /* ReviewRetrievalTests.swift */; };
 		72856A3A54EA6635E8F43083 /* GoogleArtifactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AD41B89B54A1D15B576B54E /* GoogleArtifactTests.swift */; };
 		7327A261F86D0B86C88FCBEA /* SubmissionBlockerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC44CA7E8968DD452595072 /* SubmissionBlockerTests.swift */; };
+		735FAD0B61662B5E2443C36E /* ProjectLocalesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB88269512FA3779C3DE0A99 /* ProjectLocalesTests.swift */; };
 		746A2B9737EE024D37637197 /* ReviewInfoScreenReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94006F9A32D3E1736BFF4387 /* ReviewInfoScreenReviewTests.swift */; };
 		757C281F2EF136DB96DDAA88 /* AppleBuildService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E74E2FD14F99B42014E7C967 /* AppleBuildService.swift */; };
 		787090BDBED28F6E8D8675AB /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D79C5DE3F2E7E5B601B24DD /* Sidebar.swift */; };
@@ -257,6 +258,7 @@
 		AC51904FE56A1C1FBB6B258A /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9E25B3162E791B57E85330 /* Credentials.swift */; };
 		ACA4BE2A48864A4C49A13960 /* BindingLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = B552F0B4703F1833D8640EF6 /* BindingLimits.swift */; };
 		ACD9F409A6A4FEB5265F3CA4 /* AppTagsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DAB421E8F5BDC7CBD7F52C9 /* AppTagsPanel.swift */; };
+		AD432A2792217A6107099598 /* ProjectLocales.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA43B724C62604DCB8F67D1D /* ProjectLocales.swift */; };
 		ADF5159C6B654A0E0EB02791 /* AppTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB647EAB19EDD8CE71F387B0 /* AppTabBar.swift */; };
 		ADFA52DF2F75227B61890394 /* UploadStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2BC630E6C38260E7F793896 /* UploadStateTests.swift */; };
 		AFC3B63D0A3BB28A6914C90A /* VitalsSeriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10014A85FEC2E31093B9A1CA /* VitalsSeriesTests.swift */; };
@@ -295,6 +297,7 @@
 		C5B14445FB4351B497628AD2 /* EntitlementVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B7BDBC4CFA41B779503C46 /* EntitlementVerifier.swift */; };
 		C5D2D71BDF83A54C4F1B6C44 /* ManifestEditingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425AF414536E2877618D5BBF /* ManifestEditingTests.swift */; };
 		C799F9D09D1439D088572361 /* LiveAppHead.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03E9A4B8DD795385F622A8C /* LiveAppHead.swift */; };
+		C86E76503EBA189887924ACF /* BuildTabOpensReadyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7092C850CA84130B2E1A0D1 /* BuildTabOpensReadyTests.swift */; };
 		C90F2B1FD0C6223E6A65480F /* SentMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF72785F031728ABABADC36 /* SentMediaTests.swift */; };
 		C930AE41EBBB327BEA8F9AB6 /* MoneyTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88FFBAD82D86A4775D0AF48C /* MoneyTab.swift */; };
 		CA07286A5B30FD2A76C52077 /* ManageListsLiveAppsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD69FF7C34654971A7B9C06A /* ManageListsLiveAppsTests.swift */; };
@@ -685,6 +688,7 @@
 		A9000ACF0B32D0860AE416D2 /* MonetizationExistingProductsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonetizationExistingProductsTests.swift; sourceTree = "<group>"; };
 		A9685EAA78E5413A1BE5BD1A /* UpdateRequirementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateRequirementTests.swift; sourceTree = "<group>"; };
 		A97EFE644B997062A23FCEFB /* SigningIdentitiesPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SigningIdentitiesPanel.swift; sourceTree = "<group>"; };
+		AA43B724C62604DCB8F67D1D /* ProjectLocales.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectLocales.swift; sourceTree = "<group>"; };
 		AB3980179BF4C3F19EE496D9 /* Draft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Draft.swift; sourceTree = "<group>"; };
 		AB517435315135FE658F195A /* AppStateUndo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateUndo.swift; sourceTree = "<group>"; };
 		ADCDB80D12F9D17E4007443B /* UpdaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterTests.swift; sourceTree = "<group>"; };
@@ -729,6 +733,7 @@
 		C91945C6121D0FE2ADC5C94F /* StoreSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreSelection.swift; sourceTree = "<group>"; };
 		CAA029973011E040843D8973 /* PaletteStepsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteStepsTests.swift; sourceTree = "<group>"; };
 		CB059340B013D6F4324F8F6A /* ReleaseInFlightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseInFlightTests.swift; sourceTree = "<group>"; };
+		CB88269512FA3779C3DE0A99 /* ProjectLocalesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectLocalesTests.swift; sourceTree = "<group>"; };
 		CC15B00B50A626A5F4200EF8 /* SuperSubmitterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperSubmitterApp.swift; sourceTree = "<group>"; };
 		CC43D4E00712A21F03A6FF94 /* AppAvailabilityReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAvailabilityReadTests.swift; sourceTree = "<group>"; };
 		CCC2EB25A24CE90D44A4E4ED /* Gzip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gzip.swift; sourceTree = "<group>"; };
@@ -762,6 +767,7 @@
 		E3AA57DF716DDDCF5552F76F /* AppStateRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateRun.swift; sourceTree = "<group>"; };
 		E3B3931950BDF99F219148B3 /* ApplePlatformStandingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePlatformStandingTests.swift; sourceTree = "<group>"; };
 		E612A467105AF3D35B6BF6E2 /* StatusPillContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPillContrastTests.swift; sourceTree = "<group>"; };
+		E7092C850CA84130B2E1A0D1 /* BuildTabOpensReadyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildTabOpensReadyTests.swift; sourceTree = "<group>"; };
 		E74E2FD14F99B42014E7C967 /* AppleBuildService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleBuildService.swift; sourceTree = "<group>"; };
 		E78B5A8CC5A9C3BA7A477462 /* MonetizationCatalogReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonetizationCatalogReadTests.swift; sourceTree = "<group>"; };
 		E7A622EAC4AC1F5387ADECB5 /* ImportedIconTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportedIconTests.swift; sourceTree = "<group>"; };
@@ -949,6 +955,7 @@
 				360506813C5CC582DF217F11 /* BuildPathNoticeTests.swift */,
 				FD1A01A03264D799F8047155 /* BuildScreenReviewTests.swift */,
 				69D1DAFEC60F55A58A9EE1FF /* BuildsListWindowTests.swift */,
+				E7092C850CA84130B2E1A0D1 /* BuildTabOpensReadyTests.swift */,
 				61D4CEC1D565BC5BA2365DF3 /* CancelQueuedSubmissionTests.swift */,
 				48EA31CCF3068930153D56CD /* CatalogImportTests.swift */,
 				A7C77E78F475B91BAA4EB5A8 /* CheckoutKeyTests.swift */,
@@ -1138,6 +1145,7 @@
 				C195129D25C9904DA1575EE7 /* PerStoreScreenshotTests.swift */,
 				54D8576A89F9578A2DA413B5 /* PlannerTests.swift */,
 				EEB122699517E677F09744AA /* PricePointPagingTests.swift */,
+				CB88269512FA3779C3DE0A99 /* ProjectLocalesTests.swift */,
 				157C66C68A124365FC98C9F5 /* ReadBackTests.swift */,
 				04EF321E0259E71AC24E933F /* ReadScopeTests.swift */,
 				1F000E34291F48D1BDA5A72E /* RemoteSafetyTests.swift */,
@@ -1328,6 +1336,7 @@
 				6DE54D096EF55A82E4DEB084 /* BuildModels.swift */,
 				2E478E4DC53EB86AD9227D47 /* BuildStorage.swift */,
 				DA1117E3BE5331194E42ADC9 /* ProjectDiscovery.swift */,
+				AA43B724C62604DCB8F67D1D /* ProjectLocales.swift */,
 				2AE871FE21655B5878BD19A1 /* Redaction.swift */,
 				BEFADD5D0C024A395A42101D /* ToolProcess.swift */,
 				A4D1B38E1BC07601F5407CE3 /* UploadRun.swift */,
@@ -1691,6 +1700,7 @@
 				5C025C26E76B2302FCB5857F /* PerStoreScreenshotTests.swift in Sources */,
 				1EE99FE798E4B23C662567B0 /* PlannerTests.swift in Sources */,
 				E9A23F946E6AED3EC4D87113 /* PricePointPagingTests.swift in Sources */,
+				735FAD0B61662B5E2443C36E /* ProjectLocalesTests.swift in Sources */,
 				CA3A815E6C174DD0ABE630C5 /* ReadBackTests.swift in Sources */,
 				C19E582739608CDB9A374087 /* ReadScopeTests.swift in Sources */,
 				7E56642B8A4955C0DF5C91C2 /* RemoteSafetyTests.swift in Sources */,
@@ -1785,6 +1795,7 @@
 				BB68827901D56AB194F7B551 /* Planner.swift in Sources */,
 				4CA3A601A81E0CC018CF74D9 /* PriceDraft.swift in Sources */,
 				55CE06F6D950B18D5222F276 /* ProjectDiscovery.swift in Sources */,
+				AD432A2792217A6107099598 /* ProjectLocales.swift in Sources */,
 				FAF804DE2D9D05F6EB014D58 /* ProtoManifest.swift in Sources */,
 				B5F84498304FABA8F28ED612 /* ProviderApply.swift in Sources */,
 				C1F59B28E0F0920AD38350DB /* ProviderConnectionClient.swift in Sources */,
@@ -1946,6 +1957,7 @@
 				CBA8AAB27D569DF271BDC27F /* BuildNumberAheadTests.swift in Sources */,
 				35698200EBCA20CB147E2B3A /* BuildPathNoticeTests.swift in Sources */,
 				4B054D8DEE985963ED99B5F1 /* BuildScreenReviewTests.swift in Sources */,
+				C86E76503EBA189887924ACF /* BuildTabOpensReadyTests.swift in Sources */,
 				989BDB1EEDAC5050FAA6C927 /* BuildsListWindowTests.swift in Sources */,
 				71997BA54A11A2EA15F0AF4E /* CancelQueuedSubmissionTests.swift in Sources */,
 				E0C13E01C746538F15C3F53E /* CatalogImportTests.swift in Sources */,

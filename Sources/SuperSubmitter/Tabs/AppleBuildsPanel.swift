@@ -14,7 +14,12 @@ import SwiftUI
 struct AppleBuildsPanel: View {
     @Environment(AppState.self) private var state
     @State private var loading = false
-    @State private var loaded = false
+    /// Which app and train the rows on screen belong to, or nil while there
+    /// are none. It was a `Bool`, and a `Bool` cannot tell "already fetched"
+    /// from "fetched, for the app before this one": switching app in the tab
+    /// strip left the previous app's builds under the new app's name, and the
+    /// fetch that would have replaced them was refused as already done.
+    @State private var loadedKey: String?
     @State private var error: String?
     @State private var builds: [UploadService.RemoteBuild] = []
     /// How many rows are drawn. An app that has been shipping for a year holds
@@ -27,12 +32,24 @@ struct AppleBuildsPanel: View {
     /// is what a developer comes here for.
     private static let page = 10
 
+    /// Whether the rows on screen answer for the app the tab is showing.
+    private var loaded: Bool { loadedKey == taskKey }
+
+    /// What a fetched list belongs to: one app id and one train. Both change
+    /// the answer, and both can change without this panel leaving the screen.
+    private var taskKey: String {
+        "\(state.appleActionAppID ?? "")·\(state.applePlatform.rawValue)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
             header
             NoteWithAction(note) {
-                QuietButton(title: loading ? "Fetching…" : "Fetch the builds") { load() }
-                    .disabled(loading)
+                QuietButton(title: loading ? "Fetching…"
+                                   : (loaded ? "Fetch them again" : "Fetch the builds")) {
+                    load()
+                }
+                .disabled(loading)
             }
             .font(Theme.font(size: 11.5))
 
@@ -41,10 +58,23 @@ struct AppleBuildsPanel: View {
                 Text("App Store Connect holds no build for this app on \(state.applePlatform == .macOS ? "macOS" : "iOS") yet.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
-            if !builds.isEmpty { list }
+            if loaded, !builds.isEmpty { list }
             if let chosen = state.chosenAppleBuildNumber, !chosen.isEmpty { chosenLine(chosen) }
         }
         .fieldAnchor("build.storeBuilds")
+        // The list, without being asked for it. A panel titled "Builds in App
+        // Store Connect" that holds no build until a button is pressed is the
+        // app asking the developer to confirm that they meant the thing they
+        // opened. The read is read-only and it writes nothing.
+        //
+        // Keyed on the app and the platform, because those are the two answers
+        // the list depends on: switching app in the tab strip, or switching an
+        // app's train from iOS to macOS, both make the rows on screen the
+        // wrong ones.
+        .task(id: taskKey) {
+            guard !loaded, !loading, state.appleActionAppID != nil else { return }
+            load()
+        }
     }
 
     private var header: some View {
@@ -222,12 +252,17 @@ struct AppleBuildsPanel: View {
         // a window the developer opened against the last one would leave rows
         // showing for builds that are no longer in the list.
         shown = Self.page
+        // The key at the moment of the call. The developer is free to switch
+        // app while Apple answers, and rows fetched for the app they left must
+        // not be marked as this one's.
+        let key = taskKey
         Task {
             do {
                 builds = try await state.appleStoreBuilds()
-                loaded = true
+                loadedKey = key
             } catch {
                 self.error = error.localizedDescription
+                loadedKey = nil
             }
             loading = false
         }

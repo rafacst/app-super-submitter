@@ -14,7 +14,7 @@ import Testing
         #expect(!Tab.remoteSave.canFetchFromStore)
     }
 
-    @Test func theSharedFetchWarnsLocksAndShowsProgress() throws {
+    @Test func theSharedFetchSaysWhatItDoesLocksAndShowsProgress() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let shell = try String(
@@ -22,7 +22,11 @@ import Testing
             encoding: .utf8)
 
         #expect(shell.contains("Fetch from store"))
-        #expect(shell.contains("Everything not saved in this tab will be overwritten."))
+        // What the read actually does. It fills what the app knows about the
+        // stores and leaves `store.yaml` alone, so the message says so and
+        // the button is not destructive.
+        #expect(shell.contains("Nothing you have written in store.yaml is changed."))
+        #expect(!shell.contains("Everything not saved in this tab will be overwritten."))
         #expect(shell.contains("ProgressView()"))
         #expect(shell.contains(".disabled(state.isFetchingSelectedTab)"))
     }

@@ -20,8 +20,13 @@ struct BuildTab: View {
                 }
             }
             buildSetup
-            storeBuilds
-            storeTools
+            // The Play track decides what an apply writes, so it is a release
+            // decision and it stands with the essentials. It was the top half
+            // of `googleOptions`, and when the artifact paths beside it moved
+            // under the switch the track went nowhere at all: an Android
+            // release had no way to choose internal, alpha, beta or production.
+            if state.stores.contains(.google) { googleOptions }
+            advancedOptions
         }
         .frame(maxWidth: 1040, alignment: .leading)
         .confirmationDialog("Replace the local data?",
@@ -38,6 +43,14 @@ struct BuildTab: View {
         // `AppState.defaultEncryptionAnswer`: the tab that asks the question is
         // the tab that fills it in.
         .task { state.defaultEncryptionAnswer() }
+        // And what the stores hold, asked by the tab rather than by the
+        // developer. See `AppState.fetchBuildTabFromStore`: it writes nothing,
+        // it fills the boxes that were empty, and every one of them stays
+        // editable afterwards.
+        //
+        // Keyed on the manifest, so switching to another app in the tab strip
+        // asks about that app instead of leaving the one before it on screen.
+        .task(id: state.manifestURL) { await state.fetchBuildTabFromStore() }
     }
 
     /// The one decision that changes the workflow below it.
@@ -121,25 +134,17 @@ struct BuildTab: View {
         }
     }
 
-    private var buildSetupNeedsAttention: Bool {
-        if state.stores.contains(.apple),
-           state.appleBundleID.isEmpty || state.appleAppID.isEmpty
-            || state.encryptionAnswer == nil {
-            return true
-        }
-        if state.stores.contains(.google), state.googlePackageName.isEmpty {
-            return true
-        }
-        return state.stores.contains {
-            state.manifest.versionName(for: $0)?.isEmpty != false
-        }
-    }
-
-    /// Store-owned values stay close, but they do not compete with the normal
-    /// build path after the app has a complete setup.
+    /// What a submission cannot go without: who this app is in each store,
+    /// which version it ships, and Apple's export compliance answer.
+    ///
+    /// It does not fold any more. It was a fold that opened only when one of
+    /// its own fields was missing, so the three values that decide what gets
+    /// sent were behind a closed header on every app that was ready to send —
+    /// and the header said "Build setup", which reads like a preference. These
+    /// are the necessary ones, so they are the ones that stay on the screen.
+    /// Everything past them is under the switch below. See `advancedOptions`.
     private var buildSetup: some View {
         Section_("Build setup", icon: "slider.horizontal.3",
-                 folds: true, startsOpen: buildSetupNeedsAttention,
                  note: "Store identifiers, release versions, and export compliance") {
             VStack(alignment: .leading, spacing: 14) {
                 storeIdentitySection
@@ -169,25 +174,70 @@ struct BuildTab: View {
 
             Divider().overlay(Theme.sep)
             versionRow
+            if state.stores.contains(.apple) { storeBuildNote }
+            readingNote
+        }
+    }
 
-            HStack(alignment: .top, spacing: 10) {
-                QuietButton(
-                    title: state.listingImportStatus == .connecting
-                        ? "Fetching…" : "Fetch the current listings",
-                    action: { state.importExistingListing() })
-                    .disabled(state.listingImportStatus == .connecting)
-                switch state.listingImportStatus {
-                case .connected(let message):
-                    Text(message).foregroundStyle(Theme.green)
-                case .failed(let message):
-                    WarningNote(message)
-                default:
-                    Text("The store owns these identifiers; importing an existing listing fills them in.")
-                        .foregroundStyle(Theme.text3)
-                }
+    /// The newest build App Store Connect holds for this train.
+    ///
+    /// The tab reads this number as it opens and had nowhere to put it: it was
+    /// on the Summary tab and inside the build list under the advanced switch,
+    /// so the one fact a developer opens Build to learn was on two screens
+    /// that are not this one. The list stays advanced, because picking a build
+    /// other than the newest is the advanced job. The number is not.
+    @ViewBuilder private var storeBuildNote: some View {
+        if let highest = state.actualState.apple?.highestBuildNumber {
+            Text(verbatim: "Build \(highest) is the newest in App Store Connect")
+                .font(Theme.font(size: 11.5))
+                .foregroundStyle(Theme.text2)
+                .monospacedDigit()
+        }
+    }
+
+    /// What the tab is doing while it opens, and what it found.
+    ///
+    /// The read runs on its own now, so the developer has to be told it is
+    /// happening: a version box that fills itself two seconds after the screen
+    /// draws is the app editing their file in front of them unless the screen
+    /// says who did it. It stays one line, and it says nothing at all once
+    /// there is nothing to report.
+    @ViewBuilder private var readingNote: some View {
+        if state.planReading {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Reading what the stores hold for this app…")
+                    .foregroundStyle(Theme.text2)
             }
             .font(Theme.font(size: 11.5))
+        } else if !state.planReadFailures.isEmpty {
+            WarningNote(state.planReadFailures.joined(separator: "\n"))
         }
+    }
+
+    /// The listing import. It replaces every local word with the store's, so
+    /// it is a command a developer runs on purpose and never the tab opening.
+    private var listingImportRow: some View {
+        HStack(alignment: .top, spacing: 10) {
+            QuietButton(
+                title: state.listingImportStatus == .connecting
+                    ? "Fetching…" : "Replace the listing with the store's",
+                action: { state.importExistingListing() })
+                .disabled(state.listingImportStatus == .connecting)
+            switch state.listingImportStatus {
+            case .connected(let message):
+                Text(message).foregroundStyle(Theme.green)
+            case .failed(let message):
+                WarningNote(message)
+            default:
+                Text("The tab already reads what the stores hold. This goes further and overwrites the listing text, the media, and the identifiers in store.yaml with the store's own.")
+                    .foregroundStyle(Theme.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+        }
+        .font(Theme.font(size: 11.5))
+        .storePanel(padding: 12, horizontal: 15)
     }
 
     /// The store owns these three, and this tab shows them.
@@ -527,23 +577,63 @@ struct BuildTab: View {
         .overlay(alignment: .bottom) { Hairline() }
     }
 
+    /// Which track a Play release goes to. It decides what an apply writes, so
+    /// it is a release decision and it stays with the essentials. The artifact
+    /// paths beside it — the mapping file, the symbols, the expansion files —
+    /// belong to the apps that use them, which is not most of them.
     private var googleOptions: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            GoogleTracksSection()
-            AndroidArtifactsSection()
+        GoogleTracksSection()
+    }
+
+    /// The one switch, and everything it holds.
+    ///
+    /// None of these is needed to send a version. The build list picks a build
+    /// other than the newest, the listing import overwrites `store.yaml` with
+    /// the store's own words, the artifact paths belong to an Android release
+    /// that ships a mapping file, and the tooling reads this Mac and the team.
+    /// They were four folds with four different opening rules; they are one
+    /// answer now, and it is remembered.
+    private var advancedOptions: some View {
+        @Bindable var state = state
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Advanced options")
+                        .font(Theme.cardTitle)
+                    Text("The store's own build list, the listing import, the Android artifacts, and the tools this Mac signs with.")
+                        .font(Theme.caption)
+                        .foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 16)
+                Toggle("Advanced options", isOn: $state.showsAdvancedBuildOptions)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            .storePanel(padding: 12, horizontal: 15)
+
+            if state.showsAdvancedBuildOptions {
+                listingImportRow
+                storeBuilds
+                if state.stores.contains(.google) { AndroidArtifactsSection() }
+                storeTools
+            }
         }
     }
 
+    /// Open when the store has a build to show. The panel fetches on its own
+    /// now, so a shut fold over a list that has already arrived is the app
+    /// hiding the answer it just went and got.
     private var storeBuilds: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        Group {
             if state.stores.contains(.apple) {
                 Section_("App Store builds", icon: "apple.logo", tint: Theme.appleMark,
-                         folds: true, startsOpen: false,
+                         folds: true,
+                         startsOpen: state.actualState.apple?.highestBuildNumber != nil,
                          note: "Builds that App Store Connect already holds") {
                     AppleBuildsPanel()
                 }
             }
-            if state.stores.contains(.google) { googleOptions }
         }
     }
 

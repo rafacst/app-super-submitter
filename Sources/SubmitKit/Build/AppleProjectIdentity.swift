@@ -16,16 +16,24 @@ public struct AppleProjectIdentity: Sendable, Equatable {
     public var bundleIdentifier: String?
     public var marketingVersion: String?
     public var displayName: String?
+    /// `ITSAppUsesNonExemptEncryption`, as the project states it.
+    ///
+    /// Apple takes this answer from inside the binary and changes it for
+    /// nobody, so a project that states it has already decided. Nil when the
+    /// project says nothing, and nil is the developer's question to answer.
+    public var usesNonExemptEncryption: Bool?
 
     public init(bundleIdentifier: String? = nil, marketingVersion: String? = nil,
-                displayName: String? = nil) {
+                displayName: String? = nil, usesNonExemptEncryption: Bool? = nil) {
         self.bundleIdentifier = bundleIdentifier
         self.marketingVersion = marketingVersion
         self.displayName = displayName
+        self.usesNonExemptEncryption = usesNonExemptEncryption
     }
 
     public var isEmpty: Bool {
         bundleIdentifier == nil && marketingVersion == nil && displayName == nil
+            && usesNonExemptEncryption == nil
     }
 
     /// Reads the `project.pbxproj` that belongs to a discovered container.
@@ -39,7 +47,36 @@ public struct AppleProjectIdentity: Sendable, Equatable {
               let text = try? String(contentsOf: project, encoding: .utf8) else {
             return AppleProjectIdentity()
         }
-        return parse(text)
+        var result = parse(text)
+        // The `Info.plist` beside the project, for the one key the settings
+        // block does not carry when the project ships a file of its own.
+        // `SRCROOT` is the folder that holds the `.xcodeproj`, and
+        // `INFOPLIST_FILE` is written relative to it.
+        if result.usesNonExemptEncryption == nil {
+            let root = project.deletingLastPathComponent().deletingLastPathComponent()
+            result.usesNonExemptEncryption = infoPlistEncryption(in: text, root: root)
+        }
+        return result
+    }
+
+    /// `ITSAppUsesNonExemptEncryption` out of the `Info.plist` the project
+    /// names.
+    ///
+    /// A project that generates its plist states the answer as
+    /// `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption` and never reaches here.
+    /// One that ships a file names it in `INFOPLIST_FILE`, and that file is
+    /// the only place the answer exists.
+    ///
+    /// A project with several targets names several files, and `pick` takes
+    /// the one stated most often, which is the app rather than a test bundle.
+    static func infoPlistEncryption(in text: String, root: URL) -> Bool? {
+        guard let named = pick(values(of: "INFOPLIST_FILE", in: text)) else { return nil }
+        let url = URL(fileURLWithPath: named, relativeTo: root)
+        guard let data = try? Data(contentsOf: url),
+              let plist = try? PropertyListSerialization.propertyList(
+                  from: data, format: nil) as? [String: Any]
+        else { return nil }
+        return plist["ITSAppUsesNonExemptEncryption"] as? Bool
     }
 
     static func projectFile(for container: URL) -> URL? {
@@ -71,7 +108,24 @@ public struct AppleProjectIdentity: Sendable, Equatable {
             .filter { !isCompanion($0) })
         result.marketingVersion = pick(values(of: "MARKETING_VERSION", in: text))
         result.displayName = pick(values(of: "INFOPLIST_KEY_CFBundleDisplayName", in: text))
+        // The generated-plist form. Xcode writes the plist keys into the
+        // settings block, so a project made since Xcode 13 states this here
+        // and has no `Info.plist` file at all.
+        result.usesNonExemptEncryption = pick(
+            values(of: "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption", in: text))
+            .flatMap(boolean(from:))
         return result
+    }
+
+    /// A build setting as a yes or no. Xcode writes `YES` and `NO`; a plist
+    /// key copied into the settings block may read `true` or `false`.
+    /// Anything else is not an answer and stays nil.
+    static func boolean(from value: String) -> Bool? {
+        switch value.lowercased() {
+        case "yes", "true", "1": true
+        case "no", "false", "0": false
+        default: nil
+        }
     }
 
     /// The value a settings line holds, for every target that names it.

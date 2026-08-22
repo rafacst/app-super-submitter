@@ -139,6 +139,7 @@ final class AppState {
     /// extension one file over.
     @ObservationIgnored let liveAppsKey = "appLiveStates.v1"
     @ObservationIgnored private let googleCredentialChoiceKey = "googleCredentialChoice.v1"
+    @ObservationIgnored private let advancedBuildKey = "advancedBuildOptions.v1"
 
     // The manifest and the file behind it.
     var manifest = Manifest()
@@ -477,7 +478,37 @@ final class AppState {
     /// and it was the one the tab opened on, so the ordinary case — this Mac
     /// has the project, build it — was one click away every single time.
     var showBuildFromProject = true
+
+    /// Whether the Build tab draws everything past what a submission needs.
+    ///
+    /// The tab answers one question — what am I sending — and it had grown
+    /// four folds around that answer: the store's own build list, the listing
+    /// import, the diagnostics, Xcode Cloud, the signing identities and the
+    /// Android artifacts. Each one opened on its own rule, so the screen a
+    /// developer met was different every time and none of the six is needed to
+    /// send a version.
+    ///
+    /// One switch decides all of them now, and the essentials never fold. It
+    /// is the developer's standing answer, so it lives in the defaults and
+    /// covers every app, the same as the dry-run preference.
+    var showsAdvancedBuildOptions = true {
+        didSet {
+            guard showsAdvancedBuildOptions != oldValue else { return }
+            defaults.set(showsAdvancedBuildOptions, forKey: advancedBuildKey)
+        }
+    }
     var buildRead = false
+
+    /// Whether the Build tab has asked the stores about the open app yet.
+    ///
+    /// It cannot be `plan == nil`, which is the guard the Summary tab uses:
+    /// every edit anywhere calls `invalidatePlan`, so that guard would send a
+    /// fresh read of both stores every time a developer edited a field and
+    /// came back to Build — which is the loop the whole tab is built around.
+    /// `resetRunState` clears this, and that runs when an app is opened or
+    /// switched, so the read happens once per app and not once per visit.
+    /// See `fetchBuildTabFromStore`.
+    var buildTabAskedTheStores = false
     var packages: [AppPackage.Kind: AppPackage] = [:]
     var packageErrors: [AppPackage.Kind: String] = [:]
     var readingPackages: Set<AppPackage.Kind> = []
@@ -723,6 +754,7 @@ final class AppState {
         appLiveStates = defaults.dictionary(forKey: liveAppsKey) as? [String: Bool] ?? [:]
         appleVendorNumber = defaults.string(forKey: "appleVendorNumber") ?? ""
         googleDeveloperId = defaults.string(forKey: "googleDeveloperId") ?? ""
+        showsAdvancedBuildOptions = defaults.bool(forKey: advancedBuildKey)
         if let value = defaults.string(forKey: googleCredentialChoiceKey),
            let choice = GoogleCredentialChoice(rawValue: value) {
             googleCredentialChoice = choice
@@ -3454,6 +3486,7 @@ final class AppState {
         plan = nil
         storePlans = [:]
         actualState = ActualState()
+        buildTabAskedTheStores = false
         moneyReadApps.removeAll()
         fetchingStoreTab = nil
         consoleRows = []

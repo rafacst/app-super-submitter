@@ -99,4 +99,67 @@ import Testing
         #expect(AppleProjectIdentity.read(container: workspace).bundleIdentifier
             == "com.example.deck")
     }
+
+    /// Apple's export compliance answer, where a modern project states it.
+    ///
+    /// Xcode writes the plist keys into the settings block since Xcode 13, so
+    /// a project made in the last few years carries no `Info.plist` file at
+    /// all and this is the only place the answer exists.
+    @Test func theGeneratedPlistFormStatesTheEncryptionAnswer() {
+        let identity = AppleProjectIdentity.parse("""
+            buildSettings = {
+                PRODUCT_BUNDLE_IDENTIFIER = com.example.deck;
+                INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+            };
+            """)
+        #expect(identity.usesNonExemptEncryption == false)
+
+        #expect(AppleProjectIdentity.parse("""
+            buildSettings = {
+                INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
+            };
+            """).usesNonExemptEncryption == true)
+
+        // A project that states nothing has not answered, and nil is the
+        // developer's question to answer.
+        #expect(AppleProjectIdentity.parse("").usesNonExemptEncryption == nil)
+    }
+
+    /// A project that ships an `Info.plist` of its own names it in
+    /// `INFOPLIST_FILE`, and the answer is inside that file.
+    @Test func theInfoPlistFileAnswersWhenTheSettingsBlockDoesNot() throws {
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("plist-\(UUID().uuidString)", isDirectory: true)
+        let project = folder.appendingPathComponent("Deck.xcodeproj")
+        let source = folder.appendingPathComponent("Deck")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try """
+            buildSettings = {
+                PRODUCT_BUNDLE_IDENTIFIER = com.example.deck;
+                INFOPLIST_FILE = Deck/Info.plist;
+            };
+            """.write(to: project.appendingPathComponent("project.pbxproj"),
+                      atomically: true, encoding: .utf8)
+        try """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>ITSAppUsesNonExemptEncryption</key>
+                <true/>
+            </dict>
+            </plist>
+            """.write(to: source.appendingPathComponent("Info.plist"),
+                      atomically: true, encoding: .utf8)
+
+        #expect(AppleProjectIdentity.read(container: project).usesNonExemptEncryption == true)
+
+        // A project that names a file it does not have answers nothing, and
+        // reads as the developer's question rather than as a settled "no".
+        try FileManager.default.removeItem(at: source.appendingPathComponent("Info.plist"))
+        #expect(AppleProjectIdentity.read(container: project).usesNonExemptEncryption == nil)
+    }
 }

@@ -65,7 +65,10 @@ public struct StateReader: Sendable {
                     groupNames: (manifest.subscriptions ?? [])
                         .map { $0.groupName ?? $0.groupId },
                     areas: areas)
-            } catch { state.failures.append("App Store: \(error.localizedDescription)") }
+            } catch {
+                state.failures.append(
+                    "\(Store.apple.readFailureLabel): \(error.localizedDescription)")
+            }
         }
         if stores.contains(.google), let google = manifest.apps.google,
            !google.packageName.isEmpty {
@@ -78,7 +81,8 @@ public struct StateReader: Sendable {
                         .flatMap { $0.plans.map(\.id) },
                     areas: areas)
             } catch {
-                state.failures.append("Google Play: \(error.localizedDescription)")
+                state.failures.append(
+                    "\(Store.google.readFailureLabel): \(error.localizedDescription)")
             }
         }
         // The provider mirrors the catalog, so it is read when the catalog is.

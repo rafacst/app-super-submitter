@@ -230,19 +230,91 @@ private func buildReviewState() -> AppState {
     #expect(source.lowerBound < setup.lowerBound)
 }
 
-/// Store identifiers, versions, and compliance remain available without
-/// competing with the primary build action on each normal visit.
-@Test func buildSetupUsesProgressiveDisclosure() throws {
+/// Store identifiers, versions, and compliance are what a submission cannot
+/// go without, so they never fold.
+///
+/// This block used to fold, and it opened only when one of its own fields was
+/// missing: the three values that decide what gets sent were behind a closed
+/// header on every app that was ready to send. Everything past them is under
+/// one switch instead. See `advancedOptions`.
+@Test func theEssentialsNeverFold() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
     let setup = try #require(build.range(of: "private var buildSetup"))
-    let identity = try #require(build.range(of: "private var storeIdentitySection"))
-    let section = String(build[setup.lowerBound..<identity.lowerBound])
+    let note = try #require(build.range(of: "private var storeIdentitySection"))
+    let section = String(build[setup.lowerBound..<note.lowerBound])
 
     #expect(section.contains("Section_(\"Build setup\""))
-    #expect(section.contains("folds: true"))
-    #expect(section.contains("startsOpen: buildSetupNeedsAttention"))
+    #expect(!section.contains("folds: true"))
     #expect(section.contains("storeIdentitySection"))
     #expect(section.contains("exportCompliance"))
+}
+
+/// One switch holds everything a submission does not need, and it holds all
+/// of it: four folds with four different opening rules were one screen that
+/// looked different on every visit.
+@Test func oneSwitchHoldsEverythingElse() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let advanced = try #require(build.range(of: "private var advancedOptions"))
+    let builds = try #require(build.range(of: "private var storeBuilds"))
+    let section = String(build[advanced.lowerBound..<builds.lowerBound])
+
+    #expect(section.contains("$state.showsAdvancedBuildOptions"))
+    #expect(section.contains("if state.showsAdvancedBuildOptions"))
+    // Every one of them, and nothing left drawing itself unconditionally.
+    for held in ["listingImportRow", "storeBuilds", "AndroidArtifactsSection()",
+                 "storeTools"] {
+        #expect(section.contains(held))
+    }
+    // And the release track is not one of them: it decides what an apply
+    // writes, so it stands with the essentials.
+    #expect(!section.contains("googleOptions"))
+}
+
+/// The Play track is a release decision, so it stands with the essentials.
+///
+/// It was the top half of `googleOptions`, and when the artifact paths beside
+/// it moved under the advanced switch the track went nowhere at all: an
+/// Android release had no way to choose internal, alpha, beta or production.
+@Test func thePlayTrackStandsWithTheEssentials() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let body = try #require(build.range(of: "var body: some View"))
+    let source = try #require(build.range(of: "private var buildPath"))
+    let layout = String(build[body.lowerBound..<source.lowerBound])
+
+    #expect(layout.contains("googleOptions"))
+    // Above the switch, and not inside it.
+    let track = try #require(layout.range(of: "googleOptions"))
+    let advanced = try #require(layout.range(of: "advancedOptions"))
+    #expect(track.lowerBound < advanced.lowerBound)
+    #expect(build.contains("private var googleOptions"))
+}
+
+/// The build number the tab just read, on the tab that read it.
+///
+/// It lived on the Summary tab and inside the build list under the advanced
+/// switch, so the one fact a developer opens Build to learn was on two screens
+/// that are not this one. The list stays advanced; the number does not.
+@Test func theStoreBuildNumberSitsWithTheVersion() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    let identity = try #require(build.range(of: "private var storeIdentitySection"))
+    let note = try #require(build.range(of: "private var storeBuildNote"))
+    let section = String(build[identity.lowerBound..<note.lowerBound])
+
+    let version = try #require(section.range(of: "versionRow"))
+    let number = try #require(section.range(of: "storeBuildNote"))
+    #expect(version.lowerBound < number.lowerBound)
+    #expect(build.contains("state.actualState.apple?.highestBuildNumber"))
+}
+
+/// The tab reads the stores as it opens, and the read is the one that writes
+/// nothing. See `AppState.fetchBuildTabFromStore`.
+@Test func theTabFetchesWithoutBeingAsked() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+    #expect(build.contains(".task(id: state.manifestURL) { await state.fetchBuildTabFromStore() }"))
+
+    // And the build list with it, rather than behind a button press.
+    let panel = try buildReviewSource("Sources/SuperSubmitter/Tabs/AppleBuildsPanel.swift")
+    #expect(panel.contains(".task(id: taskKey)"))
 }
 
 /// The project summary keeps the normal path short. The less common project

@@ -876,16 +876,26 @@ private struct ContentHeader: View {
         } message: {
             Text("The next apply writes drafts to \(state.storeListText) instead of logging them. It writes drafts only: nothing reaches review until you send it on the Release tab.")
         }
+        // Not a destructive button, and the message no longer says it is.
+        //
+        // It read "Everything not saved in this tab will be overwritten", and
+        // that was never what happened: `readStores` fills what the app knows
+        // about the stores and leaves `store.yaml` exactly as the developer
+        // left it. The warning was the reason the Build tab could not simply
+        // read as it opened — the one control that answered "what does the
+        // store hold" stood behind a red button and a threat to the
+        // developer's work. It reads on its own there now, and this is the
+        // same read, asked again on purpose.
         .confirmationDialog("Fetch this tab from the store?",
                             isPresented: $confirmingStoreFetch,
                             titleVisibility: .visible) {
-            Button("Fetch from store", role: .destructive) {
+            Button("Fetch from store") {
                 fetchTick += 1
                 Task { await state.fetchSelectedTabFromStore() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Everything not saved in this tab will be overwritten.")
+            Text("This reads both stores and refreshes what they hold. Nothing you have written in store.yaml is changed.")
         }
         // Below macOS 26 the band is the page at rest, and separates itself
         // only while there is something above the fold. On 26 the material
