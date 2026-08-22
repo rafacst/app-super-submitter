@@ -4,6 +4,16 @@ public enum Store: String, Codable, Sendable, CaseIterable, Hashable, Identifiab
     case apple, google
 
     public var id: String { rawValue }
+
+    /// How a read failure names this store. `StateReader` writes it in front
+    /// of every failure it reports, so a caller that asked only some of the
+    /// stores can tell the answers apart afterwards.
+    public var readFailureLabel: String {
+        switch self {
+        case .apple: "App Store"
+        case .google: "Google Play"
+        }
+    }
 }
 
 /// One text field of the store listing. Spec section 6.1.

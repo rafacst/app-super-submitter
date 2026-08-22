@@ -225,6 +225,83 @@ extension AppState {
         ])
     }
 
+    /// Everything the Build tab needs from the stores, asked as the tab opens.
+    ///
+    /// The tab used to open on nothing. `resetRunState` empties `actualState`
+    /// every time an app is opened or switched, so the live version, the next
+    /// free version and the highest build number were all absent until the
+    /// developer found "Fetch from store" in the header and agreed to a
+    /// confirmation that warned about overwriting their work. The one fact a
+    /// developer opens this tab to learn — what the store already holds — was
+    /// the one thing the tab would not tell them without being asked.
+    ///
+    /// `readStores` is the read to use, because it writes nothing: it fills
+    /// `actualState`, the snapshot and the plan, and it leaves `store.yaml`
+    /// exactly as the developer left it. The Summary tab has opened this way
+    /// since it was written, and this is the same guard in the same shape.
+    ///
+    /// A credential per chosen store, and no read at all without one. A store
+    /// with no key answers with a failure, and a failure nobody asked for is a
+    /// red line under a field on a tab that has not been used yet.
+    ///
+    /// Once per app and not once per visit. See `buildTabAskedTheStores`: the
+    /// Summary tab guards on `plan == nil`, and every edit invalidates the
+    /// plan, so that guard here would read both stores again each time a
+    /// developer edited a field and came back. "Fetch from store" in the
+    /// header is the way to ask a second time.
+    func fetchBuildTabFromStore() async {
+        guard !buildTabAskedTheStores, !planReading,
+              !connectedStores.isEmpty else { return }
+        buildTabAskedTheStores = true
+        await readStores()
+        planReadFailures = Self.failures(planReadFailures,
+                                         hiding: stores.subtracting(connectedStores))
+        adoptStoreVersionWhereEmpty()
+    }
+
+    /// The stores the app goes to that this Mac holds a key for.
+    ///
+    /// The Build tab's guard used to be `allSatisfy`, so one missing key
+    /// stopped the whole read: an app that goes to both stores with only the
+    /// App Store key connected opened on nothing at all. One key is enough to
+    /// answer for the store it belongs to.
+    var connectedStores: Set<Store> { stores.filter(hasCredential(for:)) }
+
+    /// Drops the read failures of stores nobody asked about.
+    ///
+    /// `readStores` asks every store the app goes to, because the plan has to
+    /// cover all of them, and a store with no key answers with an
+    /// authorization failure. That failure is not news on a tab that has just
+    /// opened: the identity row already says the store is not connected, and a
+    /// red line under it says the same thing twice. Pressing "Fetch from
+    /// store" is the developer asking on purpose, and it keeps every failure.
+    static func failures(_ failures: [String], hiding silent: Set<Store>) -> [String] {
+        guard !silent.isEmpty else { return failures }
+        let prefixes = silent.map { "\($0.readFailureLabel):" }
+        return failures.filter { failure in
+            !prefixes.contains(where: failure.hasPrefix)
+        }
+    }
+
+    /// Fills a release version the file does not carry with the one the App
+    /// Store holds. It overrules nothing.
+    ///
+    /// The store owns this number for an app that has shipped, and a developer
+    /// who imported an app and then typed nothing had an empty box under a
+    /// heading that says "Release version". A field the developer has answered
+    /// is never touched, and the box stays editable after this writes it.
+    ///
+    /// Apple only. `ActualState.Google` carries version codes and no version
+    /// name, so Google has nothing to answer with.
+    func adoptStoreVersionWhereEmpty() {
+        guard stores.contains(.apple),
+              manifest.versionName(for: .apple)?.isEmpty != false,
+              let version = actualState.apple?.versionString ?? nextAppleVersion,
+              !version.isEmpty
+        else { return }
+        setAppleReleaseVersion(version)
+    }
+
     /// Replaces the selected tab's last remote values with one complete store read.
     func fetchSelectedTabFromStore() async {
         let tab = selectedTab
