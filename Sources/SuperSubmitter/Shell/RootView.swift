@@ -539,10 +539,10 @@ private struct EmptyAppView: View {
             // and Release in it.
             HStack(spacing: 18) {
                 EntryModeCard(symbol: "paperplane.fill", title: "Submit a new app",
-                              detail: "Choose its project folder and prepare a fresh store submission.",
+                              detail: "Connect your store accounts, then point at the project folder. Super Submitter reads what the project already says.",
                               tint: Theme.accent) {
                     state.mode = .publishing
-                    state.chooseAppFolder()
+                    state.startNewApp()
                 }
                 // This one keeps the mode it is opened in: the import writes
                 // `store.yaml` beside the developer's source for a publisher and
@@ -555,7 +555,7 @@ private struct EmptyAppView: View {
                                   ? "Connect your store accounts, select one or many apps, and import their current data."
                                   : "Connect your store accounts and pick the apps you look after. The reviews, the numbers, and the pages all follow.",
                               tint: Theme.teal) {
-                    state.showExistingAppImport = true
+                    state.startAppImport()
                 }
             }
             .frame(maxWidth: 760)
@@ -753,19 +753,31 @@ private struct ContentHeader: View {
             // them has to survive the entry screen, where this band is not
             // drawn at all. See `RootView.toolbar`.
 
-            if state.manifestURL != nil, state.selectedTab.canFetchFromStore {
+            // What the store holds, and the way to go and get it. The chip
+            // used to ride at the far end beside the save, a corner that is
+            // about this Mac's copy, while the button that reads the store
+            // sat five controls away from the chip that reports it. One
+            // group, one subject.
+            if state.manifestURL != nil,
+               state.selectedTab.canFetchFromStore || state.currentApp != nil {
                 HeaderCluster(morphOn: shape) {
-                    if state.isFetchingSelectedTab {
-                        ProgressView()
-                            .progressViewStyle(.linear)
-                            .frame(width: 112)
-                            .accessibilityLabel("Fetch from store")
-                    } else {
-                        QuietButton(title: "Fetch from store", glass: true,
-                                    symbol: "arrow.down.circle", tick: fetchTick) {
-                            confirmingStoreFetch = true
+                    if !state.linkedApps.isEmpty, let app = state.currentApp {
+                        AppStatusChip(mark: state.appMark(appKey: app.key))
+                    }
+                    if state.awaitsProjectFolder { ProjectFolderChip() }
+                    if state.selectedTab.canFetchFromStore {
+                        if state.isFetchingSelectedTab {
+                            ProgressView()
+                                .progressViewStyle(.linear)
+                                .frame(width: 112)
+                                .accessibilityLabel("Fetch from store")
+                        } else {
+                            QuietButton(title: "Fetch from store", glass: true,
+                                        symbol: "arrow.down.circle", tick: fetchTick) {
+                                confirmingStoreFetch = true
+                            }
+                            .disabled(state.fetchingStoreTab != nil)
                         }
-                        .disabled(state.fetchingStoreTab != nil)
                     }
                 }
             }
@@ -846,19 +858,9 @@ private struct ContentHeader: View {
             // list of linked apps lives in user defaults, and a developer who
             // lost it lost the sidebar while every file was still on disk.
             // Nothing to copy with no app linked, so it draws nothing there.
-            //
-            // The standing of the open app rides beside it. It was a chip on
-            // every tab of the app bar, where it doubled the width of each tab
-            // and squeezed the names it sat next to; here it is one chip, for
-            // the one app the window is showing.
-            if !state.linkedApps.isEmpty {
+            if !state.linkedApps.isEmpty, state.selectedTab.showsDraftControls {
                 HeaderCluster(morphOn: shape) {
-                    if let app = state.currentApp {
-                        AppStatusChip(mark: state.appMark(appKey: app.key))
-                    }
-                    if state.selectedTab.showsDraftControls {
-                        DraftButton().disabled(state.isFetchingSelectedTab)
-                    }
+                    DraftButton().disabled(state.isFetchingSelectedTab)
                 }
             }
         }
@@ -935,7 +937,6 @@ private struct LocalePicker: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text("Language").font(Theme.font(size: 11)).foregroundStyle(Theme.text2)
             HStack(spacing: 0) {
                 ForEach(state.locales, id: \.self) { code in
                     let selected = state.locale == code
@@ -959,6 +960,11 @@ private struct LocalePicker: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+            // The label was a word the control already says: two segments
+            // reading "en-US" and "pt-BR" are language codes and nothing else.
+            // In a band this full, sixty points of caption is the cheapest
+            // thing on it to give back.
+            .help("Language")
 
             // Outside the group, and deliberately. Every segment inside it
             // picks the language you are editing; this one opens a sheet. A
@@ -1018,15 +1024,19 @@ extension View {
     func appMessage() -> some View { modifier(AppMessage()) }
 }
 
-private enum SaveDestination: String, CaseIterable, Identifiable {
-    case local, remote
-    var id: Self { self }
-}
-
-/// Save a local draft or write this tab's draft rows to its store.
+/// Save a local draft, or write this tab's draft rows to its store.
 ///
 /// Every field on every tab already writes `store.yaml` when it is edited.
-/// Local keeps a separate copy. Remote reads the stores and writes this tab.
+/// The local copy is a separate one. The remote save reads the stores and
+/// writes this tab.
+///
+/// One split button, and not a two-part control. The destination used to be a
+/// segmented Local/Remote picker standing beside the command, which cost the
+/// band a hundred and thirty points for a mode nobody holds an opinion about
+/// between saves — and it read as a setting, so the button beside it said
+/// "Save draft" while doing two different things on two different days. A
+/// click saves the local copy, which is the one taken daily; the chevron
+/// carries the store, which is the one that asks a question first.
 ///
 /// The title carries the report rather than an alert, because this is a
 /// command a developer may run twice in a minute before an update and an alert
@@ -1034,85 +1044,149 @@ private enum SaveDestination: String, CaseIterable, Identifiable {
 /// beside the folder and the restore.
 struct DraftButton: View {
     @Environment(AppState.self) private var state
-    @State private var destination = SaveDestination.local
     @State private var localSaved = false
     @State private var remoteSaved = false
     @State private var confirmingRemote = false
     @State private var tick = 0
 
     var body: some View {
-        HStack(spacing: 6) {
-            Picker("Save destination", selection: $destination) {
-                Text("Local").tag(SaveDestination.local)
-                Text("Remote").tag(SaveDestination.remote)
-                    .disabled(state.selectedTab.remoteSaveTarget == nil)
+        control
+            .fixedSize()
+            .help(help)
+            .confirmationDialog("Save this tab remotely?", isPresented: $confirmingRemote) {
+                if let target = state.selectedTab.remoteSaveTarget {
+                    Button("Save to \(target.destination(state.directApplyStores(for: target)))") {
+                        state.saveRemotely(target)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Super Submitter reads the stores first, then writes the draft rows from this tab.")
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
+            // The same cancellable timer as SavedChip, and for the same reason:
+            // two saves in three seconds must not fight over the title.
+            .task(id: state.draftSavedAt) {
+                guard state.draftSavedAt != nil else { return }
+                localSaved = true
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                localSaved = false
+            }
+            .task(id: state.remoteSavedAt) {
+                guard state.remoteSavedAt != nil else { return }
+                remoteSaved = true
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                remoteSaved = false
+            }
+            .motion(.smooth(duration: 0.2), value: saved)
+    }
+
+    /// The chevron is the menu style's own, and not one this file draws. A
+    /// hand-drawn one beside a menu that also draws its own is two chevrons,
+    /// and the whole affordance of a split button is that single mark.
+    @ViewBuilder
+    private var control: some View {
+        // Glass beside the other header commands on macOS 26, and the system's
+        // own bordered button below it. `QuietButton` draws a flat control
+        // there instead, and this does not copy it: that chrome is a label,
+        // and a plain-styled menu loses the indicator.
+        //
+        // Two concrete styles, and not `AnyButtonStyle`. That wrapper rebuilds
+        // its configuration as a `Button`, which is exactly the step that
+        // would drop the menu behind this one.
+        if #available(macOS 26.0, *) {
+            menu.buttonStyle(.glass)
+        } else {
+            menu.buttonStyle(.bordered)
+        }
+    }
+
+    private var menu: some View {
+        Menu { items } label: { label } primaryAction: { saveLocally() }
+            .menuStyle(.button)
             .controlSize(.small)
-            .frame(width: 124)
-
-            QuietButton(title: saved ? savedTitle : "Save draft", glass: true,
-                        symbol: saved ? "checkmark" : symbol, tick: tick) {
-                tick += 1
-                if destination == .local {
-                    state.saveDraft()
-                } else if state.selectedTab.remoteSaveTarget != nil {
-                    confirmingRemote = true
-                }
-            }
-            .disabled(destination == .remote && state.selectedTab.remoteSaveTarget == nil)
-        }
-        .help(help)
-        .confirmationDialog("Save this tab remotely?", isPresented: $confirmingRemote) {
-            if let target = state.selectedTab.remoteSaveTarget {
-                Button("Save to \(target.destination(state.directApplyStores(for: target)))") {
-                    state.saveRemotely(target)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Super Submitter reads the stores first, then writes the draft rows from this tab.")
-        }
-        // The same cancellable timer as SavedChip, and for the same reason:
-        // two saves in three seconds must not fight over the title.
-        .task(id: state.draftSavedAt) {
-            guard state.draftSavedAt != nil else { return }
-            localSaved = true
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            localSaved = false
-        }
-        .task(id: state.remoteSavedAt) {
-            guard state.remoteSavedAt != nil else { return }
-            remoteSaved = true
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            remoteSaved = false
-        }
-        .motion(.smooth(duration: 0.2), value: saved)
+            .menuIndicator(.visible)
     }
 
-    private var saved: Bool {
-        destination == .local ? localSaved : remoteSaved
+    @ViewBuilder
+    private var items: some View {
+        Button("Save a local copy") { saveLocally() }
+        Button(remoteTitle) { confirmingRemote = true }
+            .disabled(state.selectedTab.remoteSaveTarget == nil)
     }
+
+    private var label: some View {
+        HStack(spacing: 5) {
+            Image(systemName: saved ? "checkmark" : "tray.and.arrow.down")
+                .symbolEffect(.bounce, value: tick)
+            Text(saved ? savedTitle : "Save draft")
+        }
+        .font(Theme.font(size: 12))
+        .foregroundStyle(Theme.text)
+        .lineLimit(1)
+    }
+
+    private func saveLocally() {
+        tick += 1
+        state.saveDraft()
+    }
+
+    private var saved: Bool { localSaved || remoteSaved }
 
     private var savedTitle: String {
-        destination == .local ? "Saved locally" : "Saved remotely"
+        remoteSaved ? "Saved remotely" : "Saved locally"
     }
 
-    private var symbol: String {
-        destination == .local ? "tray.and.arrow.down" : "icloud.and.arrow.up"
+    private var remoteTitle: String {
+        guard let target = state.selectedTab.remoteSaveTarget else {
+            return "Save to the store"
+        }
+        return "Save to \(target.destination(state.directApplyStores(for: target)))"
     }
 
     private var help: String {
-        if destination == .local {
-            return "Save a local copy of every linked app and its proposed store data"
+        guard state.selectedTab.remoteSaveTarget != nil else {
+            return "Save a local copy of every linked app and its proposed store data. "
+                + "This tab has no draft rows to write to a store."
         }
-        guard let target = state.selectedTab.remoteSaveTarget else {
-            return "This tab has no draft rows to write to a store"
+        return "Save a local copy, or write this tab's draft rows to the store"
+    }
+}
+
+/// The app whose `store.yaml` is still in Super Submitter's own folder, and
+/// the way to give it the folder it belongs in.
+///
+/// An import of several apps at once does not ask for a folder per app, and
+/// the answer on the folder step can be "later". Either way the app is in a
+/// state it could not report: the flag sat on the record, `BuildFlow` read it
+/// when a project was eventually linked, and nothing in between said a word.
+/// A developer had to reach the Build tab by themselves to find out.
+///
+/// It draws only while the flag is set, so it is gone for good the moment the
+/// folder is linked.
+private struct ProjectFolderChip: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        Button { state.selectedTab = .build } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "folder.badge.plus")
+                    .font(Theme.font(size: 9.5))
+                Text("Link folder")
+                    .font(Theme.font(size: 9.5, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Theme.yellow)
+            .fixedSize()
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(Theme.yellowBg, in: Capsule())
+            .contentShape(.rect)
         }
-        return "Write this tab's draft rows to \(target.destination(state.directApplyStores(for: target)))"
+        .buttonStyle(.plain)
+        .help("This app's store.yaml is in Super Submitter's folder. Link its project folder to move it beside your source.")
+        .accessibilityLabel("Link this app's project folder")
     }
 }
 

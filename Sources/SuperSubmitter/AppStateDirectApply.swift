@@ -543,6 +543,11 @@ extension AppState {
                 // The plan compared against a state that is now stale, so the
                 // next read is the honest one.
                 invalidatePlan()
+                // The pictures belong to the store from here on, so the local
+                // list goes and the store answers for them. The read is the
+                // second half of that sentence: without it the tab would show
+                // the strip from before the upload and call it live.
+                if adoptSentMedia(only.steps) { await readStores() }
             }
             continuation?.finish()
             if remoteSaveContinuation != nil { remoteSaveContinuation = nil }

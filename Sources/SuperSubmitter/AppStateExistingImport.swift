@@ -134,9 +134,11 @@ extension AppState {
                 googleConnection = .connected("Connected · the import used this service account")
             }
         }
-        // A publisher lands on the build they are about to send. A manager has
-        // nothing to build, so they land on the reviews of the live app.
-        selectedTab = mode == .managing ? .liveApp : .build
+        // Where each app opens is the app's own, and `link` has already put
+        // every one of them there: a new record opens on the build a publisher
+        // is about to send, or on the reviews a manager reads, and a record
+        // that existed already opens where it was last left. A line here would
+        // overrule that for whichever app happened to be imported last.
         // Which of the apps just imported the App Store has shipped. The Manage
         // side lists those and no others, and an import is the usual way a live
         // app arrives: without this the developer imported five published apps
@@ -192,20 +194,18 @@ extension AppState {
     }
 
     /// Whether this import will write store values into an existing local file.
+    ///
+    /// One answer per app, because each app names its own folder now. An app
+    /// whose row named none goes to Super Submitter's own workspace, which is
+    /// where this looks for it: the old single destination could only ask the
+    /// question about one folder, so a batch that mixed the two answered for
+    /// whichever the sheet happened to hand it.
     func importWouldReplaceLocalData(_ candidates: [ExistingAppCandidate],
-                                     destination: URL? = nil) -> Bool {
-        let groups = ExistingAppImportPlan.group(candidates)
-        for group in groups {
-            let folder: URL?
-            if let destination {
-                folder = groups.count == 1
-                    ? destination
-                    : availableImportFolder(named: group.folderName, under: destination,
-                                            identifier: group.identifier)
-            } else {
-                folder = try? buildStorage.managedFolder(name: group.folderName,
-                                                         identifier: group.identifier)
-            }
+                                     folders: [String: URL] = [:]) -> Bool {
+        for group in ExistingAppImportPlan.group(candidates) {
+            let folder = folders[group.id]
+                ?? (try? buildStorage.managedFolder(name: group.folderName,
+                                                    identifier: group.identifier))
             guard let folder else { continue }
             if FileManager.default.fileExists(
                 atPath: folder.appendingPathComponent(ManifestFile.defaultName).path) {
@@ -499,6 +499,64 @@ extension AppState {
 
     static func isImported(_ path: String) -> Bool {
         path.hasPrefix("\(importFolder)/")
+    }
+
+    /// The store, the language and the size one media step wrote.
+    ///
+    /// The planner keys these `<store>.media.<locale>.<size>`, and the app
+    /// previews `apple.preview.<locale>.<size>`. Nothing else in the media
+    /// area answers with four parts: Google's icon and banner have three, and
+    /// its deletions have five.
+    static func sentMedia(stepID id: String)
+        -> (store: Store, locale: String, deviceClass: Manifest.DeviceClass, previews: Bool)? {
+        let parts = id.split(separator: ".").map(String.init)
+        guard parts.count == 4, !parts[2].isEmpty,
+              let deviceClass = Manifest.DeviceClass(rawValue: parts[3]) else { return nil }
+        return switch (parts[0], parts[1]) {
+        case ("apple", "media"): (.apple, parts[2], deviceClass, false)
+        case ("apple", "preview"): (.apple, parts[2], deviceClass, true)
+        case ("google", "media"): (.google, parts[2], deviceClass, false)
+        default: nil
+        }
+    }
+
+    /// Hands the pictures a send has just landed over to the store that holds
+    /// them now.
+    ///
+    /// Every other tab writes text, and text that has been sent still belongs
+    /// in `store.yaml`: it is the value, and the store holding it is what turns
+    /// the field grey. A screenshot is not a value but an upload queued, so a
+    /// list that survives its own send is a second copy of what the store now
+    /// owns, and the app went on reading it as work still to do.
+    ///
+    /// The steps that reported `.done` and no others, so a run that stopped
+    /// halfway keeps every picture it never sent. It is one undo step, because
+    /// this empties a list the developer filled by hand.
+    @discardableResult
+    func adoptSentMedia(_ steps: [PlanStep]) -> Bool {
+        var adopted = false
+        for step in steps {
+            guard let sent = Self.sentMedia(stepID: step.id) else { continue }
+            if sent.previews {
+                manifest.clearSentPreviews(locale: sent.locale, deviceClass: sent.deviceClass)
+            } else {
+                manifest.clearSentScreenshots(
+                    locale: sent.locale, deviceClass: sent.deviceClass,
+                    store: sent.store, shippingTo: stores)
+            }
+            adopted = true
+        }
+        guard adopted else { return false }
+        // Its own step, always. Registration coalesces edits made within the
+        // same three quarters of a second so that Command-Z walks back through
+        // a description a word at a time and not a letter at a time. This is
+        // not typing: a send that landed just after the last keystroke would
+        // fold into it, and the one step the developer needs back would be the
+        // one step the stack never filed.
+        lastUndoRegistration = nil
+        registerManifestUndo()
+        saveManifest()
+        return true
     }
 }
 

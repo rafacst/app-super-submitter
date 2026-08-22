@@ -275,7 +275,7 @@ enum ScreenshotMode {
         case "about":
             state.showAbout = true
         case "import":
-            state.showExistingAppImport = true
+            state.startAppImport()
         // The offer, which is a tab and no longer a sheet, and the one panel
         // it still opens.
         case "account":

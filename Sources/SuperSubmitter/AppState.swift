@@ -18,6 +18,18 @@ struct LinkedAppRecord: Codable, Identifiable, Equatable {
     ///
     /// Optional, so a record written before this field existed still decodes.
     var awaitingProjectFolder: Bool?
+    /// The screen this app was last on, as a `Tab` raw value.
+    ///
+    /// Where an app opens is the app's own business and not the door's. An
+    /// import used to land on Build, a fresh link on Stores and a relaunch on
+    /// whatever the last app happened to be, so the same app opened on three
+    /// different screens depending on how you got to it.
+    ///
+    /// A raw `Int` and not a `Tab`. The whole list decodes with one `try?`,
+    /// so a value no longer in the enum would throw on that one key and take
+    /// every linked app on this Mac with it. An `Int` that maps to nothing
+    /// falls back to the default and loses one app's screen.
+    var lastTab: Int?
 }
 
 enum ConnectionStatus: Equatable {
@@ -198,6 +210,7 @@ final class AppState {
             if !selectedTab.modes.contains(mode), let owner = selectedTab.modes.first {
                 mode = owner
             }
+            rememberOpenAppTab()
             // Last of the four, and that ordering is the point. This used to
             // be the second line of the observer, which reported the mode the
             // tab was leaving rather than the one it lands in: clicking a
@@ -262,6 +275,9 @@ final class AppState {
     var showOnboarding = false {
         didSet { trackOverlay("Onboarding", shown: showOnboarding, was: oldValue) }
     }
+    /// Which door opened the import sheet. See `ExistingAppImportModel.Purpose`.
+    var importPurpose = ExistingAppImportModel.Purpose.update
+
     var showExistingAppImport = false {
         didSet { trackOverlay("Update existing apps", shown: showExistingAppImport, was: oldValue) }
     }
@@ -721,7 +737,7 @@ final class AppState {
         let last = defaults.string(forKey: lastOpenAppKey)
         let index = linkedApps.firstIndex { $0.id.uuidString == last } ?? 0
         if !linkedApps.isEmpty {
-            activateLinkedApp(at: index)
+            activateLinkedApp(at: index, restoringTab: true)
         } else {
             // A launch with no app still holds the two store keys, and the
             // Stores tab is reachable without one. Without this line a
@@ -892,6 +908,20 @@ final class AppState {
         return appRows[selectedAppIndex]
     }
 
+    /// Whether the open app is still keeping its `store.yaml` in Super
+    /// Submitter's own folder, waiting for the project folder it belongs
+    /// beside.
+    ///
+    /// Set by an import that took several apps at once and by the "later"
+    /// answer on the folder step. Nothing showed it: the flag was written on
+    /// the record and read only by `BuildFlow`, so the app that was waiting
+    /// never said so and the developer had to find the Build tab to discover
+    /// it. See `BuildFlow.relocateManifestIfPending`.
+    var awaitsProjectFolder: Bool {
+        currentApp != nil && linkedApps.indices.contains(selectedAppIndex)
+            && linkedApps[selectedAppIndex].awaitingProjectFolder == true
+    }
+
     var stores: Set<Store> {
         var result: Set<Store> = []
         if manifest.apps.apple != nil { result.insert(.apple) }
@@ -1027,7 +1057,16 @@ final class AppState {
             manifestURL = nil
             resetUndo()
             selectedAppIndex = 0
+            // The two doors, the same screen a Mac with no app opens on.
+            // Removing the last app used to land on Stores, which stands alone
+            // and therefore hides the entry screen: the window went to a
+            // credential form for an app that no longer existed, and the way
+            // back was a button in the tab strip.
+            //
+            // The tab first and the flag second. `selectedTab` clears the flag
+            // whenever it lands on a tab that stands alone, and Stores is one.
             selectedTab = .stores
+            showEntryScreen = true
             locale = ""
             packages = [:]
             packageErrors = [:]
@@ -1037,7 +1076,7 @@ final class AppState {
             resetRunState()
             return
         }
-        activateLinkedApp(at: min(index, linkedApps.count - 1))
+        activateLinkedApp(at: min(index, linkedApps.count - 1), restoringTab: true)
     }
 
     /// The one way in. The user picks the folder of an app that already exists.
@@ -1045,27 +1084,22 @@ final class AppState {
     ///
     /// Nobody who has built an app wants to "create a new app", so the app
     /// never asks for one. It asks for the folder and does the rest.
-    func chooseAppFolder() {
-        let panel = NSOpenPanel()
-        panel.title = "Select your app folder"
-        panel.explain("Choose the folder of your app. store.yaml goes inside it.")
-        panel.prompt = "Select"
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let folder = panel.url else { return }
+    /// The first door: a brand-new app.
+    ///
+    /// It used to open a folder panel on the spot, write an empty `store.yaml`
+    /// into whatever was chosen, and leave the developer on a credential form
+    /// for an app the app knew nothing about. The keys come first now and the
+    /// folder is read, so the sheet does both in the order the developer
+    /// thinks in. See `createApp`.
+    func startNewApp() {
+        importPurpose = .newApp
+        showExistingAppImport = true
+    }
 
-        let url = folder.appendingPathComponent(ManifestFile.defaultName)
-        if !FileManager.default.fileExists(atPath: url.path) {
-            do {
-                try ManifestFile.save(Manifest(), to: url)
-            } catch {
-                errorMessage = error.localizedDescription
-                return
-            }
-        }
-        link(manifestAt: url)
+    /// The second door: the apps the stores already hold.
+    func startAppImport() {
+        importPurpose = .update
+        showExistingAppImport = true
     }
 
     /// The second door, for a folder that already carries the file but is not
@@ -1086,8 +1120,7 @@ final class AppState {
         do {
             let loaded = try ManifestFile.load(from: url)
             if let index = linkedApps.firstIndex(where: { $0.manifestPath == url.path }) {
-                activateLinkedApp(at: index)
-                selectedTab = .stores
+                activateLinkedApp(at: index, restoringTab: true)
                 return
             }
             let defaultLocale = loaded.listing?.defaultLocale
@@ -1106,8 +1139,7 @@ final class AppState {
                 awaitingProjectFolder: awaitingProjectFolder)
             linkedApps.append(record)
             persistLinkedApps()
-            activateLinkedApp(at: linkedApps.count - 1)
-            selectedTab = .stores
+            activateLinkedApp(at: linkedApps.count - 1, restoringTab: true)
             // What the stores hold for this one app, asked once, here. Linking
             // is the moment a developer hands the app over, it is the only
             // moment that names one app rather than all of them, and both
@@ -3229,10 +3261,44 @@ final class AppState {
         manifestURL?.deletingLastPathComponent()
     }
 
-    private func activateLinkedApp(at index: Int) {
+    /// Files the screen against the app that is open, so opening it again
+    /// comes back here.
+    ///
+    /// The remote save tab is never filed. It is a temporary activity tab that
+    /// removes itself when the save ends, and an app that reopened onto it
+    /// would open onto a screen with no save running.
+    private func rememberOpenAppTab() {
+        guard manifestURL != nil, selectedTab != .remoteSave,
+              linkedApps.indices.contains(selectedAppIndex),
+              linkedApps[selectedAppIndex].lastTab != selectedTab.rawValue else { return }
+        linkedApps[selectedAppIndex].lastTab = selectedTab.rawValue
+        persistLinkedApps()
+    }
+
+    /// The screen an app opens on: the one it was last left on, and the first
+    /// screen of the job otherwise.
+    ///
+    /// Publishing starts at the build, Managing at the live app, and neither
+    /// starts at Stores. Stores is about the account rather than the app, so
+    /// an app that opened there opened on a screen that says nothing about it.
+    private func landingTab(for record: LinkedAppRecord) -> Tab {
+        if let raw = record.lastTab, let tab = Tab(rawValue: raw), tab != .remoteSave {
+            return tab
+        }
+        return mode == .managing ? .liveApp : .build
+    }
+
+    /// `restoringTab` tells opening an app from switching to one.
+    ///
+    /// Opening is a door: a launch, a link, an import, the app that takes over
+    /// when another is removed. It lands on that app's own screen. Pressing a
+    /// tab in the strip is not a door — the screen stays, so reading one app's
+    /// Details and then the next one's is two clicks. See `selectApp`.
+    private func activateLinkedApp(at index: Int, restoringTab: Bool = false) {
         guard linkedApps.indices.contains(index) else { return }
         selectedAppIndex = index
         showEntryScreen = false
+        if restoringTab { selectedTab = landingTab(for: linkedApps[index]) }
         defaults.set(linkedApps[index].id.uuidString, forKey: lastOpenAppKey)
         let url = URL(fileURLWithPath: linkedApps[index].manifestPath)
         do {
@@ -3257,6 +3323,11 @@ final class AppState {
             // live here without waiting for the sweep.
             rememberOpenAppLiveState()
             applyDryRunDefault()
+            // Whatever screen the window is on now belongs to this app. A
+            // switch between two open apps keeps the screen, so without this
+            // the app you switched to would still claim the one it was left on
+            // a week ago the next time it opened.
+            rememberOpenAppTab()
         } catch {
             errorMessage = "Could not open \(url.lastPathComponent). \(error.localizedDescription)"
         }

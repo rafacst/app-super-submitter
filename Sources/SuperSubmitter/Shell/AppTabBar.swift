@@ -202,7 +202,7 @@ private struct AppTab: View {
         .contextMenu {
             Button("Update from the Stores…") {
                 state.selectApp(at: index)
-                state.showExistingAppImport = true
+                state.startAppImport()
             }
             Divider()
             Button("Remove from Super Submitter…") { state.askToRemoveApp(at: index) }

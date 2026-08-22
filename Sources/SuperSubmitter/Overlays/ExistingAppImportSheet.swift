@@ -8,12 +8,10 @@ struct ExistingAppImportSheet: View {
     @State private var model = ExistingAppImportModel()
     @State private var appleImporterOpen = false
     @State private var googleImporterOpen = false
-    @State private var pendingImport: ImportDestination?
-
-    private enum ImportDestination {
-        case managed(awaitingProjectFolder: Bool)
-        case folder(URL)
-    }
+    /// The import that is waiting on the "this will replace local data"
+    /// question. It is the work itself, so the answer runs exactly what the
+    /// button would have run.
+    @State private var pendingImport: (([ExistingAppCandidate]) async throws -> [URL])?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +21,7 @@ struct ExistingAppImportSheet: View {
                     switch model.step {
                     case .credentials: credentialsStep
                     case .apps: appsStep
+                    case .folders: foldersStep
                     case .destination: importingStep
                     case .complete: completeStep
                     }
@@ -51,23 +50,31 @@ struct ExistingAppImportSheet: View {
         // The keys the app already holds. Without this the sheet asked for
         // them on every import, one line under the sentence that promises it
         // asks once.
-        .onAppear { model.seedCredentials(from: state) }
+        .onAppear {
+            model.purpose = state.importPurpose
+            model.seedCredentials(from: state)
+        }
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            IconChip(symbol: "arrow.triangle.2.circlepath", tint: Theme.teal, size: 34)
+            IconChip(symbol: model.purpose == .newApp
+                     ? "paperplane.fill" : "arrow.triangle.2.circlepath",
+                     tint: tint, size: 34)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Update existing apps").font(Theme.font(size: 17, weight: .semibold))
+                Text(model.purpose == .newApp ? "Submit a new app" : "Update existing apps")
+                    .font(Theme.font(size: 17, weight: .semibold))
                 Text(stepLabel).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             Spacer()
             HStack(spacing: 5) {
-                ForEach(0..<4, id: \.self) { index in
-                    Capsule().fill(index <= model.step.rawValue ? Theme.teal : Theme.sep)
-                        .frame(width: index == model.step.rawValue ? 28 : 15, height: 4)
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    let reached = steps.firstIndex(of: model.step) ?? 0
+                    Capsule().fill(index <= reached ? tint : Theme.sep)
+                        .frame(width: step == model.step ? 28 : 15, height: 4)
                 }
             }
+            .motion(.smooth(duration: 0.2), value: model.step)
         }
         .padding(.horizontal, 24)
         .frame(height: 64)
@@ -79,7 +86,9 @@ struct ExistingAppImportSheet: View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("Connect the stores first").font(Theme.font(size: 22, weight: .semibold))
-                Text("You enter these once. The key covers every app in your developer account, and it goes to the macOS Keychain when the import starts.")
+                Text(model.purpose == .newApp
+                     ? "Pick the stores this app goes to, and connect them. You enter these once. The key covers every app in your developer account, and it goes to the macOS Keychain."
+                     : "You enter these once. The key covers every app in your developer account, and it goes to the macOS Keychain when the import starts.")
                     .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
             }
             // The Stores tab layout, because this asks the Stores tab question:
@@ -222,11 +231,89 @@ struct ExistingAppImportSheet: View {
         }
     }
 
+    /// One row per app, and a folder button on each.
+    ///
+    /// The old sheet asked for one folder when one app was chosen and asked
+    /// for nothing at all when several were: every `store.yaml` went into
+    /// Super Submitter's own workspace, and the folder question came back
+    /// weeks later, per app, on a Build tab the developer had to find. The
+    /// question belongs here, where they are already choosing the apps, and
+    /// the answer is still allowed to be "later".
+    private var foldersStep: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(model.purpose == .newApp ? "Where does this app live?"
+                                              : "Where does each app live?")
+                    .font(Theme.font(size: 22, weight: .semibold))
+                Text(model.purpose == .newApp
+                     ? "Choose the folder of the project. Super Submitter writes store.yaml inside it and reads what the project already says: the identifier, the version and the name."
+                     : "Super Submitter keeps store.yaml beside your source. Link the folder of each app now, or leave it and link it from the Build tab later.")
+                    .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if model.purpose == .newApp {
+                folderRow(key: ExistingAppImportModel.newAppKey,
+                          name: model.newAppFolder?.lastPathComponent ?? "Your app",
+                          detail: "The folder that holds the Xcode or Gradle project")
+            } else {
+                VStack(spacing: 9) {
+                    ForEach(model.selectedGroups) { group in
+                        folderRow(key: group.id, name: group.folderName,
+                                  detail: group.identifier)
+                    }
+                }
+            }
+            if model.purpose == .update, model.appsWithoutFolder > 0 {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "clock.badge.questionmark").foregroundStyle(Theme.yellow)
+                    Text("\(model.appsWithoutFolder) of these keep their store.yaml in Super Submitter's own folder for now. Each one says so in the window until you link its folder, and linking it moves the file across.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 9))
+            }
+            errorView
+        }
+    }
+
+    private func folderRow(key: String, name: String, detail: String) -> some View {
+        let folder = model.folders[key]
+        return HStack(spacing: 12) {
+            IconChip(symbol: folder == nil ? "folder" : "folder.fill",
+                     tint: folder == nil ? Theme.text3 : Theme.teal, size: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(Theme.font(size: 13, weight: .medium)).lineLimit(1)
+                Text(folder?.path ?? detail)
+                    .font(Theme.mono(10))
+                    .foregroundStyle(folder == nil ? Theme.text3 : Theme.text2)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            if folder != nil {
+                Button("Change…") { chooseFolder(for: key, named: name) }
+                    .buttonStyle(.borderless)
+            } else {
+                QuietButton(title: "Link folder…") { chooseFolder(for: key, named: name) }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(folder == nil ? Theme.sep : Theme.teal.opacity(0.5),
+                          lineWidth: Theme.hairline))
+    }
+
     private var importingStep: some View {
         VStack(spacing: 18) {
             ProgressView().controlSize(.large)
-            Text("Importing current store data…").font(Theme.font(size: 18, weight: .semibold))
-            Text("Super Submitter is creating local workspaces, downloading available listing metadata, and saving the credentials in the Keychain.")
+            Text(model.purpose == .newApp ? "Reading the project…" : "Importing current store data…")
+                .font(Theme.font(size: 18, weight: .semibold))
+            Text(model.purpose == .newApp
+                 ? "Super Submitter is looking for the Xcode or Gradle project in this folder and taking the identifier, the version and the name it states."
+                 : "Super Submitter is creating local workspaces, downloading available listing metadata, and saving the credentials in the Keychain.")
                 .font(Theme.font(size: 13)).foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center).frame(maxWidth: 520)
             errorView
@@ -260,54 +347,88 @@ struct ExistingAppImportSheet: View {
     }
 
     private var completeDetail: String {
-        let landing = state.mode == .managing ? "Reviews" : "Build"
+        let placed = model.selectedGroups.count - model.appsWithoutFolder
         let where_ = state.mode == .managing
             ? "Super Submitter keeps the workspace, so nothing landed in your folders."
-            : "Each app has its own store.yaml beside it."
+            : (model.appsWithoutFolder == 0
+               ? "Each app has its own store.yaml in the folder you linked."
+               : "\(placed) of them have their store.yaml in the folder you linked. The rest keep it in Super Submitter's own folder until you link one, and each says so in the window.")
         return "\(where_) They share the credentials you entered, so no tab asks for them again. "
-            + "The last imported app is open on the \(landing) tab."
+            + "Each app opens on the screen it was last left on."
     }
 
     private var footer: some View {
         HStack {
-            if model.step == .apps {
-                Button("Back") { model.step = .credentials }.buttonStyle(.borderless)
+            if let back = backStep {
+                Button("Back") { model.step = back }.buttonStyle(.borderless)
             }
             Spacer()
             Button(model.step == .complete ? "Done" : "Cancel") { dismiss() }
-            if model.step == .credentials {
-                Button(model.loading ? "Connecting…" : "Connect and list apps") {
-                    Task { await model.discover() }
+            switch model.step {
+            case .credentials:
+                Button(model.loading ? "Connecting…"
+                       : (model.purpose == .newApp ? "Continue" : "Connect and list apps")) {
+                    if model.purpose == .newApp {
+                        state.adoptCredentials(apple: model.appleCredential,
+                                               google: model.googleCredential)
+                        model.step = .folders
+                    } else {
+                        Task { await model.discover() }
+                    }
                 }
-                .buttonStyle(.borderedProminent).tint(Theme.teal)
+                .buttonStyle(.borderedProminent).tint(tint)
                 .disabled(!model.canDiscover || model.loading)
-            } else if model.step == .apps {
+            case .apps:
                 // Managing needs no folder. There is no repository to sit
                 // beside, so Super Submitter keeps the workspace itself.
-                //
-                // Publishing normally asks once per app, immediately, because
-                // that folder is where `store.yaml` and the project both live.
-                // Several apps at once is a different question: picking one
-                // folder now, per app, before any of them has a project to
-                // build, is five prompts for a decision that only matters once
-                // a developer opens that app's Build tab. So it waits: Super
-                // Submitter keeps the workspace itself, the same as Managing,
-                // and linking a project later moves `store.yaml` into it. See
-                // `BuildFlow.relocateManifestIfPending`.
-                Button(state.mode == .managing || deferFolderChoice
-                       ? "Bring in \(model.selection.count) apps"
-                       : (model.selectedGroupName == nil
-                          ? "Choose the folder for these apps…" : "Choose the app folder…")) {
-                    if state.mode == .managing { importManaged() }
-                    else if deferFolderChoice { importPendingFolder() }
-                    else { chooseFolder() }
+                Button(state.mode == .managing
+                       ? "Bring in \(model.selection.count) apps" : "Choose folders") {
+                    if state.mode == .managing { importManaged() } else { model.step = .folders }
                 }
-                .buttonStyle(.borderedProminent).tint(Theme.teal)
+                .buttonStyle(.borderedProminent).tint(tint)
                 .disabled(model.selection.count == 0)
+            case .folders:
+                Button(model.purpose == .newApp ? "Create the app" : importTitle) {
+                    if model.purpose == .newApp { createNewApp() } else { importGrouped() }
+                }
+                .buttonStyle(.borderedProminent).tint(tint)
+                // A new app has nowhere to write without one. An import of
+                // apps the stores already hold does: the folder can come later.
+                .disabled(model.purpose == .newApp && model.newAppFolder == nil)
+            case .destination, .complete:
+                EmptyView()
             }
         }
         .padding(.horizontal, 24).frame(height: 62)
         .background(Theme.raised).overlay(alignment: .top) { Hairline() }
+    }
+
+    /// The colour of the door. The update sheet has always been teal; a new
+    /// app is the accent, the same as the card that opens it.
+    private var tint: Color { model.purpose == .newApp ? Theme.accent : Theme.teal }
+
+    /// The screens this door actually shows, for the rail and the count.
+    private var steps: [ExistingAppImportModel.Step] {
+        switch model.purpose {
+        case .newApp: [.credentials, .folders, .destination]
+        case .update:
+            state.mode == .managing
+                ? [.credentials, .apps, .destination, .complete]
+                : [.credentials, .apps, .folders, .destination, .complete]
+        }
+    }
+
+    private var backStep: ExistingAppImportModel.Step? {
+        switch model.step {
+        case .apps: .credentials
+        case .folders: model.purpose == .newApp ? .credentials : .apps
+        default: nil
+        }
+    }
+
+    private var importTitle: String {
+        let count = model.selectedGroups.count
+        return "Bring in \(count) \(count == 1 ? "app" : "apps")"
     }
 
     private var limitationNote: some View {
@@ -327,12 +448,16 @@ struct ExistingAppImportSheet: View {
     }
 
     private var stepLabel: String {
-        switch model.step {
-        case .credentials: "1 of 4 · Credentials"
-        case .apps: "2 of 4 · App selection"
-        case .destination: "3 of 4 · Import"
-        case .complete: "4 of 4 · Complete"
+        let total = steps.count
+        let index = (steps.firstIndex(of: model.step) ?? 0) + 1
+        let name = switch model.step {
+        case .credentials: "Credentials"
+        case .apps: "App selection"
+        case .folders: "Folders"
+        case .destination: "Import"
+        case .complete: "Complete"
         }
+        return "\(index) of \(total) · \(name)"
     }
 
     private func handleFile(_ result: Result<URL, Error>,
@@ -352,25 +477,24 @@ struct ExistingAppImportSheet: View {
         catch { model.error = error.localizedDescription; return false }
     }
 
-    /// Super Submitter keeps `store.yaml` beside the app, so the panel asks for
-    /// the folder of the app itself. Several apps at once need one folder that
-    /// holds them all, and each app then takes its own folder inside it.
-    private func chooseFolder() {
+    /// One folder, for one app, from the row that asked for it.
+    ///
+    /// It used to ask once for everything: one folder for one app, or one
+    /// parent folder that several apps would each take a subfolder of. The
+    /// parent never ran — the multi-app path skipped the question entirely —
+    /// and a parent is the wrong question anyway, because a developer's five
+    /// repositories are rarely five folders side by side.
+    private func chooseFolder(for key: String, named name: String) {
         let panel = NSOpenPanel()
-        if let name = model.selectedGroupName {
-            panel.title = "Select the folder of \(name)"
-            panel.explain("Choose the folder of \(name). store.yaml goes inside it.")
-        } else {
-            panel.title = "Select the folder for these apps"
-            panel.explain("Choose the folder that holds your app folders. Each takes its own.")
-        }
+        panel.title = "Select the folder of \(name)"
+        panel.explain("Choose the folder of \(name). store.yaml goes inside it.")
         panel.prompt = "Select"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        importSelected(into: url)
+        model.folders[key] = url
     }
 
     private func storeGrid(_ store: Store, _ apps: [ExistingAppCandidate]) -> some View {
@@ -401,54 +525,75 @@ struct ExistingAppImportSheet: View {
     /// The managing path. Super Submitter owns the folder, so it asks for
     /// nothing and the import starts on the button.
     private func importManaged() {
-        requestImport(.managed(awaitingProjectFolder: false))
+        requestImport { candidates in
+            try await state.importManagedApps(
+                candidates, appleCredential: model.appleCredential,
+                googleCredential: model.googleCredential)
+        }
     }
 
-    /// Publishing, two or more apps: the same folder-free import as Managing,
-    /// but marked so the Build tab still asks for a project once, the first
-    /// time this app builds.
-    private var deferFolderChoice: Bool {
-        state.mode == .publishing && model.selectedGroupCount > 1
+    /// The publishing path: every app into the folder its row named, and the
+    /// rows that named none into Super Submitter's own workspace, marked so
+    /// the window keeps asking and a later link moves the file across.
+    ///
+    /// One import per app, because the destinations differ per app. That is
+    /// what `importManagedApps` already does with the folders it owns, and it
+    /// is why `importExistingApps` never has to split a parent folder.
+    private func importGrouped() {
+        let groups = model.selectedGroups
+        requestImport { _ in
+            for group in groups {
+                if let folder = model.folders[group.id] {
+                    let accessed = folder.startAccessingSecurityScopedResource()
+                    defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
+                    _ = try await state.importExistingApps(
+                        group.candidates, destination: folder,
+                        appleCredential: model.appleCredential,
+                        googleCredential: model.googleCredential)
+                } else {
+                    _ = try await state.importManagedApps(
+                        group.candidates, appleCredential: model.appleCredential,
+                        googleCredential: model.googleCredential,
+                        awaitingProjectFolder: true)
+                }
+            }
+            return []
+        }
     }
 
-    private func importPendingFolder() {
-        requestImport(.managed(awaitingProjectFolder: true))
+    /// The new-app door. Nothing is imported: the folder is read, `store.yaml`
+    /// is written into it, and whatever the project already states fills the
+    /// manifest. See `AppState.createApp`.
+    private func createNewApp() {
+        guard let folder = model.newAppFolder else { return }
+        model.step = .destination
+        model.error = nil
+        Task {
+            let accessed = folder.startAccessingSecurityScopedResource()
+            defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
+            await state.createApp(in: folder, stores: model.stores)
+            dismiss()
+        }
     }
 
-    private func importSelected(into url: URL) {
-        requestImport(.folder(url))
-    }
-
-    private func requestImport(_ destination: ImportDestination) {
-        let folder: URL? = if case .folder(let url) = destination { url } else { nil }
+    /// Asks before an import writes over local work, then runs it.
+    private func requestImport(
+        _ work: @escaping ([ExistingAppCandidate]) async throws -> [URL]) {
         guard !state.importWouldReplaceLocalData(model.selectedCandidates,
-                                                 destination: folder) else {
-            pendingImport = destination
+                                                 folders: model.folders) else {
+            pendingImport = work
             return
         }
-        performImport(destination)
+        performImport(work)
     }
 
-    private func performImport(_ destination: ImportDestination) {
+    private func performImport(
+        _ work: @escaping ([ExistingAppCandidate]) async throws -> [URL]) {
         model.step = .destination
         model.error = nil
         Task {
             do {
-                switch destination {
-                case .managed(let awaitingProjectFolder):
-                    _ = try await state.importManagedApps(
-                        model.selectedCandidates,
-                        appleCredential: model.appleCredential,
-                        googleCredential: model.googleCredential,
-                        awaitingProjectFolder: awaitingProjectFolder)
-                case .folder(let url):
-                    let accessed = url.startAccessingSecurityScopedResource()
-                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    _ = try await state.importExistingApps(
-                        model.selectedCandidates, destination: url,
-                        appleCredential: model.appleCredential,
-                        googleCredential: model.googleCredential)
-                }
+                _ = try await work(model.selectedCandidates)
                 model.step = .complete
             } catch {
                 model.error = error.localizedDescription

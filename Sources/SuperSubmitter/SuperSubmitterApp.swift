@@ -57,6 +57,17 @@ struct SuperSubmitterApp: App {
                     // RootView writes the flag when the panel closes. A flag
                     // written here burns the onboarding if the panel never opens.
                     if !hasSeenOnboarding { state.showOnboarding = true }
+                    // And behind it, the choice the onboarding is read for:
+                    // a new app, or the apps already in the stores.
+                    //
+                    // `selectedTab` starts on Stores, and a tab that stands
+                    // alone hides the entry screen — so a first launch opened
+                    // on a credential form for an app that did not exist yet,
+                    // and the two doors were reachable only through Add app in
+                    // the tab strip. The erase command in Settings sets these
+                    // same two lines and calls them "the first-run screen";
+                    // a real first run never ran them.
+                    if state.linkedApps.isEmpty { state.showEntryScreen = true }
                     // And where the App Store has each of the linked apps.
                     // The sweep ran on every app change and never at launch,
                     // so the status column opened empty every morning and
@@ -96,9 +107,9 @@ struct SuperSubmitterApp: App {
             // screen hides itself once one app is linked, so without these the
             // second app has nowhere to come from.
             CommandGroup(replacing: .newItem) {
-                Button("Submit a New App…") { state.chooseAppFolder() }
+                Button("Submit a New App…") { state.startNewApp() }
                     .keyboardShortcut("n", modifiers: .command)
-                Button("Update Existing Apps…") { state.showExistingAppImport = true }
+                Button("Update Existing Apps…") { state.startAppImport() }
                     .keyboardShortcut("u", modifiers: [.command, .shift])
                 Divider()
                 Button("Open store.yaml…") { state.chooseExistingManifest() }
