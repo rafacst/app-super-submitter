@@ -80,10 +80,14 @@ import Testing
     let app = ExistingAppCandidate(store: .apple, remoteID: "1", name: "Example",
                                    identifier: "com.example.app")
 
-    #expect(!state.importWouldReplaceLocalData([app], destination: root))
+    let folders = [ExistingAppImportPlan.group([app])[0].id: root]
+    #expect(!state.importWouldReplaceLocalData([app], folders: folders))
     try ManifestFile.save(Manifest(),
                           to: root.appendingPathComponent(ManifestFile.defaultName))
-    #expect(state.importWouldReplaceLocalData([app], destination: root))
+    #expect(state.importWouldReplaceLocalData([app], folders: folders))
+    // The question is asked per app. Another app's folder answers for that
+    // app and never for this one.
+    #expect(!state.importWouldReplaceLocalData([app], folders: ["other": root]))
 
     state.importExistingListing()
     #expect(state.confirmsListingImportReplacement)
@@ -105,7 +109,8 @@ import Testing
     #expect(model.candidates(for: .google).map(\.name) == ["Beta"])
 }
 
-/// One selected app writes into the folder the user picks. Two need a parent.
+/// Both stores of one app are one app, one row on the folder step, and one
+/// folder. Two apps are two rows, each with a folder of its own.
 @MainActor
 @Test func oneSelectedAppNamesTheFolderAndTwoDoNot() {
     let model = ExistingAppImportModel()
@@ -120,12 +125,18 @@ import Testing
     model.selection.toggle(alpha)
     model.selection.toggle(alphaGoogle)
     // Both stores of one app are still one app, and one folder.
-    #expect(model.selectedGroupCount == 1)
+    #expect(model.selectedGroups.count == 1)
     #expect(model.selectedGroupName == "Alpha")
+    #expect(model.appsWithoutFolder == 1)
 
     model.selection.toggle(beta)
-    #expect(model.selectedGroupCount == 2)
+    #expect(model.selectedGroups.count == 2)
     #expect(model.selectedGroupName == nil)
+    #expect(model.appsWithoutFolder == 2)
+
+    // A folder given on one row answers for that app and for no other.
+    model.folders[model.selectedGroups[0].id] = URL(fileURLWithPath: "/tmp/alpha")
+    #expect(model.appsWithoutFolder == 1)
 }
 
 /// Dropping the .p8 fills the key id, and never overwrites a typed one.

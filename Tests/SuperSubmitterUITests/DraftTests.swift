@@ -265,9 +265,12 @@ struct DraftTests {
             contentsOf: root.appending(path: "Sources/SuperSubmitter/Shell/RootView.swift"),
             encoding: .utf8)
 
-        #expect(shell.contains("Picker(\"Save destination\""))
-        #expect(shell.contains("Text(\"Local\").tag(SaveDestination.local)"))
-        #expect(shell.contains("Text(\"Remote\").tag(SaveDestination.remote)"))
+        // One split button: the click takes the local copy, the menu carries
+        // the store. The segmented Local/Remote picker that used to stand
+        // beside it is gone, and the band is 130 points wider for it.
+        #expect(!shell.contains("Picker(\"Save destination\""))
+        #expect(shell.contains("primaryAction: { saveLocally() }"))
+        #expect(shell.contains("Button(\"Save a local copy\")"))
         #expect(shell.contains("state.saveRemotely(target)"))
         #expect(shell.contains("Saved locally"))
         #expect(shell.contains("Saved remotely"))

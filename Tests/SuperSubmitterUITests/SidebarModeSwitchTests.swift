@@ -107,11 +107,18 @@ import Testing
         // And the groups follow it. A switch that draws every group is a
         // switch that changes nothing.
         #expect(sidebar.contains("$0.mode == state.mode"))
-        // The system's segmented control, not a pair of buttons with a pill
-        // animated between them: two exclusive choices in a sidebar header is
-        // the control the Mac already draws.
-        #expect(sidebar.contains(".pickerStyle(.segmented)"))
-        #expect(!sidebar.contains("matchedGeometryEffect"))
+        // The pill travels between the two jobs. This is the one control in
+        // the app that changes which tabs exist, and a segment that only
+        // changes colour says a filter moved where a pill that slides says
+        // you did.
+        #expect(sidebar.contains("matchedGeometryEffect"))
+        // And the control says what it is without a word in front of it. The
+        // drawn "Task" label took the left half of the only line the sidebar
+        // head has, to name a control with two named segments in it.
+        #expect(!sidebar.contains("Picker(\"Task\""))
+        // What the system control gave for free and a pair of buttons has to
+        // state: which segment is the chosen one.
+        #expect(sidebar.contains(".isSelected"))
     }
 
     /// An empty window has no app, and every row in these groups is a step of

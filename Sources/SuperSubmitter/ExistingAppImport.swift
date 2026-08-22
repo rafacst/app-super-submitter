@@ -83,9 +83,26 @@ enum ExistingAppImportPlan {
 @Observable
 @MainActor
 final class ExistingAppImportModel {
-    enum Step: Int { case credentials, apps, destination, complete }
+    /// Which door opened the sheet.
+    ///
+    /// One sheet and not two. Both doors ask for the same keys, in the same
+    /// cards, and both end by asking which folder an app lives in; the only
+    /// difference is the list of apps in the middle, which a new app has
+    /// nothing to fill from.
+    enum Purpose { case update, newApp }
 
+    enum Step: Int { case credentials, apps, folders, destination, complete }
+
+    var purpose: Purpose = .update
     var step: Step = .credentials
+    /// The folder each app will live in, by group id. A group missing here is
+    /// an app the developer chose to place later, and it is imported into
+    /// Super Submitter's own workspace with `awaitingProjectFolder` set.
+    ///
+    /// The new-app door keeps its one folder under `newAppKey`, because it has
+    /// no candidate and therefore no group.
+    var folders: [String: URL] = [:]
+    static let newAppKey = "new-app"
     /// Empty, so the developer says where the app lives. Both stores
     /// preselected asked for two sets of credentials before anyone chose
     /// anything. `canDiscover` already refuses an empty set, so Continue
@@ -122,16 +139,25 @@ final class ExistingAppImportModel {
         candidates.filter { $0.store == store }
     }
 
-    /// One selected app takes the folder the user picks. Several apps each
-    /// take a folder inside it.
-    var selectedGroupCount: Int {
-        ExistingAppImportPlan.group(selectedCandidates).count
-    }
-
+    /// The name of the one chosen app, or nil when several are chosen.
     var selectedGroupName: String? {
         let groups = ExistingAppImportPlan.group(selectedCandidates)
         return groups.count == 1 ? groups[0].folderName : nil
     }
+
+    /// One row per app on the folder step, in the order the grid showed them.
+    var selectedGroups: [ExistingAppImportPlan.Group] {
+        ExistingAppImportPlan.group(selectedCandidates)
+    }
+
+    /// How many of the chosen apps still have no folder. They are not refused:
+    /// a folder is the developer's to give now or later, and the app says so
+    /// in the band until they do.
+    var appsWithoutFolder: Int {
+        selectedGroups.filter { folders[$0.id] == nil }.count
+    }
+
+    var newAppFolder: URL? { folders[Self.newAppKey] }
 
     /// Fills the form from the keys the app already holds.
     ///

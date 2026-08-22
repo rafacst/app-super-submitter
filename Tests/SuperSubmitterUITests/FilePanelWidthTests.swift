@@ -58,8 +58,10 @@ private func sources() throws -> [(path: String, text: String)] {
                     "\(file.path) has a \(message.count) character panel message: \(message)")
         }
     }
-    // The scan proves nothing if it found nothing to scan.
-    #expect(checked >= 5)
+    // The scan proves nothing if it found nothing to scan. Three, because the
+    // two doors that each asked for a folder of their own are one sheet now:
+    // `chooseAppFolder` is gone and the import asks once per row.
+    #expect(checked >= 3)
 }
 
 /// The cut itself, for the message that carries an app name.

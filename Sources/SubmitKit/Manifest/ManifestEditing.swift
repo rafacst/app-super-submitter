@@ -232,6 +232,39 @@ public extension Manifest {
         self.media = media
     }
 
+    /// Drops the pictures one store has just been sent.
+    ///
+    /// A path in `store.yaml` is a file this app is going to upload. The
+    /// moment the upload lands, that same list reads as "upload these again",
+    /// and every later plan read it exactly that way: the size stayed full of
+    /// local work the store already holds, and the next run sent the same
+    /// bytes a second time. The store is the source once the store has them,
+    /// and an empty size keeps what is live.
+    ///
+    /// The other store's copy survives. One shared list feeds both stores, so
+    /// emptying it after an App Store send would silently drop pictures Google
+    /// has never been given: the size splits first, and each store then loses
+    /// its own list on its own send.
+    mutating func clearSentScreenshots(locale: String, deviceClass: DeviceClass,
+                                       store: Store, shippingTo stores: Set<Store>) {
+        if !stores.subtracting([store]).isEmpty {
+            splitMedia(locale: locale, deviceClass: deviceClass)
+        }
+        setStoreScreenshots([], locale: locale, deviceClass: deviceClass, store: store)
+        // The shared list answers for any store that holds no list of its own,
+        // so it may only go once no store is reading it.
+        let readers = stores.filter {
+            !hasStoreScreenshots(locale: locale, deviceClass: deviceClass, store: $0)
+        }
+        if readers.isEmpty { media?.screenshots?[locale]?[deviceClass.rawValue] = nil }
+    }
+
+    /// The same, for the app previews. Apple's alone, so there is no second
+    /// store to keep a copy for. See `clearSentScreenshots`.
+    mutating func clearSentPreviews(locale: String, deviceClass: DeviceClass) {
+        media?.previews?[locale]?[deviceClass.rawValue] = nil
+    }
+
     mutating func setStoreScreenshots(_ values: [String], locale: String,
                                               deviceClass: DeviceClass, store: Store) {
         var media = self.media ?? Media()

@@ -605,6 +605,15 @@ extension AppState {
             "is_dry_run": dryRun ? 1 : 0
         ])
         refreshDraftStatuses()
+        // The pictures this run sent belong to the stores now. See
+        // `adoptSentMedia`. A dry run sent nothing and keeps every one of them.
+        //
+        // No read follows it here, unlike the direct save. A read replaces the
+        // plan, and the plan is what the run panel on this screen is drawing:
+        // the developer is reading the log of the run that just ended.
+        if !dryRun {
+            adoptSentMedia(zip(runSteps, stepStates).filter { $0.1 == .done }.map(\.0))
+        }
         // `applied` has just become true, so the console steps are now the
         // work that remains and the badge may show them.
         refreshDockBadge()

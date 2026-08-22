@@ -735,27 +735,73 @@ struct BadgeView: View {
 /// both halves now, which is what made this safe to bring back: the switch
 /// picks which of two named jobs the column shows, and the column is the four
 /// or the eight rows of that job rather than all twelve.
-/// The system's segmented control, which is what this is.
+/// The two jobs, as one control and nothing beside it.
 ///
-/// It was a hand-drawn one: two buttons, a matched-geometry pill, a per-mode
-/// tint and a shadow. All of that is a segmented control with a spring
-/// animation bolted to it, and the Mac already draws one — with the user's own
-/// accent, the right metrics at every text size, and the keyboard and
-/// VoiceOver behaviour that a pair of plain buttons does not have.
+/// It carried a drawn "Task" label, because two words with nothing above them
+/// read as a filter over the rows below. The label answered that by adding a
+/// third word to a control with room for two, and it took the left half of the
+/// only line the sidebar head has. The control says what it is itself now: a
+/// symbol per job, and the chosen one lit in that job's own colour.
+///
+/// The pill travels. This is the one control in the app that changes which
+/// tabs exist, and a segment that simply turns blue says a filter changed
+/// where a pill that slides says you moved from one job to the other.
 struct ModeSwitch: View {
     @Environment(AppState.self) private var state
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var pill
+    @State private var hovering: Mode?
 
     var body: some View {
-        // The label is drawn and not hidden. Two words with nothing above them
-        // read as a filter over the rows below, which is what a developer took
-        // them for; the label says they choose the job the sidebar is showing.
-        Picker("Task", selection: Binding(get: { state.mode },
-                                          set: { state.mode = $0 })) {
+        HStack(spacing: 2) {
             ForEach(Mode.allCases) { mode in
-                Text(mode.title).tag(mode)
+                segment(mode)
             }
         }
-        .pickerStyle(.segmented)
+        .padding(2)
+        .background(Theme.sunken, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+        .motion(.spring(response: 0.32, dampingFraction: 0.78), value: state.mode)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Task")
         .accessibilityHint("Choose the app workflow shown in the sidebar.")
+    }
+
+    private func segment(_ mode: Mode) -> some View {
+        let selected = state.mode == mode
+        return Button {
+            state.mode = mode
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: mode.symbol)
+                    .font(Theme.font(size: 10, weight: .semibold))
+                    // The glyph answers the press, so a switch that is already
+                    // where you clicked still acknowledges the click.
+                    .symbolEffect(.bounce, value: selected)
+                Text(mode.title)
+                    .font(Theme.font(size: 11.5, weight: selected ? .semibold : .medium))
+            }
+            .foregroundStyle(selected ? Theme.accentText
+                             : (hovering == mode ? Theme.text : Theme.text2))
+            .lineLimit(1)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .background {
+                if selected {
+                    Capsule()
+                        .fill(mode.tint)
+                        .matchedGeometryEffect(id: "mode", in: pill)
+                } else if hovering == mode {
+                    Capsule().fill(Theme.raised)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 ? mode : (hovering == mode ? nil : hovering) }
+        .help(mode.line)
+        .accessibilityLabel(mode.title)
+        .accessibilityValue(mode.line)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }

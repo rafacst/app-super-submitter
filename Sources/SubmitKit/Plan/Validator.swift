@@ -201,6 +201,21 @@ public enum Validator {
         return counts
     }
 
+    /// Whether one store is already showing pictures for this language and
+    /// this screen size. Both stores key what they hold "locale/bucket".
+    static func storeHoldsScreenshots(_ store: Store, locale: String,
+                                      deviceClass: Manifest.DeviceClass,
+                                      actual: ActualState) -> Bool {
+        let held = store == .apple
+            ? actual.apple?.screenshotURLs ?? [:]
+            : actual.google?.imageURLs ?? [:]
+        return held.contains { key, urls in
+            let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+            guard parts.count == 2, parts[0] == locale, !urls.isEmpty else { return false }
+            return Manifest.DeviceClass(storeBucket: parts[1]) == deviceClass
+        }
+    }
+
     static func media(_ input: Planner.Input) -> [Finding] {
         let manifest = input.manifest
         var result: [Finding] = []
@@ -278,7 +293,16 @@ public enum Validator {
                                                      store: .apple, root: input.root)
                     let google = Planner.mediaUploads(googlePaths, deviceClass: deviceClass,
                                                       store: .google, root: input.root)
-                    if apple.isEmpty != google.isEmpty {
+                    // Unless that store already holds them. An empty size is
+                    // how "keep what is live" is said, and it is what a send
+                    // leaves behind: the pictures went up and the local list
+                    // went with them. The warning is for a listing that would
+                    // end with no pictures at all, not for one whose store has
+                    // them already.
+                    let storeHas = Self.storeHoldsScreenshots(
+                        apple.isEmpty ? .apple : .google, locale: code,
+                        deviceClass: deviceClass, actual: input.actual)
+                    if apple.isEmpty != google.isEmpty, !storeHas {
                         let empty = apple.isEmpty ? "the App Store" : "Google Play"
                         result.append(Finding(
                             id: "media.oneStore.\(code).\(deviceClass.rawValue)",
