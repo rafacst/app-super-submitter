@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.4 (360) - 2026-08-22
+
+### Starting an app
+
+- Submit a new app opens the same door the import does. It asks for the store keys first, then for the project folder, so the credential form no longer arrives for an app Super Submitter knows nothing about.
+- The folder answers for itself. One scan reads the bundle identifier, the release version and the display name out of the Xcode project or the Gradle build, and a value the project computes at build time stays empty rather than guessed.
+- The import asks for a folder on every row, and not once for the whole selection. An import of several apps used to ask nothing at all and put every store.yaml in Super Submitter's own workspace.
+- The answer on the folder step is still allowed to be later. An app that took it carries a Link folder chip in the window until the folder arrives, and linking it moves store.yaml across.
+- Placeholders no longer survive an import. An empty store record used to reach store.yaml and stand in the window as a store the app does not ship to.
+
+### Build
+
+- One project builds both native Apple platforms. The second archive starts after the first one passes inspection, and either archive can be made the upload.
+- The Build tab keeps the normal path on one surface. Project details are still there and no longer stand between the developer and the build.
+- The scheme question comes before the preflight reads anything. It used to run its checks first and ask afterwards, over an answer that could change what the checks were about.
+- A version customers already read is refused before the archive runs. The card used to offer the live version as the next one, which spends a whole build on an upload the App Store then rejects.
+- The version the app offers moves its patch component. Version 1.6 answers 1.6.1 and not 1.7, because a fix is not a minor release.
+- Recheck refreshes what the preflight is reading, so a corrected project reports its correction.
+
+### Drafts and store data
+
+- Save draft is one split button. A click saves the local copy, and the menu carries the write to the store, which asks first.
+- A remote save reads only the tab it writes. It used to read every store surface for a write that touches one of them.
+- The remote save runs in its own temporary tab, with its progress and its API calls in it, and the tab goes away with the save.
+- A remote save is offered only where a store keeps draft rows for it. The Build tab writes inside the Build tab, the store preview is read only, and the App Store needs a draft to write into.
+- Every app tab can replace its last store read with a fresh one, from the same command in the window head.
+
+### Shell and layout
+
+- The window head groups what the store holds beside the button that goes and reads it. The standing chip used to sit at the far end, five controls away from the command that reports it.
+- A fold label opens and closes its fold. The pointer had to find the chevron.
+- The language segments dropped their caption. Two segments that read en-US and pt-BR are language codes and nothing else, and the band needed the room.
+- The Publish and Manage switch says what it is with a symbol for each job and a pill that travels between them.
+- The copied run log is capped, so a long run no longer hands the pasteboard more than it can carry.
+
 ## 1.3 (327) - 2026-08-15
 
 ### The dry run
