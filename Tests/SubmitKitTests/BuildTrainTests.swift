@@ -45,7 +45,10 @@ private final class BuildsStubProtocol: URLProtocol, @unchecked Sendable {
                         "appStoreVersion":{"data":{"id":"ver-draft"}}}},
       {"id":"b-3","type":"builds",
        "attributes":{"version":"3","processingState":"PROCESSING"},
-       "relationships":{"preReleaseVersion":{"data":{"id":"train-new"}}}}
+       "relationships":{"preReleaseVersion":{"data":{"id":"train-new"}}}},
+      {"id":"b-9","type":"builds",
+       "attributes":{"version":"9","processingState":"VALID"},
+       "relationships":{"preReleaseVersion":{"data":{"id":"train-vision"}}}}
      ],
      "included":[
       {"id":"train-old","type":"preReleaseVersions",
@@ -54,6 +57,8 @@ private final class BuildsStubProtocol: URLProtocol, @unchecked Sendable {
        "attributes":{"version":"3.2.0","platform":"IOS"}},
       {"id":"train-mac","type":"preReleaseVersions",
        "attributes":{"version":"3.2.0","platform":"MAC_OS"}},
+      {"id":"train-vision","type":"preReleaseVersions",
+       "attributes":{"version":"1.0.0","platform":"VISION_OS"}},
       {"id":"ver-live","type":"appStoreVersions",
        "attributes":{"appVersionState":"READY_FOR_SALE","versionString":"3.1.0"}},
       {"id":"ver-draft","type":"appStoreVersions",
@@ -198,7 +203,7 @@ struct ChosenBuildTests {
     /// platform belongs in it, processed or not.
     @Test func theListNamesEveryBuildOfThisPlatform() async throws {
         let builds = try await UploadService(api: buildsAPI())
-            .appleBuildChoices(appID: "1", platform: .ios)
+            .appleBuildChoices(appID: "1", platform: "IOS")
 
         #expect(builds.map(\.id) == ["b-412", "b-1", "b-2", "b-3"])
         #expect(builds.first { $0.id == "b-2" }?.version == "3.2.0")
@@ -212,7 +217,7 @@ struct ChosenBuildTests {
     /// year ago wore the same word as the one nobody has used.
     @Test func aBuildCarriesTheStateOfTheVersionHoldingIt() async throws {
         let builds = try await UploadService(api: buildsAPI())
-            .appleBuildChoices(appID: "1", platform: .ios)
+            .appleBuildChoices(appID: "1", platform: "IOS")
 
         #expect(builds.first { $0.id == "b-412" }?.versionState == "READY_FOR_SALE")
         // The deprecated key still answers on older records, so it is read too.
@@ -223,7 +228,7 @@ struct ChosenBuildTests {
 
     @Test func theListAsksForTheVersionThatHoldsEachBuild() async throws {
         _ = try await UploadService(api: buildsAPI())
-            .appleBuildChoices(appID: "1", platform: .ios)
+            .appleBuildChoices(appID: "1", platform: "IOS")
 
         #expect(BuildsStubProtocol.paths.contains {
             $0.hasPrefix("/v1/builds?")
@@ -233,10 +238,31 @@ struct ChosenBuildTests {
 
     @Test func theListDropsTheOtherPlatform() async throws {
         let builds = try await UploadService(api: buildsAPI())
-            .appleBuildChoices(appID: "1", platform: .macos)
+            .appleBuildChoices(appID: "1", platform: "MAC_OS")
 
         // `train-mac` holds no build, and none of the iOS builds belong to it.
         #expect(builds.isEmpty)
+    }
+
+    /// Apple ships four platforms and this list knew two of them.
+    ///
+    /// It took a `BuildPlatform`, which is iOS, macOS and Android, so every
+    /// platform that was not macOS asked for `IOS`: a tvOS or visionOS app
+    /// matched no train and the panel reported an empty store over a store
+    /// holding builds. The manifest carries Apple's own spelling and the plan
+    /// reader already passes it, which is why the build number on the tab was
+    /// right while the list under it was empty.
+    @Test func theListFindsTheBuildsOfEveryApplePlatform() async throws {
+        let builds = try await UploadService(api: buildsAPI())
+            .appleBuildChoices(appID: "1", platform: "VISION_OS")
+
+        #expect(builds.map(\.id) == ["b-9"])
+        #expect(builds.first?.version == "1.0.0")
+
+        // And the other trains keep their own builds.
+        let ios = try await UploadService(api: buildsAPI())
+            .appleBuildChoices(appID: "1", platform: "IOS")
+        #expect(!ios.contains { $0.id == "b-9" })
     }
 }
 

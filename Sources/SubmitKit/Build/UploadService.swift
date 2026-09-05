@@ -152,9 +152,18 @@ public struct UploadService: Sendable {
     /// The store keeps them and a version takes one, which is what Apple's own
     /// console offers as Add Build. Nothing here writes: the choice lands in
     /// the manifest, and the plan attaches it.
+    ///
+    /// - Parameter platform: Apple's own spelling, one of `IOS`, `MAC_OS`,
+    ///   `TV_OS` or `VISION_OS`. It took a `BuildPlatform`, which knows only
+    ///   iOS, macOS and Android, so every platform that was not macOS asked
+    ///   for `IOS`: a tvOS or visionOS app matched no train at all and the
+    ///   panel reported an empty store over a store full of builds. The
+    ///   manifest holds the real value and `StateReader` already passes it,
+    ///   which is why the build number on the same tab was right while the
+    ///   list under it was empty.
     public func appleBuildChoices(appID: String,
-                                  platform: BuildPlatform) async throws -> [RemoteBuild] {
-        let wanted = platform == .macos ? "MAC_OS" : "IOS"
+                                  platform: String) async throws -> [RemoteBuild] {
+        let wanted = platform
         var result: [RemoteBuild] = []
         for page in try await appleBuildPages(appID: appID) {
             // The trains of this page name the marketing version of every
