@@ -199,7 +199,7 @@ extension AppState {
     func appleStoreBuilds() async throws -> [UploadService.RemoteBuild] {
         guard let appID = appleActionAppID else { return [] }
         let builds = try await UploadService(api: readOnlyAPI()).appleBuildChoices(
-            appID: appID, platform: applePlatform == .macOS ? .macos : .ios)
+            appID: appID, platform: applePlatform.rawValue)
         return builds.sorted { left, right in
             guard let first = left.uploaded, let second = right.uploaded else {
                 return (Int(left.number) ?? 0) > (Int(right.number) ?? 0)

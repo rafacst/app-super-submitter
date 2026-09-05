@@ -55,7 +55,13 @@ struct AppleBuildsPanel: View {
 
             if let error { WarningNote(error) }
             if loaded, builds.isEmpty {
-                Text("App Store Connect holds no build for this app on \(state.applePlatform == .macOS ? "macOS" : "iOS") yet.")
+                // The platform is named in Apple's own words, and the app has
+                // four of them. It read "iOS" for every app that was not
+                // macOS, so a tvOS app was told the store was empty and a
+                // manifest naming the wrong train said nothing at all. The
+                // list is one train's, so the sentence that reports it empty
+                // has to say which train it asked about.
+                Text("App Store Connect holds no build for this app on \(state.applePlatform.shortName) yet.")
                     .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
             }
             if loaded, !builds.isEmpty { list }
