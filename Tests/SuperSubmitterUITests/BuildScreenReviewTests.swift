@@ -255,16 +255,19 @@ private func buildReviewState() -> AppState {
 @Test func oneSwitchHoldsEverythingElse() throws {
     let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
     let advanced = try #require(build.range(of: "private var advancedOptions"))
-    let builds = try #require(build.range(of: "private var storeBuilds"))
-    let section = String(build[advanced.lowerBound..<builds.lowerBound])
+    let tools = try #require(build.range(of: "private var storeTools"))
+    let section = String(build[advanced.lowerBound..<tools.lowerBound])
 
     #expect(section.contains("$state.showsAdvancedBuildOptions"))
     #expect(section.contains("if state.showsAdvancedBuildOptions"))
     // Every one of them, and nothing left drawing itself unconditionally.
-    for held in ["listingImportRow", "storeBuilds", "AndroidArtifactsSection()",
-                 "storeTools"] {
+    for held in ["listingImportRow", "AndroidArtifactsSection()", "storeTools"] {
         #expect(section.contains(held))
     }
+    // And not the store's build list: taking a build Apple already holds is
+    // one of the three ways to have a build, so it answers to the picker at
+    // the top of the tab. See `theBuildTabOffersTheStoresOwnBuild`.
+    #expect(!section.contains("AppleBuildsPanel()"))
     // And the release track is not one of them: it decides what an apply
     // writes, so it stands with the essentials.
     #expect(!section.contains("googleOptions"))
@@ -584,13 +587,49 @@ private func buildReviewState() -> AppState {
     #expect(build.components(separatedBy: ".pickerStyle(.radioGroup)").count == 2)
 }
 
+/// The third way to have a build: the store already holds one.
+///
+/// Apple's console calls it Add Build, and this app kept it under the advanced
+/// switch, which is off until a developer finds it. A build that was processed,
+/// was ready, and was not the newest could not be shipped from the tab that
+/// asks where the build comes from.
+@Test func theBuildTabOffersTheStoresOwnBuild() throws {
+    let build = try buildReviewSource("Sources/SuperSubmitter/Tabs/BuildTab.swift")
+
+    #expect(build.contains("Use a store build"))
+    #expect(build.contains("AppState.BuildSource.store"))
+    #expect(build.contains("private var storeBuildWorkspace"))
+    #expect(build.contains("AppleBuildsPanel()"))
+    // Apple's route alone. Play serves no equivalent list.
+    let path = try #require(build.range(of: "private var buildPath"))
+    let workspace = try #require(build.range(of: "private var storeBuildWorkspace"))
+    let picker = String(build[path.lowerBound..<workspace.lowerBound])
+    #expect(picker.contains("if state.stores.contains(.apple)"))
+}
+
+/// An app that ships to Play alone never sees the store segment, so a choice
+/// left over from an Apple app must not leave the tab drawing nothing.
+@MainActor
+@Test func theStoreSourceFallsBackWithoutApple() {
+    let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
+                         storeAccount: "test-\(UUID().uuidString)")
+    state.buildSource = .store
+    #expect(state.buildSource == .store)
+
+    // The palette reaches the list by choosing the source that draws it.
+    state.buildSource = .project
+    state.jump(to: FieldIndex.all.first { $0.id == "build.storeBuilds" }!)
+    #expect(state.buildSource == .store)
+    #expect(state.selectedTab == .build)
+}
+
 /// The tab opens on the two answers that fit almost every app: this Mac has
 /// the project, and the app ships no encryption of its own.
 @MainActor
 @Test func theBuildTabOpensOnTheOrdinaryAnswers() {
     let state = AppState(defaults: UserDefaults(suiteName: UUID().uuidString)!,
                          storeAccount: "test-\(UUID().uuidString)")
-    #expect(state.showBuildFromProject)
+    #expect(state.buildSource == .project)
 
     // No Apple app, no Apple question: the answer belongs to a build going to
     // the App Store, and Google asks nothing of the kind.
