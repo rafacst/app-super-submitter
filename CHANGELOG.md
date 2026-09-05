@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.1 (364) - 2026-09-05
+
+### Build
+
+* Add a build asks where the build comes from, and there are three answers. Create one from a project, upload a package, or take a build App Store Connect already holds.
+* Taking a build the store holds is Apple's own Add Build. It writes nothing and uploads nothing: the choice lands in store.yaml, the plan draws the attach row, and the apply sends it.
+* The build list asks Apple about the platform the app ships. A tvOS or visionOS app was asked about iOS, matched no build, and was told the store was empty over a store holding builds.
+* The sentence that reports an empty list names the platform it asked about, in Apple's own words. It read iOS for every app that was not macOS.
+* The Build tab reads the store as it opens. The live version, the next free version and the highest build number arrive without a fetch and without a warning about overwriting anything.
+* A box the developer has answered is never refilled by that read. It fills the empty ones and stops.
+* The read happens once for each app, and not on every visit to the tab.
+* The list of builds arrives with the panel instead of waiting for a button press.
+
+### Starting an app
+
+* The project folder answers with the languages it ships. The listing locale used to come out empty, so Details, Media and Preview store all opened on Add the first locale over a project that states the answer plainly.
+* The Xcode project answers for the bundle identifier, the release version, the display name and the export compliance key, read from the project file itself with no build.
+* A value the project computes at build time stays empty. An identifier that is wrong is worse than one that is missing, and only the missing one is obviously the developer's to fill.
+
 ## 1.4 (360) - 2026-08-22
 
 ### Starting an app
