@@ -10,14 +10,17 @@ struct BuildTab: View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 16) {
             buildPath
-            if state.showBuildFromProject {
+            switch source {
+            case .project:
                 BuildFromProjectView()
-            } else {
+            case .upload:
                 uploadWorkspace
                 if state.buildFlow.state.isActive || state.buildFlow.candidate != nil
                     || state.buildFlow.failure != nil {
                     BuildFromProjectView()
                 }
+            case .store:
+                storeBuildWorkspace
             }
             buildSetup
             // The Play track decides what an apply writes, so it is a release
@@ -53,6 +56,14 @@ struct BuildTab: View {
         .task(id: state.manifestURL) { await state.fetchBuildTabFromStore() }
     }
 
+    /// The build the tab is working with, with the store route ruled out for an
+    /// app that ships to Play alone. The segment is not on the screen for those
+    /// apps, and a stale choice must not leave the tab drawing nothing.
+    private var source: AppState.BuildSource {
+        state.buildSource == .store && !state.stores.contains(.apple)
+            ? .upload : state.buildSource
+    }
+
     /// The one decision that changes the workflow below it.
     private var buildPath: some View {
         @Bindable var state = state
@@ -60,20 +71,46 @@ struct BuildTab: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Add a build")
                     .font(Theme.cardTitle)
-                Text("Create one from a project, or upload a package you already have.")
+                Text("Create one from a project, upload a package you already have, or take one App Store Connect holds.")
                     .font(Theme.caption)
                     .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 16)
-            Picker("Build source", selection: $state.showBuildFromProject) {
-                Text("Create a build").tag(true)
-                Text("Upload a build").tag(false)
+            Picker("Build source", selection: $state.buildSource) {
+                Text("Create a build").tag(AppState.BuildSource.project)
+                Text("Upload a build").tag(AppState.BuildSource.upload)
+                // Apple's route only. Play serves no equivalent list, and its
+                // release takes the artifact this app sends it.
+                if state.stores.contains(.apple) {
+                    Text("Use a store build").tag(AppState.BuildSource.store)
+                }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 310)
+            .frame(width: state.stores.contains(.apple) ? 430 : 310)
         }
         .storePanel(padding: 12, horizontal: 15)
+    }
+
+    /// The build App Store Connect already holds, and the version taking it.
+    ///
+    /// This is Apple's Add Build, and nothing here uploads: the panel writes
+    /// the chosen number to `store.yaml`, the plan draws the attach row, and
+    /// the apply sends it.
+    private var storeBuildWorkspace: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Use a build App Store Connect already holds")
+                    .font(Theme.cardTitle)
+                Text("Pick a processed build. The apply attaches it to this version, and nothing uploads a binary.")
+                    .font(Theme.caption)
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            AppleBuildsPanel()
+        }
+        .storePanel(padding: 14, horizontal: 15)
     }
 
     /// Apple's export compliance answer, on the tab that makes the build that
@@ -587,12 +624,15 @@ struct BuildTab: View {
 
     /// The one switch, and everything it holds.
     ///
-    /// None of these is needed to send a version. The build list picks a build
-    /// other than the newest, the listing import overwrites `store.yaml` with
-    /// the store's own words, the artifact paths belong to an Android release
-    /// that ships a mapping file, and the tooling reads this Mac and the team.
-    /// They were four folds with four different opening rules; they are one
-    /// answer now, and it is remembered.
+    /// None of these is needed to send a version. The listing import overwrites
+    /// `store.yaml` with the store's own words, the artifact paths belong to an
+    /// Android release that ships a mapping file, and the tooling reads this
+    /// Mac and the team. They were four folds with four different opening
+    /// rules; they are one answer now, and it is remembered.
+    ///
+    /// The store's own build list was here and is not any more: taking a build
+    /// Apple already holds is one of the three ways to have a build, so it
+    /// belongs to the picker at the top that asks which one. See `buildPath`.
     private var advancedOptions: some View {
         @Bindable var state = state
         return VStack(alignment: .leading, spacing: 16) {
@@ -600,7 +640,7 @@ struct BuildTab: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Advanced options")
                         .font(Theme.cardTitle)
-                    Text("The store's own build list, the listing import, the Android artifacts, and the tools this Mac signs with.")
+                    Text("The listing import, the Android artifacts, and the tools this Mac signs with.")
                         .font(Theme.caption)
                         .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -614,25 +654,8 @@ struct BuildTab: View {
 
             if state.showsAdvancedBuildOptions {
                 listingImportRow
-                storeBuilds
                 if state.stores.contains(.google) { AndroidArtifactsSection() }
                 storeTools
-            }
-        }
-    }
-
-    /// Open when the store has a build to show. The panel fetches on its own
-    /// now, so a shut fold over a list that has already arrived is the app
-    /// hiding the answer it just went and got.
-    private var storeBuilds: some View {
-        Group {
-            if state.stores.contains(.apple) {
-                Section_("App Store builds", icon: "apple.logo", tint: Theme.appleMark,
-                         folds: true,
-                         startsOpen: state.actualState.apple?.highestBuildNumber != nil,
-                         note: "Builds that App Store Connect already holds") {
-                    AppleBuildsPanel()
-                }
             }
         }
     }

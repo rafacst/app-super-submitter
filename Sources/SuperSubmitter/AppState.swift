@@ -308,6 +308,11 @@ final class AppState {
     /// anchor is on a view that is about to exist.
     func jump(to entry: FieldEntry) {
         selectedTab = entry.tab
+        // The store's build list is one of the three build sources, and the
+        // other two draw over it, so reaching it means choosing it. Without
+        // this the palette opened the Build tab on the project builder and
+        // scrolled to an anchor that was not on the screen.
+        if entry.id == "build.storeBuilds" { buildSource = .store }
         jumpTarget = entry.id
     }
 
@@ -472,12 +477,22 @@ final class AppState {
     func isBuilding(appID: UUID) -> Bool {
         buildFlows[appID]?.isBusy ?? false
     }
+    /// Where the build this version ships comes from.
+    ///
+    /// Three ways to have one, and the tab offered two: build the project on
+    /// this Mac, or upload a package somebody else produced. The third is the
+    /// one Apple's console calls Add Build — the store already holds a
+    /// processed build, and the version only has to take it. That route was
+    /// under the advanced switch, so a developer whose build was already in
+    /// App Store Connect had no answer on the screen that asks the question.
+    enum BuildSource: Hashable { case project, upload, store }
+
     /// The Build tab opens on the project builder.
     ///
     /// Importing a package is the answer for a build somebody else produced,
     /// and it was the one the tab opened on, so the ordinary case — this Mac
     /// has the project, build it — was one click away every single time.
-    var showBuildFromProject = true
+    var buildSource = BuildSource.project
 
     /// Whether the Build tab draws everything past what a submission needs.
     ///
@@ -491,7 +506,13 @@ final class AppState {
     /// One switch decides all of them now, and the essentials never fold. It
     /// is the developer's standing answer, so it lives in the defaults and
     /// covers every app, the same as the dry-run preference.
-    var showsAdvancedBuildOptions = true {
+    ///
+    /// It starts shut, which is what `init` reads out of an empty defaults and
+    /// what `theAdvancedSwitchSurvivesALaunch` states. The declaration said
+    /// true and never survived a launch to prove it. Nothing a submission
+    /// needs is under here, and the store's own build list, which was, is a
+    /// build source now. See `BuildSource`.
+    var showsAdvancedBuildOptions = false {
         didSet {
             guard showsAdvancedBuildOptions != oldValue else { return }
             defaults.set(showsAdvancedBuildOptions, forKey: advancedBuildKey)
