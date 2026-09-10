@@ -229,6 +229,7 @@
 		934DCF3F2E2CEEB4DE1FFB9A /* GameCenterWriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D34C53995256A0169EF4BE6E /* GameCenterWriteTests.swift */; };
 		948BA6DBB9E40AA805CDCA33 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F018F63C836231D10329C0B9 /* LogView.swift */; };
 		989BDB1EEDAC5050FAA6C927 /* BuildsListWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D1DAFEC60F55A58A9EE1FF /* BuildsListWindowTests.swift */; };
+		99897274488B0CB534CA670A /* BuildAttachChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBE4535E3F5A6C994B2F97F /* BuildAttachChip.swift */; };
 		9A886D5A6FCF7E8036FB207B /* AppleTeamClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F582BB2DA6CBD225B8FBFD7 /* AppleTeamClient.swift */; };
 		9AEC50062B8786966DBA324B /* PaletteStepsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA029973011E040843D8973 /* PaletteStepsTests.swift */; };
 		9C4DE339A7F92698687A313E /* LiveListingLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2F7F98D039E2A0594237F01 /* LiveListingLockTests.swift */; };
@@ -236,6 +237,7 @@
 		9D21037A87BCF8695A14D7CA /* CoverageGapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 369BD68FC3B4A58C282FA68C /* CoverageGapTests.swift */; };
 		9E37AE0F62355A2C49DE17F2 /* AppleReportsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E307C8BC221C9A71BD38993 /* AppleReportsClient.swift */; };
 		9F813C2E50184CA458EAA406 /* NuclearResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE13D6EDDBBD5698EDC4DDF /* NuclearResetTests.swift */; };
+		A0A3F5114EFF61EAAC9673D0 /* AppStateAttachedBuild.swift in Sources */ = {isa = PBXBuildFile; fileRef = F29E2D9632798B5E18E2B708 /* AppStateAttachedBuild.swift */; };
 		A111FB9B970F03FC997A1A5D /* SubscriptionGroupMembershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56C6EF9D5DF01615438AA18 /* SubscriptionGroupMembershipTests.swift */; };
 		A22BF801105C6FC623233E05 /* Haptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 548E9C71B30209CDDDF658C0 /* Haptic.swift */; };
 		A2B2E86A33D5389C6B28683E /* UploadRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D1B38E1BC07601F5407CE3 /* UploadRun.swift */; };
@@ -375,6 +377,7 @@
 		FAF804DE2D9D05F6EB014D58 /* ProtoManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D33E2834F78C9B6DF4C98CB /* ProtoManifest.swift */; };
 		FB7F57877611E186A8058525 /* GoogleActionsClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281FA294F1C5C5D34164D838 /* GoogleActionsClient.swift */; };
 		FBB2A2BF448D1477647D2675 /* BuildAgainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69F2FDB44F52070728527DF /* BuildAgainTests.swift */; };
+		FC1FBBA11B7CE1AF8967CC34 /* AttachedBuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ED22F558F78F929FABCEF74 /* AttachedBuildTests.swift */; };
 		FCA2F3D95DF8B67FBDEC8561 /* ManifestFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F487A6A33C04D956210C7B /* ManifestFile.swift */; };
 		FCAD049B51F10F0C25DA08F3 /* AppleTestFlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9991048BBA83F9E9DC9F2AB2 /* AppleTestFlight.swift */; };
 		FCD2FEF74C0E1C1EBC8816F7 /* AndroidArtifactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 485C733B823964B46B2EBAEB /* AndroidArtifactsSection.swift */; };
@@ -511,6 +514,7 @@
 		2E307C8BC221C9A71BD38993 /* AppleReportsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleReportsClient.swift; sourceTree = "<group>"; };
 		2E478E4DC53EB86AD9227D47 /* BuildStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildStorage.swift; sourceTree = "<group>"; };
 		2E94EBFCF27BC91D2059A774 /* ReportsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsPanel.swift; sourceTree = "<group>"; };
+		2ED22F558F78F929FABCEF74 /* AttachedBuildTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachedBuildTests.swift; sourceTree = "<group>"; };
 		2EF39FCAEF6F8F553220AC24 /* AndroidBuildService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidBuildService.swift; sourceTree = "<group>"; };
 		2F582BB2DA6CBD225B8FBFD7 /* AppleTeamClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleTeamClient.swift; sourceTree = "<group>"; };
 		2FE13D6EDDBBD5698EDC4DDF /* NuclearResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuclearResetTests.swift; sourceTree = "<group>"; };
@@ -648,6 +652,7 @@
 		8D0C17A03108A0D101068749 /* ReleaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseClient.swift; sourceTree = "<group>"; };
 		8D79C5DE3F2E7E5B601B24DD /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
 		8DAB421E8F5BDC7CBD7F52C9 /* AppTagsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTagsPanel.swift; sourceTree = "<group>"; };
+		8EBE4535E3F5A6C994B2F97F /* BuildAttachChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildAttachChip.swift; sourceTree = "<group>"; };
 		8F46E724D08D58DD6558DDA4 /* TabSwitchFlushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabSwitchFlushTests.swift; sourceTree = "<group>"; };
 		91E21F4F8E9681197F6ACE94 /* AppleKeyIDTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleKeyIDTests.swift; sourceTree = "<group>"; };
 		92CC10AAB4F6572C96CD9F98 /* OfferEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferEditor.swift; sourceTree = "<group>"; };
@@ -795,6 +800,7 @@
 		F1DF98412E4B4F9EF7BF51E7 /* AppleSandboxClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSandboxClient.swift; sourceTree = "<group>"; };
 		F22E680C8C11A97942B4057D /* StoreConnectionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreConnectionClient.swift; sourceTree = "<group>"; };
 		F29CCFB0C775C2C3BC49A29C /* RuntimePlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimePlaceholderTests.swift; sourceTree = "<group>"; };
+		F29E2D9632798B5E18E2B708 /* AppStateAttachedBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateAttachedBuild.swift; sourceTree = "<group>"; };
 		F2F7F98D039E2A0594237F01 /* LiveListingLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListingLockTests.swift; sourceTree = "<group>"; };
 		F3586FECD62BCB03E6A144AA /* CredentialCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialCard.swift; sourceTree = "<group>"; };
 		F40AF41EE8A5F072EFBAD071 /* AppStateAppleActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateAppleActions.swift; sourceTree = "<group>"; };
@@ -947,6 +953,7 @@
 				89F1D6FB9888910EC3020105 /* AppReviewStatesTests.swift */,
 				4DD6651F8318B42732684163 /* AppRowStoresTests.swift */,
 				DAD2876FFF2AEEF92EB6045B /* AppTabStripTests.swift */,
+				2ED22F558F78F929FABCEF74 /* AttachedBuildTests.swift */,
 				41F4083CB7FA3ACA9D0732FA /* AvailabilityScreenTests.swift */,
 				51BF914AE9AB214F1E22CD9F /* BetaTestingPanelTests.swift */,
 				0A0C38D73C94CD59F98C5DC9 /* BlockersEverywhereTests.swift */,
@@ -1294,6 +1301,7 @@
 				F40AF41EE8A5F072EFBAD071 /* AppStateAppleActions.swift */,
 				D2E666062418BDAA89C5E014 /* AppStateAppleReads.swift */,
 				75812E72D8517689DBB03F82 /* AppStateArtifacts.swift */,
+				F29E2D9632798B5E18E2B708 /* AppStateAttachedBuild.swift */,
 				B41DF84B54D31B54FACFEA4F /* AppStateCatalog.swift */,
 				A1AFAB6589CDC4EBC3895BCF /* AppStateDirectApply.swift */,
 				4EBD6FED9F592D6DC5898FB2 /* AppStateExistingImport.swift */,
@@ -1413,6 +1421,7 @@
 				8DAB421E8F5BDC7CBD7F52C9 /* AppTagsPanel.swift */,
 				66509B507946F7098BBE1120 /* AvailabilityTab.swift */,
 				5079F30B980EA11832EBC72C /* BetaTestingTab.swift */,
+				8EBE4535E3F5A6C994B2F97F /* BuildAttachChip.swift */,
 				30D4C875E4DDDAD0E5173D72 /* BuildTab.swift */,
 				197CAE8BA80B64F568B18E7C /* CrashesPanel.swift */,
 				1B1BACCC636778CEAA23A8EA /* DetailsTab.swift */,
@@ -1838,6 +1847,7 @@
 				82A164B4436F5ED3ADD99138 /* AppStateAppleActions.swift in Sources */,
 				8755AD9DB50C66432A8A6873 /* AppStateAppleReads.swift in Sources */,
 				88706A2206A6D167031D5C00 /* AppStateArtifacts.swift in Sources */,
+				A0A3F5114EFF61EAAC9673D0 /* AppStateAttachedBuild.swift in Sources */,
 				85182B476C60DAF6322F18A1 /* AppStateCatalog.swift in Sources */,
 				458A09C67A97B85371C4A2F5 /* AppStateDirectApply.swift in Sources */,
 				61410815C5F8D4261E355306 /* AppStateExistingImport.swift in Sources */,
@@ -1860,6 +1870,7 @@
 				BCC864190C70CD170FD2D992 /* AvailabilityTab.swift in Sources */,
 				F91DFBBC059B5038C4707AAB /* BetaTestingTab.swift in Sources */,
 				5CFC5529B9D11BEDCE05D3C4 /* Blockers.swift in Sources */,
+				99897274488B0CB534CA670A /* BuildAttachChip.swift in Sources */,
 				F39F7E355F37B20BF46985CD /* BuildFlow.swift in Sources */,
 				5D3969DAC2D6E8C4A65C85D3 /* BuildFlowRun.swift in Sources */,
 				E3AAC9F3AEC53746DC5FEAE2 /* BuildFromProjectView.swift in Sources */,
@@ -1950,6 +1961,7 @@
 				617151642D0FDB8DA8D4F21A /* AppReviewStatesTests.swift in Sources */,
 				12B61CBF632C65881AD260D0 /* AppRowStoresTests.swift in Sources */,
 				B5E52D6C8280936238A1E135 /* AppTabStripTests.swift in Sources */,
+				FC1FBBA11B7CE1AF8967CC34 /* AttachedBuildTests.swift in Sources */,
 				6CB5347438DF401DE0FB1E5F /* AvailabilityScreenTests.swift in Sources */,
 				FF013A61A704A8B81AED02DE /* BetaTestingPanelTests.swift in Sources */,
 				45D6F0B45E60ACC8BA4FED19 /* BlockersEverywhereTests.swift in Sources */,
@@ -2086,7 +2098,7 @@
 				);
 				LICENSING_BASE_URL = "https://super-submitter.rafacst.me";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rafacst.supersubmitter;
 				PRODUCT_NAME = SuperSubmitter;
 				SDKROOT = macosx;
@@ -2172,7 +2184,7 @@
 				);
 				LICENSING_BASE_URL = "https://super-submitter.rafacst.me";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rafacst.supersubmitter;
 				PRODUCT_NAME = SuperSubmitter;
 				SDKROOT = macosx;
