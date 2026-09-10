@@ -692,6 +692,13 @@ struct BuildFromProjectView: View {
             Text(explanation).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // The build and the inspection have no percentage to report, so the
+            // bar is honest about it: an indeterminate sweep that says work is
+            // happening while the tools run. The upload does report a fraction,
+            // and keeps its own bar below.
+            if flow.state == .building || flow.state == .inspectingArtifact {
+                IndeterminateBar()
+            }
             if flow.state == .uploading || flow.state == .processingOrValidating {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
@@ -789,11 +796,11 @@ struct BuildFromProjectView: View {
     private var buildBothApplePlatformsConfirmation: some View {
         ConfirmationSheet(
             title: "Build both Apple platforms?",
-            body: "Build \(flow.snapshot.scheme ?? "this scheme") for iOS and macOS. This can run scripts and plug-ins supplied by the selected project.",
+            body: "Build \(flow.snapshot.scheme ?? "this scheme") for iOS and macOS at the same time. This can run scripts and plug-ins supplied by the selected project.",
             rows: [("Folder", flow.project?.rootPath ?? ""),
                    ("Container", flow.project?.containerURL.lastPathComponent ?? ""),
                    ("Destinations", "generic/platform=iOS, generic/platform=macOS")],
-            note: "Super Submitter keeps both archives. Each archive waits for its own upload confirmation.",
+            note: "Both archives build at the same time. Super Submitter keeps each one, and each waits for its own upload confirmation.",
             confirm: "Build Both",
             destructive: false) {
             flow.buildBothApplePlatforms()
@@ -996,6 +1003,9 @@ struct BuiltArtifactSection: View {
     @Environment(AppState.self) private var state
     @State private var detailsOpen: [UUID: Bool] = [:]
     @State private var deleting = false
+    /// The artifact whose concurrent upload is being confirmed. Nothing sends
+    /// without this sheet, the same rule the selected artifact's upload keeps.
+    @State private var confirming: BuildCandidate?
 
     private var flow: BuildFlow { state.buildFlow }
 
@@ -1009,6 +1019,37 @@ struct BuiltArtifactSection: View {
             ForEach(flow.builtCandidates) { candidate in card(candidate) }
         }
         .deleteArtifactConfirmation($deleting, flow: flow)
+        .sheet(item: $confirming) { candidate in
+            ConfirmationSheet(
+                title: "Upload this build?",
+                body: "Upload \(candidate.productIdentifier) version \(candidate.marketingVersion) "
+                    + "build \(candidate.buildVersion) to "
+                    + (candidate.platform == .android ? "Google Play" : "App Store Connect")
+                    + ". It uploads beside any other build already on its way, and does not "
+                    + "submit for review.",
+                rows: Self.uploadRows(candidate),
+                note: "The upload cannot be recalled reliably once the store accepts it.",
+                confirm: "Upload",
+                destructive: false) {
+                flow.startUpload(of: candidate)
+            }
+        }
+    }
+
+    static func uploadRows(_ candidate: BuildCandidate) -> [(String, String)] {
+        [
+            ("Product", candidate.productName),
+            ("Identifier", candidate.productIdentifier),
+            ("Version", candidate.marketingVersion),
+            (candidate.platform == .android ? "Version code" : "Build", candidate.buildVersion),
+            ("Size", candidate.sizeText),
+            ("SHA-256", String(candidate.sha256.prefix(16)) + "…"),
+            ("Signature", candidate.signingSummary.verified == true
+                ? "verified" : "not verified"),
+            ("Method", candidate.platform == .android
+                ? "One Google Play edit, committed as a draft"
+                : "xcodebuild -exportArchive, destination upload"),
+        ]
     }
 
     private func card(_ candidate: BuildCandidate) -> some View {
@@ -1045,47 +1086,140 @@ struct BuiltArtifactSection: View {
                     Spacer(minLength: 0)
                 }
             }
-            HStack(spacing: 7) {
-                if isSelected, flow.state == .needsUploadConfirmation {
-                    ActionButton(title: "Upload to the store", enabled: flow.canUpload,
-                                 paid: (.storeUpload, .upload)) {
-                        flow.showUploadConfirmation = true
+            // The live upload once it runs, or the controls that start it. Each
+            // artifact uploads on its own, so the selected one and the others
+            // can all be in flight at the same time. See `UploadJob`.
+            if let job = flow.uploadJob(for: candidate) {
+                uploadJobStatus(candidate, job)
+            } else {
+                HStack(spacing: 7) {
+                    if isSelected, flow.state == .needsUploadConfirmation {
+                        ActionButton(title: "Upload to the store", enabled: flow.canUpload,
+                                     paid: (.storeUpload, .upload)) {
+                            flow.showUploadConfirmation = true
+                        }
+                        ActionButton(title: "Keep the artifact and stop", kind: .secondary) {
+                            flow.keepArtifact()
+                        }
                     }
-                    ActionButton(title: "Keep the artifact and stop", kind: .secondary) {
-                        flow.keepArtifact()
+                    // A second, concurrent send. It does not become the
+                    // selected artifact, so the direct apply and the selected
+                    // upload stay on the artifact they were on.
+                    if !isSelected, !candidate.settled, !candidate.deleted {
+                        ActionButton(title: "Upload to the store",
+                                     enabled: candidate.blockingMismatches.isEmpty,
+                                     paid: (.storeUpload, .upload)) {
+                            confirming = candidate
+                        }
+                        // Selecting it makes it the artifact the live-run panel,
+                        // the delete button and the direct apply act on. It is
+                        // no longer the way to upload it — the button above does
+                        // that beside the others — but it is still the way to
+                        // make it the one the rest of the tab means.
+                        if !flow.state.isActive {
+                            QuietButton(title: "Make this the selected build") {
+                                flow.selectBuiltCandidate(candidate)
+                            }
+                        }
                     }
-                }
-                if !isSelected, !flow.state.isActive, !candidate.settled, !candidate.deleted {
-                    QuietButton(title: "Prepare this archive for upload") {
-                        flow.selectBuiltCandidate(candidate)
+                    if candidate.deleted {
+                        Text("Deleted from this Mac. The record above is what was built.")
+                            .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    } else {
+                        QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
+                        if isSelected, flow.artifactIsDeletable {
+                            QuietButton(title: "Delete artifact") { deleting = true }
+                        }
                     }
-                }
-                if candidate.deleted {
-                    Text("Deleted from this Mac. The record above is what was built.")
-                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                } else {
-                    QuietButton(title: "Reveal artifact") { flow.reveal(candidate.artifactPath) }
-                    if isSelected, flow.artifactIsDeletable {
-                        QuietButton(title: "Delete artifact") { deleting = true }
+                    if flow.project == nil, flow.state != .complete, !flow.isBusy {
+                        QuietButton(title: "Start over") { flow.reset() }
                     }
+                    Spacer(minLength: 0)
                 }
-                if flow.project == nil, flow.state != .complete {
-                    QuietButton(title: "Start over") { flow.reset() }
-                }
-                Spacer(minLength: 0)
-            }
-            if isSelected, let held = flow.uploadBlockedByReview,
-               flow.state == .needsUploadConfirmation {
-                HStack(spacing: 8) {
-                    StatePill(text: "Held", foreground: Theme.yellow,
-                              background: Theme.yellowBg)
-                    Text(held).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
-                        .fixedSize(horizontal: false, vertical: true)
+                if isSelected, let held = flow.uploadBlockedByReview,
+                   flow.state == .needsUploadConfirmation {
+                    HStack(spacing: 8) {
+                        StatePill(text: "Held", foreground: Theme.yellow,
+                                  background: Theme.yellowBg)
+                        Text(held).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .motion(.easeInOut(duration: 0.22), value: showsDetails(candidate))
+    }
+
+    /// One concurrent upload's own live status, inside its card.
+    @ViewBuilder
+    private func uploadJobStatus(_ candidate: BuildCandidate, _ job: UploadJob) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 9) {
+                if job.isActive { Spinner() }
+                Text(job.run.state.stepTitle).font(Theme.font(size: 12, weight: .semibold))
+                Spacer(minLength: 8)
+            }
+            if job.run.state == .uploading || job.run.state == .processingOrValidating {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.sep)
+                        Capsule().fill(Theme.accent)
+                            .frame(width: geometry.size.width * max(0.03, job.progress))
+                    }
+                }
+                .frame(height: 6)
+            }
+            if let processing = job.processingLabel {
+                Text(processing).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if job.run.state == .complete {
+                HStack(spacing: 7) {
+                    Text(candidate.platform == .android
+                         ? "The bundle reached Google Play." : "The build reached App Store Connect.")
+                        .font(Theme.font(size: 11.5)).foregroundStyle(Theme.green)
+                    if let link = job.successLink {
+                        QuietButton(title: candidate.platform == .android
+                                    ? "Open Play Console ↗" : "Open App Store Connect ↗") {
+                            state.open(link)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else if let failure = job.failure {
+                Text(failure.message).font(Theme.font(size: 11.5)).foregroundStyle(Theme.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let blocking = job.blocking, !job.isActive {
+                Text(blocking).font(Theme.font(size: 11.5)).foregroundStyle(Theme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 7) {
+                if job.isActive, job.run.state != .processingOrValidating {
+                    QuietButton(title: "Cancel") { job.cancel() }
+                }
+                if job.run.state == .processingOrValidating {
+                    QuietButton(title: "Stop waiting") { job.stopWaiting() }
+                }
+                if job.run.state == .recoveryRequired {
+                    QuietButton(title: "Resume checking") { job.resumeChecking() }
+                }
+                if job.run.cleanupState == .needsAttention {
+                    QuietButton(title: "Retry cleanup") { job.retryCleanup() }
+                }
+                // A send that stopped short of the store can be started again.
+                if job.run.state == .failed || job.run.state == .cancelled
+                    || (job.run.state == .needsUploadConfirmation && job.blocking != nil) {
+                    ActionButton(title: "Try again",
+                                 enabled: candidate.blockingMismatches.isEmpty,
+                                 paid: (.storeUpload, .upload)) {
+                        flow.startUpload(of: candidate)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     static func rows(_ candidate: BuildCandidate) -> [(String, String)] {
@@ -1152,6 +1286,52 @@ extension View {
 }
 
 // MARK: - The small parts
+
+/// An honest progress bar for work with no percentage.
+///
+/// `xcodebuild` and Gradle report no fraction, so this reports none either: a
+/// gradient sweep runs back and forth across the track while the build runs.
+/// Under Reduce Motion it holds still and breathes instead, the same choice
+/// `Spinner` makes.
+private struct IndeterminateBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweep = false
+    @State private var breathe = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let comet = max(60, width * 0.35)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.sep)
+                if reduceMotion {
+                    Capsule()
+                        .fill(Theme.accent.opacity(breathe ? 0.8 : 0.35))
+                        .frame(maxWidth: .infinity)
+                        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                                   value: breathe)
+                        .onAppear { breathe = true }
+                } else {
+                    Capsule()
+                        .fill(LinearGradient(
+                            colors: [Theme.accent.opacity(0), Theme.accent,
+                                     Theme.accent.opacity(0)],
+                            startPoint: .leading, endPoint: .trailing))
+                        .frame(width: comet)
+                        .offset(x: sweep ? width - comet : 0)
+                        .animation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true),
+                                   value: sweep)
+                        .onAppear { sweep = true }
+                }
+            }
+        }
+        .frame(height: 6)
+        .clipShape(Capsule())
+        .accessibilityElement()
+        .accessibilityLabel("Building")
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+}
 
 struct PreflightRow: View {
     enum Status: Equatable { case ready, warning, unknown, blocked

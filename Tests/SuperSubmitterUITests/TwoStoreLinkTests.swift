@@ -153,7 +153,10 @@ struct TwoStoreLinkTests {
         #expect(!flow.canBuildBothApplePlatforms)
     }
 
-    @Test func bothAppleBuildsStartWithTheSelectedPlatform() throws {
+    /// The dual build archives both platforms at the same time and keeps the
+    /// selected one as the platform of the run. There is no queued second
+    /// build: the two archives run in one task, concurrently.
+    @Test func bothAppleBuildsStartConcurrentlyFromTheSelectedPlatform() throws {
         let root = try folder()
         defer { try? FileManager.default.removeItem(at: root) }
         let (flow, state) = flow(root)
@@ -169,7 +172,7 @@ struct TwoStoreLinkTests {
 
         #expect(flow.run.platform == .macos)
         #expect(flow.run.state == .building)
-        #expect(flow.queuedApplePlatform == .ios)
+        #expect(flow.otherCandidates.isEmpty)
         flow.task?.cancel()
     }
 
@@ -251,5 +254,34 @@ struct TwoStoreLinkTests {
         #expect(flow.otherCandidates.map(\.id) == [mac.id])
         #expect(flow.run.platform == .ios)
         flow.task?.cancel()
+    }
+
+    /// The second artifact uploads on its own job, beside the selected one, and
+    /// settles by id when it lands so nothing offers to send it again.
+    @Test func aConcurrentUploadIsTrackedPerCandidate() {
+        let flow = BuildFlow(app: nil)
+        let ios = BuildCandidate(
+            platform: .ios, productName: "App", productIdentifier: "com.example.app",
+            marketingVersion: "1.0", buildVersion: "1", artifactPath: "/tmp/App-iOS.xcarchive",
+            artifactSize: 1, sha256: "ios")
+        let mac = BuildCandidate(
+            platform: .macos, productName: "App", productIdentifier: "com.example.app",
+            marketingVersion: "1.0", buildVersion: "1", artifactPath: "/tmp/App-Mac.xcarchive",
+            artifactSize: 1, sha256: "mac")
+        flow.candidate = ios
+        flow.otherCandidates = [mac]
+
+        let job = UploadJob(candidate: mac, flow: flow)
+        flow.uploads[mac.id] = job
+        #expect(flow.uploadJob(for: mac)?.candidate.id == mac.id)
+        #expect(job.run.platform == .macos)
+        #expect(job.run.state == .needsUploadConfirmation)
+
+        flow.markUploaded(mac.id)
+        #expect(flow.otherCandidates.first?.settled == true)
+        #expect(flow.candidate?.settled == false)
+
+        flow.cancelConcurrentUploads()
+        #expect(flow.uploads.isEmpty)
     }
 }

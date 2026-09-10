@@ -120,6 +120,153 @@ extension BuildFlow {
             })
     }
 
+    // MARK: - Both Apple platforms, at the same time
+
+    /// Archives iOS and macOS at the same time, from one project.
+    ///
+    /// The selected platform and the other one run in their own `xcodebuild`
+    /// processes at once, each writing to its own archive path with its own
+    /// scratch key, so one build's cleanup cannot remove the `.p8` the other is
+    /// still signing with, and two archives of one bundle id cannot write the
+    /// same file. Both land as candidates when the pair finishes, and each
+    /// keeps its own upload confirmation, exactly as the sequential build did.
+    ///
+    /// ponytail: the two archives share one project's DerivedData, so Xcode's
+    /// build system may still serialise parts of them. The win the developer
+    /// asked for is that neither waits for the other to start.
+    func buildBothApplePlatforms() {
+        guard canBuildBothApplePlatforms, let project else { return }
+        showBuildBothApplePlatformsConfirmation = false
+        holdContext()
+        failure = nil
+        clearLog()
+        candidate = nil
+        otherCandidates = []
+        artifactOnly = false
+        uploadProgress = 0
+        startedAt = Date()
+        let selected = run.platform
+        let other: BuildPlatform = selected == .ios ? .macos : .ios
+        run.move(to: .building)
+        Aptabase.shared.trackEvent("project_build_started", with: [
+            "platform": "apple",
+            "both_apple_platforms": 1,
+            "allow_provisioning_updates": allowProvisioningUpdates ? 1 : 0
+        ])
+        try? storage.save(run)
+
+        task = Task { [weak self] in
+            guard let self else { return }
+            do {
+                async let first = archiveApplePlatform(selected, project)
+                async let second = archiveApplePlatform(other, project)
+                let (selectedArchive, otherArchive) = try await (first, second)
+                guard !Task.isCancelled else { return await finishCancel() }
+                run.move(to: .inspectingArtifact)
+                // The two platforms share every preflight value but the
+                // destination, so the other candidate carries its own copy with
+                // the destination corrected for its card.
+                var otherSnapshot = snapshot
+                otherSnapshot.destination = other.appleDestination
+                let selectedCandidate = try await makeAppleCandidate(
+                    archive: selectedArchive, platform: selected,
+                    project: project, snapshot: snapshot)
+                let otherCandidate = try await makeAppleCandidate(
+                    archive: otherArchive, platform: other,
+                    project: project, snapshot: otherSnapshot)
+                await landBothAppleCandidates(selected: selectedCandidate,
+                                              other: otherCandidate)
+            } catch is CancellationError {
+                await finishCancel()
+            } catch let failure as BuildFailure {
+                fail(failure)
+            } catch {
+                fail(BuildFailure(category: .build, stage: run.state.stepTitle,
+                                  message: error.localizedDescription))
+            }
+        }
+    }
+
+    /// One Apple archive for the dual build, isolated from the other.
+    private func archiveApplePlatform(_ platform: BuildPlatform,
+                                      _ project: LinkedSourceProject) async throws -> URL {
+        let service = AppleBuildService(runner: ToolProcess(redactor: redactor),
+                                        storage: storage)
+        let bundleID = snapshot.productIdentifier ?? "unknown"
+        // Its own id, and not `run.id`: it names the archive file and the
+        // scratch directory, and the two concurrent archives must share neither.
+        let buildID = UUID()
+        let archivePath = try storage.archiveURL(bundleID: bundleID, runID: buildID)
+        var authentication: AppleAuthenticationFiles?
+        if let credential = context.appleCredential {
+            authentication = try AppleAuthenticationFiles.materialize(
+                credential: credential, runID: buildID, storage: storage)
+        }
+        defer { storage.removeScratch(runID: buildID) }
+
+        let tag = platform.label
+        record(preview: "xcodebuild archive · \(tag) · \(project.selection.scheme ?? "")")
+        return try await service.archive(
+            container: project.containerURL, kind: project.containerKind,
+            scheme: project.selection.scheme ?? "",
+            configuration: project.selection.configuration,
+            platform: platform, archivePath: archivePath,
+            authentication: authentication,
+            allowProvisioningUpdates: allowProvisioningUpdates,
+            buildNumber: project.selection.buildNumberOverride,
+            marketingVersion: project.selection.marketingVersionOverride,
+            // The two logs interleave, so each line says which platform printed
+            // it. One log box draws both builds.
+            onLine: { [weak self] _, line in
+                Task { @MainActor in self?.append("[\(tag)] \(line)") }
+            })
+    }
+
+    /// Inspects one Apple archive and returns its candidate, mutating nothing.
+    private func makeAppleCandidate(archive: URL, platform: BuildPlatform,
+                                    project: LinkedSourceProject,
+                                    snapshot: PreflightSnapshot) async throws -> BuildCandidate {
+        let info = try await AppleBuildService(storage: storage)
+            .inspect(archive: archive, platform: platform)
+        var candidate = BuildCandidate(
+            platform: platform, productName: info.applicationName,
+            productIdentifier: info.bundleIdentifier,
+            marketingVersion: info.shortVersion, buildVersion: info.buildVersion,
+            artifactPath: archive.path, artifactSize: info.size,
+            sha256: try Checksums.sha256(directory: archive),
+            signingSummary: .init(style: snapshot.signingStyle, team: info.team,
+                                  identity: info.signingIdentity, profile: info.profileName,
+                                  verified: info.signatureVerified,
+                                  verificationDetail: info.signatureDetail),
+            preflightSnapshot: snapshot)
+        candidate.archiveInfo = info
+        candidate.sourceRevision = ProjectDiscovery.revision(at: project.rootURL)
+        candidate.mismatches = mismatches(for: candidate)
+        return candidate
+    }
+
+    /// Lands the pair: the selected platform on the upload button, the other in
+    /// the artifact list, each with its own upload confirmation.
+    private func landBothAppleCandidates(selected: BuildCandidate,
+                                         other: BuildCandidate) async {
+        otherCandidates = [other]
+        candidate = selected
+        appleArchiveInfo = selected.archiveInfo
+        run.candidateIdentity = selected.logicalIdentity
+        Aptabase.shared.trackEvent("artifact_inspected", with: [
+            "platform": "apple",
+            "source": "project_build_both",
+            "has_blocking_mismatches": selected.blockingMismatches.isEmpty
+                && other.blockingMismatches.isEmpty ? 0 : 1
+        ])
+        try? storage.save(run)
+        // The selected candidate is the one on the upload button, so it gets
+        // the fresh conflict check the single build gives its own artifact. The
+        // other candidate gets one when it is selected. See `selectBuiltCandidate`.
+        if !selected.mismatches.isEmpty { await recheckRemote(for: selected) }
+        run.move(to: .needsUploadConfirmation)
+    }
+
     private func buildAndroid(_ project: LinkedSourceProject) async throws -> URL {
         guard let toolchain = androidToolchain,
               let variant = variants.first(where: {
@@ -305,9 +452,10 @@ extension BuildFlow {
 
         // The other store's build, when one press asked for both. It comes
         // before the upload below: the second artifact is built, never sent,
-        // and sending is a separate confirmation either way.
+        // and sending is a separate confirmation either way. The two Apple
+        // platforms take a different route: they archive at the same time. See
+        // `buildBothApplePlatforms`.
         if queuedStore != nil { return await startQueuedBuild() }
-        if queuedApplePlatform != nil { return await startQueuedAppleBuild() }
 
         // upload-spec 8.14. The app continues by itself only when the first
         // confirmation said it would, no material field changed, and nothing
@@ -714,7 +862,6 @@ extension BuildFlow {
     func finishCancel() async {
         storage.removeScratch(runID: run.id)
         queuedStore = nil
-        queuedApplePlatform = nil
         if run.state == .uploading || run.cleanupState == .pending {
             await reconcileAfterCancel()
         } else {
@@ -796,7 +943,6 @@ extension BuildFlow {
     func fail(_ value: BuildFailure) {
         storage.removeScratch(runID: run.id)
         queuedStore = nil
-        queuedApplePlatform = nil
         failure = value
         run.lastError = value
         // The panel tells the developer to read the log, so the log is on the
@@ -844,6 +990,7 @@ extension BuildFlow {
         guard !state.isActive, let project else { return }
         task?.cancel()
         task = nil
+        cancelConcurrentUploads()
         storage.removeScratch(runID: run.id)
         run = UploadRun(platform: run.platform, linkedProjectID: project.id)
         candidate = nil
@@ -864,6 +1011,7 @@ extension BuildFlow {
     func reset() {
         task?.cancel()
         task = nil
+        cancelConcurrentUploads()
         storage.removeScratch(runID: run.id)
         run = UploadRun(platform: run.platform)
         project = nil
@@ -888,7 +1036,6 @@ extension BuildFlow {
         // A queue outlives nothing. A second build that fires after the first
         // was reset, cancelled, or failed is a build nobody asked for.
         queuedStore = nil
-        queuedApplePlatform = nil
     }
 
     // MARK: - Logging

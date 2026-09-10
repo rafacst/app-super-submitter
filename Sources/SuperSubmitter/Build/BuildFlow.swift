@@ -226,7 +226,10 @@ final class BuildFlow {
     // MARK: - Linking
 
     var state: UploadState { run.state }
-    var isBusy: Bool { run.state.isActive }
+    /// Busy while the selected artifact works, or while any artifact uploads
+    /// beside it. The tab bar marks a busy app, and `context` holds still for
+    /// one, so a concurrent upload has to count. See `uploads`.
+    var isBusy: Bool { run.state.isActive || uploads.values.contains(where: \.isActive) }
 
     /// Making the artifact, shown beside Build in the sidebar. `startedAt`
     /// keeps discovery and preflight from looking like a build the user
@@ -1122,9 +1125,6 @@ final class BuildFlow {
     /// both. Nil during an ordinary single build, which is every other build.
     var queuedStore: Store?
 
-    /// The second native Apple archive from one multi-platform project.
-    var queuedApplePlatform: BuildPlatform?
-
     var canBuildBothApplePlatforms: Bool {
         project?.platform.store == .apple && supportsBothApplePlatforms && canBuild
     }
@@ -1133,29 +1133,41 @@ final class BuildFlow {
         otherCandidates + (candidate.map { [$0] } ?? [])
     }
 
-    /// Builds the selected platform first, then the other native Apple platform.
-    func buildBothApplePlatforms() {
-        guard canBuildBothApplePlatforms else { return }
-        showBuildBothApplePlatformsConfirmation = false
-        queuedApplePlatform = run.platform == .ios ? .macos : .ios
-        startBuild()
+    /// The concurrent uploads, keyed by the candidate each one sends.
+    ///
+    /// The selected artifact still uploads on `run` and `candidate`, the path
+    /// the direct apply and the sidebar read. Every other artifact uploads
+    /// through one of these, at the same time, so two archives built together
+    /// reach the store together. See `UploadJob`.
+    var uploads: [UUID: UploadJob] = [:]
+
+    func uploadJob(for candidate: BuildCandidate) -> UploadJob? {
+        uploads[candidate.id]
     }
 
-    /// Starts the second Apple archive after the first archive passes inspection.
-    func startQueuedAppleBuild() async {
-        guard let next = queuedApplePlatform else { return }
-        queuedApplePlatform = nil
-        guard failure == nil, blocking == nil,
-              candidate?.blockingMismatches.isEmpty == true else { return }
-        if let candidate, !otherCandidates.contains(where: { $0.id == candidate.id }) {
-            otherCandidates.append(candidate)
+    /// Starts one artifact's own upload beside the others. It never becomes the
+    /// selected `candidate`: two uploads that fought over one selection would
+    /// be one upload.
+    func startUpload(of candidate: BuildCandidate) {
+        guard uploads[candidate.id]?.isActive != true else { return }
+        let job = UploadJob(candidate: candidate, flow: self)
+        uploads[candidate.id] = job
+        job.start()
+    }
+
+    /// One artifact reached the store, so it is spent and offers no re-upload.
+    func markUploaded(_ candidateID: UUID) {
+        if candidate?.id == candidateID { candidate?.settled = true }
+        if let index = otherCandidates.firstIndex(where: { $0.id == candidateID }) {
+            otherCandidates[index].settled = true
         }
-        run.platform = next
-        project?.platform = next
-        adoptAppleTrain()
-        await refreshPreflight()
-        guard canBuild else { return }
-        startBuild()
+    }
+
+    /// Stops every concurrent upload. The selected artifact's own `task` is
+    /// cancelled by its callers, so this is the others.
+    func cancelConcurrentUploads() {
+        for job in uploads.values { job.task?.cancel() }
+        uploads = [:]
     }
 
     /// Builds both stores' artifacts, one after the other.

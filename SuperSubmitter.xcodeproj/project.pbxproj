@@ -332,6 +332,7 @@
 		D92B32DB48D0016E9173126F /* AndroidBuildService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EF39FCAEF6F8F553220AC24 /* AndroidBuildService.swift */; };
 		DA65C1484743A7D884F5BBEE /* SummaryScreenReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76AB3A9817E3F9A20DEFFFDE /* SummaryScreenReviewTests.swift */; };
 		DAAB485CE9E5AEC37A41A9B7 /* PastPreparationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F5C42C4AA67173479C1877 /* PastPreparationTests.swift */; };
+		DB16F8B7D4BBDD96EF598B6E /* UploadJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB809E09522E1E00C2B5E8C7 /* UploadJob.swift */; };
 		DDA05833ED1AF887FCB8FC8D /* ReleaseNeedsADraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B96EDC8F31D9187D61AD5530 /* ReleaseNeedsADraftTests.swift */; };
 		DEE9AA10371B4F5F1454CFD5 /* MoneyPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF56F4C78D5A1ACA06BABD7D /* MoneyPanels.swift */; };
 		DF06F6117F56D91F5956BD8C /* ToolProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEFADD5D0C024A395A42101D /* ToolProcess.swift */; };
@@ -738,6 +739,7 @@
 		C91945C6121D0FE2ADC5C94F /* StoreSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreSelection.swift; sourceTree = "<group>"; };
 		CAA029973011E040843D8973 /* PaletteStepsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteStepsTests.swift; sourceTree = "<group>"; };
 		CB059340B013D6F4324F8F6A /* ReleaseInFlightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseInFlightTests.swift; sourceTree = "<group>"; };
+		CB809E09522E1E00C2B5E8C7 /* UploadJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadJob.swift; sourceTree = "<group>"; };
 		CB88269512FA3779C3DE0A99 /* ProjectLocalesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectLocalesTests.swift; sourceTree = "<group>"; };
 		CC15B00B50A626A5F4200EF8 /* SuperSubmitterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperSubmitterApp.swift; sourceTree = "<group>"; };
 		CC43D4E00712A21F03A6FF94 /* AppAvailabilityReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAvailabilityReadTests.swift; sourceTree = "<group>"; };
@@ -1280,6 +1282,7 @@
 				065E15DF6AFE7DCA28B9E994 /* BuildFlow.swift */,
 				EF116D2CBC71AB75AA21129C /* BuildFlowRun.swift */,
 				F6E1B5C011E3DC54A2ED2F08 /* BuildFromProjectView.swift */,
+				CB809E09522E1E00C2B5E8C7 /* UploadJob.swift */,
 			);
 			path = Build;
 			sourceTree = "<group>";
@@ -1942,6 +1945,7 @@
 				B8907CF8A55A15802A814CAA /* TestFlightSection.swift in Sources */,
 				4B76E33517B6594891F7FCD3 /* Theme.swift in Sources */,
 				4D2AE905E92F4FA904913562 /* Updater.swift in Sources */,
+				DB16F8B7D4BBDD96EF598B6E /* UploadJob.swift in Sources */,
 				80D144147395B49327EAA66C /* VitalsPanel.swift in Sources */,
 				05FDDA4F3949798BD7D1FC3A /* WebhooksPanel.swift in Sources */,
 				E87F3026CA9AC136AD93E44A /* XcodeCloudPanel.swift in Sources */,
