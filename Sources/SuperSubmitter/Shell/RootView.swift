@@ -709,14 +709,6 @@ private struct ContentHeader: View {
                     .foregroundStyle(Theme.text2)
                     .lineLimit(1)
             }
-            // Which build each store is getting, on every tab. It reads the
-            // same `store.yaml` the Build tab writes, so wherever the developer
-            // stands they can see what the changes attach to, and that nothing
-            // is attached is exactly when it matters most. See `BuildAttachChip`.
-            if !state.showsEntryScreen, state.manifestURL != nil,
-               !state.selectedTab.standsAlone, state.buildAttachApplies {
-                BuildAttachChip()
-            }
             Spacer(minLength: 8)
 
             // Every editing tab shows its own block of store.yaml. Spec 16.1.

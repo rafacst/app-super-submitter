@@ -17,34 +17,19 @@ struct DirectApplyBar: View {
         let changes = state.changes(for: target)
         let running = state.directApplyRunning(target)
         let message = state.directApplyMessage(for: target)
-        // No build attached to a store this tab writes to keeps the changes
-        // local. The write stays disabled until a build is chosen in the Build
-        // tab. `.build` is the tab that attaches one, so it is never gated.
-        let missingBuild = target == .build ? []
-            : state.directApplyStores(for: target).filter { !state.hasAttachedBuild(for: $0) }
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(changes.isEmpty
                      ? "\(destination.capitalizedFirst) already holds everything on this tab."
                      : "\(changes.count) \(changes.count == 1 ? "row" : "rows") to write")
                     .font(Theme.font(size: 12.5, weight: .medium))
-                if !missingBuild.isEmpty, !changes.isEmpty {
-                    HStack(spacing: 6) {
-                        Text("No build attached, so these changes stay on this Mac. Attach one to write them.")
-                            .font(Theme.font(size: 11.5))
-                            .foregroundStyle(Theme.text2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        QuietButton(title: "Attach a build") { state.openBuildTabToAttach() }
-                    }
-                } else {
-                    Text(message.isEmpty
-                         ? (changes.first ?? "Nothing here reaches a customer until you publish it in the store console.")
-                         : message)
-                        .font(Theme.font(size: 11.5))
-                        .foregroundStyle(state.directApplyFailed(target) ? Theme.red : Theme.text2)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(message.isEmpty
+                     ? (changes.first ?? "Nothing here reaches a customer until you publish it in the store console.")
+                     : message)
+                    .font(Theme.font(size: 11.5))
+                    .foregroundStyle(state.directApplyFailed(target) ? Theme.red : Theme.text2)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 12)
             if running { Spinner() }
@@ -53,8 +38,7 @@ struct DirectApplyBar: View {
             }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
-                .disabled(changes.isEmpty || running || state.stores.isEmpty
-                          || !missingBuild.isEmpty)
+                .disabled(changes.isEmpty || running || state.stores.isEmpty)
         }
         .storePanel()
         .confirmationDialog("Update drafts in \(destination)?", isPresented: $confirming) {
