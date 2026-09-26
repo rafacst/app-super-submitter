@@ -754,7 +754,10 @@ extension BuildFlow {
                 case .processed(let id):
                     run.remoteIDs["appleBuild"] = id
                     processingLabel = nil
-                    successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
+                    // The platform's own TestFlight page. A Mac build opened
+                    // on the iOS one, where it is not listed.
+                    successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/"
+                        + (candidate.platform == .macos ? "macos" : "ios")
                     run.move(to: .complete)
                     self.candidate?.settled = true
                     storeGainedABuild()
@@ -986,8 +989,13 @@ extension BuildFlow {
     ///
     /// The linked project, the platform, and the provisioning choice stay: the
     /// developer chose those, and a rebuild is not a reason to ask again.
+    ///
+    /// `isBusy` and not the state of `run`. The selected artifact can be done
+    /// while the other platform's archive is still on its way to the store,
+    /// and `cancelConcurrentUploads` below stopped that send mid-way, with no
+    /// question and no record left on the screen.
     func buildAgain() {
-        guard !state.isActive, let project else { return }
+        guard !isBusy, let project else { return }
         task?.cancel()
         task = nil
         cancelConcurrentUploads()

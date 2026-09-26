@@ -73,7 +73,13 @@ struct BuildFromProjectView: View {
                 }
             } else {
                 if flow.project != nil { projectWorkspace }
-                if flow.state.isActive || flow.failure != nil {
+                // A run that stopped waiting for the store, and a cancel whose
+                // cleanup did not confirm, are neither active nor failed. The
+                // panel holds **Resume checking** and **Retry cleanup**, and
+                // hiding it with them left no way to either.
+                if flow.state.isActive || flow.failure != nil
+                    || flow.state == .recoveryRequired
+                    || flow.run.cleanupState == .needsAttention {
                     liveRun
                 }
                 if !flow.builtCandidates.isEmpty { builtArtifactCard }
@@ -222,7 +228,11 @@ struct BuildFromProjectView: View {
                     Text("Checked \(validated.formatted(date: .omitted, time: .shortened))")
                         .font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
                 }
+                // Never under a run: the preflight takes a fresh copy of the
+                // app's manifest and keys, and the run is reading the one it
+                // started with. See `BuildContext`.
                 QuietButton(title: "Recheck") { Task { await flow.refreshPreflight() } }
+                    .disabled(flow.isBusy)
                 Menu {
                     Button("Reveal Folder") {
                         flow.reveal(project?.rootPath ?? "")
@@ -337,6 +347,10 @@ struct BuildFromProjectView: View {
                         Text("macOS").tag(BuildPlatform.macos)
                     }
                     .labelsHidden().pickerStyle(.segmented)
+                    // The same rule as the Store row. A switch restarts the
+                    // preflight, which cancels the task of the run under way,
+                    // and it rewrote the platform of that run as well.
+                    .disabled(flow.isBusy)
                 }
                 if let info = flow.containerInfo {
                     chooser("Scheme", options: info.schemes,
@@ -415,6 +429,8 @@ struct BuildFromProjectView: View {
                     .strokeBorder(Theme.sep, lineWidth: Theme.hairline))
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            // A choice restarts the preflight. See the Platform row.
+            .disabled(flow.isBusy)
         }
     }
 
@@ -441,8 +457,11 @@ struct BuildFromProjectView: View {
                     checksOpen = !showsChecks
                 }
                 if flow.state == .complete || flow.state == .cancelled {
+                    // Held while another artifact is still uploading. See
+                    // `BuildFlow.buildAgain`.
                     ActionButton(title: flow.project?.platform == .android
-                                 ? "Build a new App Bundle" : "Build a new archive") {
+                                 ? "Build a new App Bundle" : "Build a new archive",
+                                 enabled: !flow.isBusy) {
                         flow.buildAgain()
                     }
                 }
@@ -493,9 +512,12 @@ struct BuildFromProjectView: View {
                         .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
+                    // Every button in this card restarts the preflight, which
+                    // cancels the task of a run under way. See the Platform row.
                     QuietButton(title: "Use the project's number") {
                         flow.useProjectBuildNumber()
                     }
+                    .disabled(flow.isBusy)
                 }
             }
 
@@ -509,6 +531,7 @@ struct BuildFromProjectView: View {
                     QuietButton(title: "Use the project's version") {
                         flow.useProjectVersion()
                     }
+                    .disabled(flow.isBusy)
                 }
             } else if let live = flow.versionAlreadyLive, let next = flow.versionAboveLive {
                 // Before the disagreement below, because this one outranks it:
@@ -535,6 +558,7 @@ struct BuildFromProjectView: View {
                             QuietButton(title: "Release \(next) and build it") {
                                 flow.useVersionAboveLive()
                             }
+                            .disabled(flow.isBusy)
                         } else {
                             Text("Set a version above \(live) in Build setup, or in the project.")
                                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
@@ -563,6 +587,7 @@ struct BuildFromProjectView: View {
                             QuietButton(title: "Build version \(wanted) instead") {
                                 flow.useManifestVersion()
                             }
+                            .disabled(flow.isBusy)
                         } else {
                             Text("Change the Google Play version in Build setup, or change the project version.")
                                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text2)
@@ -588,6 +613,7 @@ struct BuildFromProjectView: View {
                             QuietButton(title: "Build number \(next) instead") {
                                 flow.useNextBuildNumber()
                             }
+                            .disabled(flow.isBusy)
                         }
                     }
                     Spacer(minLength: 0)
@@ -720,7 +746,12 @@ struct BuildFromProjectView: View {
                 if flow.state == .processingOrValidating {
                     QuietButton(title: "Stop waiting") { flow.stopWaiting() }
                 }
-                if flow.state == .recoveryRequired {
+                // Only where the poll has something to ask about. It checks
+                // App Store Connect for this run's own artifact, and a relaunch
+                // keeps the run without the artifact, so the button did
+                // nothing there; an App Bundle is never Apple's to process.
+                if flow.state == .recoveryRequired,
+                   let candidate = flow.candidate, candidate.platform != .android {
                     QuietButton(title: "Resume checking") { flow.resumeChecking() }
                 }
                 if flow.run.cleanupState == .needsAttention {
@@ -756,6 +787,8 @@ struct BuildFromProjectView: View {
             "Stopping this run's own processes, then checking what the store already holds."
         case .failed:
             "The run stopped. Review the error and the log below."
+        case .recoveryRequired:
+            "What the store holds is not confirmed yet. Nothing is being sent, and checking again sends nothing."
         default:
             "Nothing is running."
         }
