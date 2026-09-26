@@ -45,8 +45,11 @@ public struct ReleaseClient: Sendable {
     public func releaseApple(appID: String, platform: String,
                              versionID: String) async throws -> String {
         try await access.authorize(.storeRelease)
+        // 200, for the same reason as `cancellableAppleSubmission`: a draft
+        // submission past the first twenty was never found, and a second one
+        // for the same platform is refused.
         let drafts = try? await api.apple(
-            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20")
+            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=200")
         if let submissionID = drafts.map({ JSON(data: $0.data) })?["data"].array.first(where: {
             $0["attributes"]["state"].string == "READY_FOR_REVIEW"
                 && $0["attributes"]["platform"].string == platform
@@ -322,12 +325,33 @@ public struct ReleaseClient: Sendable {
     /// The id of the submission this app sent lives for one session only. A
     /// developer who quits and reopens still owns the submission, so the button
     /// reads the id back rather than trusting memory.
-    public func cancellableAppleSubmission(appID: String) async throws -> String? {
+    ///
+    /// - Parameters:
+    ///   - platform: Apple's own spelling, `IOS` or `MAC_OS`. Apple keeps one
+    ///     open submission per platform, so an app on iOS and macOS can hold
+    ///     two, and a cancel meant for one of them took whichever the list
+    ///     named first: deleting the Mac draft cancelled the iOS review. Only a
+    ///     submission that names this platform is taken. Nil takes any.
+    ///   - states: the states to take. The default is the whole window above.
+    ///
+    /// A page of 200 and not 20. The list holds every submission the app ever
+    /// made, and an app with a long history pushed the open one off a page of
+    /// twenty, so the cancel found nothing to cancel.
+    public func cancellableAppleSubmission(
+        appID: String, platform: String? = nil,
+        states: Set<String> = ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]
+    ) async throws -> String? {
         let payload = JSON(data: try await api.apple(
-            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
-        return payload["data"].array.first { item in
-            ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]
-                .contains(item["attributes"]["state"].string ?? "")
+            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=200").data)
+        return Self.cancellableSubmission(in: payload, platform: platform, states: states)
+    }
+
+    /// The rule above, on a page already read.
+    static func cancellableSubmission(in payload: JSON, platform: String?,
+                                      states: Set<String>) -> String? {
+        payload["data"].array.first { item in
+            states.contains(item["attributes"]["state"].string ?? "")
+                && (platform == nil || item["attributes"]["platform"].string == platform)
         }?["id"].string
     }
 

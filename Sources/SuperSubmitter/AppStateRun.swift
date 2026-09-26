@@ -1134,8 +1134,15 @@ extension AppState {
         let buildID = expiringBuild ? deletableAppleBuildID : nil
         let client = ReleaseClient(api: readOnlyAPI(), access: access)
         do {
+            // Only a submission that can hold this version: this platform's,
+            // and one not yet sent. A sent one holds other items, purchases or
+            // events, never an editable version, so cancelling it lost a place
+            // in the queue and unlocked nothing. And the other platform's was
+            // taken too, whenever the list named it first.
             if let appID = manifest.apps.apple?.appId, !appID.isEmpty,
-               let open = try? await client.cancellableAppleSubmission(appID: appID) {
+               let open = try? await client.cancellableAppleSubmission(
+                   appID: appID, platform: applePlatform.rawValue,
+                   states: ["READY_FOR_REVIEW"]) {
                 try? await client.cancelAppleSubmission(id: open)
                 appleSubmissionID = nil
             }
@@ -1176,9 +1183,16 @@ extension AppState {
     /// off the version, because the two are not the same app: the submission
     /// that blocks an apply is often the previous version's, and that version
     /// state says `PREPARE_FOR_SUBMISSION` about the draft being written.
+    ///
+    /// This platform's queue only. Apple keeps one open submission per
+    /// platform, and the cancel reaches only the one on this app's platform,
+    /// so a Mac draft beside an iOS version in the queue offered a button
+    /// that cancelled the iOS review. A read that named no platform counts.
     var appleSubmissionInQueue: Bool {
-        stores.contains(.apple)
-            && actualState.apple?.openReviewSubmission == "WAITING_FOR_REVIEW"
+        guard stores.contains(.apple),
+              actualState.apple?.openReviewSubmission == "WAITING_FOR_REVIEW" else { return false }
+        let platform = actualState.apple?.openReviewSubmissionPlatform
+        return platform == nil || platform == applePlatform.rawValue
     }
 
     /// Takes the app back out of the review queue, then reads the stores again.
@@ -1209,8 +1223,10 @@ extension AppState {
                     throw ReleaseInputError.noAppleVersion
                 }
                 // The session id is the fast path. The read is the one that
-                // still works after a restart.
-                let id = try await client.cancellableAppleSubmission(appID: appID)
+                // still works after a restart. This platform's submission and
+                // no other: see `cancellableAppleSubmission`.
+                let id = try await client.cancellableAppleSubmission(
+                    appID: appID, platform: applePlatform.rawValue)
                     ?? appleSubmissionID
                 guard let id else { throw ReleaseInputError.noOpenAppleSubmission }
                 try await client.cancelAppleSubmission(id: id)
