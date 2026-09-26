@@ -63,8 +63,11 @@ struct BuildFromProjectView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // A run that waits on the developer counts as something on the tab,
+            // with or without a linked project: a relaunch can restore one for
+            // an imported package, and the link card had no room for it.
             if flow.project == nil, flow.candidate == nil, flow.failure == nil,
-               !flow.state.isActive {
+               !flow.state.isActive, !flow.holdsUnconfirmedRun {
                 storeRow
                 if !flow.containers.isEmpty, flow.state == .needsSelection {
                     containerChooser
@@ -75,11 +78,9 @@ struct BuildFromProjectView: View {
                 if flow.project != nil { projectWorkspace }
                 // A run that stopped waiting for the store, and a cancel whose
                 // cleanup did not confirm, are neither active nor failed. The
-                // panel holds **Resume checking** and **Retry cleanup**, and
-                // hiding it with them left no way to either.
-                if flow.state.isActive || flow.failure != nil
-                    || flow.state == .recoveryRequired
-                    || flow.run.cleanupState == .needsAttention {
+                // panel holds **Resume checking**, **Retry cleanup** and
+                // **Stop tracking**, and hiding it with them left no way on.
+                if flow.state.isActive || flow.failure != nil || flow.holdsUnconfirmedRun {
                     liveRun
                 }
                 if !flow.builtCandidates.isEmpty { builtArtifactCard }
@@ -231,8 +232,11 @@ struct BuildFromProjectView: View {
                 // Never under a run: the preflight takes a fresh copy of the
                 // app's manifest and keys, and the run is reading the one it
                 // started with. See `BuildContext`.
+                // Nor while a run waits on the store: the preflight cannot
+                // leave that state, so the button did nothing. Stop tracking,
+                // on the run's own panel, is the way on from there.
                 QuietButton(title: "Recheck") { Task { await flow.refreshPreflight() } }
-                    .disabled(flow.isBusy)
+                    .disabled(flow.isBusy || flow.state == .recoveryRequired)
                 Menu {
                     Button("Reveal Folder") {
                         flow.reveal(project?.rootPath ?? "")
@@ -746,16 +750,21 @@ struct BuildFromProjectView: View {
                 if flow.state == .processingOrValidating {
                     QuietButton(title: "Stop waiting") { flow.stopWaiting() }
                 }
-                // Only where the poll has something to ask about. It checks
-                // App Store Connect for this run's own artifact, and a relaunch
-                // keeps the run without the artifact, so the button did
-                // nothing there; an App Bundle is never Apple's to process.
-                if flow.state == .recoveryRequired,
-                   let candidate = flow.candidate, candidate.platform != .android {
+                // Only where the poll has a build to ask about: this run's own
+                // artifact, or after a relaunch the build the run recorded. An
+                // App Bundle is never Apple's to process.
+                if flow.canResumeChecking {
                     QuietButton(title: "Resume checking") { flow.resumeChecking() }
                 }
                 if flow.run.cleanupState == .needsAttention {
                     QuietButton(title: "Retry cleanup") { flow.retryCleanup() }
+                }
+                // The way on from a run nobody can confirm from here. See
+                // `BuildFlow.setAsideUnconfirmedRun`.
+                if flow.holdsUnconfirmedRun {
+                    QuietButton(title: "Stop tracking") { flow.setAsideUnconfirmedRun() }
+                        .disabled(flow.isBusy)
+                        .help("Super Submitter stops following this run and clears the tab. The store keeps whatever it received, so check the store console.")
                 }
                 Spacer(minLength: 0)
                 QuietButton(title: flow.logOpen ? "Hide log" : "Show log") {

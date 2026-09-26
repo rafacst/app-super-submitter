@@ -149,7 +149,9 @@ public struct BuildStorage: Sendable {
             let unfinished = run.state == .processingOrValidating
                 || run.state == .recoveryRequired
                 || run.cleanupState == .pending || run.cleanupState == .needsAttention
-            return unfinished ? run : nil
+            // A run the developer stopped tracking is theirs to check in the
+            // console now. See `UploadRun.setAsideAt`.
+            return unfinished && run.setAsideAt == nil ? run : nil
         }.sorted { $0.startedAt > $1.startedAt }
     }
 

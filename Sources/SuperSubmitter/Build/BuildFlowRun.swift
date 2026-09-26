@@ -634,6 +634,12 @@ extension BuildFlow {
         failure = nil
         uploadProgress = 0
         artifactOnly = false
+        // What a relaunch needs to pick this send up again: whose it is, and
+        // which build it sent. The artifact does not outlive the launch. See
+        // `resumeUnfinishedRuns`.
+        run.ownerID = owner
+        run.sentMarketingVersion = candidate.marketingVersion
+        run.sentBuildVersion = candidate.buildVersion
         run.move(to: .uploading)
         Aptabase.shared.trackEvent("artifact_upload_started", with: [
             "platform": candidate.platform == .android ? "android" : "apple"
@@ -730,6 +736,22 @@ extension BuildFlow {
     /// upload-spec 8.16. The poll survives a relaunch, and **Stop waiting**
     /// never pretends that the upload was cancelled.
     func pollApple(_ candidate: BuildCandidate) async {
+        await pollApple(platform: candidate.platform,
+                        marketingVersion: candidate.marketingVersion,
+                        buildVersion: candidate.buildVersion,
+                        artifactPath: candidate.artifactPath)
+    }
+
+    /// The poll, for a build named by its numbers. A relaunch has the numbers
+    /// on the run and no artifact at all, so the artifact is optional.
+    ///
+    /// **Stop waiting** has the last word. It cancels this task and says so,
+    /// and the loop used to answer the cancel with a sentence of its own:
+    /// "Stopped checking" became "Still processing … Press Resume checking
+    /// later" a moment after the press, or the error of the request it cut
+    /// short. A cancelled poll now writes no label and no state.
+    func pollApple(platform: BuildPlatform, marketingVersion: String,
+                   buildVersion: String, artifactPath: String?) async {
         guard let appID = context.appleAppID, !appID.isEmpty else {
             run.move(to: .recoveryRequired)
             processingLabel = "The upload finished, but no App Store app is linked for processing checks."
@@ -742,14 +764,18 @@ extension BuildFlow {
             attempt += 1
             do {
                 let state = try await service.appleProcessingState(
-                    appID: appID, platform: candidate.platform,
-                    marketingVersion: candidate.marketingVersion,
-                    buildVersion: candidate.buildVersion)
+                    appID: appID, platform: platform,
+                    marketingVersion: marketingVersion,
+                    buildVersion: buildVersion)
                 switch state {
                 case .waitingToAppear:
-                    processingLabel = "Uploaded. Waiting for the build to appear."
+                    if !Task.isCancelled {
+                        processingLabel = "Uploaded. Waiting for the build to appear."
+                    }
                 case .processing(let id):
-                    processingLabel = "App Store Connect is processing the build."
+                    if !Task.isCancelled {
+                        processingLabel = "App Store Connect is processing the build."
+                    }
                     run.remoteIDs["appleBuild"] = id
                 case .processed(let id):
                     run.remoteIDs["appleBuild"] = id
@@ -757,7 +783,7 @@ extension BuildFlow {
                     // The platform's own TestFlight page. A Mac build opened
                     // on the iOS one, where it is not listed.
                     successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/"
-                        + (candidate.platform == .macos ? "macos" : "ios")
+                        + (platform == .macos ? "macos" : "ios")
                     run.move(to: .complete)
                     self.candidate?.settled = true
                     storeGainedABuild()
@@ -772,14 +798,18 @@ extension BuildFlow {
                         category: .remoteValidation, stage: "Process the build",
                         message: detail,
                         recovery: "Read Apple's diagnostic in App Store Connect, fix it, then build again.",
-                        retainedArtifact: candidate.artifactPath))
+                        retainedArtifact: artifactPath))
                     return
                 }
             } catch {
-                processingLabel = "The last check failed: \(error.localizedDescription)"
+                if !Task.isCancelled {
+                    processingLabel = "The last check failed: \(error.localizedDescription)"
+                }
             }
             try? await Task.sleep(for: .seconds(UploadService.pollDelay(attempt: attempt)))
         }
+        // Stopped, and `stopWaiting` has already said so. See above.
+        guard !Task.isCancelled else { return }
         // Timed out locally. The remote state is still pending, and this says
         // so rather than claiming a failure.
         run.move(to: .recoveryRequired)
@@ -795,13 +825,64 @@ extension BuildFlow {
     }
 
     func resumeChecking() {
-        guard let candidate else { return }
+        guard let target = pollTarget else { return }
         // A relaunch keeps the run and loses the held copy with it, so the poll
         // is pointed at this flow's own app. It is the right one either way: a
         // run belongs to one flow and a flow belongs to one app.
         holdContext()
         run.move(to: .processingOrValidating)
-        task = Task { [weak self] in await self?.pollApple(candidate) }
+        task = Task { [weak self] in
+            await self?.pollApple(platform: target.platform,
+                                  marketingVersion: target.marketingVersion,
+                                  buildVersion: target.buildVersion,
+                                  artifactPath: target.artifactPath)
+        }
+    }
+
+    /// Whether **Resume checking** has a build to ask about.
+    var canResumeChecking: Bool { run.state == .recoveryRequired && pollTarget != nil }
+
+    /// The build a poll asks about.
+    ///
+    /// This session's artifact names it. A relaunch keeps the run and not the
+    /// artifact, so the run's own record answers then, and it used to answer
+    /// nothing: **Resume checking** did nothing at all after a relaunch. An
+    /// App Bundle is never Apple's to process, so it has no target.
+    private var pollTarget: (platform: BuildPlatform, marketingVersion: String,
+                             buildVersion: String, artifactPath: String?)? {
+        if let candidate {
+            guard candidate.platform != .android else { return nil }
+            return (candidate.platform, candidate.marketingVersion,
+                    candidate.buildVersion, candidate.artifactPath)
+        }
+        guard run.platform != .android, let sent = run.sentVersions else { return nil }
+        return (run.platform, sent.marketing, sent.build, nil)
+    }
+
+    /// A run that waits on the developer and not on a tool: the store never
+    /// confirmed it, or a cleanup never did. Neither is active and neither is
+    /// a failure, and the live-run panel is the only place their buttons live.
+    var holdsUnconfirmedRun: Bool {
+        run.state == .recoveryRequired || run.cleanupState == .needsAttention
+    }
+
+    /// Stops tracking a run that nobody can confirm from here, and clears the
+    /// tab for the next build.
+    ///
+    /// Without it the tab had no way on. A run the store never confirmed sits
+    /// in `recoveryRequired`, which the preflight cannot leave, so Recheck did
+    /// nothing, no Build button came back, and a relaunch brought the same run
+    /// back every time. Unlink was the only exit.
+    ///
+    /// Nothing is sent and nothing is cancelled at the store: whatever it did
+    /// with the build, it still did. The record stays on disk with the moment
+    /// the developer moved on, which is what keeps a relaunch from restoring
+    /// it. See `UploadRun.setAsideAt`.
+    func setAsideUnconfirmedRun() {
+        guard holdsUnconfirmedRun, !isBusy else { return }
+        run.setAsideAt = Date()
+        try? storage.save(run)
+        if project != nil { buildAgain() } else { reset() }
     }
 
     private func uploadGoogle(_ candidate: BuildCandidate) async throws {
@@ -925,9 +1006,21 @@ extension BuildFlow {
 
     /// upload-spec 5.1: a poll and a cleanup may outlive the app process, so
     /// a relaunch picks them up instead of leaving a stranded edit behind.
+    ///
+    /// Only this app's own run, and only onto a tab that holds nothing of its
+    /// own. The records are one folder for the whole Mac, and the newest of
+    /// them landed on whichever app's Build tab opened first. And `.task`
+    /// runs this on every visit, so a tab with an artifact, a failure, or a
+    /// stranded run already on it is not one to swap.
+    ///
+    /// A poll that was running when the app quit carries on by itself, asking
+    /// about the build the run recorded. See `pollTarget`.
     func resumeUnfinishedRuns() {
-        guard !run.state.isActive else { return }
-        guard let stranded = storage.unfinishedRuns().first else { return }
+        guard !isBusy, candidate == nil, otherCandidates.isEmpty, failure == nil,
+              !holdsUnconfirmedRun else { return }
+        guard let stranded = storage.unfinishedRuns().first(where: { isOwnRun($0) }) else {
+            return
+        }
         run = stranded
         switch stranded.state {
         case .processingOrValidating, .recoveryRequired:
@@ -941,6 +1034,21 @@ extension BuildFlow {
             run.cleanupState = .needsAttention
             processingLabel = "A Google edit from an earlier run was not confirmed as deleted."
         }
+        // A spinner over a poll that is not running was the old answer here.
+        // With a build to ask about, the poll runs again; without one, the run
+        // says it waits on the developer.
+        if stranded.state == .processingOrValidating {
+            if pollTarget != nil { resumeChecking() } else { run.move(to: .recoveryRequired) }
+        }
+    }
+
+    /// Whether a stored run belongs to this flow's app. A record saved before
+    /// `ownerID` was kept names the linked project and nothing else, so that
+    /// is the only other way to tell, and a record with neither is nobody's.
+    private func isOwnRun(_ stored: UploadRun) -> Bool {
+        if let ownerID = stored.ownerID { return ownerID == owner }
+        guard let linked = stored.linkedProjectID else { return false }
+        return linked == project?.id
     }
 
     func fail(_ value: BuildFailure) {
