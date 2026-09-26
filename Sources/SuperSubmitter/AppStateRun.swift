@@ -459,13 +459,6 @@ extension AppState {
         // A dry run writes nothing, so it stays free. Anything else needs the
         // capability, and `Runner` asks again before the first request.
         guard dryRun || can(.storeWrite) else { return false }
-        // No build attached, no upload. A dry run stays local either way, so it
-        // is exempt; a live apply writes only when every store it touches has a
-        // build to attach the changes to. See `attachedBuild(for:)`.
-        if !dryRun {
-            let writes = Set(plan.systems.compactMap(\.store))
-            if writes.contains(where: { !hasAttachedBuild(for: $0) }) { return false }
-        }
         let warnings = plan.warnings.filter { !acknowledged.contains($0.id) }.count
         return !plan.isBlocked && warnings == 0 && !isRunning
     }

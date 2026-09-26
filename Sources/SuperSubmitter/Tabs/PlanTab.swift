@@ -1116,16 +1116,6 @@ struct PlanTab: View {
                 ? hold.message
                 : "The stores are holding this version. The apply waits until they answer."
         }
-        // The same test `canApply` makes. It switched the menu off with this
-        // line still reading "Writes a draft to each store", so the one reason
-        // the button was dead was the one thing the screen did not say.
-        let unattached = Store.allCases.filter { store in
-            plan.systems.contains { $0.store == store } && !state.hasAttachedBuild(for: store)
-        }
-        if !unattached.isEmpty {
-            let names = unattached.map(\.storeName).joined(separator: " and ")
-            return "No build is attached for \(names), so the apply writes nothing there. Choose one on the Build tab."
-        }
         if state.unacknowledgedWarnings > 0 {
             let count = state.unacknowledgedWarnings
             return "Acknowledge \(count == 1 ? "the warning" : "the \(count) warnings") to unlock the apply."
