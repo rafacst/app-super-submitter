@@ -440,7 +440,9 @@ extension AppState {
         Task {
             await upload.value
             guard flow.state == .complete, flow.uploadStatus == .succeeded else {
-                stopRemoteSave(flow.failure?.message
+                // `blocking` is the conflict check right before the send. It
+                // stops the upload with no failure, and it names the reason.
+                stopRemoteSave(flow.failure?.message ?? flow.blocking
                     ?? "The build did not reach App Store Connect.")
                 return
             }
