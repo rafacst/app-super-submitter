@@ -39,7 +39,12 @@ public enum UploadState: String, Codable, Sendable, CaseIterable {
     public func canMove(to next: UploadState) -> Bool {
         if next == .failed { return true }                       // any state may fail
         if next == .cancelling { return isActive }               // only active work cancels
-        if self == .cancelling { return next == .cancelled || next == .recoveryRequired }
+        // `complete` too: a cancel that reached Google after the commit found
+        // the bundle already on the track, and the run is over, not cancelled.
+        // Refused, the run stayed `cancelling`, which is active, for good.
+        if self == .cancelling {
+            return next == .cancelled || next == .recoveryRequired || next == .complete
+        }
         if next == .recoveryRequired {
             return [.uploading, .processingOrValidating, .cancelling].contains(self)
         }
@@ -54,8 +59,13 @@ public enum UploadState: String, Codable, Sendable, CaseIterable {
         .readyToBuild: [.building, .preflight, .needsSelection, .discovering],
         .building: [.inspectingArtifact],
         .inspectingArtifact: [.needsUploadConfirmation, .complete],
-        .needsUploadConfirmation: [.uploading, .preflight, .readyToBuild],
-        .uploading: [.processingOrValidating, .complete],
+        // `complete` is **Keep the artifact and stop**: the run ends with the
+        // artifact on this Mac and nothing sent.
+        .needsUploadConfirmation: [.uploading, .preflight, .readyToBuild, .complete],
+        // `needsUploadConfirmation` is the conflict check right before the
+        // send. It found the store already holding the build, nothing was
+        // sent, and the run goes back to the question with the reason beside it.
+        .uploading: [.processingOrValidating, .complete, .needsUploadConfirmation],
         .processingOrValidating: [.complete],
         .recoveryRequired: [.complete, .failed, .uploading, .processingOrValidating],
         .complete: [.discovering, .preflight, .readyToBuild],

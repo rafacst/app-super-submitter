@@ -45,6 +45,38 @@ import Testing
     #expect(!UploadState.preflight.canMove(to: .recoveryRequired))
 }
 
+/// Keep the artifact and stop ends the run from the upload question. The move
+/// was refused in silence, so the button did nothing.
+@Test func keepingTheArtifactEndsTheRunFromTheUploadQuestion() {
+    var run = UploadRun(platform: .ios, state: .needsUploadConfirmation)
+    let kept = run.move(to: .complete)
+    #expect(kept)
+    #expect(run.state == .complete)
+    #expect(run.finishedAt != nil)
+}
+
+/// The check right before the send found a conflict, and nothing was sent. The
+/// run goes back to the question; it stayed on "Upload" with a spinner.
+@Test func aConflictFoundBeforeTheSendReturnsToTheQuestion() {
+    var run = UploadRun(platform: .ios, state: .needsUploadConfirmation)
+    let sending = run.move(to: .uploading)
+    let back = run.move(to: .needsUploadConfirmation)
+    #expect(sending)
+    #expect(back)
+    #expect(!run.state.isActive)
+}
+
+/// A cancel that arrived after Google committed the bundle ends complete. It
+/// stayed `cancelling`, which is active, so the app read as busy for good.
+@Test func aLateCancelThatFoundTheUploadOnTheStoreEndsComplete() {
+    var run = UploadRun(platform: .android, state: .uploading)
+    let cancelling = run.move(to: .cancelling)
+    let landed = run.move(to: .complete)
+    #expect(cancelling)
+    #expect(landed)
+    #expect(!run.state.isActive)
+}
+
 @Test func anIllegalMoveIsRefusedInsteadOfApplied() {
     var run = UploadRun(platform: .ios)
     let legal = run.move(to: .discovering)
