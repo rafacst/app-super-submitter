@@ -61,6 +61,11 @@ final class UploadJob: Identifiable {
                         linkedProjectID: flow.project?.id,
                         state: .needsUploadConfirmation)
         run.candidateIdentity = candidate.logicalIdentity
+        // What a relaunch needs to resume this send. See
+        // `BuildFlow.resumeUnfinishedRuns`.
+        run.ownerID = flow.owner
+        run.sentMarketingVersion = candidate.marketingVersion
+        run.sentBuildVersion = candidate.buildVersion
     }
 
     var isActive: Bool { run.state.isActive }
@@ -175,11 +180,17 @@ final class UploadJob: Identifiable {
                     appID: appID, platform: candidate.platform,
                     marketingVersion: candidate.marketingVersion,
                     buildVersion: candidate.buildVersion)
+                // A cancelled poll writes no label: **Stop waiting** has said
+                // what happened. See `BuildFlow.pollApple`.
                 switch state {
                 case .waitingToAppear:
-                    processingLabel = "Uploaded. Waiting for the build to appear."
+                    if !Task.isCancelled {
+                        processingLabel = "Uploaded. Waiting for the build to appear."
+                    }
                 case .processing(let buildID):
-                    processingLabel = "App Store Connect is processing the build."
+                    if !Task.isCancelled {
+                        processingLabel = "App Store Connect is processing the build."
+                    }
                     run.remoteIDs["appleBuild"] = buildID
                 case .processed(let buildID):
                     run.remoteIDs["appleBuild"] = buildID
@@ -199,10 +210,13 @@ final class UploadJob: Identifiable {
                     return
                 }
             } catch {
-                processingLabel = "The last check failed: \(error.localizedDescription)"
+                if !Task.isCancelled {
+                    processingLabel = "The last check failed: \(error.localizedDescription)"
+                }
             }
             try? await Task.sleep(for: .seconds(UploadService.pollDelay(attempt: attempt)))
         }
+        guard !Task.isCancelled else { return }
         run.move(to: .recoveryRequired)
         processingLabel = "Still processing at App Store Connect. Press Resume checking later."
         try? storage.save(run)

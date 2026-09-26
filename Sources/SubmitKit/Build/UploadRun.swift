@@ -116,6 +116,19 @@ public struct UploadRun: Codable, Sendable, Equatable, Identifiable {
     public var cancelRequestedAt: Date?
     public var cleanupState: Cleanup
     public var lastError: BuildFailure?
+    /// The app this run was started for: the id of Super Submitter's own
+    /// linked record. The records share one folder for the whole Mac, and a
+    /// relaunch put the newest of them on whichever app's Build tab opened
+    /// first. Nil on a record saved before this was kept.
+    public var ownerID: UUID?
+    /// The version and the build number this run sent. A poll after a
+    /// relaunch asks the store about these, because the artifact that carried
+    /// them does not outlive the launch. Nil until the send starts.
+    public var sentMarketingVersion: String?
+    public var sentBuildVersion: String?
+    /// When the developer stopped tracking a run the store never confirmed.
+    /// The record stays, and a relaunch no longer brings it back.
+    public var setAsideAt: Date?
 
     public init(id: UUID = UUID(), platform: BuildPlatform, linkedProjectID: UUID? = nil,
                 state: UploadState = .unlinked, startedAt: Date = Date()) {
@@ -165,6 +178,23 @@ public struct UploadRun: Codable, Sendable, Equatable, Identifiable {
         if move(to: .preflight, now: now) { return true }
         guard move(to: .discovering, now: now) else { return false }
         return move(to: .preflight, now: now)
+    }
+
+    /// The version and the build number this run sent.
+    ///
+    /// The two fields above, and on a record saved before they were kept, the
+    /// middle of `candidateIdentity`, which is
+    /// `platform+identifier+version+build+checksum`. None of those five holds a
+    /// plus sign, so the split is exact. Nil when neither says.
+    public var sentVersions: (marketing: String, build: String)? {
+        if let marketing = sentMarketingVersion, !marketing.isEmpty,
+           let build = sentBuildVersion, !build.isEmpty {
+            return (marketing, build)
+        }
+        let parts = (candidateIdentity ?? "")
+            .split(separator: "+", omittingEmptySubsequences: false)
+        guard parts.count == 5, !parts[2].isEmpty, !parts[3].isEmpty else { return nil }
+        return (String(parts[2]), String(parts[3]))
     }
 }
 

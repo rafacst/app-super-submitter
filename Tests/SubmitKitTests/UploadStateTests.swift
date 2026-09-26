@@ -77,6 +77,48 @@ import Testing
     #expect(!run.state.isActive)
 }
 
+// MARK: - A relaunch
+
+/// A poll after a relaunch has the run and not the artifact, so the run names
+/// the build it sent. **Resume checking** did nothing there before.
+@Test func aRunNamesTheBuildItSentForAPollAfterARelaunch() {
+    var run = UploadRun(platform: .macos)
+    #expect(run.sentVersions?.build == nil)
+
+    run.sentMarketingVersion = "1.6"
+    run.sentBuildVersion = "215"
+    #expect(run.sentVersions?.marketing == "1.6")
+    #expect(run.sentVersions?.build == "215")
+}
+
+/// A record saved before the two fields existed still answers, out of the
+/// identity it has always carried.
+@Test func anOlderRecordReadsItsBuildOutOfTheIdentity() {
+    var run = UploadRun(platform: .ios)
+    run.candidateIdentity = "ios+com.example.app+1.2.0+42+abc"
+    #expect(run.sentVersions?.marketing == "1.2.0")
+    #expect(run.sentVersions?.build == "42")
+
+    run.candidateIdentity = "ios+com.example.app++42+abc"
+    #expect(run.sentVersions?.build == nil)
+}
+
+/// A run the developer stopped tracking stays on disk and stops coming back.
+@Test func aRunSetAsideIsNoLongerResumed() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("set-aside-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let storage = BuildStorage(root: root)
+
+    var waiting = UploadRun(platform: .ios, state: .recoveryRequired)
+    try storage.save(waiting)
+    #expect(storage.unfinishedRuns().map(\.id) == [waiting.id])
+
+    waiting.setAsideAt = Date()
+    try storage.save(waiting)
+    #expect(storage.unfinishedRuns().isEmpty)
+}
+
 @Test func anIllegalMoveIsRefusedInsteadOfApplied() {
     var run = UploadRun(platform: .ios)
     let legal = run.move(to: .discovering)
