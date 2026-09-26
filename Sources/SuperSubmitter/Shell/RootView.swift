@@ -942,44 +942,59 @@ private struct HeaderShape: Equatable {
 }
 
 /// The language switch on tab 3 and tab 4.
+///
+/// One button that shows the flag and the code of the language being edited,
+/// and opens the list of every language the listing holds. It was a row of
+/// segments, one per language, and the band gives the row whatever width the
+/// controls beside it leave: five languages came out as five columns one
+/// letter wide, "e" over an ellipsis, and none of them could be read. A list
+/// that opens takes the same width for one language as for forty.
 private struct LocalePicker: View {
     @Environment(AppState.self) private var state
+    @State private var open = false
+
+    /// One row of the list. Fixed, so the list knows its own height.
+    private static let rowHeight: CGFloat = 36
 
     var body: some View {
         HStack(spacing: 6) {
-            HStack(spacing: 0) {
-                ForEach(state.locales, id: \.self) { code in
-                    let selected = state.locale == code
-                    Button {
-                        state.locale = code
-                    } label: {
-                        Text(code)
-                            .font(Theme.mono(11))
-                            .foregroundStyle(selected ? Theme.accentText : Theme.text)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(selected ? Theme.accent : .clear)
-                            .contentShape(.rect)
+            Button { open.toggle() } label: {
+                HStack(spacing: 6) {
+                    LocaleFlag(code: state.locale, size: 13)
+                    Text(state.locale)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .fixedSize()
+                    if state.locales.count > 1 {
+                        Text("\(state.locales.count)")
+                            .font(Theme.font(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.text3)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(code)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    Image(systemName: "chevron.down")
+                        .font(Theme.font(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.text3)
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                        .motion(.easeOut(duration: 0.15), value: open)
                 }
+                .padding(.horizontal, 9)
+                .frame(height: 24)
+                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
+                .contentShape(.rect)
             }
-            .background(Theme.sunken)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.controlEdge, lineWidth: Theme.hairline))
-            // The label was a word the control already says: two segments
-            // reading "en-US" and "pt-BR" are language codes and nothing else.
-            // In a band this full, sixty points of caption is the cheapest
-            // thing on it to give back.
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel("Language")
+            .accessibilityValue(LocaleFlag.name(for: state.locale))
+            .accessibilityHint("Opens the list of languages")
             .help("Language")
+            .popover(isPresented: $open, arrowEdge: .bottom) { list }
 
-            // Outside the group, and deliberately. Every segment inside it
-            // picks the language you are editing; this one opens a sheet. A
-            // command that sits among the choices reads as a fourth choice,
-            // and a segmented control with a live segment is a lie about state.
+            // Outside the list, and deliberately. Every row inside it picks
+            // the language you are editing; this one opens a sheet. A command
+            // that sits among the choices reads as one more choice.
             Button { state.showAddLocale = true } label: {
                 Image(systemName: "plus")
                     .font(Theme.font(size: 10, weight: .semibold))
@@ -991,6 +1006,58 @@ private struct LocalePicker: View {
             .accessibilityLabel("Add a language")
             .help("Add a language")
         }
+    }
+
+    /// Every language the listing holds, flag first, and the one being edited
+    /// marked. It scrolls past ten rows rather than growing off the screen.
+    private var list: some View {
+        let codes = state.locales
+        let height = CGFloat(codes.count) * (Self.rowHeight + 2) + 10
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(codes, id: \.self) { code in
+                    row(code)
+                }
+            }
+            .padding(5)
+        }
+        .frame(width: 280, height: min(height, Self.rowHeight * 10 + 28))
+    }
+
+    private func row(_ code: String) -> some View {
+        let selected = state.locale == code
+        return Button {
+            state.locale = code
+            open = false
+        } label: {
+            HStack(spacing: 9) {
+                LocaleFlag(code: code, size: 15)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(LocaleFlag.name(for: code))
+                        .font(Theme.font(size: 12.5))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Text(code)
+                        .font(Theme.mono(10.5))
+                        .foregroundStyle(Theme.text3)
+                }
+                Spacer(minLength: 8)
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(Theme.font(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 9)
+            .frame(height: Self.rowHeight)
+            .background(selected ? Theme.accentBg : .clear,
+                        in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(LocaleFlag.name(for: code))
+        .accessibilityValue(code)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

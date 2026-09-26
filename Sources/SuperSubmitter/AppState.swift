@@ -1654,6 +1654,54 @@ final class AppState {
         return "The manifest names \(path), and no file sits there."
     }
 
+    /// The build `store.yaml` names for one kind of package, or nil.
+    func linkedBuildPath(_ kind: AppPackage.Kind) -> String? {
+        let path: String? = switch kind {
+        case .ipa: manifest.release?.build?.ios
+        case .pkg: manifest.release?.build?.macos
+        case .aab: manifest.release?.build?.android
+        }
+        guard let path, !path.isEmpty else { return nil }
+        return path
+    }
+
+    /// What one build well shows as its file: the package read this session,
+    /// or the one an earlier session named in `store.yaml`.
+    ///
+    /// The well showed the first alone, so after a relaunch a well whose build
+    /// was still going out read as empty, with nothing on it to remove.
+    func linkedBuildName(_ kind: AppPackage.Kind) -> String? {
+        packages[kind]?.url.lastPathComponent
+            ?? linkedBuildPath(kind).map { URL(fileURLWithPath: $0).lastPathComponent }
+    }
+
+    /// Takes one build off the release, and leaves the file where it is.
+    ///
+    /// A build dropped on its well stayed there: the only way out was to drop
+    /// another one over it, so a wrong pick with no right one to hand stayed
+    /// in `store.yaml` and went out with the next send. This unlinks it. The
+    /// file on disk is the developer's and is never touched, and the values the
+    /// drop read out of it — the version, the identifier, the name — stay,
+    /// because they are answers in their own fields now, not parts of the file.
+    ///
+    /// One undo step, like every other edit.
+    func removeBuild(_ kind: AppPackage.Kind) {
+        packages[kind] = nil
+        packageErrors[kind] = nil
+        if var build = manifest.release?.build {
+            switch kind {
+            case .ipa: build.ios = nil
+            case .pkg: build.macos = nil
+            case .aab: build.android = nil
+            }
+            let empty = build.ios == nil && build.macos == nil && build.android == nil
+                && build.androidApk == nil
+            manifest.release?.build = empty ? nil : build
+        }
+        buildRead = !packages.isEmpty
+        saveManifestReportingErrors()
+    }
+
     func useReleaseVersion(_ version: String) {
         manifest.setReleaseVersionName(version)
         saveManifestReportingErrors()

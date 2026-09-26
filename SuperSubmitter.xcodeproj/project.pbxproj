@@ -74,6 +74,7 @@
 		30691A3DA2AEAA507A299B09 /* PlanTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516E6CD3FCB821FB333310F /* PlanTab.swift */; };
 		30AE77C42FF2651A82541145 /* ActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330EA68F4E9E7C9DC72434BB /* ActionButton.swift */; };
 		31246BFEBA76AC7F460BF93C /* TwoStoreLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB06573A092456B44968809A /* TwoStoreLinkTests.swift */; };
+		E548F81E45E398DADF1351A2 /* LanguageAndBuildWellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70FBCDEBE90E123FD035ED55 /* LanguageAndBuildWellTests.swift */; };
 		6D050C2E819B13EF2E4DB99B /* StoreCopyPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0291B125CA2DFF557F9CCE3 /* StoreCopyPanelTests.swift */; };
 		316D131EA0C23D5E1610E128 /* StoreSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */; };
 		932E557B0DC1EA9891730446 /* AppStateStoreCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF7169E25BCA6213D0B22CE5 /* AppStateStoreCopy.swift */; };
@@ -231,6 +232,7 @@
 		920195C212422C9A6B85D01A /* ManifestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8DF457A1D20CFB570F21A9 /* ManifestTests.swift */; };
 		934DCF3F2E2CEEB4DE1FFB9A /* GameCenterWriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D34C53995256A0169EF4BE6E /* GameCenterWriteTests.swift */; };
 		948BA6DBB9E40AA805CDCA33 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F018F63C836231D10329C0B9 /* LogView.swift */; };
+		B8A63B4CBA5F5E5982E74E3C /* LocaleFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BFCA3B193A64B4802D19652 /* LocaleFlag.swift */; };
 		989BDB1EEDAC5050FAA6C927 /* BuildsListWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D1DAFEC60F55A58A9EE1FF /* BuildsListWindowTests.swift */; };
 		9A886D5A6FCF7E8036FB207B /* AppleTeamClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F582BB2DA6CBD225B8FBFD7 /* AppleTeamClient.swift */; };
 		9AEC50062B8786966DBA324B /* PaletteStepsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA029973011E040843D8973 /* PaletteStepsTests.swift */; };
@@ -800,6 +802,7 @@
 		EF0A0977E65259C92FCF8E96 /* OfferCodeValueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfferCodeValueTests.swift; sourceTree = "<group>"; };
 		EF116D2CBC71AB75AA21129C /* BuildFlowRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildFlowRun.swift; sourceTree = "<group>"; };
 		F018F63C836231D10329C0B9 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		6BFCA3B193A64B4802D19652 /* LocaleFlag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocaleFlag.swift; sourceTree = "<group>"; };
 		F0960B7810CA5CB49A344629 /* StoreCredentialScopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCredentialScopeTests.swift; sourceTree = "<group>"; };
 		F198CCA5FDE4468AF208DC16 /* AppleSubscriptionVersionsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSubscriptionVersionsClient.swift; sourceTree = "<group>"; };
 		F1A797C1788E81DBC134B2CB /* DemoAccountRecallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAccountRecallTests.swift; sourceTree = "<group>"; };
@@ -823,6 +826,7 @@
 		FAF3B7E72801E00B4455AC46 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		FAF4FCFC4A59055B1BA4CDA8 /* ActualState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualState.swift; sourceTree = "<group>"; };
 		FB06573A092456B44968809A /* TwoStoreLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoStoreLinkTests.swift; sourceTree = "<group>"; };
+		70FBCDEBE90E123FD035ED55 /* LanguageAndBuildWellTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageAndBuildWellTests.swift; sourceTree = "<group>"; };
 		D0291B125CA2DFF557F9CCE3 /* StoreCopyPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCopyPanelTests.swift; sourceTree = "<group>"; };
 		FB55B4C53BDCF96EEBBA3656 /* StorePathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePathTests.swift; sourceTree = "<group>"; };
 		FB647EAB19EDD8CE71F387B0 /* AppTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTabBar.swift; sourceTree = "<group>"; };
@@ -1044,6 +1048,7 @@
 				48B7D7160F37672B80B343B9 /* TabStructureTests.swift */,
 				8F46E724D08D58DD6558DDA4 /* TabSwitchFlushTests.swift */,
 				FB06573A092456B44968809A /* TwoStoreLinkTests.swift */,
+				70FBCDEBE90E123FD035ED55 /* LanguageAndBuildWellTests.swift */,
 				D0291B125CA2DFF557F9CCE3 /* StoreCopyPanelTests.swift */,
 				D13E0662DA10F7885A1CAA99 /* UndoTests.swift */,
 				EA51A86FD30AB3FD71F84F3B /* UnsurfacedFieldTests.swift */,
@@ -1407,6 +1412,7 @@
 				214E96AF99097214FF9352D4 /* Fields.swift */,
 				548E9C71B30209CDDDF658C0 /* Haptic.swift */,
 				F018F63C836231D10329C0B9 /* LogView.swift */,
+				6BFCA3B193A64B4802D19652 /* LocaleFlag.swift */,
 				5AE681313E0AF78C2E159F9E /* RateChart.swift */,
 				4066F1D27DEE7AE307078D01 /* ResizableBox.swift */,
 				8690CCB0E9C9FD9C329AD043 /* Section.swift */,
@@ -1910,6 +1916,7 @@
 				F322A43FF3311F311B1059C5 /* ListingDeclarations.swift in Sources */,
 				C799F9D09D1439D088572361 /* LiveAppHead.swift in Sources */,
 				948BA6DBB9E40AA805CDCA33 /* LogView.swift in Sources */,
+				B8A63B4CBA5F5E5982E74E3C /* LocaleFlag.swift in Sources */,
 				8E1B38B255D980F39FA2C3B7 /* ManagingTabs.swift in Sources */,
 				F72277A85EE651C7DDD90F59 /* MarketingTab.swift in Sources */,
 				2EBA77B2C836B214F242EE28 /* MediaTab.swift in Sources */,
@@ -2058,6 +2065,7 @@
 				1CAA1EE5153F2DB7276E8451 /* TabStructureTests.swift in Sources */,
 				35BC655886965AF6510EF829 /* TabSwitchFlushTests.swift in Sources */,
 				31246BFEBA76AC7F460BF93C /* TwoStoreLinkTests.swift in Sources */,
+				E548F81E45E398DADF1351A2 /* LanguageAndBuildWellTests.swift in Sources */,
 				6D050C2E819B13EF2E4DB99B /* StoreCopyPanelTests.swift in Sources */,
 				E83842B121B6E2FB2634F149 /* UndoTests.swift in Sources */,
 				5A54496C005B65B5A14ABD07 /* UnsurfacedFieldTests.swift in Sources */,

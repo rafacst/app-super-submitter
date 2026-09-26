@@ -568,19 +568,21 @@ struct BuildTab: View {
         VStack(alignment: .leading, spacing: 11) {
             storeBuildHeader(.apple, title: "App Store takes", detail: ".ipa or .pkg")
             PackageDropWell(
-                title: state.packages[.ipa]?.url.lastPathComponent ?? "iOS package",
+                title: state.linkedBuildName(.ipa) ?? "iOS package",
                 prompt: ".ipa · drop here or",
                 extensions: ["ipa"], reading: state.readingPackages.contains(.ipa),
                 error: state.packageErrors[.ipa], note: state.missingBuildNote(.ipa),
                 choose: { state.chooseBuildFiles(allowedExtensions: ["ipa"]) },
-                accept: state.importPackages)
+                accept: state.importPackages,
+                remove: removal(.ipa))
             PackageDropWell(
-                title: state.packages[.pkg]?.url.lastPathComponent ?? "Mac App Store package",
+                title: state.linkedBuildName(.pkg) ?? "Mac App Store package",
                 prompt: ".pkg · drop here or",
                 extensions: ["pkg"], reading: state.readingPackages.contains(.pkg),
                 error: state.packageErrors[.pkg], note: state.missingBuildNote(.pkg),
                 choose: { state.chooseBuildFiles(allowedExtensions: ["pkg"]) },
-                accept: state.importPackages)
+                accept: state.importPackages,
+                remove: removal(.pkg))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -589,17 +591,24 @@ struct BuildTab: View {
         VStack(alignment: .leading, spacing: 11) {
             storeBuildHeader(.google, title: "Google Play takes", detail: ".aab or .apk")
             PackageDropWell(
-                title: state.packages[.aab]?.url.lastPathComponent ?? "Android package",
+                title: state.linkedBuildName(.aab) ?? "Android package",
                 prompt: ".aab · drop here or",
                 extensions: ["aab"], reading: state.readingPackages.contains(.aab),
                 error: state.packageErrors[.aab], note: state.missingBuildNote(.aab),
                 choose: { state.chooseBuildFiles(allowedExtensions: ["aab"]) },
-                accept: state.importPackages)
+                accept: state.importPackages,
+                remove: removal(.aab))
             Text("Play has no TestFlight equivalent. The rollout belongs to the track below, and the testers of a closed track to the Beta testing tab.")
                 .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// The trash button of one well, while the well holds a build.
+    private func removal(_ kind: AppPackage.Kind) -> (() -> Void)? {
+        guard state.linkedBuildName(kind) != nil else { return nil }
+        return { state.removeBuild(kind) }
     }
 
     private func storeBuildHeader(_ store: Store, title: String,
@@ -781,6 +790,8 @@ private struct PackageDropWell: View {
     var note: String?
     let choose: () -> Void
     let accept: ([URL]) -> Void
+    /// Takes the build off the release. Nil while the well holds none.
+    var remove: (() -> Void)? = nil
     @State private var targeted = false
 
     var body: some View {
@@ -803,6 +814,21 @@ private struct PackageDropWell: View {
                 }
                 Spacer(minLength: 0)
                 if reading { ProgressView().controlSize(.small) }
+                // Beside the file it removes. It unlinks the build and never
+                // deletes it: the file is the developer's, and a wrong pick is
+                // a pick to undo, not a file to lose.
+                if let remove, !reading {
+                    Button(action: remove) {
+                        Image(systemName: "trash")
+                            .font(Theme.font(size: 12))
+                            .foregroundStyle(Theme.text2)
+                            .frame(width: 26, height: 26)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove \(title)")
+                    .help("Remove this build from the release. The file stays where it is.")
+                }
             }
             if let error {
                 Text(error).font(Theme.font(size: 10.5)).foregroundStyle(Theme.red)
