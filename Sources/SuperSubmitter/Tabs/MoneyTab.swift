@@ -29,6 +29,7 @@ struct MoneyTab: View {
         @Bindable var state = state
         VStack(alignment: .leading, spacing: 22) {
             oneStoreOnlyNote
+            googlePlaySetup
             // Yellow, not red. Red says irreversible in this app, and a value
             // the developer can fix in the next keystroke is not that.
             if let error = state.moneyError { WarningNote(error) }
@@ -283,6 +284,61 @@ struct MoneyTab: View {
             .padding(.horizontal, 12).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.yellowBg, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    /// The Google Play side of a catalog that came from the App Store.
+    ///
+    /// The products are one list in `store.yaml` and Google Play reads the
+    /// same list, so an App Store catalog needs no retyping. It needs the two
+    /// details the App Store never had, and nothing on this tab offered them as
+    /// a step: the base plan each Google subscription sells through, and the
+    /// sale switch that takes a new Google product out of its draft. An app
+    /// that added Google Play beside its iOS products therefore had no way here
+    /// to make them into Google Play products.
+    @ViewBuilder
+    private var googlePlaySetup: some View {
+        if state.googlePlayCatalogUnread {
+            HStack(spacing: 8) {
+                StoreMark(store: .google, size: 13)
+                Text("Google Play has not been read yet. Press Fetch from store, and this tab says what Google Play still needs for these products.")
+                    .font(Theme.font(size: 12))
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 8))
+        } else if let gaps = state.googlePlayCatalogGaps, !gaps.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                if !gaps.unset.isEmpty {
+                    HStack(spacing: 8) {
+                        StoreMark(store: .google, size: 13)
+                        Text(gaps.unset.count == 1
+                             ? "1 product needs its Google Play details"
+                             : "\(gaps.unset.count) products need their Google Play details")
+                            .font(Theme.font(size: 12, weight: .semibold))
+                        Text("A base plan and the sale switch. Google Play keeps a new product as a draft without them.")
+                            .font(Theme.font(size: 11.5))
+                            .foregroundStyle(Theme.text2)
+                            .lineLimit(2)
+                        Spacer(minLength: 8)
+                        QuietButton(title: "Set up for Google Play") {
+                            let ready = state.setUpGooglePlayCatalog()
+                            state.errorMessage = ready.count == 1
+                                ? "1 product is set up for Google Play. The next send creates it there. The id, the price and the text are the ones the App Store has."
+                                : "\(ready.count) products are set up for Google Play. The next send creates them there. The ids, the prices and the texts are the ones the App Store has."
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.accentBg, in: RoundedRectangle(cornerRadius: 8))
+                }
+                ForEach(gaps.warnings.indices, id: \.self) { index in
+                    WarningNote(gaps.warnings[index])
+                }
+            }
         }
     }
 

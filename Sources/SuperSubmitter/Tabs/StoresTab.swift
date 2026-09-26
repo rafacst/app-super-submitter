@@ -30,6 +30,10 @@ struct StoresTab: View {
                     .frame(maxHeight: .infinity, alignment: .top)
             }
             .fixedSize(horizontal: false, vertical: true)
+            // Under the keys and not above them: a second store is added on
+            // the grid, connected in the card under it, and then filled from
+            // the first one here.
+            if state.canCopyBetweenStores { StoreCopyPanel() }
             HStack(alignment: .top, spacing: 16) {
                 AppleTeamPanel()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

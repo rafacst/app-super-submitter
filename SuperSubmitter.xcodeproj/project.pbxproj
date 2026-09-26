@@ -11,6 +11,7 @@
 		00CBB662796D6FBF096CD4DA /* MarketingScreenReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8D27AE556ADD5A95669DD1 /* MarketingScreenReviewTests.swift */; };
 		0111DDA601EFB704E8738683 /* DryRunDefaultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 521D050AEB03E1FF8384F2F8 /* DryRunDefaultTests.swift */; };
 		011F6A3C642A88D045102753 /* ManifestBlockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F26613D3523CC89CAEE629 /* ManifestBlockTests.swift */; };
+		9AD5DDC2E9A2DD4BC3BDF864 /* StoreCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515DE2FC7CEC64D0A2D97077 /* StoreCopyTests.swift */; };
 		02CB7A55745915F0671DBCD1 /* AptabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80A694531372B107A9D0327 /* AptabaseClient.swift */; };
 		04232A1F8E5CBB7994D3E498 /* StoreDiagnosticsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA4D52C3FAD900F87D3E9D4 /* StoreDiagnosticsPanel.swift */; };
 		05FDDA4F3949798BD7D1FC3A /* WebhooksPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1137559C7B723BC27CC243FB /* WebhooksPanel.swift */; };
@@ -73,7 +74,9 @@
 		30691A3DA2AEAA507A299B09 /* PlanTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516E6CD3FCB821FB333310F /* PlanTab.swift */; };
 		30AE77C42FF2651A82541145 /* ActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330EA68F4E9E7C9DC72434BB /* ActionButton.swift */; };
 		31246BFEBA76AC7F460BF93C /* TwoStoreLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB06573A092456B44968809A /* TwoStoreLinkTests.swift */; };
+		6D050C2E819B13EF2E4DB99B /* StoreCopyPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0291B125CA2DFF557F9CCE3 /* StoreCopyPanelTests.swift */; };
 		316D131EA0C23D5E1610E128 /* StoreSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */; };
+		932E557B0DC1EA9891730446 /* AppStateStoreCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF7169E25BCA6213D0B22CE5 /* AppStateStoreCopy.swift */; };
 		3196AF55A7448A7FAD213FE7 /* UploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7DF63306FED48988313FED2 /* UploadService.swift */; };
 		321F8A0AB936919FA72CF1CD /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233A3F24548DC6B4BC41FFA1 /* CommandRunner.swift */; };
 		33F8BF09956135374A043B19 /* BuildTrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1657CC047DE98EE489643EC7 /* BuildTrainTests.swift */; };
@@ -336,10 +339,12 @@
 		DF06F6117F56D91F5956BD8C /* ToolProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEFADD5D0C024A395A42101D /* ToolProcess.swift */; };
 		DF28F237257414B7CB789DEF /* CheckoutKeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C77E78F475B91BAA4EB5A8 /* CheckoutKeyTests.swift */; };
 		DFABFB6B38129BD98E3C6C45 /* StoresTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0A38CD258BBFB146CDAF85 /* StoresTab.swift */; };
+		68E94BAE90A1ED3A83564FC9 /* StoreCopyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FE2FAC014235F605C855C63 /* StoreCopyPanel.swift */; };
 		E0C13E01C746538F15C3F53E /* CatalogImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EA31CCF3068930153D56CD /* CatalogImportTests.swift */; };
 		E1F223CBCF7570DCA23887A3 /* ScreenshotSetKeepTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17760A527B17FA10BB5E00F1 /* ScreenshotSetKeepTests.swift */; };
 		E3AAC9F3AEC53746DC5FEAE2 /* BuildFromProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E1B5C011E3DC54A2ED2F08 /* BuildFromProjectView.swift */; };
 		E41CD22114AE0640251C380E /* ManifestBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD54A6C465F1780A1344BAF /* ManifestBlocks.swift */; };
+		2F1A75B9F8DDFD523813D42F /* StoreCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9140C69581F38B606824154A /* StoreCopy.swift */; };
 		E51772E36D69CABFEC47E053 /* StoreMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A17C7F3344A746710460DD /* StoreMark.swift */; };
 		E550C88143E712EAA76C1420 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BE9B11225EBCA1175F86028 /* RootView.swift */; };
 		E62A35B315744A9052708F79 /* ScreenshotReviewSeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2243D471CB42A335A44A446A /* ScreenshotReviewSeedTests.swift */; };
@@ -493,6 +498,7 @@
 		232B37B687ADF8AFA3C5865F /* CustomPageMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomPageMediaTests.swift; sourceTree = "<group>"; };
 		233A3F24548DC6B4BC41FFA1 /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
 		234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreSnapshot.swift; sourceTree = "<group>"; };
+		CF7169E25BCA6213D0B22CE5 /* AppStateStoreCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateStoreCopy.swift; sourceTree = "<group>"; };
 		23B1F85E9F23E03070194B76 /* AppleKeywordsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleKeywordsClient.swift; sourceTree = "<group>"; };
 		249EF6A202B934C6039EF0D4 /* QuickLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLook.swift; sourceTree = "<group>"; };
 		26852B82AFA3D6F6A4EF430C /* StoreValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreValues.swift; sourceTree = "<group>"; };
@@ -566,6 +572,7 @@
 		5079F30B980EA11832EBC72C /* BetaTestingTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaTestingTab.swift; sourceTree = "<group>"; };
 		509B7C82E6D9D94A1DC03E21 /* DemoAccountReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAccountReadTests.swift; sourceTree = "<group>"; };
 		50F26613D3523CC89CAEE629 /* ManifestBlockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestBlockTests.swift; sourceTree = "<group>"; };
+		515DE2FC7CEC64D0A2D97077 /* StoreCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCopyTests.swift; sourceTree = "<group>"; };
 		5113C7F49B355D564BB9796B /* AppleApply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleApply.swift; sourceTree = "<group>"; };
 		51A7692646C45BA1A009CA4F /* AppleDiagnosticsClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleDiagnosticsClient.swift; sourceTree = "<group>"; };
 		51BF914AE9AB214F1E22CD9F /* BetaTestingPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaTestingPanelTests.swift; sourceTree = "<group>"; };
@@ -602,8 +609,10 @@
 		6C0183D2E989679F9F418ACC /* MarketingTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingTab.swift; sourceTree = "<group>"; };
 		6D33E2834F78C9B6DF4C98CB /* ProtoManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtoManifest.swift; sourceTree = "<group>"; };
 		6DD54A6C465F1780A1344BAF /* ManifestBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestBlocks.swift; sourceTree = "<group>"; };
+		9140C69581F38B606824154A /* StoreCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCopy.swift; sourceTree = "<group>"; };
 		6DE54D096EF55A82E4DEB084 /* BuildModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildModels.swift; sourceTree = "<group>"; };
 		6E0A38CD258BBFB146CDAF85 /* StoresTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoresTab.swift; sourceTree = "<group>"; };
+		3FE2FAC014235F605C855C63 /* StoreCopyPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCopyPanel.swift; sourceTree = "<group>"; };
 		6E5BC50E5E53E8CD38DF4403 /* ReleaseVersionFieldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseVersionFieldTests.swift; sourceTree = "<group>"; };
 		6F5E7497A1053590FC092265 /* SettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTab.swift; sourceTree = "<group>"; };
 		700B1A30221EB7BBCF563443 /* ReportTableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportTableTests.swift; sourceTree = "<group>"; };
@@ -814,6 +823,7 @@
 		FAF3B7E72801E00B4455AC46 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
 		FAF4FCFC4A59055B1BA4CDA8 /* ActualState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualState.swift; sourceTree = "<group>"; };
 		FB06573A092456B44968809A /* TwoStoreLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwoStoreLinkTests.swift; sourceTree = "<group>"; };
+		D0291B125CA2DFF557F9CCE3 /* StoreCopyPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCopyPanelTests.swift; sourceTree = "<group>"; };
 		FB55B4C53BDCF96EEBBA3656 /* StorePathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePathTests.swift; sourceTree = "<group>"; };
 		FB647EAB19EDD8CE71F387B0 /* AppTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTabBar.swift; sourceTree = "<group>"; };
 		FB9F78B534D8E2E55E4D4C80 /* FilePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePanel.swift; sourceTree = "<group>"; };
@@ -1034,6 +1044,7 @@
 				48B7D7160F37672B80B343B9 /* TabStructureTests.swift */,
 				8F46E724D08D58DD6558DDA4 /* TabSwitchFlushTests.swift */,
 				FB06573A092456B44968809A /* TwoStoreLinkTests.swift */,
+				D0291B125CA2DFF557F9CCE3 /* StoreCopyPanelTests.swift */,
 				D13E0662DA10F7885A1CAA99 /* UndoTests.swift */,
 				EA51A86FD30AB3FD71F84F3B /* UnsurfacedFieldTests.swift */,
 				ADCDB80D12F9D17E4007443B /* UpdaterTests.swift */,
@@ -1135,6 +1146,7 @@
 				335387CAD4AA02F75A765E7C /* ImportVersionChoiceTests.swift */,
 				C0F571F5345E4A808D4A06AF /* LiveListingTests.swift */,
 				50F26613D3523CC89CAEE629 /* ManifestBlockTests.swift */,
+				515DE2FC7CEC64D0A2D97077 /* StoreCopyTests.swift */,
 				425AF414536E2877618D5BBF /* ManifestEditingTests.swift */,
 				A34AB51A6B40F7FFE61616CD /* ManifestErrorTests.swift */,
 				2C8DF457A1D20CFB570F21A9 /* ManifestTests.swift */,
@@ -1317,6 +1329,7 @@
 				A728A90F3E0B9869DEFDA8AA /* LicensingConfig.swift */,
 				CFFF1088B761BD08BFC5EE1C /* ScreenshotMode.swift */,
 				234CEE3E04249CA744E9FBB0 /* StoreSnapshot.swift */,
+				CF7169E25BCA6213D0B22CE5 /* AppStateStoreCopy.swift */,
 				CC15B00B50A626A5F4200EF8 /* SuperSubmitterApp.swift */,
 				7FE78CA68577267148B61B1E /* Tab.swift */,
 				1F76E73AB6D9C5A84E155BB1 /* Updater.swift */,
@@ -1363,6 +1376,7 @@
 				4DE1B143847CE02CF815F91C /* Managed.swift */,
 				125542C9DF2F69ED1E405146 /* Manifest.swift */,
 				6DD54A6C465F1780A1344BAF /* ManifestBlocks.swift */,
+				9140C69581F38B606824154A /* StoreCopy.swift */,
 				DE68BE6466E075A815F827DF /* ManifestEditing.swift */,
 				11F487A6A33C04D956210C7B /* ManifestFile.swift */,
 			);
@@ -1447,6 +1461,7 @@
 				1DA4D52C3FAD900F87D3E9D4 /* StoreDiagnosticsPanel.swift */,
 				B2CBCAA1C2B6CEC56CC21118 /* StorePage.swift */,
 				6E0A38CD258BBFB146CDAF85 /* StoresTab.swift */,
+				3FE2FAC014235F605C855C63 /* StoreCopyPanel.swift */,
 				ECCA4138B5E91EB580C3D18D /* TabContent.swift */,
 				17E7B808F4A2961CC27FCBF0 /* TerritoryPicker.swift */,
 				97CE0E60DC614B6660D81B12 /* TestFlightSection.swift */,
@@ -1691,6 +1706,7 @@
 				B08EB6AEDDBEA0F55F2EDAFC /* ImportVersionChoiceTests.swift in Sources */,
 				5626E2A933EE220FB26A93A4 /* LiveListingTests.swift in Sources */,
 				011F6A3C642A88D045102753 /* ManifestBlockTests.swift in Sources */,
+				9AD5DDC2E9A2DD4BC3BDF864 /* StoreCopyTests.swift in Sources */,
 				C5D2D71BDF83A54C4F1B6C44 /* ManifestEditingTests.swift in Sources */,
 				2B9735D97B354894FD899661 /* ManifestErrorTests.swift in Sources */,
 				920195C212422C9A6B85D01A /* ManifestTests.swift in Sources */,
@@ -1791,6 +1807,7 @@
 				D1CDEAADBC810D7896042EA3 /* Managed.swift in Sources */,
 				114F6E5A94D031BC16E25734 /* Manifest.swift in Sources */,
 				E41CD22114AE0640251C380E /* ManifestBlocks.swift in Sources */,
+				2F1A75B9F8DDFD523813D42F /* StoreCopy.swift in Sources */,
 				8E6F8C103D3355F696E3C3CB /* ManifestEditing.swift in Sources */,
 				FCA2F3D95DF8B67FBDEC8561 /* ManifestFile.swift in Sources */,
 				FCD6C6D26B7A2006E9D9B9CD /* PackageReader.swift in Sources */,
@@ -1926,7 +1943,9 @@
 				CCBB0595D82B567D07F5BFE8 /* StorePage.swift in Sources */,
 				06930BD80F48E1A064372E14 /* StoreSelection.swift in Sources */,
 				316D131EA0C23D5E1610E128 /* StoreSnapshot.swift in Sources */,
+				932E557B0DC1EA9891730446 /* AppStateStoreCopy.swift in Sources */,
 				DFABFB6B38129BD98E3C6C45 /* StoresTab.swift in Sources */,
+				68E94BAE90A1ED3A83564FC9 /* StoreCopyPanel.swift in Sources */,
 				530A43C6C1763DE8F8E08836 /* SuperSubmitterApp.swift in Sources */,
 				FD29EAE3D515911AA70F5DE0 /* Tab.swift in Sources */,
 				EEE3B2FC2F61E042BD0CCFA2 /* TabContent.swift in Sources */,
@@ -2039,6 +2058,7 @@
 				1CAA1EE5153F2DB7276E8451 /* TabStructureTests.swift in Sources */,
 				35BC655886965AF6510EF829 /* TabSwitchFlushTests.swift in Sources */,
 				31246BFEBA76AC7F460BF93C /* TwoStoreLinkTests.swift in Sources */,
+				6D050C2E819B13EF2E4DB99B /* StoreCopyPanelTests.swift in Sources */,
 				E83842B121B6E2FB2634F149 /* UndoTests.swift in Sources */,
 				5A54496C005B65B5A14ABD07 /* UnsurfacedFieldTests.swift in Sources */,
 				2259C22F61A6FB8F68D7B79F /* UpdaterTests.swift in Sources */,
