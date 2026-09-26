@@ -96,3 +96,52 @@ import Testing
     let changedHash = try Checksums.sha256(directory: root)
     #expect(changedHash != firstHash)
 }
+
+/// Apple keeps one open review submission per platform. A cancel meant for the
+/// Mac took whichever submission the list named first, and that was the iOS
+/// review in the queue.
+@Test func aCancelTakesOnlyTheSubmissionOfItsOwnPlatform() {
+    let payload = JSON(data: Data("""
+        {"data":[
+          {"id":"ios-queue","attributes":{"state":"WAITING_FOR_REVIEW","platform":"IOS"}},
+          {"id":"mac-draft","attributes":{"state":"READY_FOR_REVIEW","platform":"MAC_OS"}}
+        ]}
+        """.utf8))
+    let either: Set<String> = ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]
+
+    #expect(ReleaseClient.cancellableSubmission(
+        in: payload, platform: "MAC_OS", states: either) == "mac-draft")
+    #expect(ReleaseClient.cancellableSubmission(
+        in: payload, platform: "IOS", states: either) == "ios-queue")
+    // The delete of a draft takes only a submission not yet sent. The iOS one
+    // in the queue holds no editable version, so it is not the delete's to end.
+    #expect(ReleaseClient.cancellableSubmission(
+        in: payload, platform: "IOS", states: ["READY_FOR_REVIEW"]) == nil)
+    #expect(ReleaseClient.cancellableSubmission(
+        in: payload, platform: "TV_OS", states: either) == nil)
+}
+
+/// The read keeps this platform's open submission, and says whose it is.
+@Test func theOpenSubmissionOfThisPlatformComesFirst() {
+    let payload = JSON(data: Data("""
+        {"data":[
+          {"id":"old","attributes":{"state":"COMPLETE","platform":"MAC_OS"}},
+          {"id":"ios","attributes":{"state":"WAITING_FOR_REVIEW","platform":"IOS"}},
+          {"id":"mac","attributes":{"state":"IN_REVIEW","platform":"MAC_OS"}}
+        ]}
+        """.utf8))
+
+    let mac = StateReader.openReviewSubmission(payload, platform: "MAC_OS")
+    #expect(mac.state == "IN_REVIEW")
+    #expect(mac.platform == "MAC_OS")
+
+    // Another platform's open submission still counts when this one has none:
+    // the hold on the apply stays as it was.
+    let tv = StateReader.openReviewSubmission(payload, platform: "TV_OS")
+    #expect(tv.state == "WAITING_FOR_REVIEW")
+    #expect(tv.platform == "IOS")
+
+    let none = StateReader.openReviewSubmission(JSON(data: Data(#"{"data":[]}"#.utf8)),
+                                                platform: "IOS")
+    #expect(none.state == nil)
+}

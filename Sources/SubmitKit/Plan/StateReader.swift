@@ -550,12 +550,31 @@ public struct StateReader: Sendable {
         // Whether the app is in review, which is read at all times: the App
         // Store refuses a write to a version that is in a queue, whichever tab
         // the write came from.
+        //
+        // Apple keeps one open submission per platform, so an app on iOS and
+        // macOS can hold two. This platform's comes first, because it is the
+        // one a cancel on this screen reaches, and its platform is kept beside
+        // its state. A page of 200 and not 20: the list holds every submission
+        // the app ever made, and a long history pushed the open one off a page
+        // of twenty.
         let submissions = JSON(data: try await api.apple(
-            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=20").data)
-        result.openReviewSubmission = submissions["data"].array.compactMap { item in
-            item["attributes"]["state"].string
-        }.first { ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"].contains($0) }
+            "GET", "/v1/reviewSubmissions?filter%5Bapp%5D=\(appID)&limit=200").data)
+        let open = Self.openReviewSubmission(submissions, platform: platform)
+        result.openReviewSubmission = open.state
+        result.openReviewSubmissionPlatform = open.platform
         return result
+    }
+
+    /// The open review submission on one page, this platform's first, and the
+    /// platform it names. Both nil when none is open. See `readApple`.
+    static func openReviewSubmission(_ payload: JSON, platform: String?)
+        -> (state: String?, platform: String?) {
+        let open = payload["data"].array.filter { item in
+            ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"]
+                .contains(item["attributes"]["state"].string ?? "")
+        }
+        let held = open.first { $0["attributes"]["platform"].string == platform } ?? open.first
+        return (held?["attributes"]["state"].string, held?["attributes"]["platform"].string)
     }
 
     /// The seven App Store marketing resources.

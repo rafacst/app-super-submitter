@@ -372,6 +372,13 @@ public struct ActualState: Sendable, Equatable {
         /// Apple refuses a cancel from the moment a reviewer opens it, so a
         /// screen that offers the cancel has to tell the two apart.
         public var openReviewSubmission: String?
+        /// Apple's platform for that submission, `IOS` or `MAC_OS`, or nil
+        /// when the read did not name one.
+        ///
+        /// Apple keeps one open submission per platform. The cancel reaches
+        /// only this app's own platform, so the screen that offers it has to
+        /// know whose queue the open one is.
+        public var openReviewSubmissionPlatform: String?
 
         public var hasOpenReviewSubmission: Bool { openReviewSubmission != nil }
         public var priceAmount: Decimal?
