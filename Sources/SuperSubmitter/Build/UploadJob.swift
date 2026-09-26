@@ -184,7 +184,8 @@ final class UploadJob: Identifiable {
                 case .processed(let buildID):
                     run.remoteIDs["appleBuild"] = buildID
                     processingLabel = nil
-                    successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/ios"
+                    successLink = "https://appstoreconnect.apple.com/apps/\(appID)/testflight/"
+                        + (candidate.platform == .macos ? "macos" : "ios")
                     run.move(to: .complete)
                     finishSuccess()
                     return
